@@ -2204,7 +2204,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <button class="btn" onclick="openM('mEmployeeTemplate')">📄 Template พนักงาน</button>
       <button class="btn" onclick="openM('mImportUsers')">⬆️ Import พนักงาน</button>
       <button class="btn" onclick="smlToast('Sync HRIS อยู่ในโหมด Demo — พร้อมเชื่อม API ภายหลัง','info')">🔄 Sync HRIS</button>
-      <button class="btn btn-p" onclick="openM('mAddEmployee')">＋ เพิ่มพนักงาน</button>
+      <button class="btn btn-p" onclick="openM('mAddUser')">＋ เพิ่มพนักงาน</button>
     </div></div>
 
     <div class="al al-e"><span>⚠️</span><div><b>พบปัญหาสายบังคับบัญชา 3 รายการ</b> — พนักงาน 2 คนไม่มีหัวหน้าระดับ 1 และพบ Circular Reference 1 จุด <button class="btn btn-sm" style="margin-left:8px">ตรวจสอบ</button></div></div>
@@ -2215,12 +2215,8 @@ tbody tr:hover{background:#f0f6ff!important}
         <input placeholder="🔍 ค้นหา" style="padding:5px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;width:170px">
       </div></div>
       <div class="tw"><table>
-        <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>ฝ่าย</th><th>ระดับ</th><th>หัวหน้า L1</th><th>หัวหน้า L2</th><th>ผู้บริหาร</th><th>สถานะ</th></tr></thead>
-        <tbody id="orgRows">
-<tr><td>SML-0001</td><td><b>สมชาย ใจดี</b></td><td>หัวหน้าแผนก</td><td>Operations</td><td><span class="bd b-g">Leader</span></td><td>วิชัย กล้าหาญ</td><td>ผู้จัดการส่วน A</td><td>GM Operations</td><td><span class="bd b-g">On</span></td></tr>
-<tr><td>SML-0002</td><td><b>นภา สุขสันต์</b></td><td>พนักงานปฏิบัติการ</td><td>Operations</td><td><span class="bd b-b">Employee</span></td><td>สมชาย ใจดี</td><td>ผู้จัดการส่วน A</td><td>GM Operations</td><td><span class="bd b-g">On</span></td></tr>
-<tr><td>SML-0003</td><td><b>กิตติพงษ์ มั่นคง</b></td><td>วิศวกร</td><td>Engineering</td><td><span class="bd b-g">Leader</span></td><td>หัวหน้า Engineering</td><td>ผู้จัดการส่วน B</td><td>GM Engineering</td><td><span class="bd b-g">On</span></td></tr>
-</tbody>
+        <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>กลุ่ม</th><th>แผนก</th><th>ส่วน</th><th>ฝ่าย</th><th>ระดับ</th><th>หัวหน้า L1</th><th>หัวหน้า L2</th><th>ผู้อนุมัติ</th><th>สถานะ</th></tr></thead>
+        <tbody id="orgRows"></tbody>
       </table></div>
     </div>
   </section>
@@ -3129,14 +3125,17 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <tbody>
         <tr><td>1</td><td><b>emp_code</b></td><td>รหัสพนักงาน</td><td>SML-0001</td></tr>
         <tr><td>2</td><td><b>full_name</b></td><td>ชื่อ-สกุล</td><td>สมชาย ใจดี</td></tr>
-        <tr><td>3</td><td><b>email</b></td><td>Email พนักงาน</td><td>somchai@sml.co.th</td></tr>
-        <tr><td>4</td><td><b>level</b></td><td>ระดับตำแหน่ง</td><td>พนักงานปฏิบัติการ / Leader / ผู้จัดการส่วน</td></tr>
-        <tr><td>5</td><td><b>role</b></td><td>บทบาทใน PMS</td><td>Employee / Leader / Manager / Executive / Admin</td></tr>
-        <tr><td>6</td><td><b>department</b></td><td>แผนก</td><td>Operations</td></tr>
-        <tr><td>7</td><td><b>section</b></td><td>ส่วน</td><td>PDI</td></tr>
-        <tr><td>8</td><td><b>division</b></td><td>ฝ่าย</td><td>Logistics</td></tr>
-        <tr><td>9</td><td><b>l1_manager</b></td><td>หัวหน้า L1</td><td>วิชัย กล้าหาญ</td></tr>
-        <tr><td>10</td><td><b>status</b></td><td>สถานะ</td><td>On</td></tr>
+        <tr><td>3</td><td><b>role</b></td><td>บทบาทใน PMS</td><td>emp / l1 / l2 / exec / admin / sysadmin</td></tr>
+        <tr><td>4</td><td><b>group</b></td><td>กลุ่ม</td><td>SML Staff</td></tr>
+        <tr><td>5</td><td><b>section</b></td><td>แผนก</td><td>Yard & PDI (SML)</td></tr>
+        <tr><td>6</td><td><b>division</b></td><td>ส่วน</td><td>ส่วน Yard</td></tr>
+        <tr><td>7</td><td><b>department</b></td><td>ฝ่าย</td><td>ฝ่ายปฏิบัติการ</td></tr>
+        <tr><td>8</td><td><b>position</b></td><td>ตำแหน่ง</td><td>พนักงานปฏิบัติการ PDI</td></tr>
+        <tr><td>9</td><td><b>grade</b></td><td>เกรด</td><td>G1</td></tr>
+        <tr><td>10</td><td><b>l1</b></td><td>หัวหน้า L1</td><td>สุดา มีสุข</td></tr>
+        <tr><td>11</td><td><b>l2</b></td><td>ผจก.ส่วน L2</td><td>อรุณ ศิริ</td></tr>
+        <tr><td>12</td><td><b>approver</b></td><td>ผู้อนุมัติ</td><td>คุณเชิดชัย</td></tr>
+        <tr><td>13</td><td><b>status</b></td><td>สถานะ</td><td>active</td></tr>
       </tbody></table>
     </div>
     <div class="template-rule-note">
@@ -3146,17 +3145,6 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-p" onclick="downloadEmployeeTemplate(true)">📥 ดาวน์โหลด Template + ตัวอย่าง</button></div>
 </div></div>
 
-
-<div class="ov" id="mAddEmployee"><div class="md" style="max-width:560px">
-  <div class="md-h"><h3>＋ เพิ่มพนักงาน</h3><button class="x" onclick="closeM()">×</button></div>
-  <div class="md-b">
-    <div class="fg"><label>รหัสพนักงาน</label><input id="newEmpCode" placeholder="SML-0004"></div>
-    <div class="fg"><label>ชื่อ-สกุล</label><input id="newEmpName" placeholder="ชื่อ นามสกุล"></div>
-    <div class="fg"><label>ระดับ</label><select id="newEmpLevel"><option>พนักงานปฏิบัติการ</option><option>พนักงานปฏิบัติการงานสำนักงาน</option><option>หัวหน้าหน่วย / หัวหน้าแผนก / วิศวกร</option><option>ผู้จัดการส่วน</option></select></div>
-    <div class="fg"><label>บทบาท PMS</label><select id="newEmpRole"><option>Employee</option><option>Leader</option><option>Manager</option></select></div>
-  </div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="addDemoEmployee()">บันทึกพนักงาน</button></div>
-</div></div>
 
 <!-- ================= MODALS ================= -->
 <div class="ov" id="mTplPreview"><div class="md tpl-preview-md" style="max-width:1180px">
@@ -3666,14 +3654,16 @@ function renderOrg(data) {
   el.innerHTML = data.map(u => `<tr>
     <td><b>${u[0]}</b></td>
     <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>${u[1]}</div></td>
-    <td>${u[7]}</td>
-    <td>${u[4]}</td>
-    <td><span class="bd b-s">${u[8]}</span></td>
-    <td>${U_ROLE_LABEL[u[2]]||u[2]}</td>
-    <td style="font-size:12px">${u[9]}</td>
-    <td style="font-size:12px">${u[10]}</td>
-    <td style="font-size:12px">${u[11]}</td>
-    <td>${U_STATUS_LABEL[u[13]]||''}</td>
+    <td>${u[7]||'—'}</td>
+    <td style="font-size:12px">${u[3]||'—'}</td>
+    <td style="font-size:12px">${u[4]||'—'}</td>
+    <td style="font-size:12px">${u[5]||'—'}</td>
+    <td style="font-size:12px">${u[6]||'—'}</td>
+    <td><span class="bd b-s">${U_ROLE_LABEL[u[2]]||u[2]}</span></td>
+    <td style="font-size:12px">${u[9]||'—'}</td>
+    <td style="font-size:12px">${u[10]||'—'}</td>
+    <td style="font-size:12px">${u[11]||'—'}</td>
+    <td>${U_STATUS_LABEL[u[12]]||''}</td>
   </tr>`).join('');
 }
 
@@ -5288,7 +5278,7 @@ function actionByText(text, el){
   if(t.includes('คำนวณใหม่')){smlToast('เริ่มคำนวณคะแนนใหม่ทั้งรอบแล้ว','info');return true}
   if(t.includes('Import พนักงาน')){openM('mImportUsers');return true}
   if(t.includes('Sync HRIS')){smlToast('Sync HRIS สำเร็จ — Demo Mode','ok');return true}
-  if(t.includes('เพิ่มพนักงาน')){openM('mAddEmployee');return true}
+  if(t.includes('เพิ่มพนักงาน')){openM('mAddUser');return true}
   if(t==='ตรวจสอบ'){smlToast('ตรวจสอบข้อมูลพนักงานเรียบร้อย','ok');return true}
   if(t.includes('เพิ่มผู้ใช้')){openM('mAddUser');return true}
   if(t.includes('ดูทั้งหมด')){smlToast('แสดงรอบย้อนหลังทั้งหมดแล้ว','info');return true}
@@ -5676,20 +5666,7 @@ function validateEmployeeImport(){
   if(!f){if(typeof smlToast==='function')smlToast('กรุณาเลือกไฟล์พนักงานก่อน','warn');return;}
   if(typeof smlToast==='function')smlToast('ตรวจสอบเบื้องต้นผ่าน — พร้อม Preview / Confirm Import','ok');
 }
-function addDemoEmployee(){
-  const code=document.getElementById('newEmpCode')?.value?.trim();
-  const name=document.getElementById('newEmpName')?.value?.trim();
-  if(!code||!name){if(typeof smlToast==='function')smlToast('กรุณากรอกรหัสและชื่อพนักงาน','warn');return;}
-  const role=document.getElementById('newEmpRole')?.value||'Employee';
-  const level=document.getElementById('newEmpLevel')?.value||'พนักงานปฏิบัติการ';
-  const tbody=document.getElementById('orgRows');
-  if(tbody){
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${code}</td><td><b>${name}</b></td><td>${level}</td><td>-</td><td><span class="bd b-b">${role}</span></td><td>-</td><td>-</td><td>-</td><td><span class="bd b-g">On</span></td>`;
-    tbody.prepend(tr);
-  }
-  closeM(); if(typeof smlToast==='function')smlToast('เพิ่มพนักงานใน Demo แล้ว','ok');
-}
+
 </script>
 
 
