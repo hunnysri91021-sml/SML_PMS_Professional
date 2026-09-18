@@ -2370,7 +2370,7 @@ tbody tr:hover{background:#f0f6ff!important}
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#059669;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">2</div>
-            <div>เปิดใน Excel → Insert → Table (ตั้งชื่อ Table ให้ตรงกับที่จะกรอกด้านล่าง เช่น <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">EmployeeMaster</code>, <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">PMSEvaluations</code>) แล้วอัปโหลดไฟล์ → SharePoint: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">Sites/SML-HR/Documents/PMS/SML_PMS_Master.xlsx</code></div>
+            <div>เปิดใน Excel → Insert → Table (ตั้งชื่อ Table ให้ตรงกับที่จะกรอกด้านล่าง เช่น <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">Employees</code>, <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">Appraisals</code>) แล้วอัปโหลดไฟล์ → SharePoint: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">Sites/SML-HR/Documents/PMS/SML_PMS_Master.xlsx</code></div>
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#059669;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">3</div>
@@ -2401,8 +2401,8 @@ tbody tr:hover{background:#f0f6ff!important}
           <div class="grid g2">
             <div class="fg"><label>SharePoint Site Name</label><input id="ms365SiteName" placeholder="SML-HR"></div>
             <div class="fg"><label>Excel Workbook</label><input id="ms365Workbook" placeholder="SML_PMS_Master.xlsx"></div>
-            <div class="fg"><label>ชื่อตาราง Employee</label><input id="ms365EmployeeTable" placeholder="EmployeeMaster"></div>
-            <div class="fg"><label>ชื่อตาราง Evaluation</label><input id="ms365EvaluationTable" placeholder="PMSEvaluations"></div>
+            <div class="fg"><label>ชื่อตาราง Employee</label><input id="ms365EmployeeTable" placeholder="Employees"></div>
+            <div class="fg"><label>ชื่อตาราง Evaluation</label><input id="ms365EvaluationTable" placeholder="Appraisals"></div>
           </div>
           <div class="fg" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="ms365NoCors" style="width:auto"><label style="margin:0">โหมด no-cors (ใช้เมื่อ Flow URL ไม่รองรับ CORS — ส่งได้อย่างเดียว อ่านผลลัพธ์กลับไม่ได้)</label></div>
           <div style="display:flex;gap:8px;margin-top:8px">
@@ -4523,8 +4523,8 @@ function getMs365ConfigFromForm(){
     apiUrl: (document.getElementById('ms365ApiUrl')?.value || '').trim(),
     siteName: (document.getElementById('ms365SiteName')?.value || '').trim(),
     workbook: (document.getElementById('ms365Workbook')?.value || '').trim(),
-    employeeTable: (document.getElementById('ms365EmployeeTable')?.value || 'EmployeeMaster').trim(),
-    evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'PMSEvaluations').trim(),
+    employeeTable: (document.getElementById('ms365EmployeeTable')?.value || 'Employees').trim(),
+    evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'Appraisals').trim(),
     noCors: !!document.getElementById('ms365NoCors')?.checked
   };
 }
@@ -4533,9 +4533,9 @@ function applyMs365ConfigToForm(cfg){
   const set = (id,val) => { const el=document.getElementById(id); if(el) el.value = val || ''; };
   set('ms365ApiUrl', cfg.apiUrl);
   set('ms365SiteName', cfg.siteName);
-  set('ms365Workbook', cfg.workbook || 'SML_PMS_MS365_Template.xlsx');
-  set('ms365EmployeeTable', cfg.employeeTable || 'EmployeeMaster');
-  set('ms365EvaluationTable', cfg.evaluationTable || 'PMSEvaluations');
+  set('ms365Workbook', cfg.workbook || 'SML_PMS_Master.xlsx');
+  set('ms365EmployeeTable', cfg.employeeTable || 'Employees');
+  set('ms365EvaluationTable', cfg.evaluationTable || 'Appraisals');
   const nc=document.getElementById('ms365NoCors'); if(nc) nc.checked=!!cfg.noCors;
   updateMs365Status(cfg.apiUrl ? 'warn' : '', cfg.apiUrl ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า');
   const mode=document.getElementById('ms365Mode'); if(mode) mode.textContent = cfg.apiUrl ? 'MS365 Basic' : 'Local';
@@ -4742,25 +4742,31 @@ async function testMs365Connection(){
   }
 }
 
+/* Mapping ตรงกับ SML_PMS_Master.xlsx sheet "Employees" ที่ใช้งานจริงบน SharePoint
+   (หัวคอลัมน์ภาษาไทย: EmpID/ชื่อ-สกุล/บทบาท/กลุ่ม/แผนก/ส่วน/ฝ่าย/ตำแหน่ง/Grade/หัวหน้า L1/หัวหน้า L2/ผู้อนุมัติ/Status/Login ล่าสุด)
+   คงชื่อ key ภาษาอังกฤษไว้เป็น fallback เผื่อ Power Automate ส่งกลับมาเป็นชื่อคอลัมน์อังกฤษแทน */
 function normalizeMs365Employee(row){
   const get=(...keys)=>keys.map(k=>row?.[k]).find(v=>v!==undefined && v!==null && String(v).trim()!=='') || '';
-  const roleRaw=String(get('Role','role','PMSRole')).toLowerCase();
-  const formRaw=String(get('FormCode','formCode','Level','level')).toLowerCase();
-  const role = roleRaw.includes('sysadmin') || roleRaw.includes('super') ? 'sysadmin' : roleRaw.includes('admin') ? 'admin' : roleRaw.includes('exec') ? 'exec' : roleRaw.includes('manager') || roleRaw==='l2' ? 'l2' : roleRaw.includes('leader') || roleRaw==='l1' ? 'l1' : 'emp';
-  const statusRaw=String(get('Status','status') || 'active').toLowerCase();
+  const roleRaw=String(get('บทบาท','Role','role','PMSRole')).toLowerCase();
+  const role = roleRaw.includes('sysadmin') || roleRaw.includes('super') ? 'sysadmin' : roleRaw.includes('admin') ? 'admin' : roleRaw.includes('exec') ? 'exec' : roleRaw.includes('manager') || roleRaw==='l2' ? 'l2' : roleRaw.includes('leader') || roleRaw==='l1' ? 'l1' : (roleRaw||'emp');
+  const statusRaw=String(get('Status','สถานะ','status') || 'active').toLowerCase();
   const status = statusRaw.includes('inactive') || statusRaw.includes('off') ? 'inactive' : statusRaw.includes('probation') ? 'probation' : statusRaw.includes('resign') ? 'resigned' : 'active';
+  // MASTER_USERS order: id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin
   return [
-    get('EmployeeCode','emp_code','Code','id'),
-    get('Name','full_name','EmployeeName','name'),
+    get('EmpID','EmployeeCode','emp_code','Code','id'),
+    get('ชื่อ-สกุล','Name','full_name','EmployeeName','name'),
     role,
-    get('Department','department','Dept'),
-    get('Position','position'),
-    formRaw.includes('mgr') ? 'M2' : formRaw.includes('ldr') ? 'M1' : 'G1',
-    get('L1Manager','l1_manager','L1'),
-    get('L2Manager','l2_manager','L2'),
-    get('Executive','exec','Exec') || 'คุณเชิดชัย',
+    get('กลุ่ม','Group','group'),
+    get('แผนก','Section','section'),
+    get('ส่วน','Division','division'),
+    get('ฝ่าย','Department','department'),
+    get('ตำแหน่ง','Position','position'),
+    get('Grade','เกรด','grade'),
+    get('หัวหน้า L1','L1Manager','l1_manager','L1','l1'),
+    get('หัวหน้า L2','L2Manager','l2_manager','L2','l2'),
+    get('ผู้อนุมัติ','Approver','approver'),
     status,
-    new Date().toLocaleString('th-TH')
+    get('Login ล่าสุด','LastLogin','lastLogin') || new Date().toLocaleString('th-TH')
   ];
 }
 
