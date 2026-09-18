@@ -3,7 +3,6 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - claude/sharp-wozniak-03hehj
       - main
   workflow_dispatch:
 
