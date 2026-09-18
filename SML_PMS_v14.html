@@ -3630,17 +3630,17 @@ function renderUsers(data) {
 }
 
 function filterUsers() {
-  const role    = document.getElementById('filterRole')?.value    || '';
-  const status  = document.getElementById('filterStatus')?.value  || '';
-  const group   = document.getElementById('filterGroup')?.value   || '';
-  const section = document.getElementById('filterSection')?.value || '';
-  const q       = (document.getElementById('searchUser')?.value   || '').toLowerCase();
+  const role       = document.getElementById('filterRole')?.value    || '';
+  const status     = document.getElementById('filterStatus')?.value  || '';
+  const group      = document.getElementById('filterGroup')?.value   || '';
+  const department = document.getElementById('filterSection')?.value || '';
+  const q          = (document.getElementById('searchUser')?.value   || '').toLowerCase();
   const f = MASTER_USERS.filter(u =>
-    (!role    || u[2]  === role)    &&   /* [2] = role */
-    (!status  || u[12] === status)  &&   /* [12] = status */
-    (!group   || u[3]  === group)   &&   /* [3] = กลุ่ม (Group) */
-    (!section || u[4]  === section) &&   /* [4] = แผนก (Section) */
-    (!q       || u[0].toLowerCase().includes(q) || u[1].toLowerCase().includes(q))
+    (!role       || u[2] === role)       &&   /* [2] = role */
+    (!status     || u[12] === status)    &&   /* [12] = status */
+    (!group      || u[3] === group)      &&   /* [3] = กลุ่ม (Group) */
+    (!department || u[6] === department) &&   /* [6] = ฝ่าย (Department) — matches filterSection's "ทุกฝ่าย (Dept)" options */
+    (!q          || u[0].toLowerCase().includes(q) || u[1].toLowerCase().includes(q))
   );
   renderUsers(f);
 }
@@ -3674,7 +3674,7 @@ function renderTeamFromMaster() {
   const el = document.getElementById('teamRows');
   if(!el) return;
   /* จำลอง: แสดงเฉพาะ emp ที่ active */
-  const members = MASTER_USERS.filter(u => u[2]==='emp' && u[13]==='active');
+  const members = MASTER_USERS.filter(u => u[2]==='emp' && u[12]==='active');
   const stMap = {pending:['b-y','⏳ รอประเมิน'],done:['b-g','✓ ส่งแล้ว'],back:['b-r','↩️ ตีกลับ']};
   /* คงค่า workflow status จาก mock เดิม */
   const wfMock = {'SML-001':'pending','SML-002':'done','SML-003':'pending',
@@ -3688,9 +3688,8 @@ function renderTeamFromMaster() {
       <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>
         <div><b>${u[1]}</b><small>${u[0]}</small></div></div></td>
       <td style="font-size:12px">${u[7]}</td>
-      <td>${U_ROLE_LABEL[u[2]]}</td>
-      <td style="font-size:12px;color:#475569">${u[4]}</td>
-      <td style="font-size:12px">${u[9]}</td>
+      <td style="color:#cbd5e1">—</td>
+      <td style="color:#cbd5e1">—</td>
       <td>${l1s==='—'?'<span style="color:#cbd5e1">—</span>':'<b>'+l1s+'</b>'}</td>
       <td><span class="bd ${st[0]}">${st[1]}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
