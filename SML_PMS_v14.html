@@ -4665,32 +4665,25 @@ function calcCurrentEvalSummary(){
   return { rawY, maxY, Y:+Y.toFixed(2), Z:+Z.toFixed(2), X:+X.toFixed(2) };
 }
 
+/* คอลัมน์ตรงกับ sheet "Appraisals" จริงบน SharePoint:
+   EmpID, ชื่อ-สกุล, รอบ, ระดับ, m01..m10, l01..l04, Z, Status
+   (Y/X/เกรด เป็นสูตร Excel คำนวณเองจาก m01-l04 + Z — ไม่ต้องส่งค่าคำนวณไปทับ) */
 function collectEvaluationPayload(status='Draft'){
   if(!currentLevel) throw new Error('กรุณาเลือกระดับตำแหน่งก่อน');
   const summary = calcCurrentEvalSummary();
+  const cfg = LEVEL_CONFIG[currentLevel];
   const empCode = (document.getElementById('evalCode')?.value || MASTER_USERS[0]?.[0] || '').trim();
   const empName = (document.getElementById('evalName')?.value || MASTER_USERS[0]?.[1] || '').trim();
   const payload = {
-    EvaluationId: `${empCode || 'SML'}-FY2026-${Date.now()}`,
-    EmployeeCode: empCode,
-    EmployeeName: empName,
-    Position: (document.getElementById('evalPos')?.value || '').trim(),
-    Department: (document.getElementById('evalDept')?.value || '').trim(),
-    FiscalYear: 'FY2026',
-    FormCode: currentLevel.toUpperCase(),
-    ScoresJSON: JSON.stringify({ level: currentLevel, scores: evalScores }),
-    RawY: summary.rawY,
-    MaxY: summary.maxY,
-    Y: summary.Y,
+    EmpID: empCode,
+    'ชื่อ-สกุล': empName,
+    'รอบ': '2569',
+    'ระดับ': currentLevel,
     Z: summary.Z,
-    X: summary.X,
-    Status: status,
-    Strengths: (document.getElementById('evalStrengths')?.value || '').trim(),
-    Development: (document.getElementById('evalDevelopment')?.value || '').trim(),
-    Training: (document.getElementById('evalTraining')?.value || '').trim(),
-    CareerGoal: (document.getElementById('evalCareerGoal')?.value || '').trim(),
-    UpdatedAt: new Date().toISOString()
+    Status: status
   };
+  for(let fi=0; fi<10; fi++) payload['m'+String(fi+1).padStart(2,'0')] = evalScores['m'+fi] || 0;
+  if(cfg.leaderShow) for(let fi=0; fi<4; fi++) payload['l'+String(fi+1).padStart(2,'0')] = evalScores['l'+fi] || 0;
   return payload;
 }
 
