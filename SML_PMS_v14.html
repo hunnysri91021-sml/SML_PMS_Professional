@@ -3296,27 +3296,6 @@ function saveGoalConfig(){
   localStorage.setItem('smlPmsGoalConfig',JSON.stringify(data));
   smlToast('บันทึกการตั้งค่า Goal / KPI เรียบร้อย','ok');
 }
-const sampleKpis=[
- ['ผลผลิตตามแผน','คัน','25%','ทุกระดับ','ปริมาณ'],
- ['คุณภาพงาน / First Time Right','%','25%','ทุกระดับ','คุณภาพ'],
- ['อัตราส่งมอบตรงเวลา','%','25%','ทุกระดับ','คุณภาพ'],
- ['ความปลอดภัย / 5ส','คะแนน','25%','ทุกระดับ','ความปลอดภัย']
-];
-function renderKpis(rows){
- const body=document.getElementById('kpiRows'); if(!body)return;
- body.innerHTML=rows.map((r,i)=>`<tr><td>${i+1}</td><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td><button class="btn btn-sm" onclick="openM('mAddKpi')">แก้ไข</button></td></tr>`).join('');
- const total=rows.reduce((a,r)=>a+parseFloat(r[2])||0,0); const t=document.getElementById('kpiTotalPct'); if(t)t.textContent=total+'%';
-}
-function loadSampleKpi(){renderKpis(sampleKpis);smlToast('โหลดตัวอย่าง KPI 4 รายการแล้ว','ok');}
-function addKpiFromModal(){
- const name=document.getElementById('mKpiName')?.value?.trim(); const unit=document.getElementById('mKpiUnit')?.value?.trim(); const pct=document.getElementById('mKpiPct')?.value;
- if(!name||!unit||!pct){smlToast('กรุณากรอกชื่อ KPI หน่วยวัด และน้ำหนัก','warn');return;}
- const body=document.getElementById('kpiRows'); if(!body)return;
- const empty=document.getElementById('kpiEmpty'); if(empty)empty.remove();
- const n=body.querySelectorAll('tr').length+1; const tr=document.createElement('tr');
- tr.innerHTML=`<td>${n}</td><td><b>${name}</b></td><td>${unit}</td><td>${pct}%</td><td>${document.getElementById('mKpiLevel')?.value||'ทุกระดับ'}</td><td>${document.getElementById('mKpiType')?.value||'ปริมาณ'}</td><td><button class="btn btn-sm" onclick="openM('mAddKpi')">แก้ไข</button></td>`;
- body.appendChild(tr); closeM(); smlToast('เพิ่ม KPI เรียบร้อย','ok');
-}
 function showBehavTab(id){
  const map={bop:{lv:'op',color:'#0891b2',label:'สีฟ้า — พนักงานปฏิบัติการ'},bof:{lv:'of',color:'#db2777',label:'สีชมพู — พนักงานสำนักงาน'},bldr:{lv:'ldr',color:'#16a34a',label:'สีเขียว — หัวหน้า / วิศวกร'},bmgr:{lv:'mgr',color:'#d97706',label:'สีเหลือง — ผู้จัดการส่วน'}};
  const x=map[id]; if(!x)return;
@@ -5006,44 +4985,6 @@ function selectReviewScore(btn,grade,score){
   const y=raw/cfg.maxRaw*cfg.ypct, x=y+zval;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
   set('reviewRaw',raw.toFixed(0));set('reviewRaw2',raw.toFixed(0));set('reviewY',y.toFixed(2));set('reviewX',x.toFixed(2));
-}
-
-/* ====== EMPLOYEE IMPORT TEMPLATE & VALIDATION ====== */
-const EMP_TEMPLATE_HEADERS = [
-  'emp_code','full_name','email','level','role','department','section','division','l1_manager','status'
-];
-const EMP_TEMPLATE_THAI = [
-  'รหัสพนักงาน','ชื่อ-สกุล','Email','ระดับ','บทบาท','แผนก','ส่วน','ฝ่าย','หัวหน้า L1','สถานะ'
-];
-function downloadEmployeeTemplate(withExample=false){
-  const example = withExample ? [
-    ['EMP-00001','สมชาย ใจดี','somchai@sml.co.th','พนักงานปฏิบัติการ','Employee','Operations','PDI','Logistics','วิชัย กล้าหาญ','On'],
-    ['EMP-00002','นภา สุขสันต์','napa@sml.co.th','หัวหน้าแผนก','Leader','Operations','Maintenance','Logistics','สมชาย ผู้จัดการ','On']
-  ] : [];
-  const rows=[EMP_TEMPLATE_HEADERS,...example].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
-  const blob=new Blob(['\ufeff'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=withExample?'SML_PMS_Employee_Import_Template_Example.csv':'SML_PMS_Employee_Import_Template.csv';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(a.href),500);
-  smlToast('ดาวน์โหลด Template พนักงานเรียบร้อย','ok');
-}
-function previewEmployeeImport(input){
-  const f=input.files?.[0]; if(!f)return;
-  const label=document.getElementById('employeeFileLabel');
-  if(label)label.textContent=f.name;
-  const box=document.getElementById('employeeImportPreview');
-  if(box){
-    box.classList.remove('hide');
-    box.innerHTML=`<div class="al al-w"><span>🔍</span><div><b>${f.name}</b> พร้อมตรวจสอบ · ${(f.size/1024/1024).toFixed(2)} MB<br>ระบบจะตรวจ Header, รหัสพนักงานซ้ำ, Email, ระดับ และสถานะก่อน Import จริง</div></div>`;
-  }
-}
-function validateEmployeeImport(){
-  const f=document.getElementById('employeeFileIn')?.files?.[0];
-  if(!f){smlToast('กรุณาเลือกไฟล์พนักงานก่อนตรวจสอบ','warn');return;}
-  const box=document.getElementById('employeeImportPreview');
-  if(box)box.innerHTML+=`<div class="al al-ok" style="margin-top:10px"><span>✓</span><div><b>ตรวจสอบเบื้องต้นผ่าน</b> · Header ตรงกับ Template · พร้อมเข้าสู่ขั้นตอน Preview/ยืนยัน Import</div></div>`;
-  smlToast('ตรวจสอบไฟล์พนักงานเรียบร้อย — พร้อม Preview','ok');
 }
 
 /* ====== TAB SAFETY ====== */
