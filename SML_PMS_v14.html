@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SML PMS v13 | ระบบประเมินผลการปฏิบัติงาน</title>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -2344,20 +2345,32 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <!-- TAB SETUP -->
     <div class="ms365-panel" id="ms365-setup" style="display:none">
+      <div class="al al-w" style="margin-bottom:14px">
+        <span>ℹ️</span>
+        <div>ระบบเชื่อมกับ Excel ผ่าน <b>Microsoft Graph API โดยตรง</b> (ไม่ผ่าน Power Automate) เพราะ trigger "When an HTTP request is received" ของ Power Automate เป็นฟีเจอร์ Premium ที่ license Microsoft 365 Basic/Business Basic ไม่รวมให้ — วิธีนี้ใช้ได้กับทุก license เพราะสิทธิ์ควบคุมที่ Azure AD App Registration ไม่ใช่ตัว M365 SKU</div>
+      </div>
       <div class="card" style="margin-bottom:14px">
-        <div class="card-h"><h3>⚙️ ขั้นตอนที่ 1 — สร้าง Power Automate Flow</h3><span class="bd b-p">IT Admin</span></div>
+        <div class="card-h"><h3>⚙️ ขั้นตอนที่ 1 — Azure App Registration</h3><span class="bd b-p">IT Admin</span></div>
         <div class="card-b" style="font-size:12.5px;display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#2563eb;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">1</div>
-            <div><b>make.powerautomate.com</b> → สร้าง Flow ใหม่ → Trigger: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">When an HTTP request is received</code></div>
+            <div><b>portal.azure.com</b> → Azure Active Directory (Entra ID) → App registrations → New registration<br>
+              Name: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">SML-PMS-App</code> · Supported account types: <b>Single tenant</b> · Redirect URI type: <b>Single-page application (SPA)</b> ใส่ URL ของหน้าแอปนี้ (เช่น URL ที่โฮสต์ไฟล์ SML_PMS_v14.html)</div>
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#2563eb;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">2</div>
-            <div>เพิ่ม Action <b>Excel Online (Business)</b> → Add a row into a table / Update a row เพื่อเขียนลง Excel ใน SharePoint ตาม <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">action</code> ที่ส่งมาใน request body (<code>saveEvaluation</code> / <code>loadEmployees</code> / <code>ping</code>)</div>
+            <div><b>API permissions</b> → Add a permission → Microsoft Graph → <b>Delegated permissions</b>:
+              <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">
+                <code style="background:#dcfce7;color:#14532d;padding:2px 7px;border-radius:20px;font-size:11px">Files.ReadWrite</code>
+                <code style="background:#dcfce7;color:#14532d;padding:2px 7px;border-radius:20px;font-size:11px">Sites.ReadWrite.All</code>
+                <code style="background:#dcfce7;color:#14532d;padding:2px 7px;border-radius:20px;font-size:11px">User.Read</code>
+              </div>
+              แล้วกด <b>Grant admin consent</b>
+            </div>
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#2563eb;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">3</div>
-            <div>บันทึก Flow → คัดลอก <b>HTTP POST URL</b> ที่ได้จาก trigger มากรอกเป็น "Power Automate Flow URL" ด้านล่าง</div>
+            <div>หน้า Overview ของ App → คัดลอก <b>Application (client) ID</b> และ <b>Directory (tenant) ID</b> มากรอกในขั้นตอนที่ 3 ด้านล่าง</div>
           </div>
         </div>
       </div>
@@ -2397,17 +2410,17 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="card">
         <div class="card-h"><h3>⚙️ ขั้นตอนที่ 3 — กรอก Config</h3><span class="bd b-b">HR Admin</span></div>
         <div class="card-b">
-          <div class="fg"><label>Power Automate Flow URL <i>*</i></label><input id="ms365ApiUrl" placeholder="https://prod-00.southeastasia.logic.azure.com/workflows/..."></div>
           <div class="grid g2">
-            <div class="fg"><label>SharePoint Site Name</label><input id="ms365SiteName" placeholder="SML-HR"></div>
-            <div class="fg"><label>Excel Workbook</label><input id="ms365Workbook" placeholder="SML_PMS_Master.xlsx"></div>
+            <div class="fg"><label>Azure Tenant ID <i>*</i></label><input id="ms365TenantId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+            <div class="fg"><label>Azure Client ID (App ID) <i>*</i></label><input id="ms365ClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+            <div class="fg"><label>SharePoint Site URL <i>*</i></label><input id="ms365SiteUrl" placeholder="https://siammotor.sharepoint.com/sites/Chosiya-HR"></div>
+            <div class="fg"><label>Excel File Path (นับจาก root ของ Document Library) <i>*</i></label><input id="ms365FilePath" placeholder="_SML_PMS_Professiona/SML_PMS_Master.xlsx"></div>
             <div class="fg"><label>ชื่อตาราง Employee</label><input id="ms365EmployeeTable" placeholder="Employees"></div>
             <div class="fg"><label>ชื่อตาราง Evaluation</label><input id="ms365EvaluationTable" placeholder="Appraisals"></div>
           </div>
-          <div class="fg" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="ms365NoCors" style="width:auto"><label style="margin:0">โหมด no-cors (ใช้เมื่อ Flow URL ไม่รองรับ CORS — ส่งได้อย่างเดียว อ่านผลลัพธ์กลับไม่ได้)</label></div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button class="btn btn-p" onclick="saveMs365Config()">💾 บันทึก Config</button>
-            <button class="btn" onclick="testMs365Connection()">🔌 ทดสอบ</button>
+            <button class="btn" onclick="testMs365Connection()">🔌 ทดสอบ (จะเปิด popup ให้ login ครั้งแรก)</button>
           </div>
           <div id="ms365Status" style="margin-top:8px;font-size:12px;color:#64748b"></div>
         </div>
@@ -4515,30 +4528,36 @@ function recalc() {
   if(zbar) zbar.style.width = (Z/cfg.Zmaxraw*100)+'%';
 }
 
-const MS365_CONFIG_KEY = 'smlPmsMs365BasicConfig';
+const MS365_CONFIG_KEY = 'smlPmsMs365GraphConfig';
 const MS365_LOCAL_DRAFT_KEY = 'smlPmsEvaluationDrafts';
+const MS365_SYNC_LOG_KEY = 'smlPmsMs365SyncLog';
+const GRAPH_SCOPES = ['Files.ReadWrite','Sites.ReadWrite.All','User.Read'];
+
+let msalInstance = null;
+let ms365SiteCache = null; // { siteId, driveId, itemId }
 
 function getMs365ConfigFromForm(){
   return {
-    apiUrl: (document.getElementById('ms365ApiUrl')?.value || '').trim(),
-    siteName: (document.getElementById('ms365SiteName')?.value || '').trim(),
-    workbook: (document.getElementById('ms365Workbook')?.value || '').trim(),
+    tenantId: (document.getElementById('ms365TenantId')?.value || '').trim(),
+    clientId: (document.getElementById('ms365ClientId')?.value || '').trim(),
+    siteUrl: (document.getElementById('ms365SiteUrl')?.value || '').trim(),
+    filePath: (document.getElementById('ms365FilePath')?.value || '').trim(),
     employeeTable: (document.getElementById('ms365EmployeeTable')?.value || 'Employees').trim(),
-    evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'Appraisals').trim(),
-    noCors: !!document.getElementById('ms365NoCors')?.checked
+    evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'Appraisals').trim()
   };
 }
 
 function applyMs365ConfigToForm(cfg){
   const set = (id,val) => { const el=document.getElementById(id); if(el) el.value = val || ''; };
-  set('ms365ApiUrl', cfg.apiUrl);
-  set('ms365SiteName', cfg.siteName);
-  set('ms365Workbook', cfg.workbook || 'SML_PMS_Master.xlsx');
+  set('ms365TenantId', cfg.tenantId);
+  set('ms365ClientId', cfg.clientId);
+  set('ms365SiteUrl', cfg.siteUrl);
+  set('ms365FilePath', cfg.filePath || '_SML_PMS_Professiona/SML_PMS_Master.xlsx');
   set('ms365EmployeeTable', cfg.employeeTable || 'Employees');
   set('ms365EvaluationTable', cfg.evaluationTable || 'Appraisals');
-  const nc=document.getElementById('ms365NoCors'); if(nc) nc.checked=!!cfg.noCors;
-  updateMs365Status(cfg.apiUrl ? 'warn' : '', cfg.apiUrl ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า');
-  const mode=document.getElementById('ms365Mode'); if(mode) mode.textContent = cfg.apiUrl ? 'MS365 Basic' : 'Local';
+  const configured = !!(cfg.tenantId && cfg.clientId && cfg.siteUrl);
+  updateMs365Status(configured ? 'warn' : '', configured ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า');
+  const mode=document.getElementById('ms365Mode'); if(mode) mode.textContent = configured ? 'MS365 Graph API' : 'Local';
 }
 
 function loadMs365Config(){
@@ -4548,11 +4567,16 @@ function loadMs365Config(){
   return cfg;
 }
 
+function isMs365Configured(cfg){
+  return !!(cfg && cfg.tenantId && cfg.clientId && cfg.siteUrl);
+}
+
 function saveMs365Config(){
   const cfg = getMs365ConfigFromForm();
   localStorage.setItem(MS365_CONFIG_KEY, JSON.stringify(cfg));
   applyMs365ConfigToForm(cfg);
-  smlToast(cfg.apiUrl ? 'บันทึกการตั้งค่า MS365 Excel แล้ว' : 'บันทึกโหมด Local แล้ว','ok');
+  msalInstance = null; ms365SiteCache = null;
+  smlToast(isMs365Configured(cfg) ? 'บันทึกการตั้งค่า MS365 Excel แล้ว' : 'บันทึกโหมด Local แล้ว','ok');
 }
 
 function switchMs365Tab(id, btn){
@@ -4565,41 +4589,41 @@ function switchMs365Tab(id, btn){
 function openMs365QuickSetup(){
   const cfg = loadMs365Config();
   const set = (id,val) => { const el=document.getElementById(id); if(el) el.value = val || ''; };
-  set('mCfgApiUrl', cfg.apiUrl);
-  set('mCfgSiteName', cfg.siteName);
-  set('mCfgWorkbook', cfg.workbook || 'SML_PMS_Master.xlsx');
+  set('mCfgTenantId', cfg.tenantId);
+  set('mCfgClientId', cfg.clientId);
+  set('mCfgSiteUrl', cfg.siteUrl);
   openM('mMs365Setup');
 }
 
 function saveMs365QuickConfig(){
   const cfg = loadMs365Config();
   const get = id => (document.getElementById(id)?.value || '').trim();
-  cfg.apiUrl = get('mCfgApiUrl');
-  cfg.siteName = get('mCfgSiteName');
-  cfg.workbook = get('mCfgWorkbook') || 'SML_PMS_Master.xlsx';
+  cfg.tenantId = get('mCfgTenantId');
+  cfg.clientId = get('mCfgClientId');
+  cfg.siteUrl = get('mCfgSiteUrl');
   localStorage.setItem(MS365_CONFIG_KEY, JSON.stringify(cfg));
   applyMs365ConfigToForm(cfg);
+  msalInstance = null; ms365SiteCache = null;
   closeM();
-  smlToast(cfg.apiUrl ? 'บันทึกการตั้งค่า MS365 Excel แล้ว' : 'บันทึกโหมด Local แล้ว','ok');
+  smlToast(isMs365Configured(cfg) ? 'บันทึกการตั้งค่า MS365 Excel แล้ว' : 'บันทึกโหมด Local แล้ว','ok');
 }
 
 function downloadExcelTemplate(){
   const dl=(filename, headers, rows)=>{
-    const csv='﻿'+[headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    const csv='﻿'+[headers,...rows].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   };
-  dl('EmployeeMaster_Template.csv',
-    ['EmployeeCode','Name','Role','Department','Position','FormCode','L1Manager','L2Manager','Executive','Status'],
-    [['SML-001','สมชาย วงศ์ดี','emp','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','op','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active']]
+  dl('Employees_Template.csv',
+    ['EmpID','ชื่อ-สกุล','บทบาท','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','Grade','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','Status','Login ล่าสุด'],
+    [['SML-001','สมชาย วงศ์ดี','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active','']]
   );
-  dl('PMSEvaluations_Template.csv',
-    ['EvaluationId','EmployeeCode','EmployeeName','Position','Department','FiscalYear','FormCode',
-     'ScoresJSON','RawY','MaxY','Y','Z','X','Status','Strengths','Development','Training','CareerGoal','UpdatedAt'],
-    [['SML-001-FY2026-1', 'SML-001','สมชาย วงศ์ดี','พนักงานปฏิบัติการ PDI','ฝ่ายปฏิบัติการ','FY2026','OP',
-      '{}','65.5','100','65.5','27','92.5','Submitted','-','-','-','-','2026-01-01T00:00:00.000Z']]
+  dl('Appraisals_Template.csv',
+    ['EmpID','ชื่อ-สกุล','รอบ','ระดับ','m01','m02','m03','m04','m05','m06','m07','m08','m09','m10',
+     'l01','l02','l03','l04','Y','Z','X','เกรด','Status'],
+    [['SML-001','สมชาย วงศ์ดี','2569','op',10,10,10,10,10,10,10,10,10,10,'','','','',70,27,97,'A','Submitted']]
   );
   smlToast('ดาวน์โหลด Template ตาราง Excel แล้ว 2 ไฟล์ (สร้าง Table ใน Excel แล้วตั้งชื่อให้ตรงก่อนอัปโหลดขึ้น SharePoint)','ok');
 }
@@ -4614,30 +4638,81 @@ function updateMs365Status(type, text){
   if(sync && type==='ok') sync.textContent = new Date().toLocaleString('th-TH');
 }
 
-async function ms365Call(action, payload={}, opt={}){
-  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
-  if(!cfg.apiUrl) throw new Error('ยังไม่ได้ตั้งค่า Power Automate URL');
-  const request = {
-    action,
-    source: 'SML_PMS_HTML',
-    version: 'v11_ms365_basic',
-    company: 'บริษัท สยามกลการโลจิสติกส์ จำกัด',
-    siteName: cfg.siteName,
-    workbook: cfg.workbook,
-    tables: { employee: cfg.employeeTable, evaluation: cfg.evaluationTable },
-    payload
-  };
-  const body = JSON.stringify(request);
-  if(cfg.noCors && opt.writeOnly){
-    await fetch(cfg.apiUrl, { method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body });
-    return { ok:true, opaque:true };
+/* ====== Microsoft Graph API + MSAL — เชื่อมตรง ไม่ผ่าน Power Automate
+   (trigger HTTP request ของ Power Automate เป็น Premium feature ที่ M365 Basic ไม่รวมให้) ====== */
+
+function getMsalInstance(){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) throw new Error('ยังไม่ได้กรอก Tenant ID / Client ID / Site URL');
+  if(msalInstance) return msalInstance;
+  if(typeof msal === 'undefined') throw new Error('โหลด MSAL.js ไม่สำเร็จ — ตรวจการเชื่อมต่ออินเทอร์เน็ต');
+  msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId: cfg.clientId,
+      authority: 'https://login.microsoftonline.com/' + cfg.tenantId,
+      redirectUri: window.location.origin + window.location.pathname
+    },
+    cache: { cacheLocation: 'localStorage' }
+  });
+  return msalInstance;
+}
+
+async function getGraphToken(){
+  const instance = getMsalInstance();
+  if(typeof instance.initialize === 'function'){ try{ await instance.initialize(); }catch(e){} }
+  const accounts = instance.getAllAccounts();
+  let account = accounts[0];
+  if(!account){
+    const loginResp = await instance.loginPopup({ scopes: GRAPH_SCOPES });
+    account = loginResp.account;
   }
-  const res = await fetch(cfg.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body });
+  try{
+    const resp = await instance.acquireTokenSilent({ scopes: GRAPH_SCOPES, account });
+    return resp.accessToken;
+  }catch(e){
+    const resp = await instance.acquireTokenPopup({ scopes: GRAPH_SCOPES, account });
+    return resp.accessToken;
+  }
+}
+
+async function graphFetch(url, options={}){
+  const token = await getGraphToken();
+  const res = await fetch(url, {
+    ...options,
+    headers: Object.assign({ 'Authorization':'Bearer '+token, 'Content-Type':'application/json' }, options.headers||{})
+  });
   const text = await res.text();
   let data = {};
   try{ data = text ? JSON.parse(text) : {}; }catch(e){ data = { raw:text }; }
-  if(!res.ok) throw new Error(data.message || data.error || ('HTTP '+res.status));
+  if(!res.ok) throw new Error((data.error && data.error.message) || ('Graph HTTP '+res.status));
   return data;
+}
+
+async function resolveMs365Site(){
+  if(ms365SiteCache) return ms365SiteCache;
+  const cfg = loadMs365Config();
+  if(!cfg.siteUrl) throw new Error('ยังไม่ได้กรอก SharePoint Site URL');
+  const u = new URL(cfg.siteUrl);
+  const site = await graphFetch('https://graph.microsoft.com/v1.0/sites/' + u.hostname + ':' + u.pathname);
+  const drive = await graphFetch('https://graph.microsoft.com/v1.0/sites/' + site.id + '/drive');
+  const filePath = (cfg.filePath || 'SML_PMS_Master.xlsx').replace(/^\/+/, '');
+  const item = await graphFetch('https://graph.microsoft.com/v1.0/sites/' + site.id + '/drive/root:/' + encodeURI(filePath));
+  ms365SiteCache = { siteId: site.id, driveId: drive.id, itemId: item.id };
+  return ms365SiteCache;
+}
+
+async function graphListTableRows(tableName){
+  const { driveId, itemId } = await resolveMs365Site();
+  const data = await graphFetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+    "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows");
+  return (data.value || []).map(r => (r.values && r.values[0]) || []);
+}
+
+async function graphAddTableRow(tableName, rowValues){
+  const { driveId, itemId } = await resolveMs365Site();
+  return graphFetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+    "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows/add",
+    { method:'POST', body: JSON.stringify({ values: [rowValues] }) });
 }
 
 function calcCurrentEvalSummary(){
@@ -4665,26 +4740,21 @@ function calcCurrentEvalSummary(){
   return { rawY, maxY, Y:+Y.toFixed(2), Z:+Z.toFixed(2), X:+X.toFixed(2) };
 }
 
-/* คอลัมน์ตรงกับ sheet "Appraisals" จริงบน SharePoint:
-   EmpID, ชื่อ-สกุล, รอบ, ระดับ, m01..m10, l01..l04, Z, Status
-   (Y/X/เกรด เป็นสูตร Excel คำนวณเองจาก m01-l04 + Z — ไม่ต้องส่งค่าคำนวณไปทับ) */
+function gradeFromX(x){ return x>=90?'A':x>=80?'B':x>=70?'C':x>=60?'D':'E'; }
+
+/* แถวตรงกับคอลัมน์จริงของ sheet "Appraisals" บน SharePoint (ลำดับ A-W):
+   EmpID, ชื่อ-สกุล, รอบ, ระดับ, m01..m10, l01..l04, Y, Z, X, เกรด, Status
+   Y/X/เกรด คำนวณเองในแอปแล้วส่งเป็นค่าจริง (ไม่ฝากให้สูตร Excel คำนวณ เพราะแถวใหม่ที่เพิ่มผ่าน Graph API
+   ไม่ได้สืบทอดสูตรจากแถวก่อนหน้าโดยอัตโนมัติเสมอไป) */
 function collectEvaluationPayload(status='Draft'){
   if(!currentLevel) throw new Error('กรุณาเลือกระดับตำแหน่งก่อน');
   const summary = calcCurrentEvalSummary();
   const cfg = LEVEL_CONFIG[currentLevel];
   const empCode = (document.getElementById('evalCode')?.value || MASTER_USERS[0]?.[0] || '').trim();
   const empName = (document.getElementById('evalName')?.value || MASTER_USERS[0]?.[1] || '').trim();
-  const payload = {
-    EmpID: empCode,
-    'ชื่อ-สกุล': empName,
-    'รอบ': '2569',
-    'ระดับ': currentLevel,
-    Z: summary.Z,
-    Status: status
-  };
-  for(let fi=0; fi<10; fi++) payload['m'+String(fi+1).padStart(2,'0')] = evalScores['m'+fi] || 0;
-  if(cfg.leaderShow) for(let fi=0; fi<4; fi++) payload['l'+String(fi+1).padStart(2,'0')] = evalScores['l'+fi] || 0;
-  return payload;
+  const m = []; for(let fi=0; fi<10; fi++) m.push(evalScores['m'+fi] || 0);
+  const l = []; for(let fi=0; fi<4; fi++) l.push(cfg.leaderShow ? (evalScores['l'+fi] || 0) : null);
+  return [ empCode, empName, '2569', currentLevel, ...m, ...l, summary.Y, summary.Z, summary.X, gradeFromX(summary.X), status ];
 }
 
 function saveEvaluationLocal(payload){
@@ -4697,16 +4767,16 @@ function saveEvaluationLocal(payload){
 async function saveEvaluationToMs365(status='Draft'){
   const payload = collectEvaluationPayload(status);
   saveEvaluationLocal(payload);
-  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
-  if(!cfg.apiUrl){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
     smlToast(`บันทึก ${status} ใน Browser แล้ว — ยังไม่ได้ตั้งค่า MS365`, 'warn');
     return { localOnly:true, payload };
   }
   try{
-    const result = await ms365Call('saveEvaluation', payload, { writeOnly: cfg.noCors });
+    await graphAddTableRow(cfg.evaluationTable, payload);
     updateMs365Status('ok','Connected');
     smlToast(status==='Submitted' ? 'ส่งแบบประเมินไป Excel แล้ว' : 'บันทึกร่างไป Excel แล้ว','ok');
-    return result;
+    return { ok:true };
   }catch(err){
     updateMs365Status('warn','Sync error');
     smlToast('บันทึกสำรองใน Browser แล้ว แต่ส่ง Excel ไม่สำเร็จ: ' + err.message,'warn');
@@ -4726,51 +4796,38 @@ async function submitEvalOnline(){
 async function testMs365Connection(){
   saveMs365Config();
   try{
-    await ms365Call('ping', { at:new Date().toISOString() });
+    await resolveMs365Site();
     updateMs365Status('ok','Connected');
-    smlToast('เชื่อมต่อ Power Automate สำเร็จ','ok');
+    smlToast('เชื่อมต่อ Microsoft Graph สำเร็จ','ok');
   }catch(err){
     updateMs365Status('warn','Connection failed');
     smlToast('ทดสอบไม่สำเร็จ: ' + err.message,'warn');
   }
 }
 
-/* Mapping ตรงกับ SML_PMS_Master.xlsx sheet "Employees" ที่ใช้งานจริงบน SharePoint
-   (หัวคอลัมน์ภาษาไทย: EmpID/ชื่อ-สกุล/บทบาท/กลุ่ม/แผนก/ส่วน/ฝ่าย/ตำแหน่ง/Grade/หัวหน้า L1/หัวหน้า L2/ผู้อนุมัติ/Status/Login ล่าสุด)
-   คงชื่อ key ภาษาอังกฤษไว้เป็น fallback เผื่อ Power Automate ส่งกลับมาเป็นชื่อคอลัมน์อังกฤษแทน */
+/* row = array ตามลำดับคอลัมน์จริงของ sheet "Employees":
+   EmpID, ชื่อ-สกุล, บทบาท, กลุ่ม, แผนก, ส่วน, ฝ่าย, ตำแหน่ง, Grade, หัวหน้า L1, หัวหน้า L2, ผู้อนุมัติ, Status, Login ล่าสุด
+   (ตรงกับลำดับ MASTER_USERS แทบทั้งหมดอยู่แล้ว) */
 function normalizeMs365Employee(row){
-  const get=(...keys)=>keys.map(k=>row?.[k]).find(v=>v!==undefined && v!==null && String(v).trim()!=='') || '';
-  const roleRaw=String(get('บทบาท','Role','role','PMSRole')).toLowerCase();
-  const role = roleRaw.includes('sysadmin') || roleRaw.includes('super') ? 'sysadmin' : roleRaw.includes('admin') ? 'admin' : roleRaw.includes('exec') ? 'exec' : roleRaw.includes('manager') || roleRaw==='l2' ? 'l2' : roleRaw.includes('leader') || roleRaw==='l1' ? 'l1' : (roleRaw||'emp');
-  const statusRaw=String(get('Status','สถานะ','status') || 'active').toLowerCase();
+  const g = i => { const v = row?.[i]; return (v===undefined||v===null) ? '' : String(v).trim(); };
+  const roleRaw = g(2).toLowerCase();
+  const role = roleRaw.includes('sysadmin') || roleRaw.includes('super') ? 'sysadmin' : roleRaw.includes('admin') ? 'admin' : roleRaw.includes('exec') ? 'exec' : roleRaw.includes('manager') || roleRaw==='l2' ? 'l2' : roleRaw.includes('leader') || roleRaw==='l1' ? 'l1' : (roleRaw || 'emp');
+  const statusRaw = g(12).toLowerCase();
   const status = statusRaw.includes('inactive') || statusRaw.includes('off') ? 'inactive' : statusRaw.includes('probation') ? 'probation' : statusRaw.includes('resign') ? 'resigned' : 'active';
-  // MASTER_USERS order: id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin
   return [
-    get('EmpID','EmployeeCode','emp_code','Code','id'),
-    get('ชื่อ-สกุล','Name','full_name','EmployeeName','name'),
-    role,
-    get('กลุ่ม','Group','group'),
-    get('แผนก','Section','section'),
-    get('ส่วน','Division','division'),
-    get('ฝ่าย','Department','department'),
-    get('ตำแหน่ง','Position','position'),
-    get('Grade','เกรด','grade'),
-    get('หัวหน้า L1','L1Manager','l1_manager','L1','l1'),
-    get('หัวหน้า L2','L2Manager','l2_manager','L2','l2'),
-    get('ผู้อนุมัติ','Approver','approver'),
-    status,
-    get('Login ล่าสุด','LastLogin','lastLogin') || new Date().toLocaleString('th-TH')
+    g(0), g(1), role, g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), status,
+    g(13) || new Date().toLocaleString('th-TH')
   ];
 }
 
 async function loadEmployeesFromMs365(){
   saveMs365Config();
   try{
-    const data = await ms365Call('loadEmployees');
-    const rows = Array.isArray(data) ? data : (data.employees || data.rows || data.value || []);
-    if(!Array.isArray(rows) || !rows.length) throw new Error('Flow ไม่ได้ส่งรายการ Employee กลับมา');
+    const cfg = loadMs365Config();
+    const rows = await graphListTableRows(cfg.employeeTable);
+    if(!rows.length) throw new Error('ไม่พบแถวข้อมูลในตาราง ' + cfg.employeeTable);
     const normalized = rows.map(normalizeMs365Employee).filter(r=>r[0] && r[1]);
-    if(!normalized.length) throw new Error('ไม่พบ EmployeeCode / Name ในข้อมูลที่ส่งกลับ');
+    if(!normalized.length) throw new Error('ไม่พบ EmpID / ชื่อ-สกุล ในข้อมูลที่อ่านได้');
     MASTER_USERS.splice(0, MASTER_USERS.length, ...normalized);
     renderUsers(MASTER_USERS);
     renderOrg(MASTER_USERS);
@@ -4785,7 +4842,6 @@ async function loadEmployeesFromMs365(){
 }
 
 /* ====== SYNC TAB — พนักงาน / เวลา HRGO / Push ผลประเมิน / Export / Log ====== */
-const MS365_SYNC_LOG_KEY = 'smlPmsMs365SyncLog';
 
 function appendSyncLog(msg, ok=true){
   let rows=[];
@@ -4814,8 +4870,8 @@ function clearSyncLog(){
 }
 
 async function ms365SyncEmployees(){
-  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
-  if(!cfg.apiUrl){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
     smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงพนักงานจาก Excel ได้','warn');
     appendSyncLog('Sync พนักงาน: ยังไม่ได้ตั้งค่า MS365', false);
     return;
@@ -4832,15 +4888,14 @@ async function ms365SyncEmployees(){
 }
 
 async function ms365SyncAttendance(){
-  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
-  if(!cfg.apiUrl){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
     smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงเวลาทำงานจาก Excel ได้ ใช้หน้า "นำเข้าเวลา HRGO" แทน','warn');
     appendSyncLog('Sync เวลา HRGO: ยังไม่ได้ตั้งค่า MS365', false);
     return;
   }
   try{
-    const data = await ms365Call('loadAttendance');
-    const rows = Array.isArray(data) ? data : (data.rows || data.value || data.attendance || []);
+    const rows = await graphListTableRows('Attendance');
     const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
     set('attendSyncTime', new Date().toLocaleString('th-TH'));
     set('attendSyncCount', rows.length + ' แถว');
@@ -4863,15 +4918,15 @@ async function ms365PushAppraisals(){
     setPending(0);
     return;
   }
-  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
-  if(!cfg.apiUrl){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
     smlToast('ยังไม่ได้ตั้งค่า MS365 — บันทึกไว้ใน Browser เท่านั้น','warn');
     appendSyncLog('Push ผลประเมิน: ยังไม่ได้ตั้งค่า MS365', false);
     return;
   }
   let ok=0, fail=0;
   for(const payload of drafts){
-    try{ await ms365Call('saveEvaluation', payload, { writeOnly: cfg.noCors }); ok++; }
+    try{ await graphAddTableRow(cfg.evaluationTable, payload); ok++; }
     catch(e){ fail++; }
   }
   setPending(fail);
@@ -4881,17 +4936,25 @@ async function ms365PushAppraisals(){
 }
 
 async function ms365ExportReport(){
-  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
-  if(!cfg.apiUrl){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
     smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถ Export รายงานจาก Excel ได้','warn');
     appendSyncLog('Export รายงาน: ยังไม่ได้ตั้งค่า MS365', false);
     return;
   }
   try{
-    const data = await ms365Call('exportReport', { at:new Date().toISOString() });
+    const { driveId, itemId } = await resolveMs365Site();
+    const token = await getGraphToken();
+    const res = await fetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId + '/content?format=pdf',
+      { headers: { Authorization: 'Bearer ' + token } });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='SML_PMS_Master_' + Date.now() + '.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
     updateMs365Status('ok','Connected');
-    smlToast('ส่งคำขอ Export รายงานสรุปแล้ว — ตรวจสอบไฟล์ใน SharePoint','ok');
-    appendSyncLog('Export รายงานสรุป: ส่งคำขอสำเร็จ', true);
+    smlToast('Export รายงานเป็น PDF สำเร็จ','ok');
+    appendSyncLog('Export รายงานสรุป: ดาวน์โหลด PDF สำเร็จ', true);
   }catch(err){
     updateMs365Status('warn','Export failed');
     smlToast('Export รายงานไม่สำเร็จ: ' + err.message,'warn');
@@ -4902,6 +4965,7 @@ async function ms365ExportReport(){
 setTimeout(()=>{
   try{ renderSyncLog(JSON.parse(localStorage.getItem(MS365_SYNC_LOG_KEY) || '[]')); }catch(e){}
 }, 200);
+
 
 
 
@@ -5857,9 +5921,9 @@ function addDemoEmployee(){
     <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span>
       <div>ดูขั้นตอนละเอียดได้ที่ <b>แท็บ "ขั้นตอนตั้งค่า"</b> ในหน้า MS365 Excel</div>
     </div>
-    <div class="fg"><label>Power Automate Flow URL</label><input id="mCfgApiUrl" placeholder="https://prod-00.southeastasia.logic.azure.com/workflows/..."></div>
-    <div class="fg"><label>SharePoint Site Name</label><input id="mCfgSiteName" placeholder="SML-HR"></div>
-    <div class="fg"><label>Excel Workbook</label><input id="mCfgWorkbook" placeholder="SML_PMS_Master.xlsx"></div>
+    <div class="fg"><label>Azure Tenant ID</label><input id="mCfgTenantId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+    <div class="fg"><label>Azure Client ID</label><input id="mCfgClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
+    <div class="fg"><label>SharePoint Site URL</label><input id="mCfgSiteUrl" placeholder="https://siammotor.sharepoint.com/sites/Chosiya-HR"></div>
   </div>
   <div class="md-f">
     <button class="btn" onclick="closeM()">ปิด</button>
