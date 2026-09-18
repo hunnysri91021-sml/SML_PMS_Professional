@@ -2017,8 +2017,8 @@ tbody tr:hover{background:#f0f6ff!important}
           </div>
           <div class="template-columns">
             <b>คอลัมน์ใน Template</b>
-            <div>รหัสพนักงาน · ชื่อ-สกุล · Email · ระดับ · บทบาท</div>
-            <div>แผนก · ส่วน · ฝ่าย · หัวหน้า L1 · สถานะ</div>
+            <div>รหัสพนักงาน · ชื่อ-สกุล · บทบาท · กลุ่ม · แผนก</div>
+            <div>ส่วน · ฝ่าย · ตำแหน่ง · เกรด · หัวหน้า L1 · ผจก.ส่วน L2 · ผู้อนุมัติ · สถานะ</div>
           </div>
         </div>
         <div class="template-actions">
@@ -5418,7 +5418,7 @@ document.addEventListener('input',e=>{
 <div class="ov" id="mImportUsers"><div class="md" style="max-width:620px">
   <div class="md-h"><h3>⬆️ Import พนักงานจาก Excel</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="al al-i"><span>📋</span><div><b>Template พนักงานมาตรฐาน</b><br>คอลัมน์บังคับ: รหัสพนักงาน, ชื่อ-สกุล, Email, ระดับ, บทบาท, แผนก, ส่วน, ฝ่าย, หัวหน้า L1, สถานะ</div></div>
+    <div class="al al-i"><span>📋</span><div><b>Template พนักงานมาตรฐาน</b><br>คอลัมน์บังคับ: รหัสพนักงาน, ชื่อ-สกุล, บทบาท, กลุ่ม, แผนก, ส่วน, ฝ่าย, ตำแหน่ง, เกรด, หัวหน้า L1, ผจก.ส่วน L2, ผู้อนุมัติ, สถานะ</div></div>
     <div class="up" style="margin:14px 0" onclick="document.getElementById('employeeFileIn').click()">
       <div class="ic">📁</div><b id="employeeFileLabel">เลือกไฟล์ Excel / CSV</b><span>รองรับ .xlsx, .xls, .csv · สูงสุด 500 แถว / 20 MB</span>
     </div>
@@ -5550,16 +5550,17 @@ document.addEventListener('input',e=>{
 
 <script>
 /* v9 — Employee Master Template / Import */
+const EMP_TEMPLATE_HEADERS = ['emp_code','full_name','role','group','section','division','department','position','grade','l1','l2','approver','status'];
+const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/l1/l2/exec/admin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','เกรด','หัวหน้า L1','ผจก.ส่วน L2','ผู้อนุมัติ','สถานะ'];
 function downloadEmployeeTemplate(withExample=true){
-  const headers=['emp_code','full_name','email','level','role','department','section','division','l1_manager','status'];
-  const rows=[headers];
+  const rows=[EMP_TEMPLATE_HEADERS];
   if(withExample){
     rows.push(
-      ['SML-0001','สมชาย ใจดี','somchai@sml.co.th','หัวหน้าหน่วย / หัวหน้าแผนก / วิศวกร','Leader','Operations','PDI','Logistics','วิชัย กล้าหาญ','On'],
-      ['SML-0002','นภา สุขสันต์','napa@sml.co.th','พนักงานปฏิบัติการ','Employee','Operations','PDI','Logistics','สมชาย ใจดี','On']
+      ['SML-0001','สมชาย ใจดี','l1','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','หัวหน้าแผนก PDI','M1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active'],
+      ['SML-0002','นภา สุขสันต์','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สมชาย ใจดี','อรุณ ศิริ','คุณเชิดชัย','active']
     );
   }
-  const csv='\ufeff'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const csv='﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -5574,7 +5575,7 @@ function previewEmployeeImport(input){
   const box=document.getElementById('employeeImportPreview');
   if(box){
     box.classList.remove('hide');
-    box.innerHTML=`<div class="al al-w"><span>🔍</span><div><b>${f.name}</b> · ${(f.size/1024/1024).toFixed(2)} MB<br>ตรวจ Header, รหัสพนักงานซ้ำ, ระดับ, Role, สายบังคับบัญชา และ Status ก่อน Import</div></div>`;
+    box.innerHTML=`<div class="al al-w"><span>🔍</span><div><b>${f.name}</b> · ${(f.size/1024/1024).toFixed(2)} MB<br>ตรวจ Header, รหัสพนักงานซ้ำ, กลุ่ม/แผนก/ส่วน/ฝ่าย/ตำแหน่ง, บทบาท, สายบังคับบัญชา และ Status ก่อน Import</div></div>`;
   }
 }
 function validateEmployeeImport(){
