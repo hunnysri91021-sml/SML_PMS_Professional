@@ -2233,8 +2233,8 @@ tbody tr:hover{background:#f0f6ff!important}
         <p>คู่มือและขั้นตอนการเชื่อม SML PMS กับ Microsoft 365 Excel · SharePoint · Graph API</p>
       </div>
       <div class="ph-act">
-        <button class="btn" onclick="ms365TestConnection()">🔌 ทดสอบการเชื่อมต่อ</button>
-        <button class="btn btn-p" onclick="openM('mMs365Setup')">⚙️ ตั้งค่าการเชื่อมต่อ</button>
+        <button class="btn" onclick="testMs365Connection()">🔌 ทดสอบการเชื่อมต่อ</button>
+        <button class="btn btn-p" onclick="openMs365QuickSetup()">⚙️ ตั้งค่าการเชื่อมต่อ</button>
       </div>
     </div>
 
@@ -2344,28 +2344,19 @@ tbody tr:hover{background:#f0f6ff!important}
     <!-- TAB SETUP -->
     <div class="ms365-panel" id="ms365-setup" style="display:none">
       <div class="card" style="margin-bottom:14px">
-        <div class="card-h"><h3>⚙️ ขั้นตอนที่ 1 — Azure App Registration</h3><span class="bd b-p">IT Admin</span></div>
+        <div class="card-h"><h3>⚙️ ขั้นตอนที่ 1 — สร้าง Power Automate Flow</h3><span class="bd b-p">IT Admin</span></div>
         <div class="card-b" style="font-size:12.5px;display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#2563eb;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">1</div>
-            <div><b>portal.azure.com</b> → Azure Active Directory → App registrations → New registration<br>
-              Name: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">SML-PMS-App</code> · Supported: <b>Single tenant</b> · Redirect URI: SPA</div>
+            <div><b>make.powerautomate.com</b> → สร้าง Flow ใหม่ → Trigger: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">When an HTTP request is received</code></div>
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#2563eb;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">2</div>
-            <div><b>API Permissions</b> → Add → Microsoft Graph → Delegated:
-              <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">
-                <code style="background:#dcfce7;color:#14532d;padding:2px 7px;border-radius:20px;font-size:11px">Files.ReadWrite</code>
-                <code style="background:#dcfce7;color:#14532d;padding:2px 7px;border-radius:20px;font-size:11px">Sites.ReadWrite.All</code>
-                <code style="background:#dcfce7;color:#14532d;padding:2px 7px;border-radius:20px;font-size:11px">User.Read</code>
-                <code style="background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:20px;font-size:11px">offline_access</code>
-              </div>
-            </div>
+            <div>เพิ่ม Action <b>Excel Online (Business)</b> → Add a row into a table / Update a row เพื่อเขียนลง Excel ใน SharePoint ตาม <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">action</code> ที่ส่งมาใน request body (<code>saveEvaluation</code> / <code>loadEmployees</code> / <code>ping</code>)</div>
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#2563eb;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">3</div>
-            <div><b>Grant admin consent</b> → คลิก "Grant admin consent" → ✅<br>
-              บันทึก <b>Application (client) ID</b> และ <b>Directory (tenant) ID</b></div>
+            <div>บันทึก Flow → คัดลอก <b>HTTP POST URL</b> ที่ได้จาก trigger มากรอกเป็น "Power Automate Flow URL" ด้านล่าง</div>
           </div>
         </div>
       </div>
@@ -2374,11 +2365,11 @@ tbody tr:hover{background:#f0f6ff!important}
         <div class="card-b" style="font-size:12.5px;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#059669;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">1</div>
-            <div>ดาวน์โหลด Template: <button class="btn btn-sm btn-p" onclick="downloadExcelTemplate()">📥 SML_PMS_Master.xlsx Template</button></div>
+            <div>ดาวน์โหลด Template ตาราง: <button class="btn btn-sm btn-p" onclick="downloadExcelTemplate()">📥 EmployeeMaster + PMSEvaluations Template</button></div>
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#059669;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">2</div>
-            <div>อัปโหลดไฟล์ → SharePoint: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">Sites/SML-HR/Documents/PMS/SML_PMS_Master.xlsx</code></div>
+            <div>เปิดใน Excel → Insert → Table (ตั้งชื่อ Table ให้ตรงกับที่จะกรอกด้านล่าง เช่น <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">EmployeeMaster</code>, <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">PMSEvaluations</code>) แล้วอัปโหลดไฟล์ → SharePoint: <code style="background:#f1f5f9;padding:1px 5px;border-radius:3px">Sites/SML-HR/Documents/PMS/SML_PMS_Master.xlsx</code></div>
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#059669;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">3</div>
@@ -2389,17 +2380,19 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="card">
         <div class="card-h"><h3>⚙️ ขั้นตอนที่ 3 — กรอก Config</h3><span class="bd b-b">HR Admin</span></div>
         <div class="card-b">
+          <div class="fg"><label>Power Automate Flow URL <i>*</i></label><input id="ms365ApiUrl" placeholder="https://prod-00.southeastasia.logic.azure.com/workflows/..."></div>
           <div class="grid g2">
-            <div class="fg"><label>Azure Tenant ID <i>*</i></label><input id="cfgTenantId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
-            <div class="fg"><label>Azure Client ID (App ID) <i>*</i></label><input id="cfgClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
-            <div class="fg"><label>SharePoint Site URL <i>*</i></label><input id="cfgSiteUrl" placeholder="https://siammotors.sharepoint.com/sites/SML-HR"></div>
-            <div class="fg"><label>Excel File Path <i>*</i></label><input id="cfgFilePath" placeholder="/Documents/PMS/SML_PMS_Master.xlsx"></div>
+            <div class="fg"><label>SharePoint Site Name</label><input id="ms365SiteName" placeholder="SML-HR"></div>
+            <div class="fg"><label>Excel Workbook</label><input id="ms365Workbook" placeholder="SML_PMS_Master.xlsx"></div>
+            <div class="fg"><label>ชื่อตาราง Employee</label><input id="ms365EmployeeTable" placeholder="EmployeeMaster"></div>
+            <div class="fg"><label>ชื่อตาราง Evaluation</label><input id="ms365EvaluationTable" placeholder="PMSEvaluations"></div>
           </div>
-          <div class="fg"><label>Redirect URI</label><input id="cfgRedirectUri" placeholder="https://your-site/sml-pms/"></div>
+          <div class="fg" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="ms365NoCors" style="width:auto"><label style="margin:0">โหมด no-cors (ใช้เมื่อ Flow URL ไม่รองรับ CORS — ส่งได้อย่างเดียว อ่านผลลัพธ์กลับไม่ได้)</label></div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button class="btn btn-p" onclick="saveMs365Config()">💾 บันทึก Config</button>
-            <button class="btn" onclick="ms365TestConnection()">🔌 ทดสอบ</button>
+            <button class="btn" onclick="testMs365Connection()">🔌 ทดสอบ</button>
           </div>
+          <div id="ms365Status" style="margin-top:8px;font-size:12px;color:#64748b"></div>
         </div>
       </div>
     </div>
@@ -4533,6 +4526,55 @@ function saveMs365Config(){
   smlToast(cfg.apiUrl ? 'บันทึกการตั้งค่า MS365 Excel แล้ว' : 'บันทึกโหมด Local แล้ว','ok');
 }
 
+function switchMs365Tab(id, btn){
+  document.querySelectorAll('.ms365-panel').forEach(p=>p.style.display='none');
+  const panel=document.getElementById('ms365-'+id); if(panel)panel.style.display='';
+  const bar=btn?.closest('div'); if(bar) bar.querySelectorAll('.ms365-tab').forEach(t=>t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+function openMs365QuickSetup(){
+  const cfg = loadMs365Config();
+  const set = (id,val) => { const el=document.getElementById(id); if(el) el.value = val || ''; };
+  set('mCfgApiUrl', cfg.apiUrl);
+  set('mCfgSiteName', cfg.siteName);
+  set('mCfgWorkbook', cfg.workbook || 'SML_PMS_Master.xlsx');
+  openM('mMs365Setup');
+}
+
+function saveMs365QuickConfig(){
+  const cfg = loadMs365Config();
+  const get = id => (document.getElementById(id)?.value || '').trim();
+  cfg.apiUrl = get('mCfgApiUrl');
+  cfg.siteName = get('mCfgSiteName');
+  cfg.workbook = get('mCfgWorkbook') || 'SML_PMS_Master.xlsx';
+  localStorage.setItem(MS365_CONFIG_KEY, JSON.stringify(cfg));
+  applyMs365ConfigToForm(cfg);
+  closeM();
+  smlToast(cfg.apiUrl ? 'บันทึกการตั้งค่า MS365 Excel แล้ว' : 'บันทึกโหมด Local แล้ว','ok');
+}
+
+function downloadExcelTemplate(){
+  const dl=(filename, headers, rows)=>{
+    const csv='﻿'+[headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  };
+  dl('EmployeeMaster_Template.csv',
+    ['EmployeeCode','Name','Role','Department','Position','FormCode','L1Manager','L2Manager','Executive','Status'],
+    [['SML-001','สมชาย วงศ์ดี','emp','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','op','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active']]
+  );
+  dl('PMSEvaluations_Template.csv',
+    ['EvaluationId','EmployeeCode','EmployeeName','Position','Department','FiscalYear','FormCode',
+     'ScoresJSON','RawY','MaxY','Y','Z','X','Status','Strengths','Development','Training','CareerGoal','UpdatedAt'],
+    [['SML-001-FY2026-1', 'SML-001','สมชาย วงศ์ดี','พนักงานปฏิบัติการ PDI','ฝ่ายปฏิบัติการ','FY2026','OP',
+      '{}','65.5','100','65.5','27','92.5','Submitted','-','-','-','-','2026-01-01T00:00:00.000Z']]
+  );
+  smlToast('ดาวน์โหลด Template ตาราง Excel แล้ว 2 ไฟล์ (สร้าง Table ใน Excel แล้วตั้งชื่อให้ตรงก่อนอัปโหลดขึ้น SharePoint)','ok');
+}
+
 function updateMs365Status(type, text){
   const st=document.getElementById('ms365Status');
   if(st){
@@ -5666,27 +5708,20 @@ function addDemoEmployee(){
     <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span>
       <div>ดูขั้นตอนละเอียดได้ที่ <b>แท็บ "ขั้นตอนตั้งค่า"</b> ในหน้า MS365 Excel</div>
     </div>
-    <div class="fg"><label>Tenant ID</label><input placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
-    <div class="fg"><label>Client ID</label><input placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
-    <div class="fg"><label>SharePoint URL</label><input placeholder="https://company.sharepoint.com/sites/SML-HR"></div>
+    <div class="fg"><label>Power Automate Flow URL</label><input id="mCfgApiUrl" placeholder="https://prod-00.southeastasia.logic.azure.com/workflows/..."></div>
+    <div class="fg"><label>SharePoint Site Name</label><input id="mCfgSiteName" placeholder="SML-HR"></div>
+    <div class="fg"><label>Excel Workbook</label><input id="mCfgWorkbook" placeholder="SML_PMS_Master.xlsx"></div>
   </div>
   <div class="md-f">
     <button class="btn" onclick="closeM()">ปิด</button>
-    <button class="btn btn-p" onclick="closeM()">บันทึก</button>
+    <button class="btn btn-p" onclick="saveMs365QuickConfig()">บันทึก</button>
   </div>
 </div></div>
 
 
 <!-- Compat stubs -->
-<span id="ms365ApiUrl" style="display:none"></span>
 <span id="ms365EmpCount" style="display:none"></span>
-<span id="ms365EmployeeTable" style="display:none"></span>
-<span id="ms365EvaluationTable" style="display:none"></span>
 <span id="ms365Mode" style="display:none"></span>
-<span id="ms365NoCors" style="display:none"></span>
-<span id="ms365SiteName" style="display:none"></span>
-<span id="ms365Status" style="display:none"></span>
-<span id="ms365Workbook" style="display:none"></span>
 
 <!-- ===== USER DETAIL DRAWER ===== -->
 <div id="userDetailOverlay" onclick="closeUserDetail()"
