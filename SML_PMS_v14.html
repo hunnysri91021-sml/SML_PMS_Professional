@@ -1395,6 +1395,7 @@ tbody tr:hover{background:#f0f6ff!important}
         <label>มุมมอง:</label>
         <select id="roleSel" onchange="setRole(this.value)">
           <option value="admin">👑 Admin (HR&GA)</option>
+          <option value="sysadmin">🛡️ Admin ระบบ (Super Admin)</option>
           <option value="exec">💼 คุณเชิดชัย (AGM/MD)</option>
           <option value="l2">🎯 ผู้จัดการส่วน</option>
           <option value="l1">👔 หัวหน้าแผนก/Leader</option>
@@ -2808,15 +2809,25 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   </div>
 
   <div class="card">
-    <div class="card-h"><h3>ภาพรวมบทบาทและสิทธิ์</h3><div class="r"><span class="bd b-b">5 บทบาทหลัก</span></div></div>
+    <div class="card-h"><h3>ภาพรวมบทบาทและสิทธิ์</h3><div class="r"><span class="bd b-b">6 บทบาทหลัก</span></div></div>
     <div class="card-b">
       <div class="role-grid">
+        <div class="role-card admin" style="border-color:#dc2626">
+          <div class="role-top"><div class="role-avatar" style="background:#fee2e2;color:#dc2626">🛡️</div><div class="role-title"><b>Super Admin</b><span>Admin ระบบสูงสุด / System Owner</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
+          <div class="permission-list">
+            <div class="permission"><span class="yes">✓</span> มองเห็นทุกฟังก์ชันในระบบ</div><div class="permission"><span class="yes">✓</span> ประเมิน/สอบทาน/Calibration/อนุมัติ</div>
+            <div class="permission"><span class="yes">✓</span> ตั้งค่าระบบทั้งหมด</div><div class="permission"><span class="yes">✓</span> รายงาน & Export</div>
+            <div class="permission"><span class="yes">✓</span> จัดการผู้ใช้ & บทบาท</div><div class="permission"><span class="yes">✓</span> Audit Log</div>
+          </div>
+          <div class="role-actions"><button class="btn btn-sm">ดูสิทธิ์</button><button class="btn btn-sm btn-p">แก้ไข</button></div>
+        </div>
+
         <div class="role-card admin">
-          <div class="role-top"><div class="role-avatar">👑</div><div class="role-title"><b>System Admin</b><span>HR & GA / System Owner</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
+          <div class="role-top"><div class="role-avatar">👑</div><div class="role-title"><b>Admin</b><span>HR & GA</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
           <div class="permission-list">
             <div class="permission"><span class="yes">✓</span> จัดการผู้ใช้</div><div class="permission"><span class="yes">✓</span> ตั้งค่ารอบ</div>
             <div class="permission"><span class="yes">✓</span> แบบประเมิน</div><div class="permission"><span class="yes">✓</span> รายงาน & Export</div>
-            <div class="permission"><span class="yes">✓</span> Calibration</div><div class="permission"><span class="yes">✓</span> Audit Log</div>
+            <div class="permission"><span class="no">—</span> ประเมิน/สอบทาน/Calibration/อนุมัติ</div><div class="permission"><span class="yes">✓</span> Audit Log</div>
           </div>
           <div class="role-actions"><button class="btn btn-sm">ดูสิทธิ์</button><button class="btn btn-sm btn-p">แก้ไข</button></div>
         </div>
@@ -2886,6 +2897,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
           <select id="filterRole" onchange="filterUsers()"
             style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
             <option value="">ทุกบทบาท</option>
+            <option value="sysadmin">🛡️ Admin ระบบ</option>
             <option value="admin">👑 Admin</option>
             <option value="exec">💼 AGM/MD</option>
             <option value="l2">🎯 ผจก.ส่วน</option>
@@ -3247,10 +3259,11 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
 });
 
 /* ====== ROLE SWITCH ====== */
-const avMap={admin:['HR','#3b82f6'],exec:['MD','#8b5cf6'],l2:['MGR','#0891b2'],l1:['LDR','#16a34a'],emp:['EMP','#f59e0b']};
+const avMap={sysadmin:['SYS','#dc2626'],admin:['HR','#3b82f6'],exec:['MD','#8b5cf6'],l2:['MGR','#0891b2'],l1:['LDR','#16a34a'],emp:['EMP','#f59e0b']};
 function setRole(r){
   document.querySelectorAll('[data-role]').forEach(el=>{
-    const ok=el.dataset.role.split(',').includes(r);
+    // sysadmin = Admin ระบบสูงสุด มองเห็นทุกฟังก์ชันเสมอ ไม่ผ่านการกรอง data-role
+    const ok = r==='sysadmin' ? true : el.dataset.role.split(',').includes(r);
     if(el.classList.contains('nav-item')||el.classList.contains('nav-sec')){
       el.style.display=ok?'flex':'none';
     } else {
@@ -3518,7 +3531,7 @@ setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); }, 200);
    MASTER_USERS — Single Source of Truth
    ทุกหน้าที่แสดงรายชื่อพนักงาน render จาก array นี้เดียวกัน
    fields: [id, name, role, dept, position, grade, l1, l2, exec, status, lastLogin]
-   role: emp / l1 / l2 / exec / admin
+   role: emp / l1 / l2 / exec / admin / sysadmin (Admin ระบบสูงสุด — มองเห็นทุกฟังก์ชัน)
    status: active / probation / inactive / resigned
    ============================================================ */
 const MASTER_USERS = [
@@ -4717,7 +4730,7 @@ function normalizeMs365Employee(row){
   const get=(...keys)=>keys.map(k=>row?.[k]).find(v=>v!==undefined && v!==null && String(v).trim()!=='') || '';
   const roleRaw=String(get('Role','role','PMSRole')).toLowerCase();
   const formRaw=String(get('FormCode','formCode','Level','level')).toLowerCase();
-  const role = roleRaw.includes('admin') ? 'admin' : roleRaw.includes('exec') ? 'exec' : roleRaw.includes('manager') || roleRaw==='l2' ? 'l2' : roleRaw.includes('leader') || roleRaw==='l1' ? 'l1' : 'emp';
+  const role = roleRaw.includes('sysadmin') || roleRaw.includes('super') ? 'sysadmin' : roleRaw.includes('admin') ? 'admin' : roleRaw.includes('exec') ? 'exec' : roleRaw.includes('manager') || roleRaw==='l2' ? 'l2' : roleRaw.includes('leader') || roleRaw==='l1' ? 'l1' : 'emp';
   const statusRaw=String(get('Status','status') || 'active').toLowerCase();
   const status = statusRaw.includes('inactive') || statusRaw.includes('off') ? 'inactive' : statusRaw.includes('probation') ? 'probation' : statusRaw.includes('resign') ? 'resigned' : 'active';
   return [
@@ -5262,6 +5275,7 @@ document.addEventListener('input',e=>{
           <option value="l2">🎯 ผจก.ส่วน</option>
           <option value="exec">💼 AGM/MD</option>
           <option value="admin">👑 Admin</option>
+          <option value="sysadmin">🛡️ Admin ระบบ (Super Admin)</option>
         </select>
       </div>
     </div>
@@ -5551,7 +5565,7 @@ document.addEventListener('input',e=>{
 <script>
 /* v9 — Employee Master Template / Import */
 const EMP_TEMPLATE_HEADERS = ['emp_code','full_name','role','group','section','division','department','position','grade','l1','l2','approver','status'];
-const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/l1/l2/exec/admin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','เกรด','หัวหน้า L1','ผจก.ส่วน L2','ผู้อนุมัติ','สถานะ'];
+const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/l1/l2/exec/admin/sysadmin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','เกรด','หัวหน้า L1','ผจก.ส่วน L2','ผู้อนุมัติ','สถานะ'];
 function downloadEmployeeTemplate(withExample=true){
   const rows=[EMP_TEMPLATE_HEADERS];
   if(withExample){
