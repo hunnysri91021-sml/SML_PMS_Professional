@@ -3273,6 +3273,11 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   const sb=document.getElementById('sb');
   if(sb) sb.classList.remove('show');
   window.scrollTo(0,0);
+  if(p==='ms365'){
+    if(typeof startMs365AutoSync==='function') startMs365AutoSync();
+  } else {
+    if(typeof stopMs365AutoSync==='function') stopMs365AutoSync();
+  }
 });
 
 /* ====== ROLE SWITCH ====== */
@@ -4877,11 +4882,13 @@ function clearSyncLog(){
   smlToast('ล้าง Sync Log แล้ว','ok');
 }
 
-async function ms365SyncEmployees(){
+async function ms365SyncEmployees(silent=false){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
-    smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงพนักงานจาก Excel ได้','warn');
-    appendSyncLog('Sync พนักงาน: ยังไม่ได้ตั้งค่า MS365', false);
+    if(!silent){
+      smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงพนักงานจาก Excel ได้','warn');
+      appendSyncLog('Sync พนักงาน: ยังไม่ได้ตั้งค่า MS365', false);
+    }
     return;
   }
   const before = MASTER_USERS.length;
@@ -4892,7 +4899,19 @@ async function ms365SyncEmployees(){
   const failed = status.includes('Load failed');
   set('empSyncTime', new Date().toLocaleString('th-TH'));
   set('empSyncCount', (failed ? before : cnt) + ' รายการ');
-  appendSyncLog(failed ? 'Sync พนักงานล้มเหลว — ดูรายละเอียดใน toast' : `Sync พนักงาน: ดึงข้อมูล ${cnt} รายการจาก Excel`, !failed);
+  appendSyncLog(failed ? 'Sync พนักงานล้มเหลว — ดูรายละเอียดใน toast' : `Sync พนักงาน: ดึงข้อมูล ${cnt} รายการจาก Excel${silent?' (auto)':''}`, !failed);
+}
+
+/* Auto sync — ทำงานเฉพาะตอนอยู่หน้า MS365 Excel เท่านั้น: sync ทันทีที่เข้าหน้า
+   แล้วรีเฟรชซ้ำทุก 5 นาทีระหว่างที่ยังเปิดหน้านี้ค้างอยู่ (ตามที่ระบุไว้ในหน้า "ภาพรวม") */
+var ms365AutoSyncTimer = null;
+function startMs365AutoSync(){
+  ms365SyncEmployees(true);
+  if(ms365AutoSyncTimer) return;
+  ms365AutoSyncTimer = setInterval(()=>ms365SyncEmployees(true), 5*60*1000);
+}
+function stopMs365AutoSync(){
+  if(ms365AutoSyncTimer){ clearInterval(ms365AutoSyncTimer); ms365AutoSyncTimer=null; }
 }
 
 async function ms365SyncAttendance(){
