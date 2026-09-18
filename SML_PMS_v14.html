@@ -4756,6 +4756,125 @@ async function loadEmployeesFromMs365(){
   }
 }
 
+/* ====== SYNC TAB — พนักงาน / เวลา HRGO / Push ผลประเมิน / Export / Log ====== */
+const MS365_SYNC_LOG_KEY = 'smlPmsMs365SyncLog';
+
+function appendSyncLog(msg, ok=true){
+  let rows=[];
+  try{ rows=JSON.parse(localStorage.getItem(MS365_SYNC_LOG_KEY) || '[]'); }catch(e){ rows=[]; }
+  rows.unshift({ t: new Date().toLocaleString('th-TH'), msg, ok });
+  rows = rows.slice(0,50);
+  localStorage.setItem(MS365_SYNC_LOG_KEY, JSON.stringify(rows));
+  renderSyncLog(rows);
+}
+
+function renderSyncLog(rows){
+  const box = document.getElementById('ms365SyncLog'); if(!box) return;
+  if(!rows || !rows.length){
+    box.innerHTML = '<div style="color:#475569">// Sync log จะแสดงที่นี่...</div>';
+    return;
+  }
+  box.innerHTML = rows.map(r =>
+    `<div style="color:${r.ok?'#4ade80':'#f87171'}">[${r.t}] ${r.ok?'✓':'✗'} ${r.msg}</div>`
+  ).join('');
+}
+
+function clearSyncLog(){
+  localStorage.removeItem(MS365_SYNC_LOG_KEY);
+  renderSyncLog([]);
+  smlToast('ล้าง Sync Log แล้ว','ok');
+}
+
+async function ms365SyncEmployees(){
+  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
+  if(!cfg.apiUrl){
+    smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงพนักงานจาก Excel ได้','warn');
+    appendSyncLog('Sync พนักงาน: ยังไม่ได้ตั้งค่า MS365', false);
+    return;
+  }
+  const before = MASTER_USERS.length;
+  await loadEmployeesFromMs365();
+  const cnt = MASTER_USERS.length;
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+  const status = document.getElementById('ms365Status')?.textContent || '';
+  const failed = status.includes('Load failed');
+  set('empSyncTime', new Date().toLocaleString('th-TH'));
+  set('empSyncCount', (failed ? before : cnt) + ' รายการ');
+  appendSyncLog(failed ? 'Sync พนักงานล้มเหลว — ดูรายละเอียดใน toast' : `Sync พนักงาน: ดึงข้อมูล ${cnt} รายการจาก Excel`, !failed);
+}
+
+async function ms365SyncAttendance(){
+  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
+  if(!cfg.apiUrl){
+    smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงเวลาทำงานจาก Excel ได้ ใช้หน้า "นำเข้าเวลา HRGO" แทน','warn');
+    appendSyncLog('Sync เวลา HRGO: ยังไม่ได้ตั้งค่า MS365', false);
+    return;
+  }
+  try{
+    const data = await ms365Call('loadAttendance');
+    const rows = Array.isArray(data) ? data : (data.rows || data.value || data.attendance || []);
+    const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+    set('attendSyncTime', new Date().toLocaleString('th-TH'));
+    set('attendSyncCount', rows.length + ' แถว');
+    updateMs365Status('ok','Connected');
+    smlToast('นำเข้าเวลาทำงานจาก Excel แล้ว ' + rows.length + ' แถว','ok');
+    appendSyncLog(`Sync เวลา HRGO: นำเข้า ${rows.length} แถว`, true);
+  }catch(err){
+    updateMs365Status('warn','Sync failed');
+    smlToast('นำเข้าเวลาทำงานไม่สำเร็จ: ' + err.message,'warn');
+    appendSyncLog('Sync เวลา HRGO ล้มเหลว: ' + err.message, false);
+  }
+}
+
+async function ms365PushAppraisals(){
+  let drafts=[];
+  try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ drafts=[]; }
+  const setPending=(v)=>{const el=document.getElementById('appraisalPending'); if(el) el.textContent=v+' รายการ';};
+  if(!drafts.length){
+    smlToast('ไม่มีผลประเมินค้าง Push','warn');
+    setPending(0);
+    return;
+  }
+  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
+  if(!cfg.apiUrl){
+    smlToast('ยังไม่ได้ตั้งค่า MS365 — บันทึกไว้ใน Browser เท่านั้น','warn');
+    appendSyncLog('Push ผลประเมิน: ยังไม่ได้ตั้งค่า MS365', false);
+    return;
+  }
+  let ok=0, fail=0;
+  for(const payload of drafts){
+    try{ await ms365Call('saveEvaluation', payload, { writeOnly: cfg.noCors }); ok++; }
+    catch(e){ fail++; }
+  }
+  setPending(fail);
+  updateMs365Status(fail ? 'warn' : 'ok', fail ? 'บาง Push ไม่สำเร็จ' : 'Connected');
+  smlToast(`Push ผลประเมินสำเร็จ ${ok} รายการ${fail ? ' · ล้มเหลว '+fail+' รายการ' : ''}`, fail ? 'warn' : 'ok');
+  appendSyncLog(`Push ผลประเมิน: สำเร็จ ${ok} รายการ${fail ? ' · ล้มเหลว '+fail : ''}`, fail===0);
+}
+
+async function ms365ExportReport(){
+  const cfg = getMs365ConfigFromForm().apiUrl ? getMs365ConfigFromForm() : loadMs365Config();
+  if(!cfg.apiUrl){
+    smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถ Export รายงานจาก Excel ได้','warn');
+    appendSyncLog('Export รายงาน: ยังไม่ได้ตั้งค่า MS365', false);
+    return;
+  }
+  try{
+    const data = await ms365Call('exportReport', { at:new Date().toISOString() });
+    updateMs365Status('ok','Connected');
+    smlToast('ส่งคำขอ Export รายงานสรุปแล้ว — ตรวจสอบไฟล์ใน SharePoint','ok');
+    appendSyncLog('Export รายงานสรุป: ส่งคำขอสำเร็จ', true);
+  }catch(err){
+    updateMs365Status('warn','Export failed');
+    smlToast('Export รายงานไม่สำเร็จ: ' + err.message,'warn');
+    appendSyncLog('Export รายงานล้มเหลว: ' + err.message, false);
+  }
+}
+
+setTimeout(()=>{
+  try{ renderSyncLog(JSON.parse(localStorage.getItem(MS365_SYNC_LOG_KEY) || '[]')); }catch(e){}
+}, 200);
+
 
 
 /* ====== TEMPLATE DETAIL — 4 OFFICIAL SML FORMS ====== */
