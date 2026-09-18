@@ -3354,10 +3354,13 @@ document.addEventListener('click',e=>{
 
 
 setTimeout(()=>{
-  if(typeof setEvalLevel==='function') setEvalLevel('op');
-  if(typeof showBehavTab==='function') showBehavTab('bop');
-  if(typeof syncGoalPct==='function') syncGoalPct(document.getElementById('goalKpiPct'),'goalBehPct');
-  if(typeof loadMs365Config==='function') loadMs365Config();
+  const steps = [
+    ()=>{ if(typeof setEvalLevel==='function') setEvalLevel('op'); },
+    ()=>{ if(typeof showBehavTab==='function') showBehavTab('bop'); },
+    ()=>{ if(typeof syncGoalPct==='function') syncGoalPct(document.getElementById('goalKpiPct'),'goalBehPct'); },
+    ()=>{ if(typeof loadMs365Config==='function') loadMs365Config(); }
+  ];
+  steps.forEach(fn=>{ try{ fn(); }catch(e){ console.error('init step failed:', e); } });
 },150);
 
 /* ====== MODAL ====== */
@@ -4522,6 +4525,18 @@ const MS365_LOCAL_DRAFT_KEY = 'smlPmsEvaluationDrafts';
 const MS365_SYNC_LOG_KEY = 'smlPmsMs365SyncLog';
 const GRAPH_SCOPES = ['Files.ReadWrite','Sites.ReadWrite.All','User.Read'];
 
+/* ค่า config องค์กรเดียวกัน ฝังไว้ในไฟล์เพื่อให้ทุกเครื่อง/ทุกคนที่เปิดแอปนี้ได้ค่าเดียวกันอัตโนมัติ
+   (ไม่ต้องตั้งค่าแยกทีละเครื่องผ่าน localStorage) — Tenant ID/Client ID ของแอป SPA
+   ไม่ใช่ความลับ (ไม่มี client secret ในฝั่ง SPA) จึงฝังในโค้ดได้อย่างปลอดภัยตามมาตรฐาน MSAL */
+const DEFAULT_MS365_CONFIG = {
+  tenantId: 'e00dda6c-8f9b-4c9f-bf97-a0f549de0b0c',
+  clientId: '15405b27-0a7f-4efe-8eff-59f4b8be0969',
+  siteUrl: 'https://siammotor.sharepoint.com/sites/Chosiya-HR',
+  filePath: '_SML_PMS_Professiona/SML_PMS_Master.xlsx',
+  employeeTable: 'Employees',
+  evaluationTable: 'Appraisals'
+};
+
 let msalInstance = null;
 let ms365SiteCache = null; // { siteId, driveId, itemId }
 
@@ -4550,8 +4565,12 @@ function applyMs365ConfigToForm(cfg){
 }
 
 function loadMs365Config(){
-  let cfg = {};
-  try{ cfg = JSON.parse(localStorage.getItem(MS365_CONFIG_KEY) || '{}'); }catch(e){ cfg = {}; }
+  let stored = {};
+  try{ stored = JSON.parse(localStorage.getItem(MS365_CONFIG_KEY) || '{}'); }catch(e){ stored = {}; }
+  const cfg = {};
+  for(const k of Object.keys(DEFAULT_MS365_CONFIG)){
+    cfg[k] = (stored[k] && String(stored[k]).trim()) ? stored[k] : DEFAULT_MS365_CONFIG[k];
+  }
   applyMs365ConfigToForm(cfg);
   return cfg;
 }
