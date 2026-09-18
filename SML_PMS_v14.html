@@ -1392,7 +1392,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="crumb">PMS 2026 / <b id="crumb">แดชบอร์ด</b></div><div class="sml-live"><span></span> SML PMS • FY2026</div>
     <div class="top-right">
       <div class="role-box">
-        <label>มุมมอง:</label>
+        <label title="สาธิต UI เท่านั้น — สิทธิ์จริงคุมที่ SharePoint permission ของไฟล์ Excel">มุมมอง (Demo UI):</label>
         <select id="roleSel" onchange="setRole(this.value)">
           <option value="admin">👑 Admin (HR&GA)</option>
           <option value="sysadmin">🛡️ Admin ระบบ (Super Admin)</option>
@@ -2374,9 +2374,25 @@ tbody tr:hover{background:#f0f6ff!important}
           </div>
           <div style="display:flex;gap:10px">
             <div style="width:22px;height:22px;border-radius:50%;background:#059669;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:800;flex-shrink:0">3</div>
-            <div>สิทธิ์ไฟล์: HR Admin = Edit · ผู้จัดการ = Read · พนักงาน = ไม่มีสิทธิ์โดยตรง</div>
+            <div>
+              ตั้งสิทธิ์ไฟล์บน SharePoint (จุดคุมสิทธิ์จริงของระบบ — ไม่ใช่ตัว dropdown "มุมมอง" ในแอปนี้ ซึ่งเป็นแค่ UI สาธิต):
+              <table style="width:100%;margin-top:8px;font-size:11.5px;border-collapse:collapse">
+                <thead><tr style="background:#f1f5f9"><th style="text-align:left;padding:5px 8px;border:1px solid #e2e8f0">บทบาทใน PMS</th><th style="text-align:left;padding:5px 8px;border:1px solid #e2e8f0">SharePoint Group</th><th style="text-align:left;padding:5px 8px;border:1px solid #e2e8f0">Permission Level</th></tr></thead>
+                <tbody>
+                  <tr><td style="padding:5px 8px;border:1px solid #e2e8f0">🛡️ Super Admin (sysadmin)</td><td style="padding:5px 8px;border:1px solid #e2e8f0">SML-PMS Owners</td><td style="padding:5px 8px;border:1px solid #e2e8f0"><span class="bd b-ok" style="background:#dcfce7;color:#15803d">Full Control</span></td></tr>
+                  <tr><td style="padding:5px 8px;border:1px solid #e2e8f0">👑 Admin (HR&GA)</td><td style="padding:5px 8px;border:1px solid #e2e8f0">SML-PMS HR Admin</td><td style="padding:5px 8px;border:1px solid #e2e8f0"><span class="bd b-ok" style="background:#dcfce7;color:#15803d">Edit</span></td></tr>
+                  <tr><td style="padding:5px 8px;border:1px solid #e2e8f0">💼 Executive / 🎯 ผจก.ส่วน / 👔 หัวหน้า</td><td style="padding:5px 8px;border:1px solid #e2e8f0">SML-PMS Viewers</td><td style="padding:5px 8px;border:1px solid #e2e8f0"><span class="bd b-b">Read</span></td></tr>
+                  <tr><td style="padding:5px 8px;border:1px solid #e2e8f0">🙋 พนักงานทั่วไป</td><td style="padding:5px 8px;border:1px solid #e2e8f0">— (ไม่ต้องเพิ่มในไฟล์)</td><td style="padding:5px 8px;border:1px solid #e2e8f0"><span class="bd b-s">ไม่มีสิทธิ์เข้าไฟล์โดยตรง</span></td></tr>
+                </tbody>
+              </table>
+              <div style="margin-top:6px;color:#64748b">ตั้งค่าที่ SharePoint site → Library "PMS" → Library Settings → Permissions for this document library → Stop Inheriting Permissions → เพิ่ม 3 กลุ่มด้านบนตามสิทธิ์ที่กำหนด</div>
+            </div>
           </div>
         </div>
+      </div>
+      <div class="al al-w" style="margin-bottom:14px">
+        <span>⚠️</span>
+        <div><b>สำคัญ:</b> Dropdown "มุมมอง" ที่มุมขวาบนของแอปนี้เป็นเพียง UI สาธิต (สลับดูหน้าจอแต่ละบทบาทได้ทุกคน) <u>ไม่ใช่ระบบยืนยันตัวตน/ควบคุมสิทธิ์จริง</u> — การป้องกันข้อมูลจริงต้องอาศัยสิทธิ์ไฟล์ SharePoint ตามตารางด้านบนเท่านั้น</div>
       </div>
       <div class="card">
         <div class="card-h"><h3>⚙️ ขั้นตอนที่ 3 — กรอก Config</h3><span class="bd b-b">HR Admin</span></div>
@@ -2794,7 +2810,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     <div class="hero-icon">👤</div>
     <div class="hero-copy">
       <h3>ตั้งค่าผู้ใช้ & บทบาท</h3>
-      <p>กำหนดสิทธิ์การเข้าถึงระบบ PMS ให้เหมาะสมกับหน้าที่ของแต่ละระดับ</p>
+      <p>กำหนดสิทธิ์การเข้าถึงระบบ PMS ให้เหมาะสมกับหน้าที่ของแต่ละระดับ — หน้านี้อธิบายบทบาทเพื่อ mapping ไปตั้งสิทธิ์ไฟล์จริงที่ SharePoint (ดูตารางที่หน้า "เชื่อมต่อ MS365 Excel" → แท็บ "ขั้นตอนตั้งค่า")</p>
     </div>
     <div class="hero-status"><i></i> ระบบกำลังใช้งาน</div>
   </div>
