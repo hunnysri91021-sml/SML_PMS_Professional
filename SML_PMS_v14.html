@@ -4346,6 +4346,7 @@ function setEvalLevel(lv) {
   currentLevel = lv;
   evalScores = {};
   const cfg = LEVEL_CONFIG[lv];
+  const smCfg = SML_FORMS[lv];
   const idx = LV_IDX[lv];
 
   // update button styles
@@ -4386,7 +4387,7 @@ function setEvalLevel(lv) {
   // main factors table
   const tbody = document.getElementById('evalRows');
   if(tbody) {
-    tbody.innerHTML = cfg.factors.slice(0,10).map((f, fi) => {
+    tbody.innerHTML = smCfg.factors.slice(0,10).map((f, fi) => {
       const w = f[2];                     /* [name, desc, weight] */
       return buildRow('m'+fi, f[0], f[1], w);
     }).join('');
@@ -4400,7 +4401,7 @@ function setEvalLevel(lv) {
     if(lcard) lcard.style.display = '';
     if(lb) lb.textContent = (lv==='ldr'?'4 ปัจจัย · 8 หน่วย (2×4)':'4 ปัจจัย · 12 หน่วย (3×4)');
     if(ltbody) {
-      ltbody.innerHTML = cfg.factors.slice(10).map((f, fi) => {
+      ltbody.innerHTML = smCfg.factors.slice(10).map((f, fi) => {
         const w = f[2];                     /* [name, desc, weight] */
         return buildRow('l'+fi, f[0], f[1], w);
       }).join('');
