@@ -2016,14 +2016,6 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="ph"><div><h2>Import ข้อมูลเวลาทำงาน (Z)</h2><p>นำเข้าข้อมูลขาด-ลา-มาสาย จาก HRGO เพื่อคำนวณคะแนน Z อัตโนมัติ · ช่วง 1 ธ.ค. – 30 พ.ย.</p></div>
     <div class="ph-act"><button class="btn" onclick="downloadEmployeeTemplate()">📄 Template พนักงาน</button><button class="btn btn-p" onclick="openM('mImportUsers')">⬆️ Import พนักงาน</button></div></div>
 
-    <div class="tabs">
-      <div class="tab on" data-tab="i-up">อัปโหลด</div>
-      <div class="tab" data-tab="i-map">ตั้งค่า Mapping</div>
-      <div class="tab" data-tab="i-hist">ประวัติการนำเข้า</div>
-    </div>
-
-    <div class="tp on" id="i-up">
-      
     <div class="card employee-template-card">
       <div class="card-h">
         <div><h3>👥 Import พนักงาน</h3><small style="color:#7b8796">นำเข้าข้อมูล Employee Master จาก Template มาตรฐาน SML</small></div>
@@ -2101,95 +2093,36 @@ tbody tr:hover{background:#f0f6ff!important}
       </div>
     </div>
 
-<div class="card"><div class="card-b">
-        <div class="fr" style="margin-bottom:17px">
-          <div class="fg"><label>รอบประเมิน <i>*</i></label><select><option>FY2026-ANNUAL — ประจำปี 2569</option></select></div>
-          <div class="fg"><label>Template นำเข้า <i>*</i></label><select><option>HRGO Export (.xlsx) — ค่าเริ่มต้น</option><option>Manual Excel Template</option><option>CSV จากระบบอื่น</option></select></div>
-        </div>
-        <div class="fr" style="margin-bottom:17px">
-          <div class="fg"><label>ช่วงข้อมูลเริ่มต้น <i>*</i></label><input type="date" value="2025-10-01"></div>
-          <div class="fg"><label>ช่วงข้อมูลสิ้นสุด <i>*</i></label><input type="date" value="2026-09-30"></div>
-        </div>
-        <div class="up" onclick="document.getElementById('fileIn').click()">
-          <div class="ic">📁</div><b>คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวางที่นี่</b>
-          <span>รองรับ .xlsx, .xls, .csv · ขนาดไม่เกิน 20 MB · สูงสุด 10,000 แถว</span>
-        </div>
-        <input type="file" id="fileIn" class="hide" onchange="showPreview()">
-      </div></div>
-
-      <div id="prevArea" class="hide">
-        <div class="al al-w"><span>🔍</span><div><b>ตรวจสอบข้อมูลเสร็จสิ้น — attendance_2026.xlsx</b><br>
-        ทั้งหมด 1,248 แถว · ✅ ผ่าน 1,241 แถว · ⚠️ เตือน 4 แถว · ❌ ผิดพลาด 3 แถว</div></div>
-
-        <div class="grid g4" style="margin-bottom:18px">
-          <div class="stat s-i"><div class="lb">📄 แถวทั้งหมด</div><div class="vl">1,248</div></div>
-          <div class="stat s-ok"><div class="lb">✅ ผ่าน</div><div class="vl">1,241</div></div>
-          <div class="stat s-w"><div class="lb">⚠️ เตือน</div><div class="vl">4</div></div>
-          <div class="stat s-e"><div class="lb">❌ ผิดพลาด</div><div class="vl">3</div></div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h3>รายการข้อผิดพลาด</h3><div class="r"><button class="btn btn-sm">📥 ดาวน์โหลด Error Report</button></div></div>
-          <div class="tw"><table>
-            <thead><tr><th>แถว</th><th>รหัสพนักงาน</th><th>คอลัมน์</th><th>ค่าที่พบ</th><th>รหัสข้อผิดพลาด</th><th>รายละเอียด</th><th>ระดับ</th></tr></thead>
-            <tbody>
-              <tr style="background:#fef2f2"><td>47</td><td>EMP-09912</td><td>emp_code</td><td>EMP-09912</td><td><code style="font-size:11px">EMP_NOT_FOUND</code></td><td>ไม่พบรหัสพนักงานในระบบ</td><td><span class="bd b-r">Error</span></td></tr>
-              <tr style="background:#fef2f2"><td>128</td><td>EMP-00218</td><td>late_times</td><td>-3</td><td><code style="font-size:11px">NEGATIVE_VALUE</code></td><td>ค่าติดลบไม่ถูกต้อง</td><td><span class="bd b-r">Error</span></td></tr>
-              <tr style="background:#fef2f2"><td>556</td><td>EMP-00124</td><td>emp_code</td><td>EMP-00124</td><td><code style="font-size:11px">DUPLICATE_ROW</code></td><td>รหัสพนักงานซ้ำกับแถวที่ 122</td><td><span class="bd b-r">Error</span></td></tr>
-              <tr style="background:#fffbeb"><td>302</td><td>EMP-00445</td><td>work_days</td><td>0</td><td><code style="font-size:11px">ZERO_WORKDAY</code></td><td>วันทำงานเป็น 0 — ตรวจสอบสถานะพนักงาน</td><td><span class="bd b-y">Warning</span></td></tr>
-              <tr style="background:#fffbeb"><td>713</td><td>EMP-00889</td><td>sick_leave</td><td>45</td><td><code style="font-size:11px">UNUSUAL_VALUE</code></td><td>ลาป่วยสูงผิดปกติ (&gt;30 วัน)</td><td><span class="bd b-y">Warning</span></td></tr>
-            </tbody>
-          </table></div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h3>ตัวอย่างข้อมูล (Preview)</h3></div>
-          <div class="tw"><table>
-            <thead id="impHead"><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>วันทำงาน</th><th>สาย(ครั้ง)</th><th>สาย(นาที)</th><th>ขาด</th><th>ลาป่วย</th><th>ลากิจ</th><th>พักร้อน</th><th>คะแนนวินัย</th></tr></thead>
-            <tbody id="impRows"></tbody>
-          </table></div>
-          <div class="card-b" style="background:#f8fafc;border-top:1px solid var(--bd);display:flex;gap:9px;justify-content:flex-end">
-            <button class="btn" onclick="document.getElementById('prevArea').classList.add('hide')">ยกเลิก</button>
-            <button class="btn" >⚠️ ข้ามแถวที่ผิดพลาด</button>
-            <button class="btn btn-ok" onclick="openM('mCommit')">✅ ยืนยันนำเข้า 1,241 แถว</button>
+    <div class="card">
+      <div class="card-h">
+        <div><h3>✍️ กรอกข้อมูลวันลารายบุคคล</h3><small style="color:#7b8796">ใช้เมื่อไม่มีไฟล์ HRGO หรือต้องการแก้ไขเฉพาะบางคน — บันทึกแล้วมีผลกับคะแนน Z ทันที</small></div>
+      </div>
+      <div class="card-b">
+        <div class="fr" style="margin-bottom:12px">
+          <div class="fg"><label>พนักงาน <i>*</i></label>
+            <select id="mn_emp"></select>
           </div>
         </div>
+        <div class="fr" style="flex-wrap:wrap">
+          <div class="fg" style="max-width:110px"><label>ขาดงาน (วัน)</label><input type="number" id="mn_absent" min="0" value="0"></div>
+          <div class="fg" style="max-width:110px"><label>มาสาย (ครั้ง)</label><input type="number" id="mn_late" min="0" value="0"></div>
+          <div class="fg" style="max-width:110px"><label>กลับก่อน (ครั้ง)</label><input type="number" id="mn_early" min="0" value="0"></div>
+          <div class="fg" style="max-width:110px"><label>กิจ,กิจย่อย (วัน)</label><input type="number" id="mn_personal" min="0" value="0"></div>
+          <div class="fg" style="max-width:110px"><label>ป่วย (วัน)</label><input type="number" id="mn_sick" min="0" value="0"></div>
+          <div class="fg"><label>ใบรับรองแพทย์สะสม</label><input type="text" id="mn_medcert" placeholder="เช่น 10.5.0"></div>
+        </div>
+        <div class="template-actions">
+          <button class="btn btn-p" onclick="saveManualAttendance()">💾 บันทึกข้อมูลวันลา</button>
+        </div>
       </div>
     </div>
 
-    <div class="tp" id="i-map">
-      <div class="card">
-        <div class="card-h"><h3>Mapping คอลัมน์ — TigerSoft Time Attendance</h3><div class="r"><button class="btn btn-sm btn-p">+ เพิ่ม Mapping</button></div></div>
-        <div class="tw"><table>
-          <thead><tr><th>คอลัมน์ในไฟล์</th><th>→</th><th>ฟิลด์ในระบบ</th><th>ชนิดข้อมูล</th><th>บังคับ</th><th>ค่าเริ่มต้น</th><th>กฎแปลงค่า</th></tr></thead>
-          <tbody>
-            <tr><td><code>EmployeeID</code></td><td>→</td><td><b>emp_code</b></td><td>string</td><td>✓</td><td>—</td><td>trim, upper</td></tr>
-            <tr><td><code>WorkDay</code></td><td>→</td><td><b>work_days</b></td><td>decimal</td><td>✓</td><td>0</td><td>—</td></tr>
-            <tr><td><code>LateCount</code></td><td>→</td><td><b>late_times</b></td><td>int</td><td>✓</td><td>0</td><td>abs</td></tr>
-            <tr><td><code>LateMin</code></td><td>→</td><td><b>late_minutes</b></td><td>int</td><td>—</td><td>0</td><td>hhmm_to_minutes</td></tr>
-            <tr><td><code>AbsentDay</code></td><td>→</td><td><b>absent_days</b></td><td>decimal</td><td>✓</td><td>0</td><td>—</td></tr>
-            <tr><td><code>SickLeave</code></td><td>→</td><td><b>sick_leave_days</b></td><td>decimal</td><td>—</td><td>0</td><td>—</td></tr>
-            <tr><td><code>BusinessLeave</code></td><td>→</td><td><b>personal_leave_days</b></td><td>decimal</td><td>—</td><td>0</td><td>—</td></tr>
-            <tr><td><code>AnnualLeave</code></td><td>→</td><td><b>vacation_days</b></td><td>decimal</td><td>—</td><td>0</td><td>—</td></tr>
-            <tr><td><code>OT_Hours</code></td><td>→</td><td><b>ot_hours</b></td><td>decimal</td><td>—</td><td>0</td><td>—</td></tr>
-          </tbody>
-        </table></div>
-      </div>
-    </div>
-
-    <div class="tp" id="i-hist">
-      <div class="card">
-        <div class="card-h"><h3>ประวัติการนำเข้า</h3></div>
-        <div class="tw"><table>
-          <thead><tr><th>Batch</th><th>ไฟล์</th><th>รอบ</th><th>ช่วงข้อมูล</th><th>แถว</th><th>ผู้นำเข้า</th><th>เวลา</th><th>สถานะ</th><th></th></tr></thead>
-          <tbody>
-            <tr><td><b>IMP-2026-0041</b></td><td>attendance_2026_full.xlsx</td><td>FY2026</td><td>ต.ค.68–ก.ย.69</td><td>1,241</td><td>สุดา (HR)</td><td>12/09/69 09:24</td><td><span class="bd b-g">Committed</span></td><td><button class="btn btn-sm">↩️ Rollback</button></td></tr>
-            <tr><td>IMP-2026-0038</td><td>attendance_q3.xlsx</td><td>FY2026</td><td>เม.ย.–มิ.ย.69</td><td>1,235</td><td>สุดา (HR)</td><td>05/07/69 14:10</td><td><span class="bd b-g">Committed</span></td><td><button class="btn btn-sm" disabled style="opacity:.4">↩️</button></td></tr>
-            <tr><td>IMP-2026-0035</td><td>attendance_test.csv</td><td>FY2026</td><td>ม.ค.–มี.ค.69</td><td>0</td><td>สุดา (HR)</td><td>02/07/69 11:02</td><td><span class="bd b-r">Failed</span></td><td><button class="btn btn-sm">ดู Error</button></td></tr>
-            <tr><td>IMP-2026-0033</td><td>attendance_old.xlsx</td><td>FY2026</td><td>ต.ค.–ธ.ค.68</td><td>1,220</td><td>วิภา (HR)</td><td>15/01/69 16:45</td><td><span class="bd b-s">Rolled Back</span></td><td><button class="btn btn-sm">ดู Log</button></td></tr>
-          </tbody>
-        </table></div>
-      </div>
+    <div class="card">
+      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span></div></div>
+      <div class="tw"><table>
+        <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
+        <tbody id="attRows"></tbody>
+      </table></div>
     </div>
   </section>
 
@@ -3253,31 +3186,6 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="smlToast('ส่งกลับให้ผู้ถูกประเมินเพื่อแก้ไขแล้ว','warn');closeM();">↩️ ตีกลับ</button><button class="btn btn-ok" onclick="smlToast('บันทึกผลการประเมินของผู้ประเมินแล้ว','ok');closeM();">✓ บันทึกและส่งต่อ</button></div>
 </div></div>
 
-<div class="ov" id="mImport"><div class="md">
-  <div class="md-h"><h3>⬆️ อัปโหลดไฟล์ข้อมูลเวลาทำงาน</h3><button class="x" onclick="closeM()">×</button></div>
-  <div class="md-b">
-    <div class="fg"><label>รอบประเมิน <i>*</i></label><select><option>FY2026-ANNUAL</option></select></div>
-    <div class="fg"><label>Template <i>*</i></label><select><option>TigerSoft Time Attendance</option></select></div>
-    <div class="fr"><div class="fg"><label>วันที่เริ่ม</label><input type="date" value="2025-10-01"></div><div class="fg"><label>วันที่สิ้นสุด</label><input type="date" value="2026-09-30"></div></div>
-    <div class="up"><div class="ic">📁</div><b>เลือกไฟล์</b><span>.xlsx, .csv (สูงสุด 20 MB)</span></div>
-    <div class="al al-w" style="margin:15px 0 0"><span>⚠️</span><div>ระบบจะตรวจสอบ <b>file hash</b> เพื่อป้องกันการอัปโหลดไฟล์ซ้ำ และจะยังไม่บันทึกจนกว่าคุณจะยืนยันในขั้นตอน Preview</div></div>
-  </div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="closeM();document.getElementById('prevArea').classList.remove('hide')">ตรวจสอบข้อมูล →</button></div>
-</div></div>
-
-<div class="ov" id="mCommit"><div class="md" style="max-width:470px">
-  <div class="md-h"><h3>✅ ยืนยันการนำเข้าข้อมูล</h3><button class="x" onclick="closeM()">×</button></div>
-  <div class="md-b">
-    <div class="al al-w"><span>⚠️</span><div><b>การนำเข้าจะคำนวณคะแนนวินัยใหม่ทั้งรอบ</b> ใบประเมินที่ยังไม่อนุมัติจะได้รับผลกระทบ (ประมาณ 356 ใบ)</div></div>
-    <div class="kv"><span>Batch Number</span><b>IMP-2026-0042</b></div>
-    <div class="kv"><span>แถวที่จะนำเข้า</span><b>1,241 แถว</b></div>
-    <div class="kv"><span>แถวที่ข้าม</span><b style="color:#dc2626">3 แถว</b></div>
-    <div class="kv"><span>ใบประเมินที่กระทบ</span><b>356 ใบ</b></div>
-    <div class="fg" style="margin-top:15px"><label>หมายเหตุ</label><input placeholder="เช่น นำเข้าข้อมูลเวลารอบสิ้นปี"></div>
-  </div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-ok" onclick="closeM();alert('นำเข้าสำเร็จ 1,241 แถว · คำนวณคะแนนวินัยใหม่ 356 ใบ')">ยืนยันนำเข้า</button></div>
-</div></div>
-
 <div class="ov" id="mSubmit"><div class="md" style="max-width:440px">
   <div class="md-h"><h3>📤 ยืนยันส่งแบบประเมิน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
@@ -3926,6 +3834,8 @@ setTimeout(() => {
   renderUsers(MASTER_USERS);
   renderOrg(MASTER_USERS);
   renderTeamFromMaster();
+  if(typeof populateAttendanceEmpSelect==='function') populateAttendanceEmpSelect();
+  if(typeof renderAttendanceList==='function') renderAttendanceList();
 }, 120);
 
 
@@ -4389,17 +4299,6 @@ document.getElementById('approveRows').innerHTML=appr.map(a=>`
 <td>${a[1]}</td><td><b>${a[2]}</b></td><td><span class="grade ${a[4]}">${a[3]}</span></td>
 <td>${a[5]}</td><td>${a[6]} เดือน</td><td>${['นภา สุขสันต์','ธนา รุ่งเรือง','กิตติ พัฒนา'].includes(a[0])?'<span class="bd b-y">ปรับแล้ว</span>':'<span class="bd b-s">—</span>'}</td></tr>`).join('');
 
-const imp=[['EMP-00101','วิชัย กล้าหาญ',245,2,38,0,1,0,10,'99.00'],
-['EMP-00124','สมชาย ใจดี',245,6,142,0,4,2,8,'96.50'],
-['EMP-00218','นภา สุขสันต์',243,1,15,0,2,1,10,'100.00'],
-['EMP-00301','ณัฐพล ศรีสุข',240,9,215,1,3,4,7,'88.00'],
-['EMP-00331','กิตติ พัฒนา',238,14,402,3,6,5,6,'71.50']];
-document.getElementById('impRows').innerHTML=imp.map(r=>`
-<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td>
-<td>${r[3]>5?'<span style="color:#dc2626;font-weight:700">'+r[3]+'</span>':r[3]}</td><td>${r[4]}</td>
-<td>${r[5]>0?'<span style="color:#dc2626;font-weight:700">'+r[5]+'</span>':r[5]}</td>
-<td>${r[6]}</td><td>${r[7]}</td><td>${r[8]}</td>
-<td><b style="color:${+r[9]>=95?'#16a34a':+r[9]>=85?'#f59e0b':'#dc2626'}">${r[9]}</b></td></tr>`).join('');
 
 
 
@@ -6064,11 +5963,6 @@ function downloadHrgoTemplate(){
   if(typeof smlToast==='function')smlToast('ดาวน์โหลด Template HRGO เรียบร้อย','ok');
 }
 
-/* พื้นที่แสดงผลเมื่อเลือกไฟล์ในหน้า "นำเข้าเวลา HRGO" (จุดเดิมที่เคยเรียกฟังก์ชันที่ไม่มีอยู่จริง) */
-function showPreview(){
-  document.getElementById('prevArea')?.classList.remove('hide');
-}
-
 /* Import ข้อมูล HRGO จริง — อ่านไฟล์ CSV ตาม Template ด้านบน แล้วบันทึกลง ATTENDANCE ต่อรหัสพนักงาน
    ทำให้คะแนน Z ในแบบประเมิน (ประเมินตนเอง + ใบพิมพ์) คำนวณจากข้อมูลจริงที่ Import เข้ามา
    ทนต่อไฟล์ที่ผ่านการเปิด/บันทึกซ้ำด้วย Excel ภาษาไทย ซึ่งมักเปลี่ยนตัวคั่นเป็น ; และเข้ารหัสเป็น ANSI (Windows-874) แทน UTF-8 */
@@ -6121,7 +6015,6 @@ function importHrgoFile(input){
       }
 
       let imported=0, skipped=0;
-      const previewRows=[];
       for(let i=startIdx;i<lines.length;i++){
         const c=parseDelimitedLine(lines[i], delim);
         const code=(c[0]||'').trim();
@@ -6133,6 +6026,7 @@ function importHrgoFile(input){
            11 total_day, 12 total_hr, 13 total_min, 14 med_cert_cumulative */
         const num=(v)=>Number(v)||0;
         const rec={
+          name:(c[1]||'').trim(),
           lateCount:num(c[3]), earlyCount:0, // มาสาย/กลับก่อน รวมเป็นครั้งเดียวในไฟล์ (ดูหมายเหตุ)
           absentDay:num(c[2]),
           personalDay:num(c[5]), personalHr:num(c[6]), personalMin:num(c[7]),
@@ -6140,19 +6034,12 @@ function importHrgoFile(input){
           medCert:(c[14]||'').trim()
         };
         ATTENDANCE[code]=rec;
-        previewRows.push([code, c[1]||'—', rec.absentDay, rec.lateCount, rec.personalDay, rec.sickDay]);
         imported++;
       }
       if(!imported){ smlToast('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าไฟล์ตรงตาม Template','warn'); return; }
 
-      const head=document.getElementById('impHead');
-      if(head) head.innerHTML='<tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย/กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th></tr>';
-      const el=document.getElementById('impRows');
-      if(el){
-        el.innerHTML = previewRows.slice(0,20).map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td></tr>`).join('');
-      }
       saveAttendance();
-      document.getElementById('prevArea')?.classList.remove('hide');
+      renderAttendanceList();
       // ถ้าเปิดฟอร์มประเมินของพนักงานคนที่เพิ่ง Import อยู่ ให้รีเฟรชคะแนน Z ทันที
       if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
       if(typeof recalc==='function') recalc();
@@ -6162,6 +6049,52 @@ function importHrgoFile(input){
     }
   };
   reader.readAsArrayBuffer(f);
+}
+
+/* กรอกข้อมูลวันลารายบุคคลด้วยมือ — ใช้แทน/เสริมการ Import ไฟล์ */
+function populateAttendanceEmpSelect(){
+  const sel=document.getElementById('mn_emp'); if(!sel) return;
+  sel.innerHTML = MASTER_USERS.map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]}</option>`).join('');
+}
+function saveManualAttendance(){
+  const code=(document.getElementById('mn_emp')?.value||'').trim();
+  if(!code){ smlToast('กรุณาเลือกพนักงาน','warn'); return; }
+  const num=(id)=>Number(document.getElementById(id)?.value)||0;
+  const emp=MASTER_USERS.find(u=>u[0]===code);
+  ATTENDANCE[code]={
+    name: emp ? emp[1] : (ATTENDANCE[code]?.name||''),
+    absentDay:num('mn_absent'),
+    lateCount:num('mn_late'),
+    earlyCount:num('mn_early'),
+    personalDay:num('mn_personal'),
+    sickDay:num('mn_sick'),
+    medCert:(document.getElementById('mn_medcert')?.value||'').trim()
+  };
+  saveAttendance();
+  renderAttendanceList();
+  if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
+  if(typeof recalc==='function') recalc();
+  smlToast('บันทึกข้อมูลวันลาของ '+code+' เรียบร้อย','ok');
+}
+function deleteAttendanceRow(code){
+  if(!confirm('ลบข้อมูลวันลาของ '+code+' ?')) return;
+  delete ATTENDANCE[code];
+  saveAttendance();
+  renderAttendanceList();
+  smlToast('ลบข้อมูลเรียบร้อย','ok');
+}
+function renderAttendanceList(){
+  const el=document.getElementById('attRows'); if(!el) return;
+  const codes=Object.keys(ATTENDANCE);
+  const cnt=document.getElementById('attCount'); if(cnt) cnt.textContent=codes.length+' คน';
+  el.innerHTML = codes.length ? codes.map(code=>{
+    const a=ATTENDANCE[code];
+    const emp=MASTER_USERS.find(u=>u[0]===code);
+    const name=a.name || emp?.[1] || '—';
+    const zDays=computeZDays(a);
+    return `<tr><td><b>${code}</b></td><td>${name}</td><td>${a.absentDay||0}</td><td>${a.lateCount||0}</td><td>${a.earlyCount||0}</td><td>${a.personalDay||0}</td><td>${a.sickDay||0}</td><td>${zDays.toFixed(2)}</td>
+      <td><button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${code}')">🗑️</button></td></tr>`;
+  }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน</td></tr>';
 }
 
 function previewEmployeeImport(input){
