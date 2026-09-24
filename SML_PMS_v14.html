@@ -1498,6 +1498,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="ph">
       <div><h2>แบบประเมินตนเอง</h2><p id="evalSubtitle">กรุณาเลือกระดับตำแหน่งของท่านก่อน</p></div>
       <div class="ph-act">
+        <button class="btn btn-dg" onclick="clearEvalForm()">🗑️ ล้างผลประเมิน</button>
         <button class="btn" onclick="saveDraftEval()">💾 บันทึกร่าง</button>
         <button class="btn print-eval-btn" data-no-delegate onclick="printEvalForm()">🖨️ พิมพ์ร่าง</button>
         <button class="btn btn-p" onclick="openM('mSubmit')">📤 ส่งแบบประเมิน</button>
@@ -3162,7 +3163,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 <div class="ov" id="mReview"><div class="md reviewer-md" style="max-width:1120px">
   <div class="md-h"><div><h3 id="reviewerTitle">📋 แบบประเมินสำหรับผู้ประเมิน</h3><small id="reviewerSubtitle" style="color:#7b8796">แบบฟอร์มจะเปลี่ยนตามระดับของผู้ถูกประเมิน</small></div><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b" id="reviewerFormArea"></div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="smlToast('ส่งกลับให้ผู้ถูกประเมินเพื่อแก้ไขแล้ว','warn');closeM();">↩️ ตีกลับ</button><button class="btn btn-ok" onclick="smlToast('บันทึกผลการประเมินของผู้ประเมินแล้ว','ok');closeM();">✓ บันทึกและส่งต่อ</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="smlToast('ส่งกลับให้ผู้ถูกประเมินเพื่อแก้ไขแล้ว','warn');closeM();">↩️ ตีกลับ</button><button class="btn btn-ok" onclick="smlToast('บันทึกผลการประเมินของผู้ประเมินแล้ว','ok');closeM();">✓ บันทึกและส่งต่อ</button></div>
 </div></div>
 
 <div class="ov" id="mImport"><div class="md">
@@ -4421,6 +4422,16 @@ function setEvalLevel(lv) {
   recalc();
 }
 
+function clearEvalForm(){
+  if(!currentLevel){ smlToast('ยังไม่ได้เลือกระดับตำแหน่ง','warn'); return; }
+  if(!confirm('ยืนยันล้างผลการประเมินทั้งหมดในแบบฟอร์มนี้? ข้อมูลที่กรอกไว้จะหายไป')) return;
+  ['evalStrengths','evalDevelopment','evalTraining','evalCareerGoal'].forEach(id=>{
+    const e=document.getElementById(id); if(e) e.value='';
+  });
+  setEvalLevel(currentLevel);
+  smlToast('ล้างผลการประเมินเรียบร้อย — กรอกใหม่ได้เลย','ok');
+}
+
 function buildRow(key, name, desc, w) {
   const sc = SCORES[w];
   const GK = ['Ap','A','B','Cp','C'], GL = ['A+','A','B','C+','C'];
@@ -5276,6 +5287,19 @@ function selectReviewScore(btn,grade,score){
   const y=raw/cfg.maxRaw*cfg.ypct, x=y+zval;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
   set('reviewRaw',raw.toFixed(0));set('reviewRaw2',raw.toFixed(0));set('reviewY',y.toFixed(2));set('reviewX',x.toFixed(2));
+}
+function clearReviewerForm(){
+  const area=document.getElementById('reviewerFormArea'); if(!area)return;
+  if(!confirm('ยืนยันล้างคะแนนที่ให้ไว้ทั้งหมดในแบบประเมินนี้? ข้อมูลที่กรอกไว้จะหายไป')) return;
+  area.querySelectorAll('.review-score').forEach(b=>b.classList.remove('selected'));
+  area.querySelectorAll('.review-got').forEach(b=>b.textContent='—');
+  area.querySelectorAll('.review-comment').forEach(i=>i.value='');
+  area.querySelectorAll('textarea').forEach(t=>t.value='');
+  const cfg=SML_FORMS[currentReviewerLevel];
+  const zval=cfg?cfg.zmax:0;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  set('reviewRaw','0');set('reviewRaw2','0');set('reviewY','0.00');set('reviewX',zval.toFixed(2));
+  smlToast('ล้างคะแนนในแบบประเมินเรียบร้อย','ok');
 }
 
 /* ====== TAB SAFETY ====== */
