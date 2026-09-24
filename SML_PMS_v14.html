@@ -1627,20 +1627,20 @@ tbody tr:hover{background:#f0f6ff!important}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
             <div>
               <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:10px">สถิติเวลาทำงาน</div>
-              <div class="kv"><span>มาสาย</span><b style="color:#f59e0b">6 ครั้ง</b></div>
-              <div class="kv"><span>กลับก่อนเวลา</span><b>1 ครั้ง</b></div>
-              <div class="kv"><span>รวมสาย+กลับก่อน</span><b>7 ครั้ง ÷ 8 = 0.875 วัน</b></div>
-              <div class="kv"><span>ขาดงาน</span><b style="color:#16a34a">0 วัน</b></div>
-              <div class="kv"><span>ลาป่วย</span><b>3 วัน</b></div>
-              <div class="kv"><span>ลากิจ</span><b>2 วัน</b></div>
-              <div class="kv" style="border-top:1px solid var(--bd);margin-top:6px;padding-top:8px"><span><b>วันลารวม</b></span><b>5.875 วัน (≈ 5 วัน)</b></div>
+              <div class="kv"><span>มาสาย</span><b id="zsLate" style="color:#f59e0b">— ครั้ง</b></div>
+              <div class="kv"><span>กลับก่อนเวลา</span><b id="zsEarly">— ครั้ง</b></div>
+              <div class="kv"><span>รวมสาย+กลับก่อน</span><b id="zsLateEarly">—</b></div>
+              <div class="kv"><span>ขาดงาน</span><b id="zsAbsent" style="color:#16a34a">— วัน</b></div>
+              <div class="kv"><span>ลาป่วย</span><b id="zsSick">— วัน</b></div>
+              <div class="kv"><span>ลากิจ</span><b id="zsPersonal">— วัน</b></div>
+              <div class="kv" style="border-top:1px solid var(--bd);margin-top:6px;padding-top:8px"><span><b>วันลารวม</b></span><b id="zsTotal">—</b></div>
             </div>
             <div>
               <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:10px">คะแนน Z จากตาราง SML</div>
-              <div class="kv"><span>วันลารวม 5 วัน → คะแนนเต็ม</span><b style="color:#16a34a">ได้คะแนนเต็ม (0–5 วัน)</b></div>
+              <div class="kv"><span>วันลารวม → คะแนน Z</span><b id="zsTableNote" style="color:#16a34a">คำนวณจากข้อมูล HRGO ที่ Import จริง</b></div>
               <div class="kv"><span>คะแนน Z ดิบ (พนักงาน 30%)</span><b id="zRaw" style="font-size:17px;color:#16a34a">30.00</b></div>
-              <div class="kv"><span>คะแนน Z ดิบ (หัวหน้า 20%)</span><b style="font-size:14px;color:#475569">20.00</b></div>
-              <div class="kv"><span>คะแนน Z ดิบ (ผจก.ส่วน 10%)</span><b style="font-size:14px;color:#475569">10.00</b></div>
+              <div class="kv"><span>คะแนน Z ดิบ (หัวหน้า 20%)</span><b id="zsBandLdr" style="font-size:14px;color:#475569">20.00</b></div>
+              <div class="kv"><span>คะแนน Z ดิบ (ผจก.ส่วน 10%)</span><b id="zsBandMgr" style="font-size:14px;color:#475569">10.00</b></div>
               <div class="kv" style="border-top:2px solid #0f172a;margin-top:8px;padding-top:10px">
                 <span style="font-weight:700;color:#0f172a">คะแนน Z ที่ใช้ (ตามระดับท่าน)</span>
                 <b id="zFinal" style="font-size:20px;color:#16a34a">30.00</b>
@@ -2095,6 +2095,8 @@ tbody tr:hover{background:#f0f6ff!important}
         <div class="al al-i" style="margin-top:12px"><span>ℹ️</span><div>"รวม ป่วย+กิจ" = กิจ,กิจย่อย + ป่วย รวมกัน (ใช้คำนวณวันลาสะสมตามเกณฑ์คะแนน Z) · "ใบรับรองแพทย์สะสม" นับเฉพาะวันลาป่วยที่มีใบรับรองแพทย์แนบ</div></div>
         <div class="template-actions">
           <button class="btn btn-p" onclick="downloadHrgoTemplate()">📥 ดาวน์โหลด Template HRGO</button>
+          <button class="btn btn-ok" onclick="document.getElementById('hrgoFileIn').click()">⬆️ Import ไฟล์ HRGO (คำนวณ Z จริง)</button>
+          <input type="file" id="hrgoFileIn" class="hide" accept=".csv" onchange="importHrgoFile(this)">
         </div>
       </div>
     </div>
@@ -3738,6 +3740,56 @@ const MASTER_USERS = [
   ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565'],
 ];
 
+/* ==========================================
+   ATTENDANCE STORE — ข้อมูลเวลาทำงานจริงจากการ Import HRGO
+   ผูกกับคะแนน Z ในแบบประเมิน (ส่วนที่ 2) ต่อรหัสพนักงาน
+   ========================================== */
+const ATTENDANCE_KEY = 'smlPmsAttendance';
+let ATTENDANCE = {};
+function loadAttendance(){
+  try{ ATTENDANCE = JSON.parse(localStorage.getItem(ATTENDANCE_KEY) || '{}'); }catch(e){ ATTENDANCE = {}; }
+}
+function saveAttendance(){ localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(ATTENDANCE)); }
+loadAttendance();
+
+/* ค่าตัวอย่างก่อนมีการ Import จริง — ให้ตรงกับตัวเลขที่เคยแสดงเป็น mock ในฟอร์ม */
+const DEFAULT_ATTENDANCE = { lateCount:6, earlyCount:1, absentDay:0, sickDay:3, personalDay:2 };
+function getAttendanceFor(empCode){
+  return ATTENDANCE[empCode] || DEFAULT_ATTENDANCE;
+}
+/* สูตรตามเกณฑ์ SML (หน้า "เกณฑ์คะแนน Z"): ขาด 1 วัน = ลากิจ 3 วัน · สาย/กลับก่อน 8 ครั้ง = 1 วันลา
+   วันลารวม = ลาป่วย + ลากิจ + (ขาด × 3) + ((สาย+กลับก่อน) ÷ 8) */
+function computeZDays(att){
+  const lateEarly = (att.lateCount||0) + (att.earlyCount||0);
+  const raw = (att.sickDay||0) + (att.personalDay||0) + (att.absentDay||0)*3 + lateEarly/8;
+  return Math.min(30, Math.round(raw*1000)/1000);
+}
+function zKeyForLevel(lv){ return lv==='mgr' ? 'mgr' : (lv==='ldr'||lv==='super') ? 'ldr' : 'emp'; }
+function computeZScore(lv, empCode){
+  const att = getAttendanceFor(empCode);
+  const zDaysExact = computeZDays(att);
+  const zDaysIdx = Math.min(30, Math.round(zDaysExact));
+  const score = Z_TABLE[zKeyForLevel(lv)][zDaysIdx] ?? 0;
+  return { att, zDaysExact, zDaysIdx, score };
+}
+/* แสดงสถิติเวลาทำงาน + คะแนน Z จริงในหน้าประเมินตนเอง ตามระดับที่เลือก */
+function renderZStats(lv){
+  const empCode = (document.getElementById('evalCode')?.value || MASTER_USERS[0]?.[0] || '').trim();
+  const { att, zDaysExact, zDaysIdx } = computeZScore(lv, empCode);
+  const lateEarly = (att.lateCount||0) + (att.earlyCount||0);
+  const el = (id,val) => { const e=document.getElementById(id); if(e) e.textContent = val; };
+  el('zsLate', (att.lateCount||0) + ' ครั้ง');
+  el('zsEarly', (att.earlyCount||0) + ' ครั้ง');
+  el('zsLateEarly', lateEarly + ' ครั้ง ÷ 8 = ' + (lateEarly/8).toFixed(3) + ' วัน');
+  el('zsAbsent', (att.absentDay||0) + ' วัน');
+  el('zsSick', (att.sickDay||0) + ' วัน');
+  el('zsPersonal', (att.personalDay||0) + ' วัน');
+  el('zsTotal', zDaysExact.toFixed(3) + ' วัน (≈ ' + zDaysIdx + ' วัน)');
+  el('zRaw', (Z_TABLE.emp[zDaysIdx] ?? 0).toFixed(2));
+  el('zsBandLdr', (Z_TABLE.ldr[zDaysIdx] ?? 0).toFixed(2));
+  el('zsBandMgr', (Z_TABLE.mgr[zDaysIdx] ?? 0).toFixed(2));
+}
+
 /* helpers */
 const U_ROLE_LABEL = {
   admin:'<span class="bd b-r">👑 Admin HR&GA</span>',
@@ -3980,10 +4032,10 @@ function printEvalForm() {
     </tr>`;
   }).join('');
 
-  /* Z score */
-  const zDays   = 5; /* จำลอง — จาก HRGO */
-  const zKey    = lv==='mgr'?'mgr':lv==='ldr'||lv==='super'?'ldr':'emp';
-  const zScore  = Z_TABLE[zKey][Math.min(zDays,30)]||0;
+  /* Z score — คำนวณจากข้อมูลเวลาทำงานจริงที่ Import จาก HRGO (empCode ด้านบน) */
+  const zResult = computeZScore(lv, empCode);
+  const zDays   = zResult.zDaysIdx;
+  const zScore  = zResult.score;
   const yScore  = maxY>0?((rawY/maxY)*lcfg.Ypct):0;
   const xScore  = yScore + zScore;
   const grade   = xScore>=90?'A':xScore>=80?'B':xScore>=70?'C':xScore>=60?'D':'E';
@@ -4108,10 +4160,10 @@ function printEvalForm() {
     ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${lcfg.Zpct}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO · ช่วง 1 ธ.ค. 2568 – 30 พ.ย. 2569
   </div>
   <div class="F-zbox">
-    <div class="zc"><span class="zl">มาสาย:</span><span class="zv">6 ครั้ง</span></div>
-    <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">1 ครั้ง</span></div>
-    <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">3 วัน</span></div>
-    <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">2 วัน</span></div>
+    <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zResult.att.lateCount||0} ครั้ง</span></div>
+    <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">${zResult.att.earlyCount||0} ครั้ง</span></div>
+    <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">${zResult.att.sickDay||0} วัน</span></div>
+    <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">${zResult.att.personalDay||0} วัน</span></div>
     <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zDays} วัน</span></div>
     <div class="ztotal">Z = ${zScore.toFixed(2)}</div>
   </div>
@@ -4543,15 +4595,16 @@ function setEvalLevel(lv) {
   if(fi) fi.textContent = 'ส่วนที่ 1 — ตารางประเมินผลการปฏิบัติงาน (' + (cfg.leaderShow?'10':'10') + ' ปัจจัยหลัก)';
   if(fb) fb.textContent = 'Y = ' + cfg.Ypct + '% · น้ำหนักรวม ' + (cfg.leaderShow ? (lv==='ldr'?'29':'33') : '20') + ' หน่วย';
 
-  // Z labels
+  // Z labels — คำนวณจากข้อมูลเวลาทำงานจริง (Import HRGO) ของพนักงานคนนี้
   const zb = document.getElementById('zBadgeLabel');
   if(zb) zb.textContent = 'Z = ' + cfg.Zpct + '% · คะแนนเต็ม ' + cfg.Zmaxraw;
+  renderZStats(lv);
+  const empCodeForZ = (document.getElementById('evalCode')?.value || MASTER_USERS[0]?.[0] || '').trim();
+  const zNow = computeZScore(lv, empCodeForZ).score;
   const zf = document.getElementById('zFinal');
-  if(zf) { zf.textContent = cfg.Zmaxraw + '.00'; zf.style.color = '#16a34a'; }
-  const zr = document.getElementById('zRaw');
-  if(zr) zr.textContent = cfg.Zmaxraw + '.00';
+  if(zf) { zf.textContent = zNow.toFixed(2); zf.style.color = '#16a34a'; }
   const zbar = document.getElementById('zBar');
-  if(zbar) zbar.style.width = '100%';
+  if(zbar) zbar.style.width = (cfg.Zmaxraw>0 ? (zNow/cfg.Zmaxraw*100) : 0)+'%';
 
   // main factors table
   const tbody = document.getElementById('evalRows');
@@ -4672,8 +4725,9 @@ function recalc() {
   // คะแนน Y
   const Y = maxTotal > 0 ? (rawTotal / maxTotal) * cfg.Ypct : 0;
 
-  // คะแนน Z (ใช้ค่าจำลอง 5 วันลา = ได้เต็ม)
-  const Z = cfg.Zmaxraw; // เต็ม (จากข้อมูล HRGO)
+  // คะแนน Z — คำนวณจากข้อมูลเวลาทำงานจริงที่ Import จาก HRGO (ถ้ายังไม่ Import ใช้ค่าเริ่มต้น)
+  const empCodeForZ = (document.getElementById('evalCode')?.value || MASTER_USERS[0]?.[0] || '').trim();
+  const Z = computeZScore(currentLevel, empCodeForZ).score;
 
   const X = Y + Z;
 
@@ -6008,6 +6062,83 @@ function downloadHrgoTemplate(){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   if(typeof smlToast==='function')smlToast('ดาวน์โหลด Template HRGO เรียบร้อย','ok');
+}
+
+/* พื้นที่แสดงผลเมื่อเลือกไฟล์ในหน้า "นำเข้าเวลา HRGO" (จุดเดิมที่เคยเรียกฟังก์ชันที่ไม่มีอยู่จริง) */
+function showPreview(){
+  document.getElementById('prevArea')?.classList.remove('hide');
+}
+
+/* Import ข้อมูล HRGO จริง — อ่านไฟล์ CSV ตาม Template ด้านบน แล้วบันทึกลง ATTENDANCE ต่อรหัสพนักงาน
+   ทำให้คะแนน Z ในแบบประเมิน (ประเมินตนเอง + ใบพิมพ์) คำนวณจากข้อมูลจริงที่ Import เข้ามา */
+function parseHrgoCsvLine(line){
+  const out=[]; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(inQ){
+      if(c==='"'){ if(line[i+1]==='"'){ cur+='"'; i++; } else { inQ=false; } }
+      else cur+=c;
+    } else {
+      if(c==='"') inQ=true;
+      else if(c===','){ out.push(cur); cur=''; }
+      else cur+=c;
+    }
+  }
+  out.push(cur);
+  return out.map(v=>v.trim());
+}
+function importHrgoFile(input){
+  const f=input.files?.[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const text=String(reader.result||'').replace(/^﻿/,'');
+      const lines=text.split(/\r\n|\n/).filter(l=>l.trim()!=='');
+      if(lines.length<2){ smlToast('ไฟล์ว่างเปล่าหรือไม่มีข้อมูล','warn'); return; }
+      // แถวแรก = machine header (emp_code,...) ข้ามได้ทั้งแบบมี/ไม่มีแถวคำอธิบายภาษาไทยตามหลัง
+      const firstCells = parseHrgoCsvLine(lines[0]).map(c=>c.toLowerCase());
+      let startIdx = 1;
+      if(firstCells[0] !== 'emp_code'){ startIdx = 0; } // ไม่มี header แถวแรก ถือว่าทุกแถวเป็นข้อมูล
+      else if(parseHrgoCsvLine(lines[1])[0] === HRGO_TEMPLATE_THAI[0]) startIdx = 2; // ข้ามแถว label ไทยด้วยถ้ามี
+
+      let imported=0, skipped=0;
+      const previewRows=[];
+      for(let i=startIdx;i<lines.length;i++){
+        const c=parseHrgoCsvLine(lines[i]);
+        const code=(c[0]||'').trim();
+        if(!code){ skipped++; continue; }
+        /* ลำดับคอลัมน์ตรงกับ HRGO_TEMPLATE_HEADERS:
+           0 emp_code, 1 full_name, 2 absent_day, 3 late_count, 4 late_min,
+           5 personal_day, 6 personal_hr, 7 personal_min,
+           8 sick_day, 9 sick_hr, 10 sick_min,
+           11 total_day, 12 total_hr, 13 total_min, 14 med_cert_cumulative */
+        const num=(v)=>Number(v)||0;
+        const rec={
+          lateCount:num(c[3]), earlyCount:0, // มาสาย/กลับก่อน รวมเป็นครั้งเดียวในไฟล์ (ดูหมายเหตุ)
+          absentDay:num(c[2]),
+          personalDay:num(c[5]), personalHr:num(c[6]), personalMin:num(c[7]),
+          sickDay:num(c[8]), sickHr:num(c[9]), sickMin:num(c[10]),
+          medCert:(c[14]||'').trim()
+        };
+        ATTENDANCE[code]=rec;
+        previewRows.push([code, c[1]||'—', rec.absentDay, rec.lateCount, rec.personalDay, rec.sickDay]);
+        imported++;
+      }
+      saveAttendance();
+      const el=document.getElementById('impRows');
+      if(el){
+        el.innerHTML = previewRows.slice(0,20).map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>—</td><td>${r[3]}</td><td>—</td><td>${r[2]}</td><td>${r[5]}</td><td>${r[4]}</td><td>—</td><td>—</td></tr>`).join('');
+      }
+      document.getElementById('prevArea')?.classList.remove('hide');
+      // ถ้าเปิดฟอร์มประเมินของพนักงานคนที่เพิ่ง Import อยู่ ให้รีเฟรชคะแนน Z ทันที
+      if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
+      if(typeof recalc==='function') recalc();
+      smlToast(`Import ข้อมูล HRGO สำเร็จ ${imported} รายการ` + (skipped?` (ข้าม ${skipped} แถวที่ไม่มีรหัสพนักงาน)`:''), 'ok');
+    }catch(err){
+      smlToast('อ่านไฟล์ไม่สำเร็จ: '+err.message, 'warn');
+    }
+  };
+  reader.readAsText(f, 'utf-8');
 }
 
 function previewEmployeeImport(input){
