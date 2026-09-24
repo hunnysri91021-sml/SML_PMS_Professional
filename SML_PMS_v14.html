@@ -2143,9 +2143,9 @@ tbody tr:hover{background:#f0f6ff!important}
         </div>
 
         <div class="card">
-          <div class="card-h"><h3>ตัวอย่างข้อมูล (Preview 5 แถวแรก)</h3></div>
+          <div class="card-h"><h3>ตัวอย่างข้อมูล (Preview)</h3></div>
           <div class="tw"><table>
-            <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>วันทำงาน</th><th>สาย(ครั้ง)</th><th>สาย(นาที)</th><th>ขาด</th><th>ลาป่วย</th><th>ลากิจ</th><th>พักร้อน</th><th>คะแนนวินัย</th></tr></thead>
+            <thead id="impHead"><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>วันทำงาน</th><th>สาย(ครั้ง)</th><th>สาย(นาที)</th><th>ขาด</th><th>ลาป่วย</th><th>ลากิจ</th><th>พักร้อน</th><th>คะแนนวินัย</th></tr></thead>
             <tbody id="impRows"></tbody>
           </table></div>
           <div class="card-b" style="background:#f8fafc;border-top:1px solid var(--bd);display:flex;gap:9px;justify-content:flex-end">
@@ -6070,8 +6070,9 @@ function showPreview(){
 }
 
 /* Import ข้อมูล HRGO จริง — อ่านไฟล์ CSV ตาม Template ด้านบน แล้วบันทึกลง ATTENDANCE ต่อรหัสพนักงาน
-   ทำให้คะแนน Z ในแบบประเมิน (ประเมินตนเอง + ใบพิมพ์) คำนวณจากข้อมูลจริงที่ Import เข้ามา */
-function parseHrgoCsvLine(line){
+   ทำให้คะแนน Z ในแบบประเมิน (ประเมินตนเอง + ใบพิมพ์) คำนวณจากข้อมูลจริงที่ Import เข้ามา
+   ทนต่อไฟล์ที่ผ่านการเปิด/บันทึกซ้ำด้วย Excel ภาษาไทย ซึ่งมักเปลี่ยนตัวคั่นเป็น ; และเข้ารหัสเป็น ANSI (Windows-874) แทน UTF-8 */
+function parseDelimitedLine(line, delim){
   const out=[]; let cur=''; let inQ=false;
   for(let i=0;i<line.length;i++){
     const c=line[i];
@@ -6080,31 +6081,49 @@ function parseHrgoCsvLine(line){
       else cur+=c;
     } else {
       if(c==='"') inQ=true;
-      else if(c===','){ out.push(cur); cur=''; }
+      else if(c===delim){ out.push(cur); cur=''; }
       else cur+=c;
     }
   }
   out.push(cur);
   return out.map(v=>v.trim());
 }
+function detectDelimiter(headerLine){
+  const counts = { ',': (headerLine.match(/,/g)||[]).length, ';': (headerLine.match(/;/g)||[]).length, '\t': (headerLine.match(/\t/g)||[]).length };
+  return Object.keys(counts).reduce((a,b)=>counts[b]>counts[a]?b:a, ',');
+}
+function looksMojibake(text){
+  // ตัวอักษรทดแทน (U+FFFD) หรือช่วงอักขระ Latin-1 supplement ที่ไม่ควรพบในไฟล์ไทยล้วน = สัญญาณว่าอ่านผิด encoding
+  return /�/.test(text) || (/[\u0080-ÿ]{3,}/.test(text) && !/[ก-๙]/.test(text));
+}
 function importHrgoFile(input){
   const f=input.files?.[0]; if(!f) return;
   const reader=new FileReader();
   reader.onload=()=>{
     try{
-      const text=String(reader.result||'').replace(/^﻿/,'');
+      const buf = reader.result;
+      let text = new TextDecoder('utf-8').decode(buf).replace(/^﻿/,'');
+      if(looksMojibake(text)){
+        try{ text = new TextDecoder('windows-874').decode(buf); }catch(e){ /* เบราว์เซอร์บางตัวไม่รองรับ ใช้ utf-8 ต่อไป */ }
+      }
       const lines=text.split(/\r\n|\n/).filter(l=>l.trim()!=='');
-      if(lines.length<2){ smlToast('ไฟล์ว่างเปล่าหรือไม่มีข้อมูล','warn'); return; }
+      if(lines.length<1){ smlToast('ไฟล์ว่างเปล่าหรือไม่มีข้อมูล','warn'); return; }
+      const delim = detectDelimiter(lines[0]);
+
       // แถวแรก = machine header (emp_code,...) ข้ามได้ทั้งแบบมี/ไม่มีแถวคำอธิบายภาษาไทยตามหลัง
-      const firstCells = parseHrgoCsvLine(lines[0]).map(c=>c.toLowerCase());
-      let startIdx = 1;
-      if(firstCells[0] !== 'emp_code'){ startIdx = 0; } // ไม่มี header แถวแรก ถือว่าทุกแถวเป็นข้อมูล
-      else if(parseHrgoCsvLine(lines[1])[0] === HRGO_TEMPLATE_THAI[0]) startIdx = 2; // ข้ามแถว label ไทยด้วยถ้ามี
+      const firstCells = parseDelimitedLine(lines[0], delim).map(c=>c.toLowerCase());
+      let startIdx = 0;
+      if(firstCells[0] === 'emp_code'){
+        startIdx = 1;
+        if(lines[1] && parseDelimitedLine(lines[1], delim)[0] === HRGO_TEMPLATE_THAI[0]) startIdx = 2; // ข้ามแถว label ไทยด้วยถ้ามี
+      } else if(firstCells[0] === HRGO_TEMPLATE_THAI[0].toLowerCase()){
+        startIdx = 1; // มีแค่แถว label ไทย ไม่มี machine header
+      }
 
       let imported=0, skipped=0;
       const previewRows=[];
       for(let i=startIdx;i<lines.length;i++){
-        const c=parseHrgoCsvLine(lines[i]);
+        const c=parseDelimitedLine(lines[i], delim);
         const code=(c[0]||'').trim();
         if(!code){ skipped++; continue; }
         /* ลำดับคอลัมน์ตรงกับ HRGO_TEMPLATE_HEADERS:
@@ -6124,11 +6143,15 @@ function importHrgoFile(input){
         previewRows.push([code, c[1]||'—', rec.absentDay, rec.lateCount, rec.personalDay, rec.sickDay]);
         imported++;
       }
-      saveAttendance();
+      if(!imported){ smlToast('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าไฟล์ตรงตาม Template','warn'); return; }
+
+      const head=document.getElementById('impHead');
+      if(head) head.innerHTML='<tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย/กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th></tr>';
       const el=document.getElementById('impRows');
       if(el){
-        el.innerHTML = previewRows.slice(0,20).map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>—</td><td>${r[3]}</td><td>—</td><td>${r[2]}</td><td>${r[5]}</td><td>${r[4]}</td><td>—</td><td>—</td></tr>`).join('');
+        el.innerHTML = previewRows.slice(0,20).map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td></tr>`).join('');
       }
+      saveAttendance();
       document.getElementById('prevArea')?.classList.remove('hide');
       // ถ้าเปิดฟอร์มประเมินของพนักงานคนที่เพิ่ง Import อยู่ ให้รีเฟรชคะแนน Z ทันที
       if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
@@ -6138,7 +6161,7 @@ function importHrgoFile(input){
       smlToast('อ่านไฟล์ไม่สำเร็จ: '+err.message, 'warn');
     }
   };
-  reader.readAsText(f, 'utf-8');
+  reader.readAsArrayBuffer(f);
 }
 
 function previewEmployeeImport(input){
