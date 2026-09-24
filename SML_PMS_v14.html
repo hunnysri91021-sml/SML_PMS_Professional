@@ -895,7 +895,8 @@ input[type="checkbox"]{accent-color:#0b63ce}
 @media print {
   * { visibility:hidden !important; }
   #sml-print-area, #sml-print-area * { visibility:visible !important; }
-  #sml-print-area { position:static; width:100%; min-height:0; z-index:auto; background:#fff; }
+  #sml-print-area { position:absolute; top:0; left:0; right:0; width:100%; min-height:0; z-index:auto; background:#fff; margin:0; }
+  .app, .ov { display:none !important; }
   @page { size:A4 portrait; margin:7mm 8mm 6mm 8mm; }
 }
 #sml-print-area { display:none; width:100%; }
@@ -903,10 +904,10 @@ input[type="checkbox"]{accent-color:#0b63ce}
 /* base */
 .F {
   font-family: 'TH Sarabun New','Sarabun','Tahoma',sans-serif;
-  font-size: 10pt;
+  font-size: 9pt;
   color: #111;
   background: #fff;
-  line-height: 1.3;
+  line-height: 1.15;
 }
 
 /* ===== HEADER ===== */
@@ -916,7 +917,7 @@ input[type="checkbox"]{accent-color:#0b63ce}
   border: 1.5px solid #1a3f7a;
   border-radius: 6px;
   overflow: hidden;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
 }
 .F-logo-col {
   background: linear-gradient(160deg,#0f3a8c 0%,#1a6de0 100%);
@@ -924,8 +925,8 @@ input[type="checkbox"]{accent-color:#0b63ce}
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px 12px;
-  min-width: 64px;
+  padding: 4px 10px;
+  min-width: 56px;
   gap: 2px;
 }
 .F-logo-box {
@@ -952,16 +953,16 @@ input[type="checkbox"]{accent-color:#0b63ce}
   border-right: 1px solid #d0dff5;
 }
 .F-company-th {
-  font-size: 12pt; font-weight: 900;
+  font-size: 10.5pt; font-weight: 900;
   color: #0f2f6a; letter-spacing: -.1px;
 }
 .F-company-en {
-  font-size: 7.5pt; color: #5a6e8c; margin-top: 1px;
+  font-size: 6.8pt; color: #5a6e8c; margin-top: 1px;
 }
 .F-doc-title {
-  font-size: 13.5pt; font-weight: 900;
+  font-size: 11.5pt; font-weight: 900;
   color: #0f2f6a; letter-spacing: -.2px;
-  margin-top: 3px;
+  margin-top: 2px;
 }
 .F-right-col {
   display: flex;
@@ -1000,24 +1001,24 @@ input[type="checkbox"]{accent-color:#0b63ce}
 .F-info {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 2px 0;
+  gap: 1px 0;
   border: 1px solid #c8d8f0;
   border-radius: 4px;
   background: #f4f8ff;
-  padding: 5px 10px;
-  margin-bottom: 5px;
-  font-size: 9pt;
+  padding: 3px 9px;
+  margin-bottom: 3px;
+  font-size: 8.2pt;
 }
 .F-info-row {
   display: flex;
   gap: 4px;
   align-items: baseline;
   border-bottom: 1px dashed #dde7f5;
-  padding: 2px 0;
+  padding: 1px 0;
 }
 .F-info-row:nth-child(odd):last-child { border-bottom: none; }
 .F-info-row.full { grid-column: 1 / -1; }
-.F-lbl { color:#4a5e80; white-space:nowrap; min-width: 80px; font-size:8.5pt; flex-shrink:0; }
+.F-lbl { color:#4a5e80; white-space:nowrap; min-width: 74px; font-size:7.8pt; flex-shrink:0; }
 .F-val { font-weight:800; color:#0f2f6a; flex:1; border-bottom:1px dotted #99b0d0; }
 
 /* ===== SECTION HEADING ===== */
@@ -1025,10 +1026,10 @@ input[type="checkbox"]{accent-color:#0b63ce}
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
-  margin: 5px 0 3px;
+  padding: 1.5px 9px;
+  margin: 2px 0 1.5px;
   border-radius: 4px;
-  font-size: 9pt; font-weight: 900;
+  font-size: 8.3pt; font-weight: 900;
   letter-spacing: .1px;
 }
 .F-sec.s1 { background:#0f3a8c; color:#fff; }
@@ -1049,38 +1050,38 @@ input[type="checkbox"]{accent-color:#0b63ce}
 .F-tbl {
   width: 100%;
   border-collapse: collapse;
-  font-size: 8pt;
-  margin-bottom: 4px;
+  font-size: 7.3pt;
+  margin-bottom: 3px;
 }
 .F-tbl thead th {
   background: #1a4fa8;
   color: #fff;
   border: 1px solid #2b5fc9;
-  padding: 3px 5px;
+  padding: 2px 4px;
   text-align: center;
-  font-size: 7.5pt; font-weight: 800;
+  font-size: 6.8pt; font-weight: 800;
   white-space: nowrap;
-  line-height: 1.25;
+  line-height: 1.15;
 }
 .F-tbl thead th.left { text-align: left; }
 .F-tbl tbody td {
   border: 1px solid #c8d4e8;
-  padding: 2.5px 5px;
+  padding: 1.3px 4px;
   vertical-align: middle;
-  font-size: 7.8pt;
-  line-height: 1.25;
+  font-size: 7.1pt;
+  line-height: 1.08;
 }
 .F-tbl tbody tr:nth-child(even) td { background: #f4f8ff; }
 .F-tbl tbody tr.ldr-row td { background: #f5f0ff; }
 .F-tbl tbody tr.ldr-row td:first-child { border-left: 2.5px solid #7c3aed; }
 .F-tbl .tc { text-align:center; }
-.F-tbl .num { font-weight: 900; font-size: 8pt; }
+.F-tbl .num { font-weight: 900; font-size: 7.3pt; }
 /* ระดับที่เลือก — highlight ตามฟอร์มจริง */
 .F-tbl .chk {
   background: #1a4fa8 !important;
   color: #fff !important;
   font-weight: 900;
-  font-size: 9pt;
+  font-size: 8pt;
   text-align: center;
   border-radius: 0;
 }
@@ -1088,19 +1089,19 @@ input[type="checkbox"]{accent-color:#0b63ce}
   background: #fef9c3 !important;
   color: #854d0e !important;
   font-weight: 900;
-  font-size: 9pt;
+  font-size: 8pt;
   text-align: center;
 }
 .F-tbl .sum-row td {
   background: #dbeafe !important;
   font-weight: 900;
-  font-size: 8pt;
+  font-size: 7.3pt;
 }
 .F-tbl .total-row td {
   background: #0f3a8c !important;
   color: #fff !important;
   font-weight: 900;
-  font-size: 9pt;
+  font-size: 8pt;
 }
 
 /* ===== SCORE COLS (A+ A B C+ C) in header ===== */
@@ -1119,18 +1120,18 @@ input[type="checkbox"]{accent-color:#0b63ce}
   border-left: 4px solid #059669;
   border-radius: 4px;
   background: #ecfdf5;
-  padding: 4px 8px;
-  font-size: 8pt;
-  margin-bottom: 4px;
+  padding: 2px 6px;
+  font-size: 7.3pt;
+  margin-bottom: 2px;
   align-items: center;
 }
 .F-zbox .zc { display:flex; gap:3px; align-items:baseline; }
-.F-zbox .zl { color:#065f46; font-size:7.5pt; }
+.F-zbox .zl { color:#065f46; font-size:6.8pt; }
 .F-zbox .zv { font-weight:900; color:#065f46; }
 .F-zbox .ztotal {
   grid-column: 5 / 7;
   text-align: right;
-  font-size: 13pt; font-weight: 900;
+  font-size: 11.5pt; font-weight: 900;
   color: #065f46;
   border-left: 1px dashed #6ee7b7;
   padding-left: 6px;
@@ -1143,24 +1144,24 @@ input[type="checkbox"]{accent-color:#0b63ce}
   gap: 10px;
   border: 1.5px solid #1a4fa8;
   border-radius: 5px;
-  padding: 5px 10px;
+  padding: 3px 7px;
   background: linear-gradient(90deg,#f0f5ff,#fff);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .F-grade-circle {
-  width: 44px; height: 44px;
+  width: 36px; height: 36px;
   border-radius: 50%;
   display: grid; place-items: center;
-  font-size: 17pt; font-weight: 900;
+  font-size: 14pt; font-weight: 900;
   color: #fff; flex-shrink: 0;
   box-shadow: 0 2px 6px rgba(0,0,0,.15);
 }
-.F-score-main { font-size: 11pt; font-weight: 900; color: #0f2f6a; }
-.F-score-sub  { font-size: 7.5pt; color: #4a5e80; margin-top: 1px; }
+.F-score-main { font-size: 10pt; font-weight: 900; color: #0f2f6a; }
+.F-score-sub  { font-size: 7pt; color: #4a5e80; margin-top: 1px; }
 .F-breakdown {
   margin-left: auto;
   display: flex; gap: 8px;
-  font-size: 8pt;
+  font-size: 7.3pt;
 }
 .F-breakdown .bd-item { display:flex; flex-direction:column; align-items:center; }
 .F-breakdown .bd-lbl  { color:#4a5e80; font-size:7pt; }
@@ -1170,48 +1171,48 @@ input[type="checkbox"]{accent-color:#0b63ce}
 .F-remark-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin-bottom: 4px;
+  gap: 3px;
+  margin-bottom: 3px;
 }
 .F-remark-box {
   border: 1px solid #c8d4e8;
   border-radius: 4px;
-  padding: 4px 8px;
-  min-height: 28px;
+  padding: 2px 6px;
+  min-height: 18px;
 }
 .F-remark-box .rb-title {
-  font-size: 7.5pt; font-weight: 800;
-  color: #0f2f6a; margin-bottom: 2px;
+  font-size: 6.8pt; font-weight: 800;
+  color: #0f2f6a; margin-bottom: 1px;
 }
 .F-remark-box .rb-lines {
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: 4px;
 }
 .F-remark-box .rb-line {
   border-bottom: 1px dotted #b0c0da;
-  min-height: 12px;
-  font-size: 8pt; color: #4a5e80;
+  min-height: 10px;
+  font-size: 7.3pt; color: #4a5e80;
 }
 
 /* ===== SIGNATURE (ส่วน 4) ===== */
 .F-signs {
   display: grid;
-  gap: 5px;
-  margin-bottom: 3px;
+  gap: 4px;
+  margin-bottom: 2px;
 }
 .F-signs.s4 { grid-template-columns: repeat(4,1fr); }
 .F-signs.s3 { grid-template-columns: repeat(3,1fr); }
 .F-sign {
   border: 1px solid #b8c8e4;
   border-radius: 4px;
-  padding: 5px 7px;
-  min-height: 64px;
+  padding: 2px 6px;
+  min-height: 36px;
   display: flex; flex-direction: column;
   background: #fafcff;
 }
-.F-sign .sg-role  { font-size:7pt; color:#4a5e80; font-weight:700; margin-bottom:2px; }
-.F-sign .sg-blank { border-bottom:1px solid #8fa6c4; margin:4px 0 2px; min-height:18px; }
-.F-sign .sg-name  { font-size:8pt; font-weight:900; color:#0f2f6a; text-align:center; }
-.F-sign .sg-date  { font-size:7pt; color:#4a5e80; text-align:center; margin-top:1px; }
+.F-sign .sg-role  { font-size:6.3pt; color:#4a5e80; font-weight:700; margin-bottom:1px; }
+.F-sign .sg-blank { border-bottom:1px solid #8fa6c4; margin:3px 0 1px; min-height:14px; }
+.F-sign .sg-name  { font-size:7.3pt; font-weight:900; color:#0f2f6a; text-align:center; }
+.F-sign .sg-date  { font-size:6.3pt; color:#4a5e80; text-align:center; margin-top:1px; }
 .F-sign .sg-chip  {
   margin:3px auto 0;
   font-size:6.5pt; font-weight:800;
@@ -1330,14 +1331,14 @@ tbody tr:hover{background:#f0f6ff!important}
 .sml-system-footer .dot{width:7px;height:7px;border-radius:50%;background:#19a45a;box-shadow:0 0 0 3px rgba(25,164,90,.1)}
 /* Print: professional 1–2 page A4 */
 @media print{
-  html,body{background:#fff!important}
-  #sml-print-area{display:block!important;position:static!important;width:100%!important}
+  html,body{background:#fff!important;height:auto!important}
+  #sml-print-area{display:block!important;position:absolute!important;top:0!important;left:0!important;right:0!important;width:100%!important;margin:0!important}
   .F{page-break-inside:auto}
   .F-header,.F-info,.F-sec,.F-zbox,.F-result,.F-remark-grid,.F-signs,.F-footer{page-break-inside:avoid}
   .F-tbl{page-break-inside:auto}
   .F-tbl tr{page-break-inside:avoid;page-break-after:auto}
   .F-tbl thead{display:table-header-group}
-  .F-footer{margin-top:4mm}
+  .F-footer{margin-top:1mm}
 }
 @media(max-width:1100px){
   .sidebar{width:255px}.content{padding:20px}
