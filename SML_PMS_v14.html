@@ -2978,6 +2978,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
               <th>หัวหน้า L1</th>
               <th>หัวหน้า L2</th>
               <th style="width:75px">สถานะ</th>
+              <th style="width:85px">วันเริ่มงาน</th>
               <th style="width:90px">Login ล่าสุด</th>
               <th style="width:60px;text-align:center">จัดการ</th>
             </tr></thead>
@@ -3144,6 +3145,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         <tr><td>11</td><td><b>l2</b></td><td>ผจก.ส่วน L2</td><td>อรุณ ศิริ</td></tr>
         <tr><td>12</td><td><b>approver</b></td><td>ผู้อนุมัติ</td><td>คุณเชิดชัย</td></tr>
         <tr><td>13</td><td><b>status</b></td><td>สถานะ</td><td>active</td></tr>
+        <tr><td>14</td><td><b>start_date</b></td><td>วันเริ่มงาน</td><td>01/06/2564</td></tr>
       </tbody></table>
     </div>
     <div class="template-rule-note">
@@ -3568,24 +3570,24 @@ setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); }, 200);
    status: active / probation / inactive / resigned
    ============================================================ */
 const MASTER_USERS = [
-  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin
-  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12'],
-  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58'],
-  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02'],
-  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00'],
-  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30'],
-  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15'],
-  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20'],
-  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50'],
-  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05'],
-  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00'],
-  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55'],
-  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10'],
-  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00'],
-  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30'],
-  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45'],
-  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40'],
-  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10'],
+  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)
+  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563'],
+  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564'],
+  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565'],
+  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561'],
+  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559'],
+  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565'],
+  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563'],
+  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560'],
+  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564'],
+  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568'],
+  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562'],
+  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564'],
+  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560'],
+  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555'],
+  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564'],
+  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563'],
+  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565'],
 ];
 
 /* helpers */
@@ -3633,6 +3635,7 @@ function renderUsers(data) {
     <td style="font-size:12px">${u[9]}</td>
     <td style="font-size:12px">${u[10]}</td>
     <td style="text-align:center">${U_STATUS_LABEL[u[12]]||''}</td>
+    <td style="font-size:11px;color:#374151">${u[14]||'—'}</td>
     <td style="font-size:11px;color:#94a3b8">${u[13]||'—'}</td>
     <td>
       <div style="display:flex;gap:3px;justify-content:center">
@@ -3799,6 +3802,7 @@ function printEvalForm() {
   const empSection= document.getElementById('evalDept')?.value || u[4]; /* แผนก (Section) */
   const empDiv    = u[5];                                              /* ส่วน (Division) */
   const empDept   = u[6];                                              /* ฝ่าย (Department) */
+  const empStart= u[14] || '—';
   const empL1   = u[9];
   const empL2   = u[10];
   const empExec = u[11];
@@ -3889,6 +3893,10 @@ function printEvalForm() {
     <div class="F-info-row">
       <span class="F-lbl">ส่วน / ฝ่าย</span>
       <span class="F-val">${empSection} / ${empDiv}</span>
+    </div>
+    <div class="F-info-row">
+      <span class="F-lbl">วันเริ่มงาน</span>
+      <span class="F-val">${empStart}</span>
     </div>
     <div class="F-info-row full">
       <span class="F-lbl">คำแนะนำ</span>
@@ -4083,6 +4091,7 @@ function openUserDetail(empId) {
 
   /* Info */
   setId('udCode',      u[0]);
+  setId('udStartDate', u[14] || '—');
   setId('udLastLogin', u[13] || '—');
 
   /* Status color */
@@ -4117,16 +4126,20 @@ function saveUserFromModal() {
   const l2       = document.getElementById('mu_l2')?.value.trim();
   const approver = document.getElementById('mu_approver')?.value.trim();
   const status   = document.getElementById('mu_status')?.value;
+  const startRaw = document.getElementById('mu_startdate')?.value;
+  const startDate= startRaw ? new Date(startRaw+'T00:00:00').toLocaleDateString('th-TH') : '—';
 
   if (!id || !name || !role || !group || !section || !position || !grade || !status) {
     smlToast('กรุณากรอกข้อมูลที่มี * ให้ครบถ้วน', 'warn');
     return;
   }
 
-  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin] */
+  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate] */
+  const existingRow = MASTER_USERS.find(u => u[0] === id);
   const newUser = [id, name, role, group, section, division||'—', dept||'—',
                    position, grade, l1||'—', l2||'—', approver||'—', status,
-                   new Date().toLocaleDateString('th-TH')];
+                   new Date().toLocaleDateString('th-TH'),
+                   startRaw ? startDate : (existingRow?.[14] || '—')];
 
   const existing = MASTER_USERS.findIndex(u => u[0] === id);
   if (existing >= 0) {
@@ -4852,7 +4865,8 @@ function normalizeMs365Employee(row){
   const status = statusRaw.includes('inactive') || statusRaw.includes('off') ? 'inactive' : statusRaw.includes('probation') ? 'probation' : statusRaw.includes('resign') ? 'resigned' : 'active';
   return [
     g(0), g(1), role, g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), status,
-    g(13) || new Date().toLocaleString('th-TH')
+    g(13) || new Date().toLocaleString('th-TH'),
+    g(14) || '—'
   ];
 }
 
@@ -5510,6 +5524,10 @@ document.addEventListener('input',e=>{
         </select>
       </div>
       <div class="fg">
+        <label>วันเริ่มงาน</label>
+        <input type="date" id="mu_startdate">
+      </div>
+      <div class="fg">
         <label>รหัสผ่านเริ่มต้น</label>
         <input type="password" id="mu_pass" placeholder="บังคับเปลี่ยนเมื่อ Login ครั้งแรก">
       </div>
@@ -5706,14 +5724,14 @@ document.addEventListener('input',e=>{
 
 <script>
 /* v9 — Employee Master Template / Import */
-const EMP_TEMPLATE_HEADERS = ['emp_code','full_name','role','group','section','division','department','position','grade','l1','l2','approver','status'];
-const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/l1/l2/exec/admin/sysadmin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','เกรด','หัวหน้า L1','ผจก.ส่วน L2','ผู้อนุมัติ','สถานะ'];
+const EMP_TEMPLATE_HEADERS = ['emp_code','full_name','role','group','section','division','department','position','grade','l1','l2','approver','status','start_date'];
+const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/l1/l2/exec/admin/sysadmin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','เกรด','หัวหน้า L1','ผจก.ส่วน L2','ผู้อนุมัติ','สถานะ','วันเริ่มงาน (DD/MM/YYYY)'];
 function downloadEmployeeTemplate(withExample=true){
   const rows=[EMP_TEMPLATE_HEADERS];
   if(withExample){
     rows.push(
-      ['SML-0001','สมชาย ใจดี','l1','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','หัวหน้าแผนก PDI','M1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active'],
-      ['SML-0002','นภา สุขสันต์','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สมชาย ใจดี','อรุณ ศิริ','คุณเชิดชัย','active']
+      ['SML-0001','สมชาย ใจดี','l1','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','หัวหน้าแผนก PDI','M1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active','01/06/2564'],
+      ['SML-0002','นภา สุขสันต์','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สมชาย ใจดี','อรุณ ศิริ','คุณเชิดชัย','active','15/02/2566']
     );
   }
   const csv='﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
@@ -6100,6 +6118,7 @@ function validateEmployeeImport(){
       border-bottom:1px solid #f1f5f9">🪪 ข้อมูลทั่วไป</div>
     <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:16px;font-size:12.5px">
       <div class="kv"><span>รหัสพนักงาน</span><b id="udCode"></b></div>
+      <div class="kv"><span>วันเริ่มงาน</span><b id="udStartDate"></b></div>
       <div class="kv"><span>Login ล่าสุด</span><b id="udLastLogin" style="color:#94a3b8"></b></div>
     </div>
 
