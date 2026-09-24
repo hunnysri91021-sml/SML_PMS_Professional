@@ -827,6 +827,18 @@ input[type="checkbox"]{accent-color:#0b63ce}
 .template-columns b{display:block;color:#24344d;margin-bottom:3px}
 .template-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:15px;padding-top:13px;border-top:1px solid #edf1f5}
 @media(max-width:800px){.employee-template-grid{grid-template-columns:1fr}}
+.hrgo-template-card{border-top:3px solid #29abe2}
+.hrgo-tpl-table{border-collapse:collapse;width:100%;text-align:center}
+.hrgo-tpl-table th,.hrgo-tpl-table td{border:1px solid #fff;padding:8px 10px;font-size:12.5px}
+.hrgo-tpl-table thead th{font-weight:800;color:#1f2937}
+.hrgo-tpl-table td{background:#fff;font-size:14px;font-weight:700;color:#1f2937}
+.hrgo-tpl-table .hg-absent{background:#fbd7a8}
+.hrgo-tpl-table .hg-late{background:#ec5f95;color:#fff;font-size:14px}
+.hrgo-tpl-table .hg-personal{background:#92c93e;color:#1f3d0a;font-size:14px}
+.hrgo-tpl-table .hg-sick{background:#a8dfe4}
+.hrgo-tpl-table .hg-total{background:#f5c9f3}
+.hrgo-tpl-table .hg-cert{background:#29abe2;color:#fff}
+.hrgo-tpl-table .hg-sub{background:#5bc8e8;color:#fff;font-weight:700}
 </style>
 
 
@@ -2038,7 +2050,50 @@ tbody tr:hover{background:#f0f6ff!important}
         </div>
       </div>
     </div>
-    
+
+    <div class="card hrgo-template-card">
+      <div class="card-h">
+        <div><h3>🕒 Template นำเข้าเวลา HRGO</h3><small style="color:#7b8796">คอลัมน์ตามไฟล์ Export จริงจาก HRGO — ใช้สำหรับเตรียมข้อมูลก่อน Import</small></div>
+        <span class="bd b-g">พร้อมใช้งาน</span>
+      </div>
+      <div class="card-b">
+        <div class="tw"><table class="hrgo-tpl-table">
+          <thead>
+            <tr>
+              <th class="hg-absent">ขาดงาน</th>
+              <th class="hg-late" colspan="2">มาสาย/กลับก่อน</th>
+              <th class="hg-personal" colspan="3">กิจ,กิจย่อย</th>
+              <th class="hg-sick" colspan="3">ป่วย (มี และ ไม่มีใบรับรองแพทย์)</th>
+              <th class="hg-total" colspan="3">รวม ป่วย+กิจ</th>
+              <th class="hg-cert">ใบรับรองแพทย์<br>สะสม</th>
+            </tr>
+            <tr>
+              <th class="hg-absent">วัน</th>
+              <th class="hg-sub">ครั้ง</th><th class="hg-sub">นาที</th>
+              <th class="hg-sub">วัน</th><th class="hg-sub">ช.ม</th><th class="hg-sub">นาที</th>
+              <th class="hg-sub">วัน</th><th class="hg-sub">ช.ม</th><th class="hg-sub">นาที</th>
+              <th class="hg-sub">วัน</th><th class="hg-sub">ชม</th><th class="hg-sub">นาที</th>
+              <th class="hg-cert">ว.ชม.น.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td></td>
+              <td>1</td><td>12</td>
+              <td>5</td><td>3</td><td>30</td>
+              <td>8</td><td></td><td></td>
+              <td>13</td><td>3</td><td>30</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table></div>
+        <div class="al al-i" style="margin-top:12px"><span>ℹ️</span><div>"รวม ป่วย+กิจ" = กิจ,กิจย่อย + ป่วย รวมกัน (ใช้คำนวณวันลาสะสมตามเกณฑ์คะแนน Z) · "ใบรับรองแพทย์สะสม" นับเฉพาะวันลาป่วยที่มีใบรับรองแพทย์แนบ</div></div>
+        <div class="template-actions">
+          <button class="btn btn-p" onclick="downloadHrgoTemplate()">📥 ดาวน์โหลด Template HRGO</button>
+        </div>
+      </div>
+    </div>
+
 <div class="card"><div class="card-b">
         <div class="fr" style="margin-bottom:17px">
           <div class="fg"><label>รอบประเมิน <i>*</i></label><select><option>FY2026-ANNUAL — ประจำปี 2569</option></select></div>
@@ -5920,6 +5975,39 @@ function downloadEmployeeTemplate(withExample=true){
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   if(typeof smlToast==='function')smlToast('ดาวน์โหลด Template พนักงานเรียบร้อย','ok');
 }
+
+/* Template นำเข้าเวลา HRGO — โครงสร้างคอลัมน์ตามไฟล์ Export จริง (หัวข้อกลุ่ม 2 แถว) */
+const HRGO_TEMPLATE_HEADERS = [
+  'emp_code','absent_day',
+  'late_count','late_min',
+  'personal_day','personal_hr','personal_min',
+  'sick_day','sick_hr','sick_min',
+  'total_day','total_hr','total_min',
+  'med_cert_cumulative'
+];
+const HRGO_TEMPLATE_THAI = [
+  'รหัสพนักงาน','ขาดงาน (วัน)',
+  'มาสาย/กลับก่อน (ครั้ง)','มาสาย/กลับก่อน (นาที)',
+  'กิจ,กิจย่อย (วัน)','กิจ,กิจย่อย (ช.ม)','กิจ,กิจย่อย (นาที)',
+  'ป่วย (วัน)','ป่วย (ช.ม)','ป่วย (นาที)',
+  'รวมป่วย+กิจ (วัน)','รวมป่วย+กิจ (ชม)','รวมป่วย+กิจ (นาที)',
+  'ใบรับรองแพทย์สะสม (ว.ชม.น.)'
+];
+function downloadHrgoTemplate(withExample=true){
+  const rows=[HRGO_TEMPLATE_HEADERS, HRGO_TEMPLATE_THAI];
+  if(withExample){
+    rows.push(['SML-0001',0, 1,12, 5,3,30, 8,0,0, 13,3,30, '']);
+  }
+  const csv='﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='SML_PMS_HRGO_Import_Template.csv';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  if(typeof smlToast==='function')smlToast('ดาวน์โหลด Template HRGO เรียบร้อย','ok');
+}
+
 function previewEmployeeImport(input){
   const f=input.files?.[0]; if(!f)return;
   const label=document.getElementById('employeeFileLabel'); if(label)label.textContent=f.name;
