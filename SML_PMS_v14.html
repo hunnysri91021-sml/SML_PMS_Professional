@@ -4222,6 +4222,57 @@ function closeUserDetail() {
 }
 
 
+/* ====== ORG STRUCTURE — ดึงจากผังองค์กรจริง (MASTER_USERS) สำหรับ dropdown สังกัดองค์กรในฟอร์มเพิ่ม/แก้ไขพนักงาน
+   ป้องกันการพิมพ์ กลุ่ม/แผนก/ส่วน/ฝ่าย เอง ที่อาจไม่ตรงกับผังองค์กรจริง ====== */
+function getOrgStructure(){
+  const groups = [];
+  const sectionsByGroup = {};
+  const divisionsBySection = {};
+  const departmentsBySection = {};
+  MASTER_USERS.forEach(u=>{
+    const [ ,, , group, section, division, department ] = u;
+    if(group && !groups.includes(group)) groups.push(group);
+    if(group && section){
+      (sectionsByGroup[group] = sectionsByGroup[group]||[]);
+      if(!sectionsByGroup[group].includes(section)) sectionsByGroup[group].push(section);
+    }
+    if(section && division && division!=='—'){
+      (divisionsBySection[section] = divisionsBySection[section]||[]);
+      if(!divisionsBySection[section].includes(division)) divisionsBySection[section].push(division);
+    }
+    if(section && department && department!=='—'){
+      (departmentsBySection[section] = departmentsBySection[section]||[]);
+      if(!departmentsBySection[section].includes(department)) departmentsBySection[section].push(department);
+    }
+  });
+  return { groups, sectionsByGroup, divisionsBySection, departmentsBySection };
+}
+function fillSelect(id, options, keepValue){
+  const sel = document.getElementById(id); if(!sel) return;
+  const prev = keepValue!==undefined ? keepValue : sel.value;
+  sel.innerHTML = options.length
+    ? options.map(o=>`<option value="${o}">${o}</option>`).join('')
+    : '<option value="—">— ไม่มีข้อมูลในผังองค์กร —</option>';
+  if(options.includes(prev)) sel.value = prev;
+}
+function populateOrgSelects(){
+  const org = getOrgStructure();
+  fillSelect('mu_group', org.groups);
+  onOrgGroupChange(org);
+}
+function onOrgGroupChange(org){
+  org = org || getOrgStructure();
+  const group = document.getElementById('mu_group')?.value;
+  fillSelect('mu_section', org.sectionsByGroup[group]||[]);
+  onOrgSectionChange(org);
+}
+function onOrgSectionChange(org){
+  org = org || getOrgStructure();
+  const section = document.getElementById('mu_section')?.value;
+  fillSelect('mu_division', org.divisionsBySection[section]||[]);
+  fillSelect('mu_department', org.departmentsBySection[section]||[]);
+}
+
 function saveUserFromModal() {
   const id       = document.getElementById('mu_id')?.value.trim();
   const name     = document.getElementById('mu_name')?.value.trim();
@@ -4265,7 +4316,12 @@ function saveUserFromModal() {
   closeM();
 }
 
-function openM(id){const m=document.getElementById(id);if(m)m.classList.add('on')}
+function openM(id){
+  const m=document.getElementById(id);
+  if(!m) return;
+  m.classList.add('on');
+  if(id==='mAddUser' && typeof populateOrgSelects==='function') populateOrgSelects();
+}
 function closeM(){document.querySelectorAll('.ov').forEach(o=>o.classList.remove('on'))}
 document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM();});
 
@@ -5640,34 +5696,24 @@ document.addEventListener('input',e=>{
       <div class="fr">
         <div class="fg">
           <label>กลุ่ม (Group) <i>*</i></label>
-          <select id="mu_group">
-            <option value="SML Staff">SML Staff</option>
-            <option value="KTG">KTG Outsource</option>
-            <option value="CNK">CNK Outsource</option>
-          </select>
+          <select id="mu_group" onchange="onOrgGroupChange()"></select>
         </div>
         <div class="fg">
           <label>แผนก (Section) <i>*</i></label>
-          <select id="mu_section">
-            <option value="Yard &amp; PDI (SML)">Yard &amp; PDI (SML)</option>
-            <option value="Accessory Install (SML)">Accessory Install (SML)</option>
-            <option value="HR &amp; GA (SML)">HR &amp; GA (SML)</option>
-            <option value="Executive">Executive</option>
-            <option value="KTG Outsource">KTG Outsource</option>
-            <option value="CNK Outsource">CNK Outsource</option>
-          </select>
+          <select id="mu_section" onchange="onOrgSectionChange()"></select>
         </div>
       </div>
       <div class="fr">
         <div class="fg">
           <label>ส่วน (Division)</label>
-          <input id="mu_division" placeholder="เช่น Yard, PDI, ACC, HR, MD">
+          <select id="mu_division"></select>
         </div>
         <div class="fg">
           <label>ฝ่าย (Department)</label>
-          <input id="mu_department" placeholder="เช่น ปฏิบัติการ, สนับสนุน, บริหาร">
+          <select id="mu_department"></select>
         </div>
       </div>
+      <div style="font-size:10.5px;color:#64748b;margin-top:2px">รายการดึงจากผังองค์กรจริง (ข้อมูลพนักงานปัจจุบันในระบบ) — เลือกได้เท่านั้น ไม่สามารถพิมพ์เองได้ เพื่อให้สังกัดตรงกับผังองค์กรเสมอ</div>
     </div>
 
     <!-- แถว 3: ตำแหน่ง + Grade -->
