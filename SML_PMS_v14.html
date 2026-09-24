@@ -5250,7 +5250,7 @@ function openReviewerForm(lv,name,code,position){
   if(sub) sub.textContent=cfg.label+' · แบบฟอร์ม '+cfg.factors.length+' ปัจจัย · Y '+cfg.ypct+'% + Z '+cfg.zpct+'%';
   const scoreRows=cfg.factors.map((f,i)=>{
     const w=f[2], sc=smlScoreByWeight(w);
-    return `<tr><td><b>${f[0]}</b></td><td style="text-align:center"><span class="bd b-b">${w}</span></td>
+    return `<tr><td style="line-height:1.3"><b style="font-size:13px">${f[0]}</b><br><small style="color:#94a3b8;font-size:11px">${f[1]||''}</small></td><td style="text-align:center"><span class="bd b-b">${w}</span></td>
       <td style="text-align:center"><div class="review-score-options">${['Aplus','A','B','Cplus','C'].map((g,gi)=>`<button type="button" class="review-score" onclick="selectReviewScore(this,'${g}',${sc[g]})">${['A+','A','B','C+','C'][gi]}<small>${sc[g]}</small></button>`).join('')}</div></td>
       <td style="text-align:center"><b class="review-got">—</b></td>
       <td><input class="review-comment" placeholder="เหตุผล / ความเห็นประกอบ"></td></tr>`;
