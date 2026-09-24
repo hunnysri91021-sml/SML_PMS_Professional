@@ -839,6 +839,8 @@ input[type="checkbox"]{accent-color:#0b63ce}
 .hrgo-tpl-table .hg-total{background:#f5c9f3}
 .hrgo-tpl-table .hg-cert{background:#29abe2;color:#fff}
 .hrgo-tpl-table .hg-sub{background:#5bc8e8;color:#fff;font-weight:700}
+.hrgo-tpl-table .hg-id{background:#f1f5f9;color:#0f2f6a}
+.hrgo-tpl-table tbody td{height:26px}
 </style>
 
 
@@ -2060,6 +2062,8 @@ tbody tr:hover{background:#f0f6ff!important}
         <div class="tw"><table class="hrgo-tpl-table">
           <thead>
             <tr>
+              <th class="hg-id" rowspan="2">รหัสพนักงาน</th>
+              <th class="hg-id" rowspan="2">ชื่อ-สกุล</th>
               <th class="hg-absent">ขาดงาน</th>
               <th class="hg-late" colspan="2">มาสาย/กลับก่อน</th>
               <th class="hg-personal" colspan="3">กิจ,กิจย่อย</th>
@@ -2078,12 +2082,13 @@ tbody tr:hover{background:#f0f6ff!important}
           </thead>
           <tbody>
             <tr>
-              <td></td>
-              <td>1</td><td>12</td>
-              <td>5</td><td>3</td><td>30</td>
-              <td>8</td><td></td><td></td>
-              <td>13</td><td>3</td><td>30</td>
-              <td></td>
+              <td>&nbsp;</td><td>&nbsp;</td>
+              <td>&nbsp;</td>
+              <td>&nbsp;</td><td>&nbsp;</td>
+              <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+              <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+              <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+              <td>&nbsp;</td>
             </tr>
           </tbody>
         </table></div>
@@ -5978,7 +5983,7 @@ function downloadEmployeeTemplate(withExample=true){
 
 /* Template นำเข้าเวลา HRGO — โครงสร้างคอลัมน์ตามไฟล์ Export จริง (หัวข้อกลุ่ม 2 แถว) */
 const HRGO_TEMPLATE_HEADERS = [
-  'emp_code','absent_day',
+  'emp_code','full_name','absent_day',
   'late_count','late_min',
   'personal_day','personal_hr','personal_min',
   'sick_day','sick_hr','sick_min',
@@ -5986,18 +5991,15 @@ const HRGO_TEMPLATE_HEADERS = [
   'med_cert_cumulative'
 ];
 const HRGO_TEMPLATE_THAI = [
-  'รหัสพนักงาน','ขาดงาน (วัน)',
+  'รหัสพนักงาน','ชื่อ-สกุล','ขาดงาน (วัน)',
   'มาสาย/กลับก่อน (ครั้ง)','มาสาย/กลับก่อน (นาที)',
   'กิจ,กิจย่อย (วัน)','กิจ,กิจย่อย (ช.ม)','กิจ,กิจย่อย (นาที)',
   'ป่วย (วัน)','ป่วย (ช.ม)','ป่วย (นาที)',
   'รวมป่วย+กิจ (วัน)','รวมป่วย+กิจ (ชม)','รวมป่วย+กิจ (นาที)',
   'ใบรับรองแพทย์สะสม (ว.ชม.น.)'
 ];
-function downloadHrgoTemplate(withExample=true){
+function downloadHrgoTemplate(){
   const rows=[HRGO_TEMPLATE_HEADERS, HRGO_TEMPLATE_THAI];
-  if(withExample){
-    rows.push(['SML-0001',0, 1,12, 5,3,30, 8,0,0, 13,3,30, '']);
-  }
   const csv='﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');
