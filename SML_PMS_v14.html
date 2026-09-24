@@ -1307,6 +1307,12 @@ tbody tr:hover{background:#f0f6ff!important}
 #formArea .card-h{background:linear-gradient(180deg,#ffffff,#f8fbff)}
 #evalSummary{position:sticky;bottom:12px;z-index:20;box-shadow:0 12px 35px rgba(3,18,38,.14)}
 #evalSummary .card-b{background:linear-gradient(90deg,#f8fbff,#fff)}
+#evalTable thead th,#leadershipCard thead th{background:color-mix(in srgb,var(--evalColor,#0891b2) 10%,#f5f8fc)}
+#evalRows tr,#leaderRows tr{border-left:4px solid transparent;transition:border-color .2s,background .2s}
+#evalRows tr.f-done,#leaderRows tr.f-done{border-left-color:var(--evalColor,#0891b2);background:color-mix(in srgb,var(--evalColor,#0891b2) 4%,#fff)}
+.eval-source-header{transition:border-color .2s}
+.eval-doc-head b{color:var(--evalColor,#0f172a)}
+.f-grade-btn.active{outline:2px solid #0f172a}
 /* Reviewer */
 .reviewer-table tbody tr{border-bottom:1px solid #edf1f5}
 .review-score{transition:all .12s ease}
@@ -1516,10 +1522,10 @@ tbody tr:hover{background:#f0f6ff!important}
     <!-- Summary bar — แสดงหลังเลือกระดับ -->
     <div id="evalSummary" style="display:none;margin-bottom:18px">
       <div class="grid g4">
-        <div class="stat"><div class="lb">📊 คะแนน Y (ผลงาน)</div><div class="vl" id="sumY">—</div><div class="sb" id="sumYpct">—</div></div>
+        <div class="stat" id="sumYCard" style="--p:var(--evalColor,#0891b2)"><div class="lb">📊 คะแนน Y (ผลงาน)</div><div class="vl" id="sumY" style="color:var(--evalColor,#0891b2)">—</div><div class="sb" id="sumYpct">—</div></div>
         <div class="stat s-i"><div class="lb">⏱️ คะแนน Z (เวลา)</div><div class="vl" id="sumZ">—</div><div class="sb" id="sumZpct">—</div></div>
         <div class="stat s-ok"><div class="lb">🏆 คะแนนรวม X</div><div class="vl" id="sumX" style="color:var(--ok)">—</div><div class="sb">Y + Z</div></div>
-        <div class="stat"><div class="lb">📋 ความสมบูรณ์</div><div class="vl" id="sumPct">0%</div><div class="sb" id="sumDone">กรอก 0/0 ข้อ</div></div>
+        <div class="stat" id="sumPctCard" style="--p:var(--evalColor,#0891b2)"><div class="lb">📋 ความสมบูรณ์</div><div class="vl" id="sumPct" style="color:var(--evalColor,#0891b2)">0%</div><div class="sb" id="sumDone">กรอก 0/0 ข้อ</div></div>
       </div>
     </div>
 
@@ -4421,18 +4427,18 @@ function buildRow(key, name, desc, w) {
   const GC = ['#dcfce7','#dbeafe','#f1f5f9','#fef3c7','#fee2e2'];
   const GT = ['#15803d','#1d4ed8','#475569','#b45309','#b91c1c'];
   const btns = GK.map((g,gi) =>
-    `<button onclick="setScore('${key}','${g}',${w},this)"
+    `<button class="f-grade-btn" onclick="setScore('${key}','${g}',${w},this)"
       style="padding:4px 10px;border:2px solid transparent;border-radius:6px;font-size:12px;
       cursor:pointer;min-width:40px;transition:.15s;
       background:${GC[gi]};color:${GT[gi]};font-weight:700;">
       ${GL[gi]}<br><small style="font-size:10px">${sc[g]}</small></button>`
   ).join('');
-  return `<tr id="row-${key}">
+  return `<tr id="row-${key}" class="f-pending">
     <td style="line-height:1.3">
       <b style="font-size:13px">${name}</b>
       <br><small style="color:#94a3b8;font-size:11px">${desc||''}</small>
     </td>
-    <td style="text-align:center"><span class="bd b-b" style="font-size:13px;font-weight:800">${w}</span></td>
+    <td style="text-align:center"><span class="bd" style="font-size:13px;font-weight:800;background:var(--evalColor,#0891b2);color:#fff;padding:2px 9px;border-radius:999px">${w}</span></td>
     <td><div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap">${btns}</div></td>
     <td style="text-align:center"><b id="sc-${key}" style="font-size:16px;color:#94a3b8;font-weight:900">—</b></td>
   </tr>`;
@@ -4442,19 +4448,23 @@ function setScore(key, grade, w, btn) {
   evalScores[key] = SCORES[w][grade];
   const row = document.getElementById('row-'+key);
   if(row) {
+    row.classList.remove('f-pending');
+    row.classList.add('f-done');
     row.querySelectorAll('button').forEach(b => {
       const chosen = b === btn;
+      b.classList.toggle('active', chosen);
       b.style.opacity   = chosen ? '1' : '0.38';
       b.style.border    = chosen ? '2px solid #0f172a' : '2px solid transparent';
       b.style.transform = chosen ? 'scale(1.08)' : 'scale(1)';
       b.style.boxShadow = chosen ? '0 2px 8px rgba(0,0,0,.18)' : 'none';
     });
   }
+  const gi = GRADE_KEYS.indexOf(grade);
   const sc = document.getElementById('sc-'+key);
   if(sc){
     sc.textContent = SCORES[w][grade];
-    sc.style.color = '#2563eb';
-    sc.style.background = '#eff6ff';
+    sc.style.color = gi>=0 ? GRADE_TEXT[gi] : '#2563eb';
+    sc.style.background = gi>=0 ? GRADE_COLORS[gi] : '#eff6ff';
     sc.style.borderRadius = '6px';
     sc.style.padding = '2px 6px';
   }
