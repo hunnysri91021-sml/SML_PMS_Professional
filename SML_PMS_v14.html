@@ -3070,6 +3070,18 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
           </div>
         </div>
       </div>
+
+      <div class="cycle-card">
+        <div class="cycle-card-head"><h3>การมอบหมายผู้ประเมิน (Evaluation Assignment)</h3><div class="r"><span class="bd b-b" id="assignCount">0 คน</span><button class="btn btn-sm" onclick="exportAssignments()">📥 Export</button></div></div>
+        <div class="cycle-card-body">
+          <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>ระบบดึงผู้ประเมินแต่ละคนอัตโนมัติจากสายบังคับบัญชาจริงในทะเบียนพนักงาน (หัวหน้า L1 / L2 / ผู้อนุมัติ) — HR ไม่ต้องมอบหมายเองทีละคน หากมีรายชื่อขาดหัวหน้า ระบบจะเตือนไว้ด้านล่าง</div></div>
+          <div id="assignMissingWarn"></div>
+          <div class="tw"><table>
+            <thead><tr><th>พนักงาน</th><th>หัวหน้า L1</th><th>หัวหน้า L2</th><th>ผู้อนุมัติ</th><th style="text-align:center">สถานะการมอบหมาย</th></tr></thead>
+            <tbody id="assignRows"></tbody>
+          </table></div>
+        </div>
+      </div>
 </div>
     </div>
 
@@ -6027,6 +6039,51 @@ function renderCycleStats(){
   renderDashboardWorkflowSteps(participants, drafts);
   renderDashDeptProgress(participants, drafts);
   renderDashGradeBars(drafts);
+  renderAssignments(participants);
+}
+
+/* ====== Evaluation Assignment — derived automatically จากสายบังคับบัญชาจริงในทะเบียนพนักงาน
+   (u[9]=หัวหน้า L1, u[10]=หัวหน้า L2, u[11]=ผู้อนุมัติ) ไม่มีตารางแยก ไม่ให้ HR มอบหมายเองทีละคน
+   ตามที่ระบุ: "ห้ามสร้างข้อมูลซ้ำหลายชุดที่ขัดแย้งกัน — Employee Master ต้องเป็น Source of Truth" */
+function getEvaluationAssignments(participants){
+  const list = participants || getEvalParticipants();
+  return list.map(u => {
+    const needsL1 = u[2]==='emp' || u[2]==='l1';
+    const l1 = u[9] && u[9]!=='—' ? u[9] : '';
+    const l2 = u[10] && u[10]!=='—' ? u[10] : '';
+    const approver = u[11] && u[11]!=='—' ? u[11] : '';
+    const missing = needsL1 && !l1;
+    return { code:u[0], name:u[1], role:u[2], l1, l2, approver, missing };
+  });
+}
+function renderAssignments(participants){
+  const tbody = document.getElementById('assignRows');
+  if(!tbody) return;
+  const rows = getEvaluationAssignments(participants);
+  const cnt = document.getElementById('assignCount'); if(cnt) cnt.textContent = rows.length+' คน';
+  tbody.innerHTML = rows.length ? rows.map(r=>`
+    <tr style="${r.missing?'background:#fef2f2':''}">
+      <td><b>${r.name}</b><small style="display:block;color:#94a3b8">${r.code}</small></td>
+      <td>${r.l1 || '<span style="color:#dc2626">— ไม่มี —</span>'}</td>
+      <td>${r.l2 || '<span style="color:#cbd5e1">—</span>'}</td>
+      <td>${r.approver || '<span style="color:#cbd5e1">—</span>'}</td>
+      <td style="text-align:center">${r.missing ? '<span class="bd b-r">⚠️ ขาดหัวหน้า L1</span>' : '<span class="bd b-g">✓ ครบถ้วน</span>'}</td>
+    </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในรอบ</td></tr>';
+  const missingCount = rows.filter(r=>r.missing).length;
+  const warnBox = document.getElementById('assignMissingWarn');
+  if(warnBox){
+    warnBox.innerHTML = missingCount
+      ? `<div class="al al-e" style="margin-bottom:12px"><span>⚠️</span><div><b>พบ ${missingCount} คนที่ยังไม่มีหัวหน้า L1 ในทะเบียนพนักงาน</b> — ระบบจะมอบหมายผู้ประเมินให้ไม่ได้จนกว่าจะแก้ไขที่หน้า "ผังองค์กร & พนักงาน"</div></div>`
+      : '';
+  }
+}
+function exportAssignments(){
+  const rows = getEvaluationAssignments();
+  if(!rows.length){ smlToast('ไม่มีข้อมูลให้ Export','warn'); return; }
+  downloadCsv('Evaluation_Assignment_'+Date.now()+'.csv',
+    ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','สถานะ'],
+    rows.map(r=>[r.code,r.name,r.role,r.l1,r.l2,r.approver, r.missing?'ขาดหัวหน้า L1':'ครบถ้วน']));
+  smlToast('Export การมอบหมายผู้ประเมินแล้ว ('+rows.length+' คน)','ok');
 }
 
 function renderDashDeptProgress(participants, drafts){
