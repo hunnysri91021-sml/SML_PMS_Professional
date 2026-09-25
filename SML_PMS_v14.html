@@ -2949,16 +2949,10 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
           <select id="filterGroup" onchange="filterUsers()"
             style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
             <option value="">ทุกกลุ่ม (Group)</option>
-            <option value="SML Staff">SML Staff</option>
-            <option value="KTG">KTG Outsource</option>
-            <option value="CNK">CNK Outsource</option>
           </select>
           <select id="filterSection" onchange="filterUsers()"
             style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
             <option value="">ทุกฝ่าย (Dept)</option>
-            <option value="ฝ่ายปฏิบัติการ">ฝ่ายปฏิบัติการ</option>
-            <option value="ฝ่ายสนับสนุน">ฝ่ายสนับสนุน</option>
-            <option value="ฝ่ายบริหาร">ฝ่ายบริหาร</option>
           </select>
           <select id="filterStatus" onchange="filterUsers()"
             style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
@@ -3765,6 +3759,22 @@ function renderUsers(data) {
   if(cnt) cnt.textContent = 'แสดง ' + data.length + ' รายการ';
 }
 
+function populateUserFilters(){
+  const groupSel = document.getElementById('filterGroup');
+  const deptSel  = document.getElementById('filterSection');
+  if(!groupSel || !deptSel) return;
+  const groups = [...new Set(MASTER_USERS.map(u=>u[3]).filter(Boolean))].sort();
+  const depts  = [...new Set(MASTER_USERS.map(u=>u[6]).filter(Boolean))].sort();
+  const rebuild = (sel, values, placeholder) => {
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">${placeholder}</option>` +
+      values.map(v=>`<option value="${v}">${v}</option>`).join('');
+    if(values.includes(cur)) sel.value = cur;
+  };
+  rebuild(groupSel, groups, 'ทุกกลุ่ม (Group)');
+  rebuild(deptSel, depts, 'ทุกฝ่าย (Dept)');
+}
+
 function filterUsers() {
   const role       = document.getElementById('filterRole')?.value    || '';
   const status     = document.getElementById('filterStatus')?.value  || '';
@@ -3841,6 +3851,7 @@ function renderTeamFromMaster() {
    ========================================== */
 setTimeout(() => {
   renderUsers(MASTER_USERS);
+  populateUserFilters();
   renderOrg(MASTER_USERS);
   renderTeamFromMaster();
   if(typeof populateAttendanceEmpSelect==='function') populateAttendanceEmpSelect();
@@ -4321,6 +4332,7 @@ function saveUserFromModal() {
   }
 
   renderUsers(MASTER_USERS);
+  populateUserFilters();
   renderOrg(MASTER_USERS);
   closeM();
 }
@@ -5056,6 +5068,7 @@ async function loadEmployeesFromMs365(){
     if(!normalized.length) throw new Error('ไม่พบ EmpID / ชื่อ-สกุล ในข้อมูลที่อ่านได้');
     MASTER_USERS.splice(0, MASTER_USERS.length, ...normalized);
     renderUsers(MASTER_USERS);
+    populateUserFilters();
     renderOrg(MASTER_USERS);
     renderTeamFromMaster();
     const cnt=document.getElementById('ms365EmpCount'); if(cnt) cnt.textContent=String(normalized.length);
