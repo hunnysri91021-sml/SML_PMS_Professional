@@ -1389,10 +1389,10 @@ tbody tr:hover{background:#f0f6ff!important}
   <!-- หมวด 2: กระบวนการประเมิน (เรียงตาม workflow) -->
   <div class="nav-sec">กระบวนการประเมิน</div>
   <div class="nav-item" data-pg="myeval"><span class="ic">📝</span> 1. ประเมินตนเอง</div>
-  <div class="nav-item" data-pg="team" data-role="l1,l2,exec"><span class="ic">👥</span> 2. ประเมินทีมงาน <span class="nav-badge">5</span></div>
-  <div class="nav-item" data-pg="review" data-role="l2,exec"><span class="ic">🔍</span> 3. สอบทาน L2 <span class="nav-badge">3</span></div>
-  <div class="nav-item" data-pg="calib" data-role="l2,exec"><span class="ic">⚖️</span> 4. Calibration</div>
-  <div class="nav-item" data-pg="approve" data-role="exec"><span class="ic">✅</span> 5. อนุมัติ AGM/MD <span class="nav-badge">8</span></div>
+  <div class="nav-item" data-pg="team" data-role="l1,l2,exec"><span class="ic">👥</span> 2. ประเมินทีมงาน <span class="nav-badge" id="navBadgeTeam" style="display:none">0</span></div>
+  <div class="nav-item" data-pg="review" data-role="l2,exec"><span class="ic">🔍</span> 3. สอบทาน L2 <span class="nav-badge" id="navBadgeReview" style="display:none">0</span></div>
+  <div class="nav-item" data-pg="calib" data-role="l2,exec"><span class="ic">⚖️</span> 4. Calibration <span class="nav-badge" id="navBadgeCalib" style="display:none">0</span></div>
+  <div class="nav-item" data-pg="approve" data-role="exec"><span class="ic">✅</span> 5. อนุมัติ AGM/MD <span class="nav-badge" id="navBadgeApprove" style="display:none">0</span></div>
   <div class="nav-item" data-pg="myresult"><span class="ic">🏆</span> 6. ผลประเมิน</div>
 
   <!-- หมวด 3: ตั้งค่าระบบ (Admin) -->
@@ -3998,24 +3998,22 @@ function filterOrg(){
 function renderTeamFromMaster() {
   const el = document.getElementById('teamRows');
   if(!el) return;
-  /* จำลอง: แสดงเฉพาะ emp ที่ active */
   const members = MASTER_USERS.filter(u => u[2]==='emp' && u[12]==='active');
   const stMap = {pending:['b-y','⏳ รอประเมิน'],done:['b-g','✓ ส่งแล้ว'],back:['b-r','↩️ ตีกลับ']};
-  /* คงค่า workflow status จาก mock เดิม */
-  const wfMock = {'SML-001':'pending','SML-002':'done','SML-003':'pending',
-                  'SML-006':'done','SML-007':'pending','SML-009':'pending','SML-011':'done','SML-012':'pending'};
-  const l1Mock = {'SML-001':'84.0','SML-002':'79.5','SML-003':'88.0','SML-006':'86.0'};
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
   el.innerHTML = members.map(u => {
-    const wf  = wfMock[u[0]] || 'pending';
-    const st  = stMap[wf];
-    const l1s = l1Mock[u[0]] || '—';
+    const d = drafts.find(x=>x[0]===u[0]);
+    const status = d ? d[d.length-1] : 'Draft';
+    const wf = status==='Draft' ? 'pending' : (status==='L2Reviewed'||status==='Calibrated'||status==='Approved') ? 'done' : 'done';
+    const st = stMap[wf];
+    const l1s = d ? d[d.length-3] : null;
     return `<tr>
       <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>
         <div><b>${u[1]}</b><small>${u[0]}</small></div></div></td>
       <td style="font-size:12px">${u[7]}</td>
       <td style="color:#cbd5e1">—</td>
       <td style="color:#cbd5e1">—</td>
-      <td>${l1s==='—'?'<span style="color:#cbd5e1">—</span>':'<b>'+l1s+'</b>'}</td>
+      <td>${l1s==null?'<span style="color:#cbd5e1">—</span>':'<b>'+l1s+'</b>'}</td>
       <td><span class="bd ${st[0]}">${st[1]}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
         onclick="openReviewerForm(inferLevelFromPosition('${u[7]}'),'${u[1]}','${u[0]}','${u[7]}')">
@@ -5765,6 +5763,30 @@ function renderWorkflowPages(){
   if(typeof renderReportRows==='function') renderReportRows();
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof renderNotifBell==='function') renderNotifBell();
+  if(typeof renderNavBadges==='function') renderNavBadges();
+  if(typeof renderTeamFromMaster==='function') renderTeamFromMaster();
+}
+
+/* Badge ตัวเลขสีแดงข้างเมนู "2. ประเมินทีมงาน / 3. สอบทาน L2 / 4. Calibration / 5. อนุมัติ AGM/MD"
+   นับจากคิวจริงตัวเดียวกับที่แต่ละหน้าใช้ render ตาราง ไม่ใช่ตัวเลขตายตัว */
+function renderNavBadges(){
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  const teamPending = MASTER_USERS.filter(u=>u[2]==='emp' && u[12]==='active').filter(u=>{
+    const d = drafts.find(x=>x[0]===u[0]);
+    return !d || d[d.length-1]==='Draft';
+  }).length;
+  const counts = {
+    navBadgeTeam: teamPending,
+    navBadgeReview: drafts.filter(d=>d[d.length-1]==='Submitted').length,
+    navBadgeCalib: drafts.filter(d=>d[d.length-1]==='L2Reviewed').length,
+    navBadgeApprove: drafts.filter(d=>d[d.length-1]==='Calibrated').length,
+  };
+  Object.keys(counts).forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(counts[id] > 0){ el.style.display=''; el.textContent = counts[id]; }
+    else el.style.display='none';
+  });
 }
 
 /* ====== Audit Log — บันทึกเหตุการณ์จริงที่เกิดขึ้น (เก็บในเบราว์เซอร์เครื่องนี้) ====== */
