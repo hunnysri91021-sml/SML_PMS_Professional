@@ -149,6 +149,34 @@ touches employee/attendance/evaluation data.
     without an external network call, so the Audit Log's old "IP: SML-NET"
     column was pure invention. When a field can't be sourced honestly,
     drop the column rather than inventing a plausible-looking value.
+15. **A generic, short CSS class name can collide with an unrelated
+    component elsewhere in this single 7000+ line file — always grep for
+    the class before reusing it.** `.up` was used both for an "upward
+    trend" text style (`.stat .up{color:...;font-weight:700}`) and, quite
+    separately, the file-upload dropzone box
+    (`.up{border:2px dashed ...;padding:34px}`). Both rules matched the
+    same `<span class="up">`, and CSS merges non-conflicting declarations
+    from every matching rule — so the trend span silently inherited the
+    dropzone's dashed border and padding, rendering as a broken dashed
+    box instead of plain text (visible on the Dashboard's "เสร็จสมบูรณ์"
+    tile once its value was empty enough to expose the empty box). Fixed
+    by renaming to `.trend-up`. Before adding or reusing a one-word class
+    like this, `grep -n 'class="X"'` and check every existing CSS rule
+    for that class name first, in a file this large a coincidental reuse
+    is more likely than it looks. When in doubt, verify styling with an
+    actual rendered screenshot, not just a DOM/HTML read — this exact bug
+    was invisible in the HTML source and only showed up in the browser.
+16. **Any grid/table that always exactly reproduces a fixed target
+    quota or shows numbers inconsistent with the real dataset size is
+    a giveaway of hardcoded mock data — check the actual counts against
+    a known real total.** The Dashboard's grade-distribution chart
+    always showed exactly 10/20/40/20/10 (the SML quota percentages,
+    never actual counts), and its 9-Box grid showed a cell of "688"
+    people in a dataset of 15 real participants. Look for this pattern
+    (a source array literally named `const rep=`/`const audit=`/etc.,
+    or a code comment like `/* MOCK DATA RENDER */`) elsewhere in the
+    file before assuming a chart or grid is real just because it
+    renders from a `document.getElementById(...).innerHTML=` call.
 
 ## Verification checklist for any change to this file
 
