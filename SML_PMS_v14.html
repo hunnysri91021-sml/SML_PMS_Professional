@@ -2064,7 +2064,8 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="card-b">
         <div class="fr" style="margin-bottom:12px">
           <div class="fg"><label>รหัสพนักงาน <i>*</i></label>
-            <select id="mn_emp" onchange="onManualEmpChange()"></select>
+            <input id="mn_emp" list="mn_emp_list" placeholder="พิมพ์หรือเลือกรหัสพนักงาน เช่น SML-001" autocomplete="off" oninput="onManualEmpChange()" onchange="onManualEmpChange()">
+            <datalist id="mn_emp_list"></datalist>
           </div>
         </div>
         <div class="al al-i" id="mn_empInfo" style="display:none;margin-bottom:12px">
@@ -7135,11 +7136,8 @@ function importHrgoFile(input){
 
 /* กรอกข้อมูลวันลารายบุคคลด้วยมือ — ใช้แทน/เสริมการ Import ไฟล์ */
 function populateAttendanceEmpSelect(){
-  const sel=document.getElementById('mn_emp'); if(!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">— เลือกรหัสพนักงาน —</option>' +
-    MASTER_USERS.map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]}</option>`).join('');
-  if(MASTER_USERS.some(u=>u[0]===cur)) sel.value = cur;
+  const list=document.getElementById('mn_emp_list'); if(!list) return;
+  list.innerHTML = MASTER_USERS.map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]}</option>`).join('');
   onManualEmpChange();
 }
 /* เลือกรหัสแล้วดึงรายละเอียดพนักงานจากข้อมูลจริง (MASTER_USERS) ขึ้นมาแสดงยืนยันก่อนบันทึกวันลา */
@@ -7174,6 +7172,10 @@ function saveManualAttendance(){
   if(typeof recalc==='function') recalc();
   if(typeof appendAuditLog==='function') appendAuditLog('attendance','กรอกข้อมูลวันลาด้วยตนเอง', code, emp[1]);
   smlToast('บันทึกข้อมูลวันลาของ '+emp[1]+' ('+code+') เรียบร้อย','ok');
+  ['mn_emp','mn_absent','mn_late','mn_early','mn_personal','mn_sick','mn_medcert'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value = id==='mn_emp'||id==='mn_medcert' ? '' : '0';
+  });
+  onManualEmpChange();
 }
 function deleteAttendanceRow(code){
   if(!confirm('ลบข้อมูลวันลาของ '+code+' ?')) return;
