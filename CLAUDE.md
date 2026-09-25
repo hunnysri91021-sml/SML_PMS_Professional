@@ -136,6 +136,19 @@ touches employee/attendance/evaluation data.
     — the same shape of bug as CLAUDE.md #7, just one step earlier in the
     pipeline. Any "save/submit this record" function needs to filter out
     the existing entry with the same natural key before adding the new one.
+13. **A modal whose select/input options are hardcoded sample values not
+    drawn from any real store (a KPI dropdown, an employee dropdown) will
+    eventually go stale or, worse, list options that were never real to
+    begin with** — the IDP modal's employee list was 3 names that didn't
+    even exist in `MASTER_USERS`. Populate on `openM()` (see the
+    `id==='mCascadeKpi'`/`id==='mAddIdp'` branches) from the live store,
+    the same way `populateOrgSelects()` already does for Add/Edit
+    Employee.
+14. **Don't fabricate a value the app has no way to know for real** — a
+    client-side static page cannot know the visitor's real IP address
+    without an external network call, so the Audit Log's old "IP: SML-NET"
+    column was pure invention. When a field can't be sourced honestly,
+    drop the column rather than inventing a plausible-looking value.
 
 ## Verification checklist for any change to this file
 
