@@ -261,6 +261,19 @@ touches employee/attendance/evaluation data.
     when guarding against an accidental duplicate/overwrite, ask "does
     this block a legitimate edit too?" — if yes, the fix is load-real-
     data-into-the-form, not refuse-and-redirect-to-delete.
+21. **`graphAddTableRow()` always appends — it's only correct for data that
+    is genuinely a new event every time (one evaluation submission, one
+    audit log line). For data that represents "the current state of one
+    entity" (one employee's attendance), repeated adds pile up duplicate
+    rows in Excel forever.** Added `graphUpsertTableRow(tableName,
+    keyColIndex, keyValue, rowValues)` for this second case: it lists the
+    table's rows, finds one whose `keyColIndex` cell matches `keyValue`,
+    and `PATCH`es that specific row (`/rows/itemAt(index=N)`) if found,
+    or falls back to `rows/add` only when no match exists. Used by
+    `ms365PushAttendance()`, keyed on employee code — pushing the same
+    person's attendance twice updates one Excel row, never creates a
+    second. Before adding a new "push local data to Excel" function,
+    decide which shape the data has and pick the matching primitive.
 
 ## Verification checklist for any change to this file
 

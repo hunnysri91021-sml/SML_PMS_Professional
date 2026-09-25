@@ -2085,7 +2085,7 @@ tbody tr:hover{background:#f0f6ff!important}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button></div></div>
+      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button></div></div>
       <div id="attPushStatus" style="padding:0 16px 4px;font-size:11.5px;color:#64748b"></div>
       <div class="tw"><table>
         <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
@@ -2432,6 +2432,9 @@ tbody tr:hover{background:#f0f6ff!important}
           <div class="card-b">
             <div style="font-size:12px;color:#475569;margin-bottom:10px">Last: <b id="attendSyncTime">—</b> · <span id="attendSyncCount">—</span></div>
             <button class="btn btn-p" style="width:100%;justify-content:center" onclick="ms365SyncAttendance()">📥 นำเข้าเวลาทำงาน → คำนวณ Z</button>
+            <div style="font-size:11px;color:#94a3b8;margin:10px 0 4px">ข้อมูลที่กรอก/แก้ไขในเว็บเครื่องนี้ (กรอกมือ หรือแก้จากที่ Sync มา) ยังไม่เข้า Excel จนกว่าจะกดปุ่มนี้ —
+              คนละเครื่องจะยังไม่เห็นตรงกันจนกว่าจะ Push</div>
+            <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAttendance()">📤 Push ข้อมูลเวลา → Excel</button>
           </div>
         </div>
         <div class="card"><div class="card-h"><h3>📤 Push ผลประเมิน</h3></div>
@@ -5496,6 +5499,26 @@ async function graphAddTableRow(tableName, rowValues){
     { method:'POST', body: JSON.stringify({ values: [rowValues] }) });
 }
 
+/* graphAddTableRow() ต่อแถวใหม่ท้ายตารางเสมอ — เหมาะกับ "เหตุการณ์" (ผลประเมิน 1 รอบ = 1 แถว)
+   แต่ไม่เหมาะกับ "สถานะปัจจุบันของคนคนหนึ่ง" (วันลาของ SML-001) ที่แก้ไขซ้ำได้ ถ้าใช้ add ซ้ำๆ
+   จะได้แถวซ้ำของรหัสเดียวกันสะสมใน Excel ไปเรื่อยๆ ฟังก์ชันนี้จึงหาแถวเดิมด้วยคอลัมน์ key ก่อน
+   เจอแล้ว PATCH ทับแถวเดิม ไม่เจอค่อย add ใหม่ — กันปัญหาข้อมูลซ้ำฝั่ง Excel แบบเดียวกับที่กัน
+   ฝั่งเว็บไปแล้ว (ห้ามบันทึกซ้ำในฟอร์มกรอกมือ) */
+async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
+  const { driveId, itemId } = await resolveMs365Site();
+  const base = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+    "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows";
+  const data = await graphFetch(base);
+  const rows = data.value || [];
+  const idx = rows.findIndex(r => String((r.values && r.values[0] && r.values[0][keyColIndex]) ?? '').trim() === String(keyValue).trim());
+  if(idx >= 0 && rows[idx].index !== undefined){
+    await graphFetch(base + '/itemAt(index=' + rows[idx].index + ')', { method:'PATCH', body: JSON.stringify({ values: [rowValues] }) });
+    return 'updated';
+  }
+  await graphFetch(base + '/add', { method:'POST', body: JSON.stringify({ values: [rowValues] }) });
+  return 'added';
+}
+
 /* ====== SystemStatus (cross-device) — ทุกเครื่องที่มี MS365 login แล้ว (แม้ไม่ใช่ Admin)
    จะเห็นสถานะ "ข้อมูลอัปเดตล่าสุดเมื่อไหร่" อันเดียวกัน โดยอ่าน/เขียนตาราง "SystemStatus"
    ในไฟล์ Excel กลาง — ต้องสร้างตารางชื่อ SystemStatus (คอลัมน์: UpdatedAt, Note, PendingCount)
@@ -5805,6 +5828,42 @@ async function ms365SyncAttendance(){
     smlToast('นำเข้าเวลาทำงานไม่สำเร็จ: ' + err.message,'warn');
     appendSyncLog('Sync เวลา HRGO ล้มเหลว: ' + err.message, false);
   }
+}
+
+/* Push ข้อมูลเวลา/วันลาที่กรอกมือ หรือแก้ไขในเว็บเครื่องนี้ กลับเข้า Excel ตาราง "Attendance"
+   ATTENDANCE คือ "สถานะปัจจุบัน" ของแต่ละรหัสพนักงาน ไม่ใช่เหตุการณ์ที่เกิดซ้ำได้แบบผลประเมิน
+   จึงต้องใช้ graphUpsertTableRow() (หา-แล้ว-อัปเดตแถวเดิมด้วยรหัสพนักงาน) ไม่ใช่ graphAddTableRow()
+   ที่จะพอกแถวใหม่ทับไปเรื่อยๆ ทุกครั้งที่กด — คอลัมน์เรียงตาม HRGO_TEMPLATE_HEADERS เดียวกับที่
+   ms365SyncAttendance() ใช้อ่าน เพื่อให้ไป-กลับ Excel ตรงกันเสมอ */
+async function ms365PushAttendance(){
+  const codes = Object.keys(ATTENDANCE);
+  if(!codes.length){ smlToast('ยังไม่มีข้อมูลเวลาในเครื่องนี้ให้ Push','warn'); return; }
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
+    smlToast('ยังไม่ได้ตั้งค่า MS365 — ข้อมูลจะยังอยู่แค่ในเครื่องนี้เท่านั้น','warn');
+    appendSyncLog('Push ข้อมูลเวลา: ยังไม่ได้ตั้งค่า MS365', false);
+    return;
+  }
+  let ok=0, fail=0;
+  for(const code of codes){
+    const a = ATTENDANCE[code];
+    const emp = MASTER_USERS.find(u=>u[0]===code);
+    const name = emp ? emp[1] : (a.name || code); // ชื่อเชื่อถือจาก MASTER_USERS ก่อนเสมอ ตกลงใช้ที่เก็บไว้เฉพาะถ้าไม่พบคนคนนี้แล้วจริงๆ
+    const row = [
+      code, name, a.absentDay||0,
+      a.lateCount||0, 0,
+      a.personalDay||0, a.personalHr||0, a.personalMin||0,
+      a.sickDay||0, a.sickHr||0, a.sickMin||0,
+      (a.personalDay||0)+(a.sickDay||0), (a.personalHr||0)+(a.sickHr||0), (a.personalMin||0)+(a.sickMin||0),
+      a.medCert||''
+    ];
+    try{ await graphUpsertTableRow('Attendance', 0, code, row); ok++; }
+    catch(e){ fail++; }
+  }
+  updateMs365Status(fail?'warn':'ok', fail?'บาง Push ไม่สำเร็จ':'Connected');
+  smlToast(`Push ข้อมูลเวลาเข้า Excel สำเร็จ ${ok} คน` + (fail?` · ล้มเหลว ${fail} คน`:''), fail?'warn':'ok');
+  appendSyncLog(`Push ข้อมูลเวลา: สำเร็จ ${ok} คน${fail?' · ล้มเหลว '+fail:''}`, fail===0);
+  if(ok){ markSystemUpdated(`Push ข้อมูลเวลา ${ok} คนเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push ข้อมูลเวลาเข้า Excel', 'Attendance', ok+' คนสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
 }
 
 function exportMyDataFile(){
