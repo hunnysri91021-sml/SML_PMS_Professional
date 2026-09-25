@@ -5775,6 +5775,11 @@ function stopMs365AutoSync(){
   if(ms365AutoSyncTimer){ clearInterval(ms365AutoSyncTimer); ms365AutoSyncTimer=null; }
 }
 
+/* เดิมฟังก์ชันนี้แค่ "นับแถว" ที่อ่านได้จาก Excel แล้วโชว์ toast ว่าสำเร็จ โดยไม่เคยเขียนลง
+   ATTENDANCE จริง — ข้อมูลจึงไม่เคยไหลเข้าเว็บเลยแม้ Excel จะมีข้อมูลอยู่แล้ว (บั๊กแบบ CLAUDE.md #10)
+   แก้ให้ parse แถวจริงด้วยลำดับคอลัมน์เดียวกับ HRGO_TEMPLATE_HEADERS (ตารางชื่อ "Attendance" ต้อง
+   มีคอลัมน์ตรงกับ Template HRGO) แล้วเขียนเข้า ATTENDANCE จริง เหมือน importHrgoFile() ทุกประการ
+   รวมถึงกฎ "ชื่อต้องดึงจาก MASTER_USERS เสมอ ไม่เชื่อชื่อจากไฟล์" และ "รหัสที่ไม่มีจริงต้องข้าม+รายงาน" */
 async function ms365SyncAttendance(){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
@@ -5784,14 +5789,47 @@ async function ms365SyncAttendance(){
   }
   try{
     const rows = await graphListTableRows('Attendance');
+    if(!rows.length) throw new Error('ไม่พบแถวข้อมูลในตาราง Attendance');
+
+    let firstCell = String(rows[0]?.[0] ?? '').trim().toLowerCase();
+    let startIdx = firstCell === HRGO_TEMPLATE_HEADERS[0] ? 1 : 0;
+    if(startIdx===1 && String(rows[1]?.[0] ?? '').trim() === HRGO_TEMPLATE_THAI[0]) startIdx = 2;
+
+    let imported=0, unmatched=[];
+    for(let i=startIdx;i<rows.length;i++){
+      const c = rows[i];
+      const code = String(c[0] ?? '').trim();
+      if(!code) continue;
+      const emp = MASTER_USERS.find(u=>u[0]===code);
+      if(!emp){ unmatched.push(code); continue; }
+      const num=(v)=>Number(v)||0;
+      ATTENDANCE[code] = {
+        name: emp[1],
+        lateCount:num(c[3]), earlyCount:0,
+        absentDay:num(c[2]),
+        personalDay:num(c[5]), personalHr:num(c[6]), personalMin:num(c[7]),
+        sickDay:num(c[8]), sickHr:num(c[9]), sickMin:num(c[10]),
+        medCert:String(c[14] ?? '').trim()
+      };
+      imported++;
+    }
+    if(!imported && !unmatched.length) throw new Error('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าตาราง Attendance ตรงตาม Template HRGO');
+
+    saveAttendance();
+    renderAttendanceList();
+    if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
+    if(typeof recalc==='function') recalc();
+    if(typeof renderCycleStats==='function') renderCycleStats();
+
     const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
     set('attendSyncTime', new Date().toLocaleString('th-TH'));
-    set('attendSyncCount', rows.length + ' แถว');
+    set('attendSyncCount', imported + ' คน');
     updateMs365Status('ok','Connected');
-    smlToast('นำเข้าเวลาทำงานจาก Excel แล้ว ' + rows.length + ' แถว','ok');
-    appendSyncLog(`Sync เวลา HRGO: นำเข้า ${rows.length} แถว`, true);
-    markSystemUpdated(`Sync เวลา HRGO ${rows.length} แถว`);
-    if(typeof appendAuditLog==='function') appendAuditLog('ms365','Sync เวลา HRGO จาก Excel', 'Attendance', rows.length+' แถว');
+    const unmatchedMsg = unmatched.length ? ` · ไม่พบรหัส ${unmatched.length} รายการในข้อมูลพนักงานจริง (${unmatched.slice(0,5).join(', ')}${unmatched.length>5?'…':''}) — ข้ามไป` : '';
+    smlToast(`นำเข้าเวลาทำงานจาก Excel แล้ว ${imported} คน` + unmatchedMsg, unmatched.length ? 'warn' : 'ok');
+    appendSyncLog(`Sync เวลา HRGO: นำเข้า ${imported} คน${unmatched.length?' · ข้าม '+unmatched.length+' รหัส':''}`, true);
+    markSystemUpdated(`Sync เวลา HRGO ${imported} คน`);
+    if(typeof appendAuditLog==='function') appendAuditLog('ms365','Sync เวลา HRGO จาก Excel', 'Attendance', imported+' คน'+(unmatched.length?' · ข้าม '+unmatched.length:''));
   }catch(err){
     updateMs365Status('warn','Sync failed');
     smlToast('นำเข้าเวลาทำงานไม่สำเร็จ: ' + err.message,'warn');

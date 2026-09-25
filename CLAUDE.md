@@ -219,6 +219,29 @@ touches employee/attendance/evaluation data.
     fresh every time the modal opens (`populateOrgSelects()`) so the list
     always reflects current `MASTER_USERS`, and `openEditUser()` explicitly
     pre-selects the row's real stored value after populating.
+19. **A "Sync from Excel" function that reads rows via Graph and reports a
+    count is not the same as one that writes those rows into the real
+    store — check both halves independently.** `ms365SyncAttendance()`
+    called `graphListTableRows('Attendance')`, displayed the row count,
+    and toasted "นำเข้าเวลาทำงานจาก Excel แล้ว N แถว" (imported N rows) —
+    but never parsed a single row or wrote to `ATTENDANCE`/called
+    `saveAttendance()`. It looked identical to a working sync (real
+    network call, real count, success toast) while doing nothing
+    persistent, so Excel could have real attendance data forever and the
+    web app would never actually have it — exactly the shape of bug
+    CLAUDE.md #10 warns about, just one layer deeper (the "action" here
+    is a real API call, not a no-op button, which made it easier to miss
+    in review). Compare this function against a working sibling doing the
+    same job on different data (`loadEmployeesFromMs365()` for the
+    Employees table) before trusting a sync function's toast message —
+    trace whether the local store it claims to update actually changed.
+    Fixed by giving `ms365SyncAttendance()` the same column parsing as
+    `importHrgoFile()` (same `HRGO_TEMPLATE_HEADERS` order, since the
+    Excel "Attendance" table is expected to mirror the HRGO template),
+    the same never-trust-the-file-name rule (resolve `emp[1]` from
+    `MASTER_USERS` by code), and the same skip-and-report for codes with
+    no matching employee, then actually calling `saveAttendance()`,
+    `renderAttendanceList()`, `recalc()`, and `renderCycleStats()`.
 
 ## Verification checklist for any change to this file
 
