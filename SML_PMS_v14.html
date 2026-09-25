@@ -1517,6 +1517,7 @@ tbody tr:hover{background:#f0f6ff!important}
         <button class="btn" onclick="saveDraftEval()">💾 บันทึกร่าง</button>
         <button class="btn print-eval-btn" data-no-delegate onclick="printEvalForm()">🖨️ พิมพ์ร่าง</button>
         <button class="btn btn-p" onclick="openM('mSubmit')">📤 ส่งแบบประเมิน</button>
+        <button class="btn" onclick="exportMyDataFile()" title="สำหรับผู้ที่ไม่มี MS365 — บันทึกไฟล์เพื่อส่งให้ Admin นำเข้ารวมภายหลัง">💾 ส่งออกไฟล์ (ไม่มี MS365)</button>
       </div>
     </div>
 
@@ -2472,6 +2473,13 @@ tbody tr:hover{background:#f0f6ff!important}
             <div class="fg" style="margin-bottom:8px"><label>รอบ</label>
               <select><option>FY2568</option><option>FY2567</option></select></div>
             <button class="btn btn-p" style="width:100%;justify-content:center" onclick="ms365ExportReport()">📊 Export รายงานสรุป Excel</button>
+          </div>
+        </div>
+        <div class="card"><div class="card-h"><h3>📥 นำเข้าไฟล์จากผู้ไม่มี MS365</h3></div>
+          <div class="card-b">
+            <div style="font-size:11.5px;color:#64748b;margin-bottom:8px">รับไฟล์ (.json) ที่พนักงาน/หัวหน้าที่ไม่มี MS365 กด "ส่งออกไฟล์" จากหน้าแบบประเมินตนเอง — นำเข้ารวมที่นี่ แล้วกด "📤 Push ผลประเมิน → Excel" ตามปกติ</div>
+            <input type="file" id="mergeImportFile" accept=".json" multiple onchange="importMergedDataFile(this)" style="width:100%;font-size:12px">
+            <div style="font-size:12px;color:#475569;margin-top:8px" id="mergeImportResult"></div>
           </div>
         </div>
       </div>
@@ -5139,6 +5147,62 @@ async function ms365SyncAttendance(){
     smlToast('นำเข้าเวลาทำงานไม่สำเร็จ: ' + err.message,'warn');
     appendSyncLog('Sync เวลา HRGO ล้มเหลว: ' + err.message, false);
   }
+}
+
+function exportMyDataFile(){
+  const empCode = (document.getElementById('evalCode')?.value || MASTER_USERS[0]?.[0] || '').trim();
+  let drafts=[];
+  try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ drafts=[]; }
+  const myDrafts = drafts.filter(d => String(d[0]) === empCode);
+  const myAttendance = ATTENDANCE[empCode] ? { [empCode]: ATTENDANCE[empCode] } : {};
+  if(!myDrafts.length && !Object.keys(myAttendance).length){
+    smlToast('ไม่มีข้อมูลของ ' + (empCode||'พนักงาน') + ' ให้ส่งออก — กรุณาบันทึกร่างแบบประเมินหรือกรอกข้อมูลวันลาก่อน','warn');
+    return;
+  }
+  const payload = { type:'sml-pms-export', empCode, exportedAt: new Date().toISOString(), evaluations: myDrafts, attendance: myAttendance };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download = 'SML_PMS_Export_' + (empCode||'emp') + '_' + Date.now() + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  smlToast('ส่งออกไฟล์แล้ว — ส่งไฟล์นี้ให้ Admin เพื่อนำเข้ารวม','ok');
+}
+
+async function importMergedDataFile(input){
+  const files = [...(input.files||[])];
+  const box = document.getElementById('mergeImportResult');
+  if(!files.length) return;
+  let evalCount=0, attCount=0, fileCount=0, failCount=0;
+  let drafts=[];
+  try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ drafts=[]; }
+  for(const file of files){
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if(data.type !== 'sml-pms-export') throw new Error('ไฟล์ไม่ใช่รูปแบบ Export ของระบบนี้');
+      (data.evaluations||[]).forEach(row => {
+        const dup = drafts.some(d => d[0]===row[0] && d[2]===row[2] && d[3]===row[3]);
+        if(!dup){ drafts.unshift(row); evalCount++; }
+      });
+      Object.entries(data.attendance||{}).forEach(([code, att]) => {
+        ATTENDANCE[code] = att; attCount++;
+      });
+      fileCount++;
+    }catch(e){
+      failCount++;
+      appendSyncLog('นำเข้าไฟล์ ' + file.name + ' ล้มเหลว: ' + e.message, false);
+    }
+  }
+  localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(drafts.slice(0,200)));
+  saveAttendance();
+  renderAttendanceList();
+  const setPending=(v)=>{const el=document.getElementById('appraisalPending'); if(el) el.textContent=v+' รายการ';};
+  setPending(drafts.length);
+  if(box) box.innerHTML = `นำเข้า ${fileCount} ไฟล์สำเร็จ · ผลประเมินใหม่ ${evalCount} รายการ · ข้อมูลวันลา ${attCount} คน` + (failCount ? ` · <span style="color:#dc2626">ล้มเหลว ${failCount} ไฟล์</span>` : '');
+  appendSyncLog(`นำเข้าไฟล์จากผู้ไม่มี MS365: ${fileCount} ไฟล์ · ผลประเมิน ${evalCount} · วันลา ${attCount}${failCount?' · ล้มเหลว '+failCount:''}`, failCount===0);
+  smlToast(evalCount || attCount ? 'นำเข้าข้อมูลสำเร็จ — กด "Push ผลประเมิน → Excel" เพื่อส่งต่อ' : 'ไม่มีข้อมูลใหม่ในไฟล์ที่เลือก', evalCount||attCount ? 'ok' : 'warn');
+  input.value = '';
 }
 
 async function ms365PushAppraisals(){
