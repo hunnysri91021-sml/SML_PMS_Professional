@@ -51,6 +51,12 @@ body{font-family:'Segoe UI',Tahoma,'Sarabun',sans-serif;background:var(--bg);col
 .notif-empty{padding:22px 14px;text-align:center;color:#94a3b8;font-size:12.5px}
 .avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;display:grid;place-items:center;font-weight:700;font-size:12.5px}
 .content{padding:22px;flex:1}
+.login-gate{position:fixed;inset:0;background:linear-gradient(135deg,#0f2341,#1e3a5f);display:flex;align-items:center;justify-content:center;z-index:9999}
+.login-box{background:#fff;border-radius:14px;padding:30px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.login-box h2{margin:0 0 6px;font-size:19px;color:var(--t1)}
+.login-note{font-size:11.5px;color:#64748b;margin:0 0 18px;line-height:1.5}
+.login-err{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:7px;padding:8px 10px;font-size:12px;margin-bottom:10px}
+.session-badge{font-size:11.5px;color:#64748b;display:flex;align-items:center;gap:6px}
 
 /* ===== COMPONENTS ===== */
 .page{display:none}.page.on{display:block;animation:fade .25s}
@@ -1374,6 +1380,18 @@ tbody tr:hover{background:#f0f6ff!important}
 
 </head>
 <body>
+
+<div class="login-gate" id="loginGate">
+  <div class="login-box">
+    <h2>🔐 เข้าสู่ระบบ SML PMS</h2>
+    <p class="login-note">ยืนยันตัวตนด้วยรหัสพนักงาน + PIN — ใช้สำหรับระบุตัวตนเบื้องต้นในเครื่องนี้เท่านั้น ไม่ใช่ระบบความปลอดภัยระดับสูง สิทธิ์เข้าถึงข้อมูลจริงยังคุมที่ SharePoint permission ของไฟล์ Excel</p>
+    <div id="loginErr" class="login-err" style="display:none"></div>
+    <div class="fg"><label>รหัสพนักงาน</label><input id="loginCode" placeholder="เช่น SML-001" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()"></div>
+    <div class="fg"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 หลัก (เว้นว่างได้ถ้ายังไม่เคยตั้ง)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn btn-p" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
 <div class="app">
 
 <!-- ================= SIDEBAR ================= -->
@@ -1435,6 +1453,10 @@ tbody tr:hover{background:#f0f6ff!important}
           <div class="notif-panel-head">🔔 การแจ้งเตือน</div>
           <div id="notifList"></div>
         </div>
+      </div>
+      <div class="session-badge" id="sessionBadge" style="display:none">
+        <span id="sessionName"></span>
+        <button class="btn btn-sm" onclick="doLogout()">ออกจากระบบ</button>
       </div>
       <div class="avatar" id="av">AD</div>
     </div>
@@ -3797,25 +3819,116 @@ setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); renderCascadeRows
    status: active / probation / inactive / resigned
    ============================================================ */
 const MASTER_USERS = [
-  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email  [16]potential(ศักยภาพ: high/medium/low หรือว่างถ้ายังไม่ประเมิน)
-  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563','',''],
-  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564','',''],
-  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565','',''],
-  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561','',''],
-  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559','',''],
-  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565','',''],
-  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563','',''],
-  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560','',''],
-  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564','',''],
-  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568','',''],
-  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562','',''],
-  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564','',''],
-  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560','',''],
-  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555','',''],
-  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564','',''],
-  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563','',''],
-  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565','',''],
+  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email  [16]potential(ศักยภาพ: high/medium/low หรือว่างถ้ายังไม่ประเมิน)  [17]pinHash(SHA-256 ของ PIN เข้าสู่ระบบ — ยืนยันตัวตนเบื้องต้นเท่านั้น ไม่ใช่รหัสผ่านจริง, ว่างถ้ายังไม่ตั้ง)
+  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563','','',''],
+  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564','','',''],
+  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565','','',''],
+  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561','','',''],
+  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559','','',''],
+  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565','','',''],
+  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563','','',''],
+  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560','','',''],
+  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564','','',''],
+  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568','','',''],
+  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562','','',''],
+  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564','','',''],
+  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560','','',''],
+  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555','','',''],
+  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564','','',''],
+  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563','','',''],
+  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565','','',''],
 ];
+
+/* ==========================================
+   LOGIN GATE — ยืนยันตัวตนด้วยรหัสพนักงาน + PIN
+   หมายเหตุความปลอดภัยที่ต้องซื่อสัตย์กับผู้ใช้: หน้านี้เป็นไฟล์ static ไม่มี server
+   ตรวจสอบ ดังนั้น PIN นี้คือ "การยืนยันตัวตนเบื้องต้น" (ใครเปิด DevTools ก็เห็น logic ได้)
+   ไม่ใช่ระบบรักษาความปลอดภัยระดับสูง — สิทธิ์เข้าถึงข้อมูลจริงยังคุมที่ SharePoint permission
+   ของไฟล์ Excel เป็นหลัก ค่า PIN เก็บเป็น SHA-256 hash เท่านั้น ไม่เคยเก็บ/แสดง PIN ดิบซ้ำอีกครั้ง
+   ========================================== */
+const SML_SESSION_KEY = 'smlPmsSession';
+let CURRENT_SESSION_USER = null;
+
+async function sha256Hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function applySession(u){
+  CURRENT_SESSION_USER = u;
+  document.getElementById('loginGate').style.display = 'none';
+  const roleSel = document.getElementById('roleSel');
+  if(roleSel) roleSel.value = u[2];
+  if(typeof setRole === 'function') setRole(u[2]);
+  const badge = document.getElementById('sessionBadge');
+  const nameEl = document.getElementById('sessionName');
+  if(badge) badge.style.display = 'flex';
+  if(nameEl) nameEl.textContent = `👤 ${u[1]} (${u[0]})`;
+  const evalCodeEl = document.getElementById('evalCode');
+  if(evalCodeEl && !evalCodeEl.value) evalCodeEl.value = u[0];
+}
+
+async function doLogin(){
+  const codeEl = document.getElementById('loginCode');
+  const pinEl = document.getElementById('loginPin');
+  const errEl = document.getElementById('loginErr');
+  const code = (codeEl?.value || '').trim();
+  const pin = (pinEl?.value || '').trim();
+  errEl.style.display = 'none';
+  const u = MASTER_USERS.find(x => x[0] === code);
+  if(!u || u[12] === 'resigned'){
+    errEl.textContent = 'ไม่พบรหัสพนักงานนี้ในระบบ (หรือพนักงานลาออกแล้ว)';
+    errEl.style.display = 'block';
+    return;
+  }
+  const storedHash = u[17] || '';
+  if(storedHash){
+    if(!pin){ errEl.textContent = 'กรุณากรอก PIN'; errEl.style.display = 'block'; return; }
+    const hash = await sha256Hex(pin);
+    if(hash !== storedHash){
+      errEl.textContent = 'PIN ไม่ถูกต้อง';
+      errEl.style.display = 'block';
+      return;
+    }
+  } else {
+    if(typeof smlToast === 'function') smlToast('บัญชีนี้ยังไม่ได้ตั้ง PIN กับ HR — เข้าใช้งานแบบยืนยันตัวตนเบื้องต้นเท่านั้น ติดต่อ HR เพื่อตั้ง PIN', 'warn');
+  }
+  sessionStorage.setItem(SML_SESSION_KEY, JSON.stringify({code: u[0]}));
+  applySession(u);
+  if(typeof appendAuditLog === 'function') appendAuditLog('auth', 'เข้าสู่ระบบ', u[0], u[1]);
+}
+
+function doLogout(){
+  if(CURRENT_SESSION_USER && typeof appendAuditLog === 'function'){
+    appendAuditLog('auth', 'ออกจากระบบ', CURRENT_SESSION_USER[0], CURRENT_SESSION_USER[1]);
+  }
+  sessionStorage.removeItem(SML_SESSION_KEY);
+  location.reload();
+}
+
+/* ตั้ง/รีเซ็ต PIN ให้พนักงาน — แสดง PIN ที่สุ่มได้ครั้งเดียวตอนนั้นให้ HR ไปแจ้งเจ้าตัว
+   ไม่เคยเก็บ PIN ดิบไว้ที่ไหนอีก มีแต่ SHA-256 hash ใน MASTER_USERS[17] */
+async function resetUserPin(code){
+  const emp = MASTER_USERS.find(u => u[0] === code);
+  if(!emp){
+    if(typeof smlToast === 'function') smlToast('กรุณาบันทึกข้อมูลพนักงานให้เสร็จก่อน จึงจะตั้ง PIN ได้', 'warn');
+    return;
+  }
+  const pin = String(Math.floor(1000 + Math.random()*9000));
+  emp[17] = await sha256Hex(pin);
+  if(typeof appendAuditLog === 'function') appendAuditLog('employee', 'ตั้ง/รีเซ็ต PIN', emp[0], emp[1]);
+  alert(`ตั้ง PIN ใหม่ให้ ${emp[1]} (${emp[0]}) เรียบร้อย\n\nPIN: ${pin}\n\nกรุณาแจ้ง PIN นี้ให้พนักงานเป็นการส่วนตัว — ระบบจะไม่แสดง PIN นี้ซ้ำอีก`);
+  if(typeof renderPinStatus === 'function') renderPinStatus(code);
+}
+
+function renderPinStatus(code){
+  const el = document.getElementById('mu_pinStatus');
+  if(!el) return;
+  const emp = MASTER_USERS.find(u => u[0] === code);
+  const hasPin = !!(emp && emp[17]);
+  el.textContent = hasPin ? '✅ ตั้ง PIN แล้ว' : '⚠️ ยังไม่ได้ตั้ง PIN';
+  el.style.color = hasPin ? 'var(--ok)' : 'var(--warn)';
+}
 
 /* ==========================================
    ATTENDANCE STORE — ข้อมูลเวลาทำงานจริงจากการ Import HRGO
@@ -4564,14 +4677,15 @@ function saveUserFromModal() {
     return;
   }
 
-  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential] */
+  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential,pinHash] */
   const existingRow = MASTER_USERS.find(u => u[0] === id);
   const newUser = [id, name, role, group, section, division||'—', dept||'—',
                    position, grade, l1||'—', l2||'—', approver||'—', status,
                    new Date().toLocaleDateString('th-TH'),
                    startRaw ? startDate : (existingRow?.[14] || '—'),
                    email || existingRow?.[15] || '',
-                   potential || existingRow?.[16] || ''];
+                   potential || existingRow?.[16] || '',
+                   existingRow?.[17] || ''];
 
   const existing = MASTER_USERS.findIndex(u => u[0] === id);
   if (existing >= 0) {
@@ -4616,7 +4730,7 @@ function thaiDateToIso(str){
 }
 
 function clearUserModalForm(){
-  ['mu_id','mu_name','mu_position','mu_l1','mu_l2','mu_approver','mu_email','mu_pass'].forEach(id=>{
+  ['mu_id','mu_name','mu_position','mu_l1','mu_l2','mu_approver','mu_email'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   const idEl=document.getElementById('mu_id'); if(idEl) idEl.removeAttribute('disabled');
@@ -4625,6 +4739,8 @@ function clearUserModalForm(){
   const status=document.getElementById('mu_status'); if(status) status.value='active';
   const sd=document.getElementById('mu_startdate'); if(sd) sd.value='';
   const pot=document.getElementById('mu_potential'); if(pot) pot.value='';
+  const pinEl=document.getElementById('mu_pinStatus');
+  if(pinEl){ pinEl.textContent='บันทึกพนักงานใหม่ก่อน จึงตั้ง PIN ได้'; pinEl.style.color='#94a3b8'; }
 }
 
 /* เปิด modal พร้อมดึงข้อมูลปัจจุบันของพนักงานคนนั้นมาเติมในฟอร์ม (แก้ไขจริง ไม่ใช่ฟอร์มเปล่า) */
@@ -4652,6 +4768,7 @@ function openEditUser(id){
   const sdEl=document.getElementById('mu_startdate'); if(sdEl) sdEl.value = thaiDateToIso(emp[14]);
   set('mu_email', emp[15]);
   set('mu_potential', emp[16]);
+  if(typeof renderPinStatus==='function') renderPinStatus(emp[0]);
 }
 
 /* ====== ส่งการแจ้งเตือน (Reminder) — ดึงกลุ่มเป้าหมาย/อีเมลจากข้อมูลพนักงานจริงเสมอ
@@ -5516,6 +5633,8 @@ async function loadEmployeesFromMs365(){
     if(!rows.length) throw new Error('ไม่พบแถวข้อมูลในตาราง ' + cfg.employeeTable);
     const normalized = rows.map(normalizeMs365Employee).filter(r=>r[0] && r[1]);
     if(!normalized.length) throw new Error('ไม่พบ EmpID / ชื่อ-สกุล ในข้อมูลที่อ่านได้');
+    /* PIN login ผูกกับเครื่องนี้เท่านั้น ไม่ได้อยู่ใน Excel — ต้องคงค่าเดิมไว้ ไม่ให้ sync ล้าง PIN ทิ้ง */
+    normalized.forEach(r => { r[17] = MASTER_USERS.find(u => u[0] === r[0])?.[17] || ''; });
     MASTER_USERS.splice(0, MASTER_USERS.length, ...normalized);
     renderUsers(MASTER_USERS);
     populateUserFilters();
@@ -7034,8 +7153,12 @@ document.addEventListener('input',e=>{
         <input type="date" id="mu_startdate">
       </div>
       <div class="fg">
-        <label>รหัสผ่านเริ่มต้น</label>
-        <input type="password" id="mu_pass" placeholder="บังคับเปลี่ยนเมื่อ Login ครั้งแรก">
+        <label>PIN เข้าสู่ระบบ</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="mu_pinStatus" style="font-size:12.5px">⚠️ ยังไม่ได้ตั้ง PIN</span>
+          <button type="button" class="btn btn-sm" onclick="resetUserPin(document.getElementById('mu_id')?.value)">🔑 ตั้ง/รีเซ็ต PIN</button>
+        </div>
+        <div style="font-size:10.5px;color:#64748b;margin-top:2px">PIN ใช้ยืนยันตัวตนเบื้องต้นเวลาเข้าระบบ (4 หลัก) — ระบบแสดง PIN ให้ครั้งเดียวตอนตั้ง กรุณาแจ้งพนักงานเป็นการส่วนตัว</div>
       </div>
     </div>
 
@@ -7234,6 +7357,25 @@ document.addEventListener('input',e=>{
     document.addEventListener('DOMContentLoaded', bootForms);
   }else{
     bootForms();
+  }
+})();
+
+/* คืนสถานะ login ที่เคยเข้าไว้แล้วในแท็บนี้ (sessionStorage — หายเมื่อปิดแท็บ) */
+(function(){
+  function tryRestoreSession(){
+    try{
+      const raw = sessionStorage.getItem(SML_SESSION_KEY);
+      if(!raw) return;
+      const s = JSON.parse(raw);
+      const u = MASTER_USERS.find(x => x[0] === s.code);
+      if(u) applySession(u);
+      else sessionStorage.removeItem(SML_SESSION_KEY);
+    }catch(e){}
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', tryRestoreSession);
+  }else{
+    tryRestoreSession();
   }
 })();
 </script>

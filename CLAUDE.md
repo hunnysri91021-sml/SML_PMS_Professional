@@ -177,6 +177,28 @@ touches employee/attendance/evaluation data.
     or a code comment like `/* MOCK DATA RENDER */`) elsewhere in the
     file before assuming a chart or grid is real just because it
     renders from a `document.getElementById(...).innerHTML=` call.
+17. **This app has no server, so any "login"/"password" feature is identity
+    convenience, not real access control — never let it be presented or
+    built as if it were.** A dead placeholder field (`mu_pass`, "รหัสผ่าน
+    เริ่มต้น", never wired to anything) was replaced with a real PIN gate
+    (`loginGate`/`doLogin()`/`applySession()`), explicitly scoped and
+    labeled in the UI as "ยืนยันตัวตนเบื้องต้น...ไม่ใช่ระบบความปลอดภัย
+    ระดับสูง". Concretely: PINs are stored only as a SHA-256 hash
+    (`MASTER_USERS[17]`, `sha256Hex()`), the raw PIN is shown to HR exactly
+    once at generation time (`resetUserPin()`'s `alert()`) and never again,
+    the check happens entirely client-side so it cannot stop someone
+    reading the page's JS/network — the UI says so rather than implying
+    otherwise. Anywhere an app like this needs "who is using it right now"
+    (audit log attribution, default `evalCode`, auto-selected role), derive
+    it from the real logged-in record (`CURRENT_SESSION_USER`), not from a
+    manually-switched demo selector — the `#roleSel` "มุมมอง (Demo UI)"
+    dropdown stays, but login now drives its initial value instead of a
+    hardcoded default. Any store rebuilt wholesale from an external source
+    (`loadEmployeesFromMs365()`'s `MASTER_USERS.splice(0, length,
+    ...normalized)`) must explicitly re-merge fields that only exist
+    locally and never come from that source (PIN hash isn't and shouldn't
+    be in the Excel employee table) — or the next sync silently deletes
+    every employee's PIN, the same shape of bug as CLAUDE.md #6/#1.
 
 ## Verification checklist for any change to this file
 
