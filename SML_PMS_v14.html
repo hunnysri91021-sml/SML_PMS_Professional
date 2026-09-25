@@ -2574,8 +2574,8 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         <p>Admin กำหนด KPI ขององค์กร · เลือกรอบที่จะใช้ · Cascade ลงถึงบุคคลหรือกลุ่ม</p>
       </div>
       <div class="ph-act">
-        <span class="bd b-y" style="font-size:11px;padding:5px 10px">⚠️ ยังไม่ได้เปิดใช้งานในรอบ 2568</span>
-        <button class="btn" onclick="openM('mKpiActivate')">🔓 เปิดใช้งาน KPI ในรอบนี้</button>
+        <span class="bd b-y" style="font-size:11px;padding:5px 10px" id="goalDraftBadge">⚠️ ยังไม่ได้เปิดใช้งาน 0 รายการ</span>
+        <button class="btn" onclick="openBulkKpiActivate()">🔓 เปิดใช้งาน KPI ในรอบนี้</button>
         <button class="btn btn-p" onclick="openM('mAddKpi')">+ เพิ่ม KPI</button>
       </div>
     </div>
@@ -2791,17 +2791,29 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 
   <!-- ========== AUDIT ========== -->
   <section class="page" id="pg-audit">
-    <div class="ph"><div><h2>Audit Log</h2><p>บันทึกการเปลี่ยนแปลงทั้งหมดในระบบ</p></div>
-    <div class="ph-act"><input type="date" class="btn"><select class="btn"><option>ทุกประเภท</option><option>เปลี่ยนคะแนน</option><option>Import</option><option>Login</option><option>Export</option></select><button class="btn">📥 Export</button></div></div>
+    <div class="ph"><div><h2>Audit Log</h2><p>บันทึกการเปลี่ยนแปลงจริงที่เกิดขึ้นในระบบ (เก็บในเบราว์เซอร์เครื่องนี้)</p></div>
+    <div class="ph-act">
+      <input type="date" class="btn" id="auditFilterDate" onchange="renderAuditLog()">
+      <select class="btn" id="auditFilterType" onchange="renderAuditLog()">
+        <option value="">ทุกประเภท</option>
+        <option value="employee">ข้อมูลพนักงาน</option>
+        <option value="attendance">ข้อมูลวันลา/เวลา</option>
+        <option value="evaluation">ผลประเมิน/Workflow</option>
+        <option value="ms365">MS365 Sync</option>
+        <option value="kpi">KPI/IDP</option>
+      </select>
+      <button class="btn" onclick="exportAuditLog()">📥 Export</button>
+      <button class="btn btn-dg" onclick="clearAuditLog()">🗑️ ล้าง Log</button>
+    </div></div>
 
     <div class="card">
       <div class="tw"><table>
-        <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th>รายการ</th><th>ค่าเดิม → ค่าใหม่</th><th>เหตุผล</th><th>IP</th></tr></thead>
+        <thead><tr><th>เวลา</th><th>ผู้ใช้ (มุมมอง)</th><th>การกระทำ</th><th>รายการ</th><th>รายละเอียด</th></tr></thead>
         <tbody id="auditRows"></tbody>
       </table></div>
       <div class="card-b" style="background:#f8fafc;border-top:1px solid var(--bd);display:flex;align-items:center">
-        <span style="font-size:12px;color:#475569">แสดง 1–8 จาก 24,891 รายการ</span>
-        <div style="margin-left:auto;display:flex;gap:5px"><button class="btn btn-sm">‹ ก่อนหน้า</button><button class="btn btn-sm btn-p">1</button><button class="btn btn-sm">2</button><button class="btn btn-sm">3</button><button class="btn btn-sm">ถัดไป ›</button></div>
+        <span style="font-size:12px;color:#475569" id="auditPageInfo">แสดง 0–0 จาก 0 รายการ</span>
+        <div style="margin-left:auto;display:flex;gap:5px" id="auditPagination"></div>
       </div>
     </div>
   </section>
@@ -3271,6 +3283,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   }
   if(p==='settings' && typeof renderNavPermEditor==='function') renderNavPermEditor();
   if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
+  if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
 });
 
 /* ====== ROLE SWITCH ====== */
@@ -3573,21 +3586,62 @@ function goalStatUpdate() {
   if(el('goalStatDraft')) el('goalStatDraft').textContent = draft;
   if(el('goalStatActive')) el('goalStatActive').textContent = active;
   if(el('goalStatPersonal')) el('goalStatPersonal').textContent = personal;
+  if(el('goalDraftBadge')) el('goalDraftBadge').textContent = draft>0 ? `⚠️ ยังไม่ได้เปิดใช้งาน ${draft} รายการ` : '✅ เปิดใช้งานครบทุก KPI แล้ว';
 }
 
 function editGoalKpi(id) { openM('mAddKpi'); }
 
+let activatingKpiId = null;
 function activateGoalKpi(id) {
   const k = goalKpiData.find(x=>x.id===id);
   if(!k) return;
   if(k.status==='active') {
     k.status='draft'; k.year='';
     smlToast('ยกเลิก KPI จากรอบแล้ว','warn');
+    renderGoalKpi(goalKpiData);
+    goalStatUpdate();
   } else {
+    activatingKpiId = id;
+    const pctEl = document.getElementById('activateTotalPct');
+    if(pctEl){
+      const total = goalKpiData.filter(x=>x.status==='active').reduce((s,x)=>s+(+x.pct||0),0) + (+k.pct||0);
+      pctEl.textContent = total+'%';
+      pctEl.style.color = total>100 ? '#dc2626' : '#2563eb';
+    }
     openM('mKpiActivate');
   }
+}
+function openBulkKpiActivate(){
+  activatingKpiId = 'ALL';
+  const draftKpis = goalKpiData.filter(k=>k.status==='draft');
+  const pctEl = document.getElementById('activateTotalPct');
+  if(pctEl){
+    const total = goalKpiData.filter(x=>x.status==='active').reduce((s,x)=>s+(+x.pct||0),0) + draftKpis.reduce((s,x)=>s+(+x.pct||0),0);
+    pctEl.textContent = total+'%';
+    pctEl.style.color = total>100 ? '#dc2626' : '#2563eb';
+  }
+  openM('mKpiActivate');
+}
+function confirmKpiActivate(){
+  const year = document.getElementById('mKpiActivateYear')?.value || '2569';
+  if(activatingKpiId==='ALL'){
+    const draftKpis = goalKpiData.filter(k=>k.status==='draft');
+    if(!draftKpis.length){ smlToast('ไม่มี KPI สถานะ Draft ให้เปิดใช้งาน','warn'); closeM(); return; }
+    draftKpis.forEach(k=>{ k.status='active'; k.year=year; });
+    renderGoalKpi(goalKpiData); goalStatUpdate(); closeM();
+    if(typeof appendAuditLog==='function') appendAuditLog('kpi','เปิดใช้งาน KPI ทั้งหมด', draftKpis.length+' รายการ', 'รอบ FY'+year);
+    smlToast('เปิดใช้งาน KPI ทั้งหมด '+draftKpis.length+' รายการในรอบ FY'+year+' แล้ว','ok');
+    return;
+  }
+  const k = goalKpiData.find(x=>x.id===activatingKpiId);
+  if(!k){ closeM(); return; }
+  k.status = 'active';
+  k.year = year;
   renderGoalKpi(goalKpiData);
   goalStatUpdate();
+  closeM();
+  if(typeof appendAuditLog==='function') appendAuditLog('kpi','เปิดใช้งาน KPI', k.name, 'รอบ FY'+year);
+  smlToast('เปิดใช้งาน KPI "'+k.name+'" ในรอบ FY'+year+' แล้ว','ok');
 }
 
 function addKpiFromModal() {
@@ -3606,8 +3660,124 @@ function addKpiFromModal() {
   smlToast('เพิ่ม KPI เรียบร้อย','ok');
 }
 
+/* ====== Cascade KPI — กำหนด KPI เฉพาะกลุ่ม/บุคคล ====== */
+let cascadeData = [];
+const CASCADE_LEVEL_LABEL = {'':'ทุกคน (ตาม scope KPI)', emp:'เฉพาะพนักงานปฏิบัติการ', l1:'เฉพาะหัวหน้าแผนก', l2:'เฉพาะผู้จัดการส่วน'};
+function populateCascadeModal(){
+  const kpiSel = document.getElementById('mCascadeKpiId');
+  if(kpiSel) kpiSel.innerHTML = goalKpiData.map(k=>`<option value="${k.id}">${k.name}</option>`).join('') || '<option value="">— ยังไม่มี KPI ในระบบ —</option>';
+  const deptSel = document.getElementById('mCascadeDept');
+  if(deptSel){
+    const depts = [...new Set(MASTER_USERS.map(u=>u[6]).filter(Boolean))].sort();
+    deptSel.innerHTML = '<option value="">ทุกฝ่าย</option>' + depts.map(d=>`<option value="${d}">${d}</option>`).join('');
+  }
+}
+function renderCascadeRows(){
+  const tbody = document.getElementById('cascadeRows');
+  if(!tbody) return;
+  if(!cascadeData.length){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px 0">ยังไม่มีการ Cascade — กด "+ กำหนด Cascade"</td></tr>';
+    return;
+  }
+  tbody.innerHTML = cascadeData.map((c,i)=>`
+    <tr><td><b>${c.kpiName}</b></td>
+    <td style="font-size:12px">${CASCADE_LEVEL_LABEL[c.level]||'ทุกคน'}${c.dept?' · '+c.dept:''}</td>
+    <td style="font-size:12px">${c.target || 'ใช้เป้าหมายเดิม'}</td>
+    <td style="text-align:center">${c.kpiYear ? 'FY'+c.kpiYear : '—'}</td>
+    <td style="text-align:center">${c.weight}%</td>
+    <td style="text-align:center"><span class="bd b-ok" style="background:#dcfce7;color:#15803d">✅ ใช้งาน</span></td>
+    <td><button class="btn btn-sm btn-dg" onclick="deleteCascade(${i})">🗑️</button></td></tr>`).join('');
+}
+function saveCascadeKpi(){
+  const kpiId = document.getElementById('mCascadeKpiId')?.value;
+  const kpi = goalKpiData.find(k=>k.id===kpiId);
+  if(!kpi){ smlToast('กรุณาเลือก KPI','warn'); return; }
+  const level = document.getElementById('mCascadeLevel')?.value || '';
+  const dept = document.getElementById('mCascadeDept')?.value || '';
+  const target = (document.getElementById('mCascadeTarget')?.value || '').trim();
+  const weight = Number(document.getElementById('mCascadeWeight')?.value) || 0;
+  cascadeData.push({ kpiId, kpiName:kpi.name, kpiYear:kpi.year, level, dept, target, weight });
+  renderCascadeRows();
+  closeM();
+  if(typeof appendAuditLog==='function') appendAuditLog('kpi','กำหนด Cascade KPI', kpi.name, (dept||'ทุกฝ่าย')+' · น้ำหนัก '+weight+'%');
+  smlToast('กำหนด Cascade KPI "'+kpi.name+'" เรียบร้อย','ok');
+}
+function deleteCascade(i){
+  if(!confirm('ลบการ Cascade นี้?')) return;
+  cascadeData.splice(i,1);
+  renderCascadeRows();
+  smlToast('ลบเรียบร้อย','ok');
+}
+
+/* ====== IDP — แผนพัฒนาเฉพาะบุคคล (เกรด D/E) ====== */
+let idpData = [];
+function populateIdpModal(){
+  const sel = document.getElementById('mIdpEmp');
+  if(!sel) return;
+  sel.innerHTML = MASTER_USERS.filter(u=>u[12]==='active').map(u=>`<option value="${u[0]}">${u[1]} (${u[0]})</option>`).join('');
+  onIdpEmpChange();
+}
+function onIdpEmpChange(){
+  const code = document.getElementById('mIdpEmp')?.value;
+  const gradeSel = document.getElementById('mIdpGrade');
+  if(!code || !gradeSel) return;
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  const d = drafts.find(x=>x[0]===code);
+  const grade = d ? d[d.length-2] : null;
+  if(grade && ['C','D','E'].includes(grade)) gradeSel.value = grade;
+}
+function renderIdpRows(){
+  const tbody = document.getElementById('idpRows');
+  if(!tbody) return;
+  if(!idpData.length){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px 0">ยังไม่มี IDP — จะปรากฏอัตโนมัติเมื่อปิดรอบและมีพนักงานเกรด D/E</td></tr>';
+    return;
+  }
+  tbody.innerHTML = idpData.map((p,i)=>`
+    <tr><td><b>${p.name}</b><small style="display:block;color:#94a3b8">${p.code}</small></td>
+    <td style="font-size:12px">${p.dept}</td>
+    <td style="text-align:center"><span class="grade g${p.grade}">${p.grade}</span></td>
+    <td style="font-size:12px">${p.plan}</td>
+    <td style="font-size:12px">${p.due||'—'}</td>
+    <td style="text-align:center"><span class="bd ${p.status==='done'?'b-g':'b-y'}">${p.status==='done'?'✅ เสร็จแล้ว':'⏳ กำลังดำเนินการ'}</span></td>
+    <td>
+      <button class="btn btn-sm" onclick="toggleIdpStatus(${i})" title="สลับสถานะ">${p.status==='done'?'↩️':'✅'}</button>
+      <button class="btn btn-sm btn-dg" onclick="deleteIdp(${i})">🗑️</button>
+    </td></tr>`).join('');
+}
+function saveIdp(){
+  const code = document.getElementById('mIdpEmp')?.value;
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(!emp){ smlToast('กรุณาเลือกพนักงาน','warn'); return; }
+  const plan = (document.getElementById('mIdpPlan')?.value || '').trim();
+  if(!plan){ smlToast('กรุณากรอกแผนพัฒนา','warn'); return; }
+  idpData.push({
+    code, name: emp[1], dept: emp[6]||emp[4]||'—',
+    grade: document.getElementById('mIdpGrade')?.value || 'D',
+    plan, due: document.getElementById('mIdpDue')?.value || '',
+    owner: document.getElementById('mIdpOwner')?.value || '',
+    metric: (document.getElementById('mIdpMetric')?.value||'').trim(),
+    status: 'pending'
+  });
+  renderIdpRows();
+  closeM();
+  if(typeof appendAuditLog==='function') appendAuditLog('kpi','บันทึก IDP', code, emp[1]+' — '+plan.slice(0,60));
+  smlToast('บันทึก IDP ของ '+emp[1]+' เรียบร้อย','ok');
+}
+function toggleIdpStatus(i){
+  if(!idpData[i]) return;
+  idpData[i].status = idpData[i].status==='done' ? 'pending' : 'done';
+  renderIdpRows();
+}
+function deleteIdp(i){
+  if(!confirm('ลบ IDP นี้?')) return;
+  idpData.splice(i,1);
+  renderIdpRows();
+  smlToast('ลบเรียบร้อย','ok');
+}
+
 // init goal page
-setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); }, 200);
+setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); renderCascadeRows(); renderIdpRows(); }, 200);
 
 
 /* ============================================================
@@ -4356,9 +4526,11 @@ function saveUserFromModal() {
   if (existing >= 0) {
     MASTER_USERS[existing] = newUser;
     smlToast('อัปเดตข้อมูล ' + name + ' เรียบร้อย', 'ok');
+    if(typeof appendAuditLog==='function') appendAuditLog('employee','แก้ไขข้อมูลพนักงาน', id, name+' — '+position);
   } else {
     MASTER_USERS.push(newUser);
     smlToast('เพิ่มพนักงาน ' + name + ' เรียบร้อย', 'ok');
+    if(typeof appendAuditLog==='function') appendAuditLog('employee','เพิ่มพนักงานใหม่', id, name+' — '+position);
   }
 
   renderUsers(MASTER_USERS);
@@ -4380,6 +4552,8 @@ function openM(id){
     const n = getDrafts().filter(d=>d[d.length-1]==='Calibrated').length;
     const el = document.getElementById('mApproveCount'); if(el) el.textContent = n+' ใบ';
   }
+  if(id==='mCascadeKpi' && typeof populateCascadeModal==='function') populateCascadeModal();
+  if(id==='mAddIdp' && typeof populateIdpModal==='function') populateIdpModal();
 }
 
 function thaiDateToIso(str){
@@ -4522,19 +4696,7 @@ const comps=[['ความเป็นผู้นำ (Leadership)','น้ำ�
 
 /* สรุปผลรายฝ่ายตอนนี้ render จากข้อมูลจริง (renderReportRows) — ดูฟังก์ชัน Report ด้านล่าง */
 
-const audit=[['ธ.ค. 68 10:22','ผู้จัดการส่วน (L2)','แก้ไขคะแนน','appraisal #SML-042','84.00 → 87.50','สอบทานขั้นที่ 2 — ผลงานดีกว่าที่ประเมิน','SML-NET'],
-['ธ.ค. 68 09:58','Awe HR&GA (Admin)','Import ข้อมูล','HRGO_attendance_2568.xlsx','— → 99 แถว','นำเข้าข้อมูลเวลา ช่วง ธ.ค.67–พ.ย.68','SML-NET'],
-['ธ.ค. 68 16:40','หัวหน้าแผนก (L1)','ส่งแบบประเมิน','appraisal #SML-042','self_submitted → l1_submitted','—','SML-NET'],
-['ธ.ค. 68 15:12','คุณเชิดชัย (AGM)','Export ข้อมูล','report/pms_result_2568.xlsx','— → 99 records','สรุปผลประเมินนำเสนอ MD-SML','SML-NET'],
-['ธ.ค. 68 11:30','Awe HR&GA (Admin)','ปรับเกณฑ์','attendance_rules Z_table','ตารางเดิม → ตารางใหม่','ปรับตารางคะแนน Z ตามมติ HR&GA','SML-NET'],
-['พ.ย. 68 14:05','ผู้จัดการส่วน (L2)','ตีกลับ','appraisal #SML-088','l1_submitted → sent_back','คะแนนไม่สอดคล้อง ขอให้ประเมินใหม่','SML-NET'],
-['พ.ย. 68 09:24','Awe HR&GA (Admin)','Login','—','—','เปิดระบบ PMS เริ่มรอบประเมิน 2568','SML-NET'],
-['พ.ย. 68 17:50','พนักงาน SML (Emp)','ส่งแบบประเมิน','appraisal #SML-042','self_draft → self_submitted','—','SML-NET']];
-document.getElementById('auditRows').innerHTML=audit.map(a=>`
-<tr><td style="white-space:nowrap;font-size:12px">${a[0]}</td><td>${a[1]}</td>
-<td><span class="bd ${a[2].includes('แก้ไข')?'b-y':a[2].includes('Import')?'b-p':a[2].includes('ตีกลับ')?'b-r':'b-b'}">${a[2]}</span></td>
-<td><code style="font-size:11px">${a[3]}</code></td><td style="font-size:12px">${a[4]}</td>
-<td style="font-size:12px;color:#475569">${a[5]}</td><td style="font-size:11.5px;color:#94a3b8">${a[6]}</td></tr>`).join('');
+/* Audit Log ตอนนี้เป็นบันทึกเหตุการณ์จริง (appendAuditLog/renderAuditLog) — ดูฟังก์ชันด้านล่าง */
 
 /* ====== SIMULATOR ====== */
 // ตาราง Z สำหรับพนักงาน (30%) ตามเกณฑ์ SML
@@ -5241,6 +5403,7 @@ function saveEvaluationLocal(payload){
 async function saveEvaluationToMs365(status='Draft'){
   const payload = collectEvaluationPayload(status);
   saveEvaluationLocal(payload);
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation', status==='Submitted'?'ส่งแบบประเมิน':'บันทึกร่างแบบประเมิน', payload[0], payload[1]+' — ระดับ '+payload[3]);
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
     smlToast(`บันทึก ${status} ใน Browser แล้ว — ยังไม่ได้ตั้งค่า MS365`, 'warn');
@@ -5367,7 +5530,7 @@ async function ms365SyncEmployees(silent=false){
   set('empSyncTime', new Date().toLocaleString('th-TH'));
   set('empSyncCount', (failed ? before : cnt) + ' รายการ');
   appendSyncLog(failed ? 'Sync พนักงานล้มเหลว — ดูรายละเอียดใน toast' : `Sync พนักงาน: ดึงข้อมูล ${cnt} รายการจาก Excel${silent?' (auto)':''}`, !failed);
-  if(!failed) markSystemUpdated(`Sync พนักงาน ${cnt} รายการ`);
+  if(!failed){ markSystemUpdated(`Sync พนักงาน ${cnt} รายการ`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Sync พนักงานจาก Excel', cfg.employeeTable, cnt+' รายการ'); }
 }
 
 /* Auto sync — ทำงานเฉพาะตอนอยู่หน้า MS365 Excel เท่านั้น: sync ทันทีที่เข้าหน้า
@@ -5398,6 +5561,7 @@ async function ms365SyncAttendance(){
     smlToast('นำเข้าเวลาทำงานจาก Excel แล้ว ' + rows.length + ' แถว','ok');
     appendSyncLog(`Sync เวลา HRGO: นำเข้า ${rows.length} แถว`, true);
     markSystemUpdated(`Sync เวลา HRGO ${rows.length} แถว`);
+    if(typeof appendAuditLog==='function') appendAuditLog('ms365','Sync เวลา HRGO จาก Excel', 'Attendance', rows.length+' แถว');
   }catch(err){
     updateMs365Status('warn','Sync failed');
     smlToast('นำเข้าเวลาทำงานไม่สำเร็จ: ' + err.message,'warn');
@@ -5522,12 +5686,14 @@ function approveReviewSelected(){
   const keys=getCheckedKeys('review-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   updateDraftStatus(keys,'L2Reviewed');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทาน L2', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ผ่านสอบทาน L2 แล้ว '+keys.length+' รายการ — เข้าสู่ขั้น Calibration','ok');
 }
 function rejectReviewSelected(){
   const keys=getCheckedKeys('review-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   updateDraftStatus(keys,'Draft');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากสอบทาน L2', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้แก้ไข '+keys.length+' รายการ','warn');
 }
 
@@ -5567,6 +5733,7 @@ function confirmCalibration(){
   });
   saveDrafts(drafts);
   renderWorkflowPages();
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration', inputs.length+' รายการ', inputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
   smlToast('ยืนยันผล Calibration แล้ว '+inputs.length+' รายการ','ok');
 }
 
@@ -5593,6 +5760,7 @@ function approveAllFinal(){
   if(!rows.length){ smlToast('ไม่มีรายการรออนุมัติ','warn'); closeM(); return; }
   updateDraftStatus(rows.map(draftKey),'Approved');
   closeM();
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติขั้นสุดท้าย', rows.length+' รายการ', 'ลงนามโดย '+sign+' — '+rows.map(d=>d[0]).join(', '));
   smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+')','ok');
 }
 function rejectApproveAll(){
@@ -5600,6 +5768,7 @@ function rejectApproveAll(){
   if(!rows.length){ smlToast('ไม่มีรายการให้ตีกลับ','warn'); return; }
   if(!confirm('ตีกลับรายการที่ผ่าน Calibration ทั้งหมด '+rows.length+' รายการ กลับไปสอบทาน L2 อีกครั้ง?')) return;
   updateDraftStatus(rows.map(draftKey),'L2Reviewed');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากอนุมัติขั้นสุดท้าย', rows.length+' รายการ', rows.map(d=>d[0]).join(', '));
   smlToast('ตีกลับแล้ว '+rows.length+' รายการ','warn');
 }
 
@@ -5610,6 +5779,73 @@ function renderWorkflowPages(){
   if(typeof renderPendingList==='function') renderPendingList();
   if(typeof renderReportRows==='function') renderReportRows();
   if(typeof renderCycleStats==='function') renderCycleStats();
+}
+
+/* ====== Audit Log — บันทึกเหตุการณ์จริงที่เกิดขึ้น (เก็บในเบราว์เซอร์เครื่องนี้) ====== */
+const AUDIT_LOG_KEY = 'smlPmsAuditLog';
+let auditPage = 1;
+const AUDIT_PAGE_SIZE = 20;
+function currentActorLabel(){
+  const role = document.getElementById('roleSel')?.value || 'admin';
+  const labels = {sysadmin:'Admin ระบบ (sysadmin)', admin:'Admin', exec:'AGM/MD', l2:'ผจก.ส่วน (L2)', l1:'หัวหน้าแผนก (L1)', emp:'พนักงาน'};
+  return labels[role] || role;
+}
+function appendAuditLog(type, action, target, detail){
+  let rows=[];
+  try{ rows=JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]'); }catch(e){ rows=[]; }
+  rows.unshift({ at: new Date().toISOString(), user: currentActorLabel(), type, action, target, detail });
+  localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(rows.slice(0,1000)));
+  if(document.getElementById('pg-audit')?.classList.contains('on') && typeof renderAuditLog==='function') renderAuditLog();
+}
+function getAuditLog(){ try{ return JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]'); }catch(e){ return []; } }
+function clearAuditLog(){
+  if(!confirm('ล้าง Audit Log ทั้งหมดในเครื่องนี้? การกระทำนี้ย้อนกลับไม่ได้')) return;
+  localStorage.removeItem(AUDIT_LOG_KEY);
+  auditPage = 1;
+  renderAuditLog();
+  smlToast('ล้าง Audit Log แล้ว','ok');
+}
+function filteredAuditLog(){
+  const dateFilter = document.getElementById('auditFilterDate')?.value;
+  const typeFilter = document.getElementById('auditFilterType')?.value;
+  return getAuditLog().filter(r=>{
+    if(typeFilter && r.type!==typeFilter) return false;
+    if(dateFilter && new Date(r.at).toISOString().slice(0,10)!==dateFilter) return false;
+    return true;
+  });
+}
+function renderAuditLog(){
+  const tbody=document.getElementById('auditRows'); if(!tbody) return;
+  const rows = filteredAuditLog();
+  const totalPages = Math.max(1, Math.ceil(rows.length/AUDIT_PAGE_SIZE));
+  if(auditPage>totalPages) auditPage=totalPages;
+  const start=(auditPage-1)*AUDIT_PAGE_SIZE;
+  const pageRows = rows.slice(start, start+AUDIT_PAGE_SIZE);
+  tbody.innerHTML = pageRows.length ? pageRows.map(r=>`
+    <tr><td style="white-space:nowrap;font-size:12px">${new Date(r.at).toLocaleString('th-TH')}</td>
+    <td style="font-size:12px">${r.user}</td>
+    <td><span class="bd b-b">${r.action}</span></td>
+    <td><code style="font-size:11px">${r.target||'—'}</code></td>
+    <td style="font-size:12px;color:#475569">${r.detail||'—'}</td></tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px 0">ยังไม่มีบันทึกการใช้งาน</td></tr>';
+  const info=document.getElementById('auditPageInfo');
+  if(info) info.textContent = rows.length ? `แสดง ${start+1}–${Math.min(start+AUDIT_PAGE_SIZE,rows.length)} จาก ${rows.length} รายการ` : 'แสดง 0–0 จาก 0 รายการ';
+  const pager=document.getElementById('auditPagination');
+  if(pager){
+    let html = `<button class="btn btn-sm" ${auditPage<=1?'disabled':''} onclick="auditGoPage(${auditPage-1})">‹ ก่อนหน้า</button>`;
+    for(let p=1;p<=totalPages;p++) html += `<button class="btn btn-sm ${p===auditPage?'btn-p':''}" onclick="auditGoPage(${p})">${p}</button>`;
+    html += `<button class="btn btn-sm" ${auditPage>=totalPages?'disabled':''} onclick="auditGoPage(${auditPage+1})">ถัดไป ›</button>`;
+    pager.innerHTML = html;
+  }
+}
+function auditGoPage(p){ auditPage=p; renderAuditLog(); }
+function exportAuditLog(){
+  const rows = filteredAuditLog();
+  if(!rows.length){ smlToast('ไม่มีข้อมูล Audit Log ให้ Export','warn'); return; }
+  downloadCsv('AuditLog_'+Date.now()+'.csv',
+    ['เวลา','ผู้ใช้','การกระทำ','รายการ','รายละเอียด'],
+    rows.map(r=>[new Date(r.at).toLocaleString('th-TH'), r.user, r.action, r.target||'', r.detail||'']));
+  smlToast('Export Audit Log แล้ว ('+rows.length+' รายการ)','ok');
 }
 
 /* ====== รายงาน & Export — คำนวณ/ export จากข้อมูลจริงเท่านั้น (MASTER_USERS + คิวผลประเมิน) ====== */
@@ -5800,7 +6036,7 @@ async function ms365PushAppraisals(){
   updateMs365Status(fail ? 'warn' : 'ok', fail ? 'บาง Push ไม่สำเร็จ' : 'Connected');
   smlToast(`Push ผลประเมินสำเร็จ ${ok} รายการ${fail ? ' · ล้มเหลว '+fail+' รายการ' : ''}`, fail ? 'warn' : 'ok');
   appendSyncLog(`Push ผลประเมิน: สำเร็จ ${ok} รายการ${fail ? ' · ล้มเหลว '+fail : ''}`, fail===0);
-  if(ok) markSystemUpdated(`Push ผลประเมิน ${ok} รายการเข้า Excel`);
+  if(ok){ markSystemUpdated(`Push ผลประเมิน ${ok} รายการเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push ผลประเมินเข้า Excel', cfg.evaluationTable, ok+' รายการสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
 }
 
 async function ms365ExportReport(){
@@ -6751,6 +6987,7 @@ function importHrgoFile(input){
       if(typeof recalc==='function') recalc();
       const unmatchedMsg = unmatched.length ? ` · ไม่พบรหัส ${unmatched.length} รายการในข้อมูลพนักงานจริง (${unmatched.slice(0,5).join(', ')}${unmatched.length>5?'…':''}) — ข้ามไป` : '';
       smlToast(`Import ข้อมูล HRGO สำเร็จ ${imported} รายการ` + (skipped?` (ข้าม ${skipped} แถวว่าง)`:'') + unmatchedMsg, unmatched.length ? 'warn' : 'ok');
+      if(typeof appendAuditLog==='function') appendAuditLog('attendance','Import ไฟล์ HRGO', f.name, imported+' รายการสำเร็จ'+(unmatched.length?' · '+unmatched.length+' รายการไม่พบในระบบ':''));
     }catch(err){
       smlToast('อ่านไฟล์ไม่สำเร็จ: '+err.message, 'warn');
     }
@@ -6797,6 +7034,7 @@ function saveManualAttendance(){
   renderAttendanceList();
   if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
   if(typeof recalc==='function') recalc();
+  if(typeof appendAuditLog==='function') appendAuditLog('attendance','กรอกข้อมูลวันลาด้วยตนเอง', code, emp[1]);
   smlToast('บันทึกข้อมูลวันลาของ '+emp[1]+' ('+code+') เรียบร้อย','ok');
 }
 function deleteAttendanceRow(code){
@@ -6904,9 +7142,9 @@ function validateEmployeeImport(){
       พนักงานในขอบเขตที่กำหนดจะเห็น KPI นี้ใน Self-Assessment</div>
     </div>
     <div class="fg"><label>ผูกกับรอบประเมิน <i>*</i></label>
-      <select>
-        <option value="2568">FY2568 — ประจำปี 2568 (รอบปัจจุบัน)</option>
-        <option value="2569">FY2569 — ประจำปี 2569</option>
+      <select id="mKpiActivateYear">
+        <option value="2568">FY2568 — ประจำปี 2568</option>
+        <option value="2569" selected>FY2569 — ประจำปี 2569 (รอบปัจจุบัน)</option>
       </select>
     </div>
     <div class="fg"><label>ขอบเขตที่ใช้</label>
@@ -6921,7 +7159,7 @@ function validateEmployeeImport(){
   </div>
   <div class="md-f">
     <button class="btn" onclick="closeM()">ยกเลิก</button>
-    <button class="btn btn-ok" onclick="closeM();smlToast('เปิดใช้งาน KPI ในรอบ FY2568 แล้ว','ok')">🔓 ยืนยันเปิดใช้งาน</button>
+    <button class="btn btn-ok" onclick="confirmKpiActivate()">🔓 ยืนยันเปิดใช้งาน</button>
   </div>
 </div></div>
 
@@ -6930,39 +7168,31 @@ function validateEmployeeImport(){
   <div class="md-h"><h3>🔽 Cascade KPI — กำหนดเฉพาะบุคคล/กลุ่ม</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
     <div class="fg"><label>เลือก KPI <i>*</i></label>
-      <select><option>ผลผลิตตามแผน</option><option>คุณภาพงาน</option><option>ความปลอดภัย</option></select>
+      <select id="mCascadeKpiId"></select>
     </div>
     <div class="fr">
       <div class="fg"><label>กำหนดให้ระดับ</label>
-        <select>
-          <option>ทุกคน (ตาม scope KPI)</option>
-          <option>เฉพาะพนักงานปฏิบัติการ</option>
-          <option>เฉพาะหัวหน้าแผนก (Section Head)</option>
-          <option>เฉพาะผู้จัดการส่วน (Division Manager)</option>
-          <option>ระบุรายชื่อ</option>
+        <select id="mCascadeLevel">
+          <option value="">ทุกคน (ตาม scope KPI)</option>
+          <option value="emp">เฉพาะพนักงานปฏิบัติการ</option>
+          <option value="l1">เฉพาะหัวหน้าแผนก (Section Head)</option>
+          <option value="l2">เฉพาะผู้จัดการส่วน (Division Manager)</option>
         </select>
       </div>
       <div class="fg"><label>กำหนดให้ฝ่าย/แผนก</label>
-        <select>
-          <option>ทุกฝ่าย</option>
-          <option>Yard & PDI</option>
-          <option>Accessory Install</option>
-          <option>HR & GA</option>
-          <option>KTG Outsource</option>
-          <option>CNK Outsource</option>
-        </select>
+        <select id="mCascadeDept"><option value="">ทุกฝ่าย</option></select>
       </div>
     </div>
     <div class="fg"><label>เป้าหมายเฉพาะกลุ่มนี้ (ถ้าต่างจาก default)</label>
-      <input placeholder="เว้นว่างถ้าใช้เป้าหมายเดิม">
+      <input id="mCascadeTarget" placeholder="เว้นว่างถ้าใช้เป้าหมายเดิม">
     </div>
     <div class="fg"><label>น้ำหนักใน Self-Assessment (%)</label>
-      <input type="number" value="25" min="0" max="100">
+      <input id="mCascadeWeight" type="number" value="25" min="0" max="100">
     </div>
   </div>
   <div class="md-f">
     <button class="btn" onclick="closeM()">ยกเลิก</button>
-    <button class="btn btn-p" onclick="closeM();smlToast('กำหนด Cascade KPI เรียบร้อย','ok')">บันทึก Cascade</button>
+    <button class="btn btn-p" onclick="saveCascadeKpi()">บันทึก Cascade</button>
   </div>
 </div></div>
 
@@ -6972,34 +7202,30 @@ function validateEmployeeImport(){
   <div class="md-b">
     <div class="fr">
       <div class="fg"><label>พนักงาน <i>*</i></label>
-        <select>
-          <option>สมชาย วงศ์ดี (SML-001)</option>
-          <option>อรุณ ศิริ (SML-005)</option>
-          <option>มานพ ดีใจ (SML-007)</option>
-        </select>
+        <select id="mIdpEmp" onchange="onIdpEmpChange()"></select>
       </div>
       <div class="fg"><label>เกรดที่ได้</label>
-        <select><option>D — พอใช้</option><option>E — ปรับปรุง</option><option>C — ปานกลาง</option></select>
+        <select id="mIdpGrade"><option value="D">D — พอใช้</option><option value="E">E — ปรับปรุง</option><option value="C">C — ปานกลาง</option></select>
       </div>
     </div>
     <div class="fg"><label>แผนพัฒนา / หลักสูตรที่กำหนด <i>*</i></label>
-      <textarea rows="3" placeholder="เช่น เข้าอบรม Safety Training ภายใน Q1 · OJT กับหัวหน้าแผนก 3 เดือน"></textarea>
+      <textarea id="mIdpPlan" rows="3" placeholder="เช่น เข้าอบรม Safety Training ภายใน Q1 · OJT กับหัวหน้าแผนก 3 เดือน"></textarea>
     </div>
     <div class="fr">
       <div class="fg"><label>กำหนดแล้วเสร็จ</label>
-        <input type="date">
+        <input id="mIdpDue" type="date">
       </div>
       <div class="fg"><label>ผู้รับผิดชอบติดตาม</label>
-        <select><option>หัวหน้าแผนก</option><option>HR & GA</option><option>ผู้จัดการส่วน</option></select>
+        <select id="mIdpOwner"><option>หัวหน้าแผนก</option><option>HR & GA</option><option>ผู้จัดการส่วน</option></select>
       </div>
     </div>
     <div class="fg"><label>ตัวชี้วัดความสำเร็จ IDP</label>
-      <input placeholder="เช่น Pass Safety Test ≥80% · ไม่มี warning ใน 6 เดือน">
+      <input id="mIdpMetric" placeholder="เช่น Pass Safety Test ≥80% · ไม่มี warning ใน 6 เดือน">
     </div>
   </div>
   <div class="md-f">
     <button class="btn" onclick="closeM()">ยกเลิก</button>
-    <button class="btn btn-ok" onclick="closeM();smlToast('บันทึก IDP เรียบร้อย','ok')">💾 บันทึก IDP</button>
+    <button class="btn btn-ok" onclick="saveIdp()">💾 บันทึก IDP</button>
   </div>
 </div></div>
 
