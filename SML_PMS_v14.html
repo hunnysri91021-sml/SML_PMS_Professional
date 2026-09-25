@@ -1493,9 +1493,10 @@ tbody tr:hover{background:#f0f6ff!important}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>9-Box Grid — ศักยภาพ vs ผลงาน</h3></div>
+      <div class="card-h"><h3>9-Box Grid — ศักยภาพ vs ผลงาน</h3><div class="r"><span class="bd b-b" id="nineBoxCoverage">0/0 คนมีข้อมูลครบ</span></div></div>
       <div class="card-b">
-        <div class="al al-w"><span>⚠️</span><div><b>ยังไม่รองรับ</b> — 9-Box ต้องใช้ข้อมูล "ศักยภาพ (Potential)" ต่อคนซึ่งระบบยังไม่มีการเก็บข้อมูลนี้จริง (มีเฉพาะคะแนนผลงานจากแบบประเมิน) เมื่อเพิ่มการประเมินศักยภาพเข้าระบบแล้วจะเปิดใช้งานส่วนนี้ได้</div></div>
+        <div id="nineBoxNote"></div>
+        <div class="box9" id="nineBoxGrid"></div>
       </div>
     </div>
   </section>
@@ -2771,8 +2772,8 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       </div></div>
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">🎯</div><b style="font-size:14.5px">Talent & 9-Box</b>
-        <p style="font-size:12px;color:#475569;margin:6px 0 13px">ยังไม่รองรับ — ต้องมีข้อมูลศักยภาพ (Potential) ต่อคนเพิ่มเติมก่อน</p>
-        <div style="display:flex;gap:6px"><button class="btn btn-sm" disabled title="ต้องมีข้อมูล Potential ต่อคนก่อน">Excel</button></div>
+        <p style="font-size:12px;color:#475569;margin:6px 0 13px">รายชื่อ Top/Bottom performer ตามศักยภาพ+ผลงานจริง (เฉพาะคนที่มีข้อมูลศักยภาพในทะเบียนพนักงาน)</p>
+        <div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="exportNineBox()">📄 CSV / Excel</button></div>
       </div></div>
     </div>
 
@@ -3796,24 +3797,24 @@ setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); renderCascadeRows
    status: active / probation / inactive / resigned
    ============================================================ */
 const MASTER_USERS = [
-  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email
-  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563',''],
-  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564',''],
-  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565',''],
-  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561',''],
-  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559',''],
-  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565',''],
-  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563',''],
-  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560',''],
-  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564',''],
-  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568',''],
-  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562',''],
-  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564',''],
-  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560',''],
-  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555',''],
-  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564',''],
-  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563',''],
-  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565',''],
+  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email  [16]potential(ศักยภาพ: high/medium/low หรือว่างถ้ายังไม่ประเมิน)
+  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563','',''],
+  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564','',''],
+  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565','',''],
+  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561','',''],
+  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559','',''],
+  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565','',''],
+  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563','',''],
+  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560','',''],
+  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564','',''],
+  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568','',''],
+  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562','',''],
+  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564','',''],
+  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560','',''],
+  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555','',''],
+  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564','',''],
+  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563','',''],
+  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565','',''],
 ];
 
 /* ==========================================
@@ -4556,19 +4557,21 @@ function saveUserFromModal() {
   const startRaw = document.getElementById('mu_startdate')?.value;
   const startDate= startRaw ? new Date(startRaw+'T00:00:00').toLocaleDateString('th-TH') : '—';
   const email    = (document.getElementById('mu_email')?.value || '').trim();
+  const potential= document.getElementById('mu_potential')?.value || '';
 
   if (!id || !name || !role || !group || !section || !position || !grade || !status) {
     smlToast('กรุณากรอกข้อมูลที่มี * ให้ครบถ้วน', 'warn');
     return;
   }
 
-  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email] */
+  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential] */
   const existingRow = MASTER_USERS.find(u => u[0] === id);
   const newUser = [id, name, role, group, section, division||'—', dept||'—',
                    position, grade, l1||'—', l2||'—', approver||'—', status,
                    new Date().toLocaleDateString('th-TH'),
                    startRaw ? startDate : (existingRow?.[14] || '—'),
-                   email || existingRow?.[15] || ''];
+                   email || existingRow?.[15] || '',
+                   potential || existingRow?.[16] || ''];
 
   const existing = MASTER_USERS.findIndex(u => u[0] === id);
   if (existing >= 0) {
@@ -4621,6 +4624,7 @@ function clearUserModalForm(){
   const grade=document.getElementById('mu_grade'); if(grade) grade.value='G1';
   const status=document.getElementById('mu_status'); if(status) status.value='active';
   const sd=document.getElementById('mu_startdate'); if(sd) sd.value='';
+  const pot=document.getElementById('mu_potential'); if(pot) pot.value='';
 }
 
 /* เปิด modal พร้อมดึงข้อมูลปัจจุบันของพนักงานคนนั้นมาเติมในฟอร์ม (แก้ไขจริง ไม่ใช่ฟอร์มเปล่า) */
@@ -4647,6 +4651,7 @@ function openEditUser(id){
   set('mu_status', emp[12]);
   const sdEl=document.getElementById('mu_startdate'); if(sdEl) sdEl.value = thaiDateToIso(emp[14]);
   set('mu_email', emp[15]);
+  set('mu_potential', emp[16]);
 }
 
 /* ====== ส่งการแจ้งเตือน (Reminder) — ดึงกลุ่มเป้าหมาย/อีเมลจากข้อมูลพนักงานจริงเสมอ
@@ -5240,8 +5245,8 @@ function downloadExcelTemplate(){
     setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   };
   dl('Employees_Template.csv',
-    ['EmpID','ชื่อ-สกุล','บทบาท','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','Grade','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','Status','Login ล่าสุด','วันเริ่มงาน','Email'],
-    [['SML-001','สมชาย วงศ์ดี','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active','','','somchai@siammotor.com']]
+    ['EmpID','ชื่อ-สกุล','บทบาท','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','Grade','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','Status','Login ล่าสุด','วันเริ่มงาน','Email','Potential'],
+    [['SML-001','สมชาย วงศ์ดี','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active','','','somchai@siammotor.com','high']]
   );
   dl('Appraisals_Template.csv',
     ['EmpID','ชื่อ-สกุล','รอบ','ระดับ','m01','m02','m03','m04','m05','m06','m07','m08','m09','m10',
@@ -5498,7 +5503,8 @@ function normalizeMs365Employee(row){
     g(0), g(1), role, g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), status,
     g(13) || new Date().toLocaleString('th-TH'),
     g(14) || '—',
-    g(15)
+    g(15),
+    ['high','medium','low'].includes(g(16).toLowerCase()) ? g(16).toLowerCase() : ''
   ];
 }
 
@@ -6112,6 +6118,64 @@ function renderCycleStats(){
   renderDashDeptProgress(participants, drafts);
   renderDashGradeBars(drafts);
   renderAssignments(participants);
+  renderNineBox(participants);
+}
+
+/* ====== 9-Box Grid — ศักยภาพ (Potential, จากทะเบียนพนักงาน u[16]) vs ผลงาน (Performance, จากคะแนน X จริง)
+   นับเฉพาะคนที่มีข้อมูลครบทั้งสองด้าน — ไม่เดา Potential ให้ใครที่ไม่ได้ระบุไว้ */
+const NINE_BOX_LABEL = {
+  'high-low':'ศักยภาพสูง / ผลงานต่ำ', 'high-medium':'ศักยภาพสูง / ผลงานกลาง', 'high-high':'⭐ Star',
+  'medium-low':'ศักยภาพกลาง / ผลงานต่ำ', 'medium-medium':'Core Player', 'medium-high':'High Performer',
+  'low-low':'⚠️ Under Performer', 'low-medium':'ศักยภาพต่ำ / ผลงานกลาง', 'low-high':'Specialist',
+};
+const NINE_BOX_COLOR = {
+  'high-low':'#fef3c7','high-medium':'#dbeafe','high-high':'#dcfce7',
+  'medium-low':'#fee2e2','medium-medium':'#f1f5f9','medium-high':'#dbeafe',
+  'low-low':'#fee2e2','low-medium':'#fef3c7','low-high':'#f1f5f9',
+};
+function performanceBand(X){ return X>=85?'high':X>=70?'medium':'low'; }
+function getNineBoxData(participants){
+  const list = participants || getEvalParticipants();
+  const drafts = getDrafts();
+  const withData = [];
+  const missing = [];
+  list.forEach(u=>{
+    const potential = ['high','medium','low'].includes(u[16]) ? u[16] : '';
+    const d = drafts.find(x=>x[0]===u[0] && x[x.length-2]);
+    if(potential && d){
+      withData.push({ code:u[0], name:u[1], potential, performance: performanceBand(Number(d[d.length-3])), X:Number(d[d.length-3]) });
+    } else {
+      missing.push({ code:u[0], name:u[1], hasPotential:!!potential, hasScore:!!d });
+    }
+  });
+  return { withData, missing, total: list.length };
+}
+function renderNineBox(participants){
+  const grid = document.getElementById('nineBoxGrid');
+  const coverage = document.getElementById('nineBoxCoverage');
+  const note = document.getElementById('nineBoxNote');
+  if(!grid) return;
+  const { withData, missing, total } = getNineBoxData(participants);
+  if(coverage) coverage.textContent = withData.length+'/'+total+' คนมีข้อมูลครบ';
+  if(note){
+    note.innerHTML = missing.length
+      ? `<div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>มี ${missing.length} คนยังไม่แสดงใน 9-Box เพราะไม่มีข้อมูลศักยภาพ และ/หรือ ยังไม่มีผลประเมินที่ตัดเกรด — เพิ่มศักยภาพได้ที่หน้าแก้ไขพนักงาน</div></div>`
+      : '';
+  }
+  const cells = ['high-low','high-medium','high-high','medium-low','medium-medium','medium-high','low-low','low-medium','low-high'];
+  grid.innerHTML = cells.map(key=>{
+    const [pot, perf] = key.split('-');
+    const count = withData.filter(d=>d.potential===pot && d.performance===perf).length;
+    return `<div class="bx" style="background:${NINE_BOX_COLOR[key]}"><span>${NINE_BOX_LABEL[key]}</span><b>${count}</b></div>`;
+  }).join('');
+}
+function exportNineBox(){
+  const { withData, missing } = getNineBoxData();
+  if(!withData.length){ smlToast('ยังไม่มีพนักงานที่มีข้อมูลศักยภาพ+ผลงานครบให้ Export','warn'); return; }
+  downloadCsv('Talent_9Box_'+Date.now()+'.csv',
+    ['รหัสพนักงาน','ชื่อ-สกุล','ศักยภาพ','ผลงาน (คะแนน X)','กลุ่ม 9-Box'],
+    withData.map(d=>[d.code,d.name,d.potential,d.X,NINE_BOX_LABEL[d.potential+'-'+d.performance]]));
+  smlToast('Export Talent & 9-Box แล้ว ('+withData.length+' คน, ข้ามคนที่ข้อมูลไม่ครบ '+missing.length+' คน)','ok');
 }
 
 /* ====== Evaluation Assignment — derived automatically จากสายบังคับบัญชาจริงในทะเบียนพนักงาน
@@ -6980,6 +7044,16 @@ document.addEventListener('input',e=>{
         <label>อีเมล</label>
         <input type="email" id="mu_email" placeholder="เช่น name@siammotor.com">
         <div style="font-size:10.5px;color:#64748b;margin-top:2px">ใช้สำหรับส่งการแจ้งเตือน (Reminder) ทางอีเมล — ถ้าไม่กรอกจะส่งอีเมลถึงคนนี้ไม่ได้</div>
+      </div>
+      <div class="fg">
+        <label>ศักยภาพ (Potential)</label>
+        <select id="mu_potential">
+          <option value="">— ยังไม่ประเมิน —</option>
+          <option value="high">สูง</option>
+          <option value="medium">ปานกลาง</option>
+          <option value="low">ต่ำ</option>
+        </select>
+        <div style="font-size:10.5px;color:#64748b;margin-top:2px">ใช้คำนวณ 9-Box Grid (ศักยภาพ vs ผลงาน) — ถ้าไม่ระบุจะไม่ถูกนับใน 9-Box</div>
       </div>
     </div>
 
