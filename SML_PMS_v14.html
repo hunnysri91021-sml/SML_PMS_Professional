@@ -1445,16 +1445,15 @@ tbody tr:hover{background:#f0f6ff!important}
       <span>🔄</span><div id="sysStatusBannerText">กำลังตรวจสอบสถานะข้อมูล...</div>
     </div>
 
-    <div class="al al-w">
-      <span>⏰</span><div><b>เหลืออีก 6 วันก่อนปิดขั้นตอน "หัวหน้าแผนก / Leader"</b>
-      ยังมีใบประเมินค้าง 12 ใบ — กำหนดส่ง ภายในเดือน ธันวาคม 2569</div>
+    <div class="al al-w" id="dashDeadlineBanner" style="display:none">
+      <span>⏰</span><div><b id="dashDeadlineText"></b></div>
     </div>
 
     <div class="grid g4" style="margin-bottom:18px">
-      <div class="stat s-i"><div class="lb">👥 พนักงานในรอบ</div><div class="vl">99</div><div class="sb">SML + KTG + CNK ที่ผ่านทดลองงาน</div></div>
-      <div class="stat s-ok"><div class="lb">✅ เสร็จสมบูรณ์</div><div class="vl">72</div><div class="sb"><span class="up">72.7%</span> ของทั้งหมด</div></div>
-      <div class="stat s-w"><div class="lb">⏳ รอดำเนินการ</div><div class="vl">21</div><div class="sb">อยู่ระหว่างขั้นตอน</div></div>
-      <div class="stat s-e"><div class="lb">⚠️ เกินกำหนด</div><div class="vl">6</div><div class="sb">ต้องติดตามด่วน</div></div>
+      <div class="stat s-i"><div class="lb">👥 พนักงานในรอบ</div><div class="vl" id="dashTotalParticipants">0</div><div class="sb">SML + KTG + CNK ที่ผ่านทดลองงาน</div></div>
+      <div class="stat s-ok"><div class="lb">✅ เสร็จสมบูรณ์</div><div class="vl" id="dashCompleted">0</div><div class="sb"><span class="up" id="dashCompletedPct">0%</span> ของทั้งหมด</div></div>
+      <div class="stat s-w"><div class="lb">⏳ รอดำเนินการ</div><div class="vl" id="dashPending">0</div><div class="sb">อยู่ระหว่างขั้นตอน</div></div>
+      <div class="stat s-e"><div class="lb">⚠️ เกินกำหนด</div><div class="vl" id="dashOverdue">0</div><div class="sb">ต้องติดตามด่วน</div></div>
     </div>
 
     <div class="card">
@@ -1776,63 +1775,36 @@ tbody tr:hover{background:#f0f6ff!important}
 
   <!-- ========== REVIEW (L2) ========== -->
   <section class="page" id="pg-review">
-    <div class="ph"><div><h2>สอบทานขั้นที่ 2 (ผู้จัดการส่วน)</h2><p>ตรวจสอบและปรับคะแนนที่หัวหน้าแผนก / Leader ประเมินมา</p></div>
-    <div class="ph-act"><button class="btn">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok">✓ อนุมัติที่เลือก</button></div></div>
-
-    <div class="al al-w"><span>⚖️</span><div><b>ตรวจพบความผิดปกติ 2 รายการ</b> — คะแนนจากหัวหน้าสูงกว่าประเมินตนเองเกิน 15 คะแนน ควรสอบทานเพิ่มเติม</div></div>
+    <div class="ph"><div><h2>สอบทานขั้นที่ 2 (ผู้จัดการส่วน)</h2><p>สอบทานใบประเมินที่ส่งแล้ว (สถานะ Submitted) ก่อนเข้าสู่ขั้น Calibration</p></div>
+    <div class="ph-act"><button class="btn" onclick="rejectReviewSelected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewSelected()">✓ อนุมัติที่เลือก</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><span class="bd b-y">3 รายการ</span></div></div>
+      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>หัวหน้า L1</th><th>ตนเอง</th><th>L1</th><th>ส่วนต่าง</th><th>เกรด</th><th></th></tr></thead>
-        <tbody>
-          <tr><td><input type="checkbox"></td><td><div class="u-cell"><div class="u-av">สช</div><div><b>สมชาย ใจดี</b><small>EMP-00124</small></div></div></td><td>ปฏิบัติการ</td><td>วิชัย ก.</td><td>88.0</td><td>91.3</td><td><span class="bd b-g">+3.3</span></td><td><span class="grade gA">A</span></td><td><button class="btn btn-sm btn-p" onclick="openReviewerForm('op','สมชาย ใจดี','EMP-00124','พนักงานปฏิบัติการ')">สอบทานแบบฟอร์ม</button></td></tr>
-          <tr><td><input type="checkbox"></td><td><div class="u-cell"><div class="u-av">นภ</div><div><b>นภา สุขสันต์</b><small>EMP-00218</small></div></div></td><td>ปฏิบัติการ</td><td>วิชัย ก.</td><td>72.5</td><td>89.0</td><td><span class="bd b-r">+16.5 ⚠️</span></td><td><span class="grade gB">B</span></td><td><button class="btn btn-sm btn-p" onclick="openReviewerForm('op','นภา สุขสันต์','EMP-00218','พนักงานปฏิบัติการ')">สอบทานแบบฟอร์ม</button></td></tr>
-          <tr><td><input type="checkbox"></td><td><div class="u-cell"><div class="u-av">กต</div><div><b>กิตติ พัฒนา</b><small>EMP-00331</small></div></div></td><td>คลังสินค้า</td><td>ปรีชา ส.</td><td>85.0</td><td>68.2</td><td><span class="bd b-r">−16.8 ⚠️</span></td><td><span class="grade gC">C</span></td><td><button class="btn btn-sm btn-p" onclick="openReviewerForm('op','กิตติ พัฒนา','EMP-00331','พนักงานปฏิบัติการ')">สอบทานแบบฟอร์ม</button></td></tr>
-        </tbody>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.review-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
+        <tbody id="reviewRows"></tbody>
       </table></div>
     </div>
   </section>
 
   <!-- ========== CALIBRATION ========== -->
   <section class="page" id="pg-calib">
-    <div class="ph"><div><h2>Calibration — ปรับเทียบคะแนน</h2><p>ประชุมปรับเทียบ ฝ่ายปฏิบัติการ · 22 ก.ย. 2569 · ผู้ร่วมประชุม 6 คน</p></div>
-    <div class="ph-act"><button class="btn">📥 Export</button><button class="btn btn-ok">🔒 ยืนยันผล Calibration</button></div></div>
+    <div class="ph"><div><h2>Calibration — ปรับเทียบคะแนน</h2><p>ปรับเทียบคะแนนของใบประเมินที่ผ่านสอบทาน L2 แล้ว (สถานะ L2Reviewed) ก่อนส่งอนุมัติขั้นสุดท้าย</p></div>
+    <div class="ph-act"><button class="btn btn-ok" onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
 
-    <div class="grid g2" style="margin-bottom:18px">
-      <div class="card"><div class="card-h"><h3>โควตาเกรด vs ปัจจุบัน</h3></div>
-        <div class="tw"><table>
-          <thead><tr><th>เกรด</th><th>การแสดงผล</th><th>โควตา</th><th>ปัจจุบัน</th><th>จำนวน</th><th>สถานะ</th></tr></thead>
-          <tbody>
-            <tr><td><span class="grade gA">A</span></td><td>ดีมาก</td><td>10%</td><td><b style="color:#dc2626">12%</b></td><td>12</td><td><span class="bd b-r">เกิน 2 คน</span></td></tr>
-            <tr><td><span class="grade gB">B</span></td><td>ดี</td><td>20%</td><td>18%</td><td>18</td><td><span class="bd b-g">ผ่าน</span></td></tr>
-            <tr><td><span class="grade gB">C</span></td><td>ปานกลาง</td><td>40%</td><td>41%</td><td>41</td><td><span class="bd b-g">ผ่าน</span></td></tr>
-            <tr><td><span class="grade gC">D</span></td><td>พอใช้</td><td>20%</td><td>19%</td><td>19</td><td><span class="bd b-g">ผ่าน</span></td></tr>
-            <tr><td><span class="grade gD">E</span></td><td>ปรับปรุง</td><td>10%</td><td>10%</td><td>10</td><td><span class="bd b-g">ผ่าน</span></td></tr>
-          </tbody>
-        </table></div>
-      </div>
-      <div class="card"><div class="card-h"><h3>การกระจายก่อน–หลังปรับ</h3></div><div class="card-b">
-        <div class="bars">
-          <div class="bar"><div class="v">12→9</div><div class="b" style="height:45%;background:#16a34a"></div><div class="l">A</div></div>
-          <div class="bar"><div class="v">21→23</div><div class="b" style="height:70%;background:#3b82f6"></div><div class="l">B+</div></div>
-          <div class="bar"><div class="v">69→70</div><div class="b" style="height:100%;background:#60a5fa"></div><div class="l">B</div></div>
-          <div class="bar"><div class="v">21→21</div><div class="b" style="height:66%;background:#f59e0b"></div><div class="l">C</div></div>
-          <div class="bar"><div class="v">5→5</div><div class="b" style="height:28%;background:#dc2626"></div><div class="l">D</div></div>
-        </div>
-      </div></div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-h"><h3>การกระจายเกรด (เฉพาะที่ผ่าน Calibration แล้วในรอบนี้)</h3></div>
+      <div class="tw"><table>
+        <thead><tr><th>เกรด</th><th>จำนวน</th></tr></thead>
+        <tbody id="calibGradeDist"></tbody>
+      </table></div>
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>ตารางปรับเทียบรายบุคคล</h3><div class="r"><span class="bd b-y">ปรับแล้ว 3 รายการ</span></div></div>
+      <div class="card-h"><h3>ตารางปรับเทียบรายบุคคล</h3><div class="r"><span class="bd b-y" id="calibCount">รอปรับเทียบ 0 รายการ</span></div></div>
       <div class="tw"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนน L2</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>เกรดใหม่</th><th>เหตุผล</th></tr></thead>
-        <tbody>
-          <tr><td><b>สมชาย ใจดี</b></td><td>ขาย A</td><td>91.25</td><td><span class="grade gA">A</span></td><td><input value="91.25" style="width:72px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td><td><span class="grade gA">A</span></td><td><span style="color:#94a3b8;font-size:12px">—</span></td></tr>
-          <tr style="background:#fffbeb"><td><b>นภา สุขสันต์</b></td><td>ขาย B</td><td>90.10</td><td><span class="grade gA">A</span></td><td><input value="88.00" style="width:72px;padding:5px;border:1px solid #f59e0b;border-radius:5px"></td><td><span class="grade gB">B</span></td><td><span class="bd b-y">โควตาเกิน</span></td></tr>
-          <tr style="background:#fffbeb"><td><b>ธนา รุ่งเรือง</b></td><td>คลัง</td><td>90.00</td><td><span class="grade gA">A</span></td><td><input value="87.50" style="width:72px;padding:5px;border:1px solid #f59e0b;border-radius:5px"></td><td><span class="grade gB">B</span></td><td><span class="bd b-y">เทียบข้ามฝ่าย</span></td></tr>
-          <tr style="background:#f0fdf4"><td><b>กิตติ พัฒนา</b></td><td>คลัง</td><td>68.20</td><td><span class="grade gC">C</span></td><td><input value="74.00" style="width:72px;padding:5px;border:1px solid #16a34a;border-radius:5px"></td><td><span class="grade gC">C+</span></td><td><span class="bd b-g">ปัจจัยภายนอก</span></td></tr>
-        </tbody>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนน L2 (X)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th></tr></thead>
+        <tbody id="calibRows"></tbody>
       </table></div>
     </div>
   </section>
@@ -1840,14 +1812,12 @@ tbody tr:hover{background:#f0f6ff!important}
   <!-- ========== APPROVE (EXEC) ========== -->
   <section class="page" id="pg-approve">
     <div class="ph"><div><h2>อนุมัติขั้นสุดท้าย (AGM/MD)</h2><p>ใบประเมินที่ผ่าน Calibration แล้ว รอการอนุมัติจาก MD-SML (คุณเชิดชัย)</p></div>
-    <div class="ph-act"><button class="btn">↩️ ตีกลับ</button><button class="btn btn-ok" onclick="openM('mApprove')">✅ อนุมัติทั้งหมด (8)</button></div></div>
-
-    <div class="al al-i"><span>💰</span><div><b>ผลกระทบงบประมาณ:</b> การอนุมัติชุดนี้จะใช้งบปรับเงินเดือนรวม <b>4.82%</b> ของฐานเงินเดือน (งบที่ตั้งไว้ 5.00%) และโบนัสเฉลี่ย 2.1 เดือน</div></div>
+    <div class="ph-act"><button class="btn" onclick="rejectApproveAll()">↩️ ตีกลับทั้งหมด</button><button class="btn btn-ok" id="approveAllBtn" onclick="openM('mApprove')">✅ อนุมัติทั้งหมด (0)</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>รายการรออนุมัติ</h3><div class="r"><span class="bd b-b">8 รายการ</span></div></div>
+      <div class="card-h"><h3>รายการรออนุมัติ</h3><div class="r"><span class="bd b-b" id="approveCount">0 รายการ</span></div></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" checked></th><th>พนักงาน</th><th>ฝ่าย</th><th>คะแนน</th><th>เกรด</th><th>ปรับเงินเดือน</th><th>โบนัส</th><th>Calibrated</th></tr></thead>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนน (X)</th><th>เกรด</th></tr></thead>
         <tbody id="approveRows"></tbody>
       </table></div>
     </div>
@@ -2210,7 +2180,7 @@ tbody tr:hover{background:#f0f6ff!important}
 
   <!-- ========== ORG ========== -->
   <section class="page" id="pg-org">
-    <div class="ph"><div><h2>ผังองค์กร & พนักงาน SML</h2><p>~99 คน · SML Staff + KTG Outsource + CNK Outsource · สายบัญชาบัญชา 3 ระดับ</p></div>
+    <div class="ph"><div><h2>ผังองค์กร & พนักงาน SML</h2><p><span id="orgTotalCount">0</span> คน · SML Staff + KTG Outsource + CNK Outsource · สายบัญชาบัญชา 3 ระดับ</p></div>
     <div class="ph-act">
       <button class="btn" onclick="openM('mEmployeeTemplate')">📄 Template พนักงาน</button>
       <button class="btn" onclick="openM('mImportUsers')">⬆️ Import พนักงาน</button>
@@ -2218,7 +2188,8 @@ tbody tr:hover{background:#f0f6ff!important}
       <button class="btn btn-p" onclick="clearUserModalForm();openM('mAddUser')">＋ เพิ่มพนักงาน</button>
     </div></div>
 
-    <div class="al al-e"><span>⚠️</span><div><b>พบปัญหาสายบังคับบัญชา 3 รายการ</b> — พนักงาน 2 คนไม่มีหัวหน้าระดับ 1 และพบ Circular Reference 1 จุด <button class="btn btn-sm" style="margin-left:8px">ตรวจสอบ</button></div></div>
+    <div class="al al-e" id="orgHierarchyBanner" style="display:none"><span>⚠️</span><div><b id="orgHierarchyBannerText"></b> <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true)">ตรวจสอบอีกครั้ง</button></div></div>
+    <div class="al al-i" id="orgHierarchyOkBanner" style="display:none"><span>✅</span><div>ไม่พบปัญหาสายบังคับบัญชา <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true)">ตรวจสอบอีกครั้ง</button></div></div>
 
     <div class="card">
       <div class="card-h"><h3>รายชื่อพนักงาน</h3><div class="r">
@@ -2779,40 +2750,40 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     <div class="grid g3">
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">📊</div><b style="font-size:14.5px">สรุปผลประเมินรายบุคคล</b>
-        <p style="font-size:12px;color:#475569;margin:6px 0 13px">คะแนน เกรด และความเห็นของทุกคนในรอบ</p>
-        <div style="display:flex;gap:6px"><button class="btn btn-sm">Excel</button><button class="btn btn-sm">PDF</button></div>
+        <p style="font-size:12px;color:#475569;margin:6px 0 13px">รหัส ชื่อ คะแนน เกรด และสถานะของทุกคนในรอบ (CSV เปิดด้วย Excel ได้)</p>
+        <div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="exportIndividualSummary()">📄 CSV / Excel</button></div>
       </div></div>
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">📈</div><b style="font-size:14.5px">การกระจายเกรดรายฝ่าย</b>
-        <p style="font-size:12px;color:#475569;margin:6px 0 13px">เปรียบเทียบสัดส่วนเกรดกับโควตาที่กำหนด</p>
-        <div style="display:flex;gap:6px"><button class="btn btn-sm">Excel</button><button class="btn btn-sm">PDF</button></div>
+        <p style="font-size:12px;color:#475569;margin:6px 0 13px">จำนวนแต่ละเกรดต่อฝ่าย คำนวณจากผลประเมินจริงในระบบ</p>
+        <div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="exportReportTable()">📄 CSV / Excel</button></div>
       </div></div>
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">💰</div><b style="font-size:14.5px">ไฟล์ส่งระบบ Payroll</b>
-        <p style="font-size:12px;color:#475569;margin:6px 0 13px">% ปรับเงินเดือน + เดือนโบนัส (CSV)</p>
-        <div style="display:flex;gap:6px"><button class="btn btn-sm btn-p">CSV</button><button class="btn btn-sm">API</button></div>
+        <p style="font-size:12px;color:#475569;margin:6px 0 13px">ยังไม่รองรับ — ระบบไม่มีข้อมูลเงินเดือน/โครงสร้างการปรับค่าจ้างในฐานข้อมูล</p>
+        <div style="display:flex;gap:6px"><button class="btn btn-sm" disabled title="ต้องเชื่อมข้อมูลเงินเดือนจากระบบ Payroll ก่อน">CSV</button></div>
       </div></div>
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">⏱️</div><b style="font-size:14.5px">สถิติเวลา vs คะแนน</b>
-        <p style="font-size:12px;color:#475569;margin:6px 0 13px">ความสัมพันธ์ระหว่างการมาสายกับผลงาน</p>
-        <div style="display:flex;gap:6px"><button class="btn btn-sm">Excel</button><button class="btn btn-sm">ดูกราฟ</button></div>
+        <p style="font-size:12px;color:#475569;margin:6px 0 13px">เปรียบเทียบข้อมูลวันลา/มาสายจริง กับคะแนนรวมของแต่ละคน</p>
+        <div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="exportAttendanceVsScore()">📄 CSV / Excel</button></div>
       </div></div>
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">📄</div><b style="font-size:14.5px">ใบประเมินรายบุคคล</b>
-        <p style="font-size:12px;color:#475569;margin:6px 0 13px">PDF พร้อมลายเซ็นอิเล็กทรอนิกส์ (Batch)</p>
-        <div style="display:flex;gap:6px"><button class="btn btn-sm">สร้าง PDF (ZIP)</button></div>
+        <p style="font-size:12px;color:#475569;margin:6px 0 13px">ยังไม่รองรับการสร้าง PDF แบบ Batch/ZIP — ใช้ "🖨️ พิมพ์ใบประเมิน" ทีละคนที่หน้าแบบประเมินแทนได้</p>
+        <div style="display:flex;gap:6px"><button class="btn btn-sm" disabled title="ต้องใช้ไลบรารีสร้าง PDF/ZIP เพิ่มเติม">สร้าง PDF (ZIP)</button></div>
       </div></div>
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">🎯</div><b style="font-size:14.5px">Talent & 9-Box</b>
-        <p style="font-size:12px;color:#475569;margin:6px 0 13px">รายชื่อ Top/Bottom performer และ Talent Pool</p>
-        <div style="display:flex;gap:6px"><button class="btn btn-sm">Excel</button><button class="btn btn-sm">PDF</button></div>
+        <p style="font-size:12px;color:#475569;margin:6px 0 13px">ยังไม่รองรับ — ต้องมีข้อมูลศักยภาพ (Potential) ต่อคนเพิ่มเติมก่อน</p>
+        <div style="display:flex;gap:6px"><button class="btn btn-sm" disabled title="ต้องมีข้อมูล Potential ต่อคนก่อน">Excel</button></div>
       </div></div>
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>สรุปผลรายฝ่าย</h3><div class="r"><button class="btn btn-sm">📥 Export ทั้งตาราง</button></div></div>
+      <div class="card-h"><h3>สรุปผลรายฝ่าย</h3><div class="r"><button class="btn btn-sm" onclick="exportReportTable()">📥 Export ทั้งตาราง</button></div></div>
       <div class="tw"><table>
-        <thead><tr><th>ฝ่าย</th><th>พนักงาน</th><th>คะแนนเฉลี่ย</th><th>A</th><th>B+</th><th>B</th><th>C</th><th>D</th><th>%ปรับเงินเดือนเฉลี่ย</th></tr></thead>
+        <thead><tr><th>ฝ่าย</th><th>พนักงาน</th><th>คะแนนเฉลี่ย</th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th></tr></thead>
         <tbody id="reportRows"></tbody>
       </table></div>
     </div>
@@ -3027,9 +2998,9 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 
   <div class="cycle-summary">
     <div class="cycle-stat"><span>รอบปัจจุบัน</span><b>FY2026</b></div>
-    <div class="cycle-stat"><span>พนักงานในรอบ</span><b>99 คน</b></div>
+    <div class="cycle-stat"><span>พนักงานในรอบ</span><b id="csTotalCount">0 คน</b></div>
     <div class="cycle-stat"><span>ขั้นตอน</span><b>6 ขั้นตอน</b></div>
-    <div class="cycle-stat"><span>ความคืบหน้า</span><b style="color:#138a4b">72.7%</b></div>
+    <div class="cycle-stat"><span>ความคืบหน้า</span><b style="color:#138a4b" id="csProgressPct">0%</b></div>
   </div>
 
   <div class="cycle-layout">
@@ -3101,9 +3072,9 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
           <div class="mini-list">
             <div class="mini-row"><span>รอบ</span><b>FY2026</b></div>
             <div class="mini-row"><span>แบบประเมิน</span><b>PMS v3</b></div>
-            <div class="mini-row"><span>ผู้เข้ารอบ</span><b>99 คน</b></div>
-            <div class="mini-row"><span>ผู้ประเมิน L1</span><b>12 คน</b></div>
-            <div class="mini-row"><span>ผู้ยืนยัน L2</span><b>4 คน</b></div>
+            <div class="mini-row"><span>ผู้เข้ารอบ</span><b id="csTotalCount2">0 คน</b></div>
+            <div class="mini-row"><span>ผู้ประเมิน L1</span><b id="csL1Count">0 คน</b></div>
+            <div class="mini-row"><span>ผู้ยืนยัน L2</span><b id="csL2Count">0 คน</b></div>
             <div class="mini-row"><span>ผู้อนุมัติ</span><b>AGM / MD</b></div>
             <div class="mini-row"><span>แจ้งเตือน</span><b style="color:#138a4b">เปิด</b></div>
           </div>
@@ -3215,13 +3186,13 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 <div class="ov" id="mApprove"><div class="md" style="max-width:470px">
   <div class="md-h"><h3>✅ อนุมัติผลการประเมิน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="kv"><span>จำนวนใบประเมิน</span><b>8 ใบ</b></div>
+    <div class="kv"><span>จำนวนใบประเมิน</span><b id="mApproveCount">0 ใบ</b></div>
     <div class="kv"><span>ช่วงผลงาน</span><b>1 ม.ค. 2568 – วันที่ประเมิน</b></div>
     <div class="kv"><span>ช่วงเวลา (Z)</span><b>1 ธ.ค. 2567 – 30 พ.ย. 2568</b></div>
     <div class="al al-i" style="margin:15px 0 0"><span>ℹ️</span><div>หลังอนุมัติ HR&GA จะแจ้งผลการประเมินให้พนักงานรับทราบและลงนาม</div></div>
-    <div class="fg" style="margin-top:15px"><label>ลายเซ็นอิเล็กทรอนิกส์ <i>*</i></label><input placeholder="พิมพ์ชื่อ-สกุลเพื่อยืนยัน"></div>
+    <div class="fg" style="margin-top:15px"><label>ลายเซ็นอิเล็กทรอนิกส์ <i>*</i></label><input id="mApproveSign" placeholder="พิมพ์ชื่อ-สกุลเพื่อยืนยัน"></div>
   </div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-ok" onclick="closeM();alert('อนุมัติเรียบร้อย 8 รายการ')">ยืนยันอนุมัติ</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-ok" onclick="approveAllFinal()">ยืนยันอนุมัติ</button></div>
 </div></div>
 
 <div class="ov" id="mCycle"><div class="md">
@@ -3299,6 +3270,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
     if(typeof stopMs365AutoSync==='function') stopMs365AutoSync();
   }
   if(p==='settings' && typeof renderNavPermEditor==='function') renderNavPermEditor();
+  if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
 });
 
 /* ====== ROLE SWITCH ====== */
@@ -3908,6 +3880,10 @@ setTimeout(() => {
   if(typeof renderSysStatusBanner==='function') renderSysStatusBanner();
   if(typeof renderPendingList==='function') renderPendingList();
   if(typeof refreshSysStatusFromMs365==='function') refreshSysStatusFromMs365();
+  if(typeof renderWorkflowPages==='function') renderWorkflowPages();
+  if(typeof renderCycleStats==='function') renderCycleStats();
+  if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
+  if(typeof renderReportRows==='function') renderReportRows();
 }, 120);
 
 
@@ -4389,6 +4365,8 @@ function saveUserFromModal() {
   populateUserFilters();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
+  if(typeof renderCycleStats==='function') renderCycleStats();
+  if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
   closeM();
 }
 
@@ -4398,6 +4376,10 @@ function openM(id){
   m.classList.add('on');
   if(id==='mAddUser' && typeof populateOrgSelects==='function') populateOrgSelects();
   if(id==='mReminder' && typeof renderReminderPreview==='function') renderReminderPreview();
+  if(id==='mApprove'){
+    const n = getDrafts().filter(d=>d[d.length-1]==='Calibrated').length;
+    const el = document.getElementById('mApproveCount'); if(el) el.textContent = n+' ใบ';
+  }
 }
 
 function thaiDateToIso(str){
@@ -4453,7 +4435,8 @@ function getReminderTargets(key){
   if(key==='pending'){
     let drafts=[];
     try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY)||'[]'); }catch(e){ drafts=[]; }
-    const submittedCodes = new Set(drafts.filter(d=>d[d.length-1]==='Submitted').map(d=>d[0]));
+    /* "ส่งแล้ว" = สถานะใดๆ ก็ตามที่ไม่ใช่ Draft (Submitted/L2Reviewed/Calibrated/Approved ล้วนแปลว่าส่งไปแล้ว) */
+    const submittedCodes = new Set(drafts.filter(d=>d[d.length-1]!=='Draft').map(d=>d[0]));
     return active.filter(u => (u[2]==='emp'||u[2]==='l1'||u[2]==='l2') && !submittedCodes.has(u[0]));
   }
   return active; // 'all'
@@ -4532,34 +4515,12 @@ const comps=[['ความเป็นผู้นำ (Leadership)','น้ำ�
 <td><input placeholder="ความเห็นเพิ่มเติม" style="width:100%;padding:6px 9px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px"></td></tr>`).join('');});
 
 
-const appr=[['สมชาย ใจดี','ปฏิบัติการ','91.25','A','gA','6.0%','2.5'],
-['ปิยะดา ทองคำ','ปฏิบัติการ','93.20','A','gA','6.0%','2.5'],
-['นภา สุขสันต์','ขาย','88.00','B+','gB','4.5%','2.0'],
-['ธนา รุ่งเรือง','คลังสินค้า','87.50','B+','gB','4.5%','2.0'],
-['มาลี ดวงจันทร์','ปฏิบัติการ','86.75','B+','gB','4.5%','2.0'],
-['สุภาพร ชื่นบาน','ปฏิบัติการ','90.10','A','gA','6.0%','2.5'],
-['กิตติ พัฒนา','คลังสินค้า','74.00','C','gC','2.5%','1.0'],
-['วีระ นามวงศ์','ปฏิบัติการ','78.50','B','gB','3.5%','1.5']];
-document.getElementById('approveRows').innerHTML=appr.map(a=>`
-<tr><td><input type="checkbox" checked></td>
-<td><div class="u-cell"><div class="u-av">${a[0].substr(0,2)}</div><b>${a[0]}</b></div></td>
-<td>${a[1]}</td><td><b>${a[2]}</b></td><td><span class="grade ${a[4]}">${a[3]}</span></td>
-<td>${a[5]}</td><td>${a[6]} เดือน</td><td>${['นภา สุขสันต์','ธนา รุ่งเรือง','กิตติ พัฒนา'].includes(a[0])?'<span class="bd b-y">ปรับแล้ว</span>':'<span class="bd b-s">—</span>'}</td></tr>`).join('');
+/* ตารางอนุมัติขั้นสุดท้ายตอนนี้ render จากข้อมูลจริง (renderApproveQueue) — ดูฟังก์ชัน workflow ด้านล่าง */
 
 
 
 
-const rep=[['Yard & PDI (SML)',35,83.5,3,7,18,6,1,'—'],
-['Accessory Install (SML)',28,81.0,2,5,14,6,1,'—'],
-['HR & GA (SML)',8,86.2,1,2,4,1,0,'—'],
-['IT / Safety / GA (SML)',6,84.5,0,1,4,1,0,'—'],
-['KTG Outsource',15,79.8,1,3,8,3,0,'—'],
-['CNK Outsource',7,77.5,0,2,3,2,0,'—']];
-document.getElementById('reportRows').innerHTML=rep.map(r=>`
-<tr><td><b>${r[0]}</b></td><td>${r[1]}</td>
-<td><span class="bd ${r[2]>=85?'b-g':r[2]>=82?'b-b':'b-y'}">${r[2]}</span></td>
-<td>${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td>${r[6]}</td><td>${r[7]}</td>
-<td><b>${r[8]}</b></td></tr>`).join('');
+/* สรุปผลรายฝ่ายตอนนี้ render จากข้อมูลจริง (renderReportRows) — ดูฟังก์ชัน Report ด้านล่าง */
 
 const audit=[['ธ.ค. 68 10:22','ผู้จัดการส่วน (L2)','แก้ไขคะแนน','appraisal #SML-042','84.00 → 87.50','สอบทานขั้นที่ 2 — ผลงานดีกว่าที่ประเมิน','SML-NET'],
 ['ธ.ค. 68 09:58','Awe HR&GA (Admin)','Import ข้อมูล','HRGO_attendance_2568.xlsx','— → 99 แถว','นำเข้าข้อมูลเวลา ช่วง ธ.ค.67–พ.ย.68','SML-NET'],
@@ -5267,10 +5228,14 @@ function collectEvaluationPayload(status='Draft'){
 function saveEvaluationLocal(payload){
   let rows=[];
   try{ rows=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ rows=[]; }
+  /* คนเดียวกัน รอบเดียวกัน ระดับเดียวกัน ต้องมีแค่ 1 แถวเสมอ — แก้ไข/บันทึกซ้ำต้องทับของเดิม ไม่ใช่สร้างแถวใหม่ซ้อน */
+  const key = payload[0]+'|'+payload[2]+'|'+payload[3];
+  rows = rows.filter(r => (r[0]+'|'+r[2]+'|'+r[3]) !== key);
   rows.unshift(payload);
   localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(rows.slice(0,50)));
   renderSysStatusBanner();
   if(typeof renderPendingList==='function') renderPendingList();
+  if(typeof renderWorkflowPages==='function') renderWorkflowPages();
 }
 
 async function saveEvaluationToMs365(status='Draft'){
@@ -5345,6 +5310,8 @@ async function loadEmployeesFromMs365(){
     renderOrg(MASTER_USERS);
     populateOrgFilters();
     renderTeamFromMaster();
+    if(typeof renderCycleStats==='function') renderCycleStats();
+    if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
     const cnt=document.getElementById('ms365EmpCount'); if(cnt) cnt.textContent=String(normalized.length);
     updateMs365Status('ok','Connected');
     smlToast('โหลด Employee Master จาก Excel แล้ว ' + normalized.length + ' รายการ','ok');
@@ -5512,13 +5479,307 @@ function renderPendingList(){
     `</tbody></table>`;
 }
 
+/* ====== WORKFLOW: สอบทาน L2 → Calibration → อนุมัติขั้นสุดท้าย ======
+   ใช้ MS365_LOCAL_DRAFT_KEY (คิวผลประเมินเดียวกับที่ push เข้า Excel) เป็นแหล่งข้อมูลจริงเดียว
+   ลำดับสถานะ: Draft → Submitted → L2Reviewed → Calibrated → Approved (ตีกลับกลับไปขั้นก่อนหน้าได้)
+   โครงสร้างแถว: [empCode,empName,cycle,level, ...m(10), ...l(4), Y, Z, X, grade, status]
+   ดังนั้น: length-5=Y, length-4=Z, length-3=X, length-2=grade, length-1=status */
+function getDrafts(){
+  try{ return JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ return []; }
+}
+function saveDrafts(drafts){ localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(drafts)); }
+function draftKey(d){ return d[0]+'|'+d[2]+'|'+d[3]; }
+function updateDraftStatus(keys, newStatus){
+  const keySet = new Set(keys);
+  const drafts = getDrafts();
+  drafts.forEach(d=>{ if(keySet.has(draftKey(d))) d[d.length-1] = newStatus; });
+  saveDrafts(drafts);
+  renderWorkflowPages();
+}
+function getCheckedKeys(cls){ return [...document.querySelectorAll('.'+cls+':checked')].map(el=>el.value); }
+function empDeptLabel(code, fallbackName){
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  return { name: emp?.[1] || fallbackName || code, dept: emp ? (emp[6]||emp[4]||'—') : '—' };
+}
+
+function renderReviewQueue(){
+  const tbody=document.getElementById('reviewRows'); const cnt=document.getElementById('reviewCount');
+  if(!tbody) return;
+  const rows = getDrafts().filter(d=>d[d.length-1]==='Submitted');
+  if(cnt) cnt.textContent = rows.length+' รายการ';
+  tbody.innerHTML = rows.length ? rows.map(d=>{
+    const {name,dept} = empDeptLabel(d[0], d[1]);
+    const X = d[d.length-3], grade = d[d.length-2];
+    return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}"></td>
+      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${d[0]}</small></div></div></td>
+      <td style="font-size:12px">${dept}</td>
+      <td style="text-align:center">${X}</td>
+      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','')">สอบทานแบบฟอร์ม</button></td></tr>`;
+  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
+}
+function approveReviewSelected(){
+  const keys=getCheckedKeys('review-chk');
+  if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  updateDraftStatus(keys,'L2Reviewed');
+  smlToast('ผ่านสอบทาน L2 แล้ว '+keys.length+' รายการ — เข้าสู่ขั้น Calibration','ok');
+}
+function rejectReviewSelected(){
+  const keys=getCheckedKeys('review-chk');
+  if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  updateDraftStatus(keys,'Draft');
+  smlToast('ตีกลับให้แก้ไข '+keys.length+' รายการ','warn');
+}
+
+function renderCalibQueue(){
+  const tbody=document.getElementById('calibRows'); const cnt=document.getElementById('calibCount');
+  const distBox=document.getElementById('calibGradeDist');
+  if(!tbody) return;
+  const rows = getDrafts().filter(d=>d[d.length-1]==='L2Reviewed');
+  if(cnt) cnt.textContent = 'รอปรับเทียบ '+rows.length+' รายการ';
+  tbody.innerHTML = rows.length ? rows.map(d=>{
+    const {name,dept} = empDeptLabel(d[0], d[1]);
+    const X = Number(d[d.length-3]), grade = d[d.length-2];
+    return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${d[0]}</small></td>
+      <td style="font-size:12px">${dept}</td>
+      <td style="text-align:center">${X}</td>
+      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+      <td><input type="number" step="0.01" class="calib-adj" data-key="${draftKey(d)}" value="${X}" style="width:80px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td></tr>`;
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอ Calibration</td></tr>';
+  if(distBox){
+    const calibrated = getDrafts().filter(d=>['Calibrated','Approved'].includes(d[d.length-1]));
+    const counts = {};
+    calibrated.forEach(d=>{ const g=d[d.length-2]; counts[g]=(counts[g]||0)+1; });
+    const grades = ['A','B','C','D','E'];
+    distBox.innerHTML = calibrated.length
+      ? grades.map(g=>`<tr><td><span class="grade g${g}">${g}</span></td><td>${counts[g]||0}</td></tr>`).join('')
+      : '<tr><td colspan="2" style="text-align:center;color:#94a3b8;padding:12px">ยังไม่มีรายการที่ผ่าน Calibration ในรอบนี้</td></tr>';
+  }
+}
+function confirmCalibration(){
+  const inputs=[...document.querySelectorAll('.calib-adj')];
+  if(!inputs.length){ smlToast('ไม่มีรายการรอ Calibration','warn'); return; }
+  const drafts=getDrafts();
+  inputs.forEach(inp=>{
+    const key=inp.dataset.key, newX=Number(inp.value)||0;
+    const d=drafts.find(x=>draftKey(x)===key);
+    if(d){ d[d.length-3]=newX; d[d.length-2]=gradeFromX(newX); d[d.length-1]='Calibrated'; }
+  });
+  saveDrafts(drafts);
+  renderWorkflowPages();
+  smlToast('ยืนยันผล Calibration แล้ว '+inputs.length+' รายการ','ok');
+}
+
+function renderApproveQueue(){
+  const tbody=document.getElementById('approveRows'); const cnt=document.getElementById('approveCount');
+  const btn=document.getElementById('approveAllBtn');
+  if(!tbody) return;
+  const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
+  if(cnt) cnt.textContent = rows.length+' รายการ';
+  if(btn) btn.textContent = '✅ อนุมัติทั้งหมด ('+rows.length+')';
+  tbody.innerHTML = rows.length ? rows.map(d=>{
+    const {name,dept} = empDeptLabel(d[0], d[1]);
+    const X = d[d.length-3], grade = d[d.length-2];
+    return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${d[0]}</small></td>
+      <td style="font-size:12px">${dept}</td>
+      <td style="text-align:center">${X}</td>
+      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td></tr>`;
+  }).join('') : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอการอนุมัติ</td></tr>';
+}
+function approveAllFinal(){
+  const sign=(document.getElementById('mApproveSign')?.value||'').trim();
+  if(!sign){ smlToast('กรุณาพิมพ์ชื่อ-สกุลเพื่อยืนยันลายเซ็นอิเล็กทรอนิกส์','warn'); return; }
+  const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
+  if(!rows.length){ smlToast('ไม่มีรายการรออนุมัติ','warn'); closeM(); return; }
+  updateDraftStatus(rows.map(draftKey),'Approved');
+  closeM();
+  smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+')','ok');
+}
+function rejectApproveAll(){
+  const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
+  if(!rows.length){ smlToast('ไม่มีรายการให้ตีกลับ','warn'); return; }
+  if(!confirm('ตีกลับรายการที่ผ่าน Calibration ทั้งหมด '+rows.length+' รายการ กลับไปสอบทาน L2 อีกครั้ง?')) return;
+  updateDraftStatus(rows.map(draftKey),'L2Reviewed');
+  smlToast('ตีกลับแล้ว '+rows.length+' รายการ','warn');
+}
+
+function renderWorkflowPages(){
+  renderReviewQueue();
+  renderCalibQueue();
+  renderApproveQueue();
+  if(typeof renderPendingList==='function') renderPendingList();
+  if(typeof renderReportRows==='function') renderReportRows();
+  if(typeof renderCycleStats==='function') renderCycleStats();
+}
+
+/* ====== รายงาน & Export — คำนวณ/ export จากข้อมูลจริงเท่านั้น (MASTER_USERS + คิวผลประเมิน) ====== */
+function downloadCsv(filename, headers, rows){
+  const csv='﻿'+[headers,...rows].map(r=>r.map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function getReportData(){
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  return MASTER_USERS.filter(u=>u[12]==='active').map(u=>{
+    const d = drafts.find(x=>x[0]===u[0]);
+    return {
+      code:u[0], name:u[1], group:u[3], dept:u[6]||u[4]||'—',
+      X: d ? Number(d[d.length-3]) : null,
+      grade: d ? d[d.length-2] : null,
+      status: d ? d[d.length-1] : 'ยังไม่ประเมิน'
+    };
+  });
+}
+function exportIndividualSummary(){
+  const rows = getReportData();
+  if(!rows.some(r=>r.X!==null)){ smlToast('ยังไม่มีผลประเมินในระบบให้ Export','warn'); return; }
+  downloadCsv('สรุปผลประเมินรายบุคคล_'+Date.now()+'.csv',
+    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนรวม (X)','เกรด','สถานะ'],
+    rows.map(r=>[r.code,r.name,r.group,r.dept, r.X??'', r.grade??'', r.status]));
+  smlToast('Export สรุปผลรายบุคคลแล้ว ('+rows.length+' คน)','ok');
+}
+function departmentSummary(){
+  const rows = getReportData();
+  const depts = [...new Set(rows.map(r=>r.dept))];
+  return depts.map(dept=>{
+    const list = rows.filter(r=>r.dept===dept);
+    const scored = list.filter(r=>r.X!==null);
+    const avg = scored.length ? Math.round(scored.reduce((s,r)=>s+r.X,0)/scored.length*10)/10 : null;
+    const counts = {A:0,B:0,C:0,D:0,E:0};
+    scored.forEach(r=>{ if(counts[r.grade]!==undefined) counts[r.grade]++; });
+    return { dept, total:list.length, avg, counts };
+  });
+}
+function renderReportRows(){
+  const tbody=document.getElementById('reportRows'); if(!tbody) return;
+  const summary = departmentSummary();
+  tbody.innerHTML = summary.length ? summary.map(s=>`
+    <tr><td><b>${s.dept}</b></td><td>${s.total}</td>
+    <td>${s.avg!==null?`<span class="bd ${s.avg>=85?'b-g':s.avg>=70?'b-b':'b-y'}">${s.avg}</span>`:'<span style="color:#94a3b8">—</span>'}</td>
+    <td>${s.counts.A}</td><td>${s.counts.B}</td><td>${s.counts.C}</td><td>${s.counts.D}</td><td>${s.counts.E}</td></tr>`).join('')
+    : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล</td></tr>';
+}
+function exportReportTable(){
+  const summary = departmentSummary();
+  if(!summary.length){ smlToast('ไม่มีข้อมูลให้ Export','warn'); return; }
+  downloadCsv('สรุปผลรายฝ่าย_'+Date.now()+'.csv',
+    ['ฝ่าย','พนักงาน','คะแนนเฉลี่ย','A','B','C','D','E'],
+    summary.map(s=>[s.dept, s.total, s.avg??'', s.counts.A, s.counts.B, s.counts.C, s.counts.D, s.counts.E]));
+  smlToast('Export สรุปผลรายฝ่ายแล้ว','ok');
+}
+function exportAttendanceVsScore(){
+  const rows = getReportData().filter(r=>r.X!==null).map(r=>{
+    const att = ATTENDANCE[r.code];
+    return { ...r, lateCount: att?.lateCount||0, absentDay: att?.absentDay||0, sickDay: att?.sickDay||0 };
+  });
+  if(!rows.length){ smlToast('ยังไม่มีคนที่มีทั้งผลประเมินและข้อมูลวันลาให้เปรียบเทียบ','warn'); return; }
+  downloadCsv('สถิติเวลา_vs_คะแนน_'+Date.now()+'.csv',
+    ['รหัสพนักงาน','ชื่อ-สกุล','มาสาย(ครั้ง)','ขาดงาน(วัน)','ลาป่วย(วัน)','คะแนนรวม (X)','เกรด'],
+    rows.map(r=>[r.code,r.name,r.lateCount,r.absentDay,r.sickDay,r.X,r.grade]));
+  smlToast('Export สถิติเวลา vs คะแนนแล้ว ('+rows.length+' คน)','ok');
+}
+
+/* ====== ตัวเลขสรุปจริง (แดชบอร์ด / ผังองค์กร / ตั้งค่ารอบ) ======
+   คำนวณจาก MASTER_USERS จริง + คิวผลประเมินจริง แทนตัวเลขตายตัวเดิม (99 คน, 72.7% ฯลฯ) */
+function getCycleSetupData(){
+  try{ return JSON.parse(localStorage.getItem('smlPmsCycleSetup') || 'null'); }catch(e){ return null; }
+}
+function getEvalParticipants(){
+  return MASTER_USERS.filter(u => u[12]==='active' && ['emp','l1','l2','exec','admin'].includes(u[2]));
+}
+function renderCycleStats(){
+  const participants = getEvalParticipants();
+  const total = participants.length;
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  const completedCodes = new Set(drafts.filter(d=>d[d.length-1]!=='Draft').map(d=>d[0]));
+  const completed = participants.filter(u=>completedCodes.has(u[0])).length;
+  const pending = total - completed;
+  const pct = total ? Math.round(completed/total*1000)/10 : 0;
+
+  let overdue = 0;
+  const cycleData = getCycleSetupData();
+  const banner = document.getElementById('dashDeadlineBanner');
+  const bannerText = document.getElementById('dashDeadlineText');
+  if(cycleData?.end && pending > 0){
+    const endDate = new Date(cycleData.end+'T23:59:59');
+    const now = new Date();
+    if(now > endDate){
+      overdue = pending;
+      if(banner && bannerText){ banner.style.display=''; bannerText.textContent = `เลยกำหนดส่งแบบประเมิน (${cycleData.end}) แล้ว — ยังมีใบประเมินค้าง ${pending} ใบ`; }
+    } else {
+      const daysLeft = Math.ceil((endDate-now)/86400000);
+      if(banner && bannerText){ banner.style.display=''; bannerText.textContent = `เหลืออีก ${daysLeft} วันก่อนถึงกำหนดส่งแบบประเมิน (${cycleData.end}) — ยังมีใบประเมินค้าง ${pending} ใบ`; }
+    }
+  } else if(banner){ banner.style.display='none'; }
+
+  const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+  set('dashTotalParticipants', total);
+  set('dashCompleted', completed);
+  set('dashCompletedPct', pct+'%');
+  set('dashPending', pending);
+  set('dashOverdue', overdue);
+
+  set('orgTotalCount', MASTER_USERS.length);
+
+  const l1Count = participants.filter(u=>u[2]==='l1').length;
+  const l2Count = participants.filter(u=>u[2]==='l2').length;
+  set('csTotalCount', total+' คน');
+  set('csTotalCount2', total+' คน');
+  set('csL1Count', l1Count+' คน');
+  set('csL2Count', l2Count+' คน');
+  set('csProgressPct', pct+'%');
+  set('mSaveCycleCount', total+' คน');
+}
+
+/* ตรวจสายบังคับบัญชาจริง: หา (1) พนักงาน/หัวหน้าที่ไม่มีหัวหน้าระดับ 1 และ (2) วน L1 ย้อนกลับมาซ้ำ (circular) */
+function checkHierarchyIssues(showToast){
+  const noL1 = MASTER_USERS.filter(u => u[12]==='active' && (u[2]==='emp'||u[2]==='l1') && (!u[9] || u[9]==='—'));
+  const byName = {};
+  MASTER_USERS.forEach(u => { byName[u[1]] = u; });
+  const circular = [];
+  MASTER_USERS.filter(u=>u[12]==='active').forEach(start => {
+    const seen = new Set([start[1]]);
+    let cur = start;
+    for(let i=0;i<20;i++){
+      const supName = cur[9];
+      if(!supName || supName==='—') break;
+      if(seen.has(supName)){ circular.push(start[1]); break; }
+      seen.add(supName);
+      cur = byName[supName];
+      if(!cur) break;
+    }
+  });
+  const banner = document.getElementById('orgHierarchyBanner');
+  const bannerText = document.getElementById('orgHierarchyBannerText');
+  const okBanner = document.getElementById('orgHierarchyOkBanner');
+  const total = noL1.length + circular.length;
+  if(total > 0){
+    if(banner && bannerText){
+      banner.style.display='';
+      bannerText.textContent = `พบปัญหาสายบังคับบัญชา ${total} รายการ — พนักงาน ${noL1.length} คนไม่มีหัวหน้าระดับ 1 และพบ Circular Reference ${circular.length} จุด`;
+    }
+    if(okBanner) okBanner.style.display='none';
+  } else {
+    if(banner) banner.style.display='none';
+    if(okBanner) okBanner.style.display='';
+  }
+  if(showToast) smlToast(total ? `พบปัญหา ${total} รายการ` : 'ไม่พบปัญหาสายบังคับบัญชา','ok');
+  return { noL1, circular };
+}
+
 async function ms365PushAppraisals(){
   let drafts=[];
   try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ drafts=[]; }
   const setPending=(v)=>{const el=document.getElementById('appraisalPending'); if(el) el.textContent=v+' รายการ';};
-  if(!drafts.length){
-    smlToast('ไม่มีผลประเมินค้าง Push','warn');
-    setPending(0);
+  /* Push ขึ้น Excel เฉพาะรายการที่ผ่านอนุมัติขั้นสุดท้ายแล้ว (สถานะ Approved) เท่านั้น
+     รายการที่ยังอยู่ระหว่าง Draft/Submitted/L2Reviewed/Calibrated ต้องไม่หลุดเข้า Excel ก่อนเวลา */
+  const toPush = drafts.filter(d=>d[d.length-1]==='Approved');
+  const notReady = drafts.filter(d=>d[d.length-1]!=='Approved');
+  if(!toPush.length){
+    smlToast(drafts.length ? 'มีผลประเมินค้างอยู่ '+drafts.length+' รายการ แต่ยังไม่ผ่านอนุมัติขั้นสุดท้าย (Approved)' : 'ไม่มีผลประเมินค้าง Push','warn');
+    setPending(drafts.length);
     return;
   }
   const cfg = loadMs365Config();
@@ -5528,8 +5789,8 @@ async function ms365PushAppraisals(){
     return;
   }
   let ok=0, fail=0;
-  const remaining=[];
-  for(const payload of drafts){
+  const remaining=[...notReady];
+  for(const payload of toPush){
     try{ await graphAddTableRow(cfg.evaluationTable, payload); ok++; }
     catch(e){ fail++; remaining.push(payload); }
   }
@@ -6023,6 +6284,7 @@ function saveCycleSetup(){
   localStorage.setItem('smlPmsCycleSetup',JSON.stringify(data));
   const title=document.querySelector('#pg-cycle .ph h2');
   if(title && data.name) title.dataset.cycleName=data.name;
+  if(typeof renderCycleStats==='function') renderCycleStats();
   smlToast('บันทึกการตั้งค่ารอบประเมินเรียบร้อย','ok');
 }
 
@@ -6302,7 +6564,7 @@ document.addEventListener('input',e=>{
   <div class="md-b">
     <div class="al al-i"><span>ℹ️</span><div>การบันทึกจะมีผลกับรอบ <b>FY2568</b> ที่กำลังดำเนินการอยู่ ใบประเมินที่ยังไม่ส่งจะถูกอัปเดตอัตโนมัติ</div></div>
     <div class="kv"><span>รอบ</span><b>FY2568 — ประจำปี 2568</b></div>
-    <div class="kv"><span>ผู้เข้าร่วม</span><b>99 คน</b></div>
+    <div class="kv"><span>ผู้เข้าร่วม</span><b id="mSaveCycleCount">0 คน</b></div>
     <div class="kv"><span>ขั้นตอน</span><b>6 ขั้นตอน</b></div>
   </div>
   <div class="md-f">
