@@ -2215,7 +2215,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <button class="btn" onclick="openM('mEmployeeTemplate')">📄 Template พนักงาน</button>
       <button class="btn" onclick="openM('mImportUsers')">⬆️ Import พนักงาน</button>
       <button class="btn" onclick="smlToast('Sync HRIS อยู่ในโหมด Demo — พร้อมเชื่อม API ภายหลัง','info')">🔄 Sync HRIS</button>
-      <button class="btn btn-p" onclick="openM('mAddUser')">＋ เพิ่มพนักงาน</button>
+      <button class="btn btn-p" onclick="clearUserModalForm();openM('mAddUser')">＋ เพิ่มพนักงาน</button>
     </div></div>
 
     <div class="al al-e"><span>⚠️</span><div><b>พบปัญหาสายบังคับบัญชา 3 รายการ</b> — พนักงาน 2 คนไม่มีหัวหน้าระดับ 1 และพบ Circular Reference 1 จุด <button class="btn btn-sm" style="margin-left:8px">ตรวจสอบ</button></div></div>
@@ -2853,7 +2853,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     <div class="setting-filter">
       <select><option>ทุกบทบาท</option><option>Admin</option><option>Executive</option><option>Manager</option><option>Leader</option><option>Employee</option></select>
       <select><option>สถานะ: ทั้งหมด</option><option>เปิดใช้งาน</option><option>ปิดใช้งาน</option></select>
-      <button class="btn btn-p" onclick="openM('mAddUser')">＋ เพิ่มผู้ใช้</button>
+      <button class="btn btn-p" onclick="clearUserModalForm();openM('mAddUser')">＋ เพิ่มผู้ใช้</button>
     </div>
   </div>
 
@@ -2975,7 +2975,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
           </select>
           <input id="searchUser" oninput="filterUsers()" placeholder="🔍 ค้นหาชื่อ / รหัส"
             style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;width:180px;font-family:inherit">
-          <button class="btn btn-p btn-sm" onclick="openM('mAddUser')">+ เพิ่มผู้ใช้</button>
+          <button class="btn btn-p btn-sm" onclick="clearUserModalForm();openM('mAddUser')">+ เพิ่มผู้ใช้</button>
         </div>
       </div>
       <div class="card-b" style="padding:0">
@@ -3262,15 +3262,18 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 <div class="ov" id="mReminder"><div class="md" style="max-width:470px">
   <div class="md-h"><h3>📢 ส่งการแจ้งเตือน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="fg"><label>กลุ่มเป้าหมาย</label><select><option>ผู้ที่ยังไม่ดำเนินการ (47 คน)</option><option>หัวหน้าระดับ 1 ทั้งหมด</option><option>ทุกคนในรอบ</option></select></div>
+    <div class="fg"><label>กลุ่มเป้าหมาย</label><select id="rm_target" onchange="renderReminderPreview()"></select></div>
     <div class="fg"><label>ช่องทาง</label>
-      <label style="font-weight:400"><input type="checkbox" checked style="width:auto;margin-right:5px">อีเมล</label>
-      <label style="font-weight:400;margin-left:14px"><input type="checkbox" checked style="width:auto;margin-right:5px">แจ้งเตือนในระบบ</label>
-      <label style="font-weight:400;margin-left:14px"><input type="checkbox" style="width:auto;margin-right:5px">LINE</label>
+      <label style="font-weight:400"><input type="checkbox" id="rm_ch_email" checked style="width:auto;margin-right:5px">อีเมล</label>
+      <label style="font-weight:400;margin-left:14px;color:#94a3b8"><input type="checkbox" disabled style="width:auto;margin-right:5px">แจ้งเตือนในระบบ <small>(ยังไม่รองรับ — ต้องมีระบบ Login รายบุคคล)</small></label>
+      <label style="font-weight:400;margin-left:14px;color:#94a3b8"><input type="checkbox" disabled style="width:auto;margin-right:5px">LINE <small>(ยังไม่รองรับ — ต้องเชื่อม LINE Messaging API)</small></label>
     </div>
-    <div class="fg"><label>ข้อความ</label><textarea rows="4">เรียนท่านหัวหน้างาน กรุณาดำเนินการประเมินผลพนักงานในสังกัดให้แล้วเสร็จภายในวันที่ 20 ก.ย. 2569</textarea></div>
+    <div class="fg"><label>ข้อความ</label><textarea id="rm_message" rows="4">เรียนท่านหัวหน้างาน กรุณาดำเนินการประเมินผลพนักงานในสังกัดให้แล้วเสร็จภายในวันที่ 20 ก.ย. 2569</textarea></div>
+    <div class="fg"><label>รายชื่อผู้รับ (ดึงจากข้อมูลพนักงานจริง)</label>
+      <div id="rm_preview" style="max-height:160px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
+    </div>
   </div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="closeM();alert('ส่งการแจ้งเตือนถึง 47 คนเรียบร้อย')">ส่งทันที</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="sendReminder()">ส่งทันที</button></div>
 </div></div>
 
 <script>
@@ -3643,24 +3646,24 @@ setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); }, 200);
    status: active / probation / inactive / resigned
    ============================================================ */
 const MASTER_USERS = [
-  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)
-  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563'],
-  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564'],
-  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565'],
-  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561'],
-  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559'],
-  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565'],
-  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563'],
-  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560'],
-  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564'],
-  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568'],
-  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562'],
-  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564'],
-  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560'],
-  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555'],
-  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564'],
-  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563'],
-  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565'],
+  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email
+  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563',''],
+  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564',''],
+  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565',''],
+  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561',''],
+  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559',''],
+  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565',''],
+  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563',''],
+  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560',''],
+  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564',''],
+  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568',''],
+  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562',''],
+  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564',''],
+  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560',''],
+  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555',''],
+  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564',''],
+  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563',''],
+  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565',''],
 ];
 
 /* ==========================================
@@ -3763,7 +3766,7 @@ function renderUsers(data) {
     <td>
       <div style="display:flex;gap:3px;justify-content:center">
         <button class="btn btn-sm" onclick="openUserDetail('${u[0]}')" title="ดูรายละเอียด">👁</button>
-        <button class="btn btn-sm" onclick="openM('mAddUser')" title="แก้ไข">✏️</button>
+        <button class="btn btn-sm" onclick="openEditUser('${u[0]}')" title="แก้ไข">✏️</button>
       </div>
     </td>
   </tr>`).join('');
@@ -4358,18 +4361,20 @@ function saveUserFromModal() {
   const status   = document.getElementById('mu_status')?.value;
   const startRaw = document.getElementById('mu_startdate')?.value;
   const startDate= startRaw ? new Date(startRaw+'T00:00:00').toLocaleDateString('th-TH') : '—';
+  const email    = (document.getElementById('mu_email')?.value || '').trim();
 
   if (!id || !name || !role || !group || !section || !position || !grade || !status) {
     smlToast('กรุณากรอกข้อมูลที่มี * ให้ครบถ้วน', 'warn');
     return;
   }
 
-  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate] */
+  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email] */
   const existingRow = MASTER_USERS.find(u => u[0] === id);
   const newUser = [id, name, role, group, section, division||'—', dept||'—',
                    position, grade, l1||'—', l2||'—', approver||'—', status,
                    new Date().toLocaleDateString('th-TH'),
-                   startRaw ? startDate : (existingRow?.[14] || '—')];
+                   startRaw ? startDate : (existingRow?.[14] || '—'),
+                   email || existingRow?.[15] || ''];
 
   const existing = MASTER_USERS.findIndex(u => u[0] === id);
   if (existing >= 0) {
@@ -4392,6 +4397,121 @@ function openM(id){
   if(!m) return;
   m.classList.add('on');
   if(id==='mAddUser' && typeof populateOrgSelects==='function') populateOrgSelects();
+  if(id==='mReminder' && typeof renderReminderPreview==='function') renderReminderPreview();
+}
+
+function thaiDateToIso(str){
+  const m = String(str||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!m) return '';
+  const [,d,mo,y] = m;
+  const ceYear = Number(y) - 543;
+  return `${ceYear}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function clearUserModalForm(){
+  ['mu_id','mu_name','mu_position','mu_l1','mu_l2','mu_approver','mu_email','mu_pass'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const idEl=document.getElementById('mu_id'); if(idEl) idEl.removeAttribute('disabled');
+  const role=document.getElementById('mu_role'); if(role) role.value='emp';
+  const grade=document.getElementById('mu_grade'); if(grade) grade.value='G1';
+  const status=document.getElementById('mu_status'); if(status) status.value='active';
+  const sd=document.getElementById('mu_startdate'); if(sd) sd.value='';
+}
+
+/* เปิด modal พร้อมดึงข้อมูลปัจจุบันของพนักงานคนนั้นมาเติมในฟอร์ม (แก้ไขจริง ไม่ใช่ฟอร์มเปล่า) */
+function openEditUser(id){
+  openM('mAddUser');
+  const emp = MASTER_USERS.find(u=>u[0]===id);
+  if(!emp){ clearUserModalForm(); return; }
+  const set=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value = (val && val!=='—') ? val : ''; };
+  set('mu_id', emp[0]);
+  document.getElementById('mu_id')?.setAttribute('disabled','disabled'); // รหัสพนักงานคือ key ห้ามแก้ระหว่างเช็คอิน
+  set('mu_name', emp[1]);
+  set('mu_role', emp[2]);
+  set('mu_group', emp[3]);
+  onOrgGroupChange();
+  set('mu_section', emp[4]);
+  onOrgSectionChange();
+  set('mu_division', emp[5]);
+  set('mu_department', emp[6]);
+  set('mu_position', emp[7]);
+  set('mu_grade', emp[8]);
+  set('mu_l1', emp[9]);
+  set('mu_l2', emp[10]);
+  set('mu_approver', emp[11]);
+  set('mu_status', emp[12]);
+  const sdEl=document.getElementById('mu_startdate'); if(sdEl) sdEl.value = thaiDateToIso(emp[14]);
+  set('mu_email', emp[15]);
+}
+
+/* ====== ส่งการแจ้งเตือน (Reminder) — ดึงกลุ่มเป้าหมาย/อีเมลจากข้อมูลพนักงานจริงเสมอ
+   ไม่มี backend กลาง จึงส่งอีเมลจริงได้ผ่าน mailto: เท่านั้น (เปิดโปรแกรมอีเมลของผู้ใช้เอง) */
+function getReminderTargets(key){
+  const active = MASTER_USERS.filter(u => u[12]==='active');
+  if(key==='l1') return active.filter(u=>u[2]==='l1');
+  if(key==='pending'){
+    let drafts=[];
+    try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY)||'[]'); }catch(e){ drafts=[]; }
+    const submittedCodes = new Set(drafts.filter(d=>d[d.length-1]==='Submitted').map(d=>d[0]));
+    return active.filter(u => (u[2]==='emp'||u[2]==='l1'||u[2]==='l2') && !submittedCodes.has(u[0]));
+  }
+  return active; // 'all'
+}
+
+function renderReminderPreview(){
+  const sel = document.getElementById('rm_target');
+  const box = document.getElementById('rm_preview');
+  if(!sel || !box) return;
+  const curKey = sel.value || 'pending';
+  const counts = {
+    pending: getReminderTargets('pending').length,
+    l1: getReminderTargets('l1').length,
+    all: getReminderTargets('all').length,
+  };
+  sel.innerHTML = `
+    <option value="pending">ผู้ที่ยังไม่ส่งแบบประเมิน (${counts.pending} คน)</option>
+    <option value="l1">หัวหน้าระดับ 1 ทั้งหมด (${counts.l1} คน)</option>
+    <option value="all">ทุกคนที่ Active ในระบบ (${counts.all} คน)</option>`;
+  sel.value = curKey;
+  const targets = getReminderTargets(sel.value);
+  if(!targets.length){
+    box.innerHTML = '<div style="color:#94a3b8">ไม่มีรายชื่อตรงกลุ่มเป้าหมายนี้</div>';
+    return;
+  }
+  box.innerHTML = targets.map(u => {
+    const hasEmail = !!u[15];
+    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f1f5f9">
+      <span>${u[1]} <span style="color:#94a3b8">(${u[0]})</span></span>
+      <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมลในระบบ'}</span>
+    </div>`;
+  }).join('');
+}
+
+function sendReminder(){
+  const targets = getReminderTargets(document.getElementById('rm_target')?.value || 'pending');
+  const message = document.getElementById('rm_message')?.value || '';
+  const wantEmail = document.getElementById('rm_ch_email')?.checked;
+  if(!targets.length){ smlToast('ไม่มีผู้รับในกลุ่มเป้าหมายนี้','warn'); return; }
+
+  const withEmail = targets.filter(u=>u[15]);
+  const withoutEmail = targets.filter(u=>!u[15]);
+
+  if(wantEmail && withEmail.length){
+    const bcc = withEmail.map(u=>u[15]).join(',');
+    const subject = encodeURIComponent('แจ้งเตือน: SML PMS — กรุณาดำเนินการประเมินผล');
+    const body = encodeURIComponent(message);
+    window.location.href = `mailto:?bcc=${bcc}&subject=${subject}&body=${body}`;
+  } else if(wantEmail && !withEmail.length){
+    smlToast('ไม่มีใครในกลุ่มนี้มีอีเมลในระบบ — เพิ่มอีเมลที่หน้าแก้ไขพนักงานก่อน','warn');
+    return;
+  }
+
+  closeM();
+  const msg = wantEmail
+    ? `เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง ${withEmail.length} คน` + (withoutEmail.length ? ` · ${withoutEmail.length} คนไม่มีอีเมลในระบบ (${withoutEmail.map(u=>u[0]).join(', ')}) ต้องแจ้งช่องทางอื่นเอง` : '')
+    : 'ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน (มีแค่อีเมลที่ส่งได้จริงตอนนี้)';
+  smlToast(msg, wantEmail ? 'ok' : 'warn');
 }
 function closeM(){document.querySelectorAll('.ov').forEach(o=>o.classList.remove('on'))}
 document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM();});
@@ -4954,8 +5074,8 @@ function downloadExcelTemplate(){
     setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   };
   dl('Employees_Template.csv',
-    ['EmpID','ชื่อ-สกุล','บทบาท','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','Grade','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','Status','Login ล่าสุด'],
-    [['SML-001','สมชาย วงศ์ดี','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active','']]
+    ['EmpID','ชื่อ-สกุล','บทบาท','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','Grade','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','Status','Login ล่าสุด','วันเริ่มงาน','Email'],
+    [['SML-001','สมชาย วงศ์ดี','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active','','','somchai@siammotor.com']]
   );
   dl('Appraisals_Template.csv',
     ['EmpID','ชื่อ-สกุล','รอบ','ระดับ','m01','m02','m03','m04','m05','m06','m07','m08','m09','m10',
@@ -5206,7 +5326,8 @@ function normalizeMs365Employee(row){
   return [
     g(0), g(1), role, g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), status,
     g(13) || new Date().toLocaleString('th-TH'),
-    g(14) || '—'
+    g(14) || '—',
+    g(15)
   ];
 }
 
@@ -6041,6 +6162,14 @@ document.addEventListener('input',e=>{
       </div>
     </div>
 
+    <div class="fr">
+      <div class="fg">
+        <label>อีเมล</label>
+        <input type="email" id="mu_email" placeholder="เช่น name@siammotor.com">
+        <div style="font-size:10.5px;color:#64748b;margin-top:2px">ใช้สำหรับส่งการแจ้งเตือน (Reminder) ทางอีเมล — ถ้าไม่กรอกจะส่งอีเมลถึงคนนี้ไม่ได้</div>
+      </div>
+    </div>
+
   </div>
   <div class="md-f">
     <button class="btn" onclick="closeM()">ยกเลิก</button>
@@ -6811,7 +6940,7 @@ function validateEmployeeImport(){
     <!-- ACTIONS -->
     <div style="display:flex;gap:8px;padding-top:8px;border-top:1px solid #f1f5f9">
       <button class="btn btn-p" style="flex:1;justify-content:center"
-        onclick="closeUserDetail();openM('mAddUser')">✏️ แก้ไขข้อมูล</button>
+        onclick="closeUserDetail();openEditUser(document.getElementById('udCode').textContent)">✏️ แก้ไขข้อมูล</button>
       <button class="btn" style="flex:1;justify-content:center"
         onclick="closeUserDetail()">ปิด</button>
     </div>
