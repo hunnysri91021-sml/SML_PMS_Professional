@@ -1740,21 +1740,27 @@ tbody tr:hover{background:#f0f6ff!important}
 
   <!-- ========== TEAM (L1) ========== -->
   <section class="page" id="pg-team">
-    <div class="ph"><div><h2>ประเมินทีมงาน</h2><p>ผู้ใต้บังคับบัญชาทางตรง · รอประเมิน 5 คน · กำหนดส่งภายในเดือน ธ.ค. 2568</p></div>
+    <div class="ph"><div><h2>ประเมินทีมงาน</h2><p id="teamPageSubtitle">ผู้ใต้บังคับบัญชาทางตรง</p></div>
     <div class="ph-act">
-      <select class="btn"><option>ทุกสถานะ</option><option>รอประเมิน</option><option>ส่งแล้ว</option><option>ถูกตีกลับ</option></select>
-      <button class="btn btn-p">⚡ ประเมินแบบกลุ่ม</button>
+      <select class="btn" id="teamManagerSelect" onchange="renderTeamFromMaster()"></select>
+      <select class="btn" id="teamStatusFilter" onchange="renderTeamFromMaster()">
+        <option value="">ทุกสถานะ</option>
+        <option value="pending">รอประเมิน</option>
+        <option value="done">ส่งแล้ว</option>
+      </select>
     </div></div>
 
+    <div class="al al-i"><span>🔒</span><div>หน้านี้แสดงเฉพาะผู้ใต้บังคับบัญชาทางตรงของหัวหน้าที่เลือกไว้ด้านบนเท่านั้น (ดึงจากสายบังคับบัญชาจริงในข้อมูลพนักงาน) — ไม่เห็นทีมของหัวหน้าคนอื่น</div></div>
+
     <div class="grid g4" style="margin-bottom:18px">
-      <div class="stat s-i"><div class="lb">👥 ทีมทั้งหมด</div><div class="vl">12</div><div class="sb">คน</div></div>
-      <div class="stat s-ok"><div class="lb">✅ ประเมินแล้ว</div><div class="vl">7</div><div class="sb">58.3%</div></div>
-      <div class="stat s-w"><div class="lb">⏳ รอประเมิน</div><div class="vl">5</div><div class="sb">เหลือ 6 วัน</div></div>
-      <div class="stat"><div class="lb">📊 คะแนนเฉลี่ยทีม</div><div class="vl">84.6</div><div class="sb">องค์กร 82.1</div></div>
+      <div class="stat s-i"><div class="lb">👥 ทีมทั้งหมด</div><div class="vl" id="teamStatTotal">0</div><div class="sb">คน</div></div>
+      <div class="stat s-ok"><div class="lb">✅ ประเมินแล้ว</div><div class="vl" id="teamStatDone">0</div><div class="sb" id="teamStatDonePct">0%</div></div>
+      <div class="stat s-w"><div class="lb">⏳ รอประเมิน</div><div class="vl" id="teamStatPending">0</div><div class="sb">คน</div></div>
+      <div class="stat"><div class="lb">📊 คะแนนเฉลี่ยทีม</div><div class="vl" id="teamStatAvg">—</div><div class="sb" id="teamStatOrgAvg">องค์กร —</div></div>
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>รายชื่อลูกน้องทางตรง</h3><div class="r"><input placeholder="🔍 ค้นหาชื่อ / รหัสพนักงาน" style="padding:7px 11px;border:1px solid var(--bd);border-radius:7px;font-size:12.5px;width:220px"></div></div>
+      <div class="card-h"><h3>รายชื่อลูกน้องทางตรง</h3><div class="r"><input id="teamSearch" oninput="renderTeamFromMaster()" placeholder="🔍 ค้นหาชื่อ / รหัสพนักงาน" style="padding:7px 11px;border:1px solid var(--bd);border-radius:7px;font-size:12.5px;width:220px"></div></div>
       <div class="tw"><table>
         <thead><tr><th>พนักงาน</th><th>ตำแหน่ง</th><th>ตนเอง</th><th>วินัย</th><th>คะแนน L1 (ของคุณ)</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
         <tbody id="teamRows"></tbody>
@@ -3996,32 +4002,73 @@ function filterOrg(){
 /* ==========================================
    render ทีมงาน (pg-team) — กรองเฉพาะลูกน้องของ L1 ปัจจุบัน
    ========================================== */
+/* ผู้ใต้บังคับบัญชาทางตรง = คนที่ u[9] (หัวหน้า L1) ตรงกับชื่อหัวหน้าที่เลือกไว้ — ดึงจากสายบังคับบัญชาจริง
+   ห้ามเห็นทีมของหัวหน้าคนอื่น (ตามที่กำหนด) — ดรอปดาวน์เลือกหัวหน้าดึงจากคนที่มีลูกน้องจริงเท่านั้น */
+function populateTeamManagerSelect(){
+  const sel = document.getElementById('teamManagerSelect');
+  if(!sel) return;
+  const cur = sel.value;
+  const managerNames = [...new Set(MASTER_USERS.filter(u=>u[12]==='active').map(u=>u[9]).filter(n=>n && n!=='—'))].sort();
+  sel.innerHTML = managerNames.map(n=>`<option value="${n}">${n}</option>`).join('') || '<option value="">— ไม่มีหัวหน้าที่มีลูกทีม —</option>';
+  if(managerNames.includes(cur)) sel.value = cur;
+}
 function renderTeamFromMaster() {
   const el = document.getElementById('teamRows');
   if(!el) return;
-  const members = MASTER_USERS.filter(u => u[2]==='emp' && u[12]==='active');
-  const stMap = {pending:['b-y','⏳ รอประเมิน'],done:['b-g','✓ ส่งแล้ว'],back:['b-r','↩️ ตีกลับ']};
+  populateTeamManagerSelect();
+  const managerName = document.getElementById('teamManagerSelect')?.value || '';
+  const statusFilter = document.getElementById('teamStatusFilter')?.value || '';
+  const q = (document.getElementById('teamSearch')?.value || '').toLowerCase();
+  const subtitle = document.getElementById('teamPageSubtitle');
+  if(subtitle) subtitle.textContent = managerName ? `ผู้ใต้บังคับบัญชาทางตรงของ ${managerName}` : 'เลือกหัวหน้าเพื่อดูทีมงาน';
+
+  const allDirectReports = MASTER_USERS.filter(u => u[12]==='active' && u[9]===managerName);
+  const stMap = {pending:['b-y','⏳ รอประเมิน'],done:['b-g','✓ ส่งแล้ว']};
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
-  el.innerHTML = members.map(u => {
+  const withStatus = allDirectReports.map(u => {
     const d = drafts.find(x=>x[0]===u[0]);
     const status = d ? d[d.length-1] : 'Draft';
-    const wf = status==='Draft' ? 'pending' : (status==='L2Reviewed'||status==='Calibrated'||status==='Approved') ? 'done' : 'done';
+    const wf = status==='Draft' ? 'pending' : 'done';
+    const X = d ? Number(d[d.length-3]) : null;
+    return { u, wf, X };
+  });
+
+  const filtered = withStatus.filter(r =>
+    (!statusFilter || r.wf===statusFilter) &&
+    (!q || r.u[0].toLowerCase().includes(q) || r.u[1].toLowerCase().includes(q))
+  );
+
+  el.innerHTML = filtered.length ? filtered.map(({u,wf,X}) => {
     const st = stMap[wf];
-    const l1s = d ? d[d.length-3] : null;
     return `<tr>
       <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>
         <div><b>${u[1]}</b><small>${u[0]}</small></div></div></td>
       <td style="font-size:12px">${u[7]}</td>
       <td style="color:#cbd5e1">—</td>
       <td style="color:#cbd5e1">—</td>
-      <td>${l1s==null?'<span style="color:#cbd5e1">—</span>':'<b>'+l1s+'</b>'}</td>
+      <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
       <td><span class="bd ${st[0]}">${st[1]}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
         onclick="openReviewerForm(inferLevelFromPosition('${u[7]}'),'${u[1]}','${u[0]}','${u[7]}')">
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
       </button></td>
     </tr>`;
-  }).join('');
+  }).join('') : `<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px 0">${managerName ? 'ไม่พบลูกทีมตรงตามเงื่อนไข' : 'กรุณาเลือกหัวหน้าที่มุมขวาบนก่อน'}</td></tr>`;
+
+  const total = allDirectReports.length;
+  const doneCount = withStatus.filter(r=>r.wf==='done').length;
+  const pendingCount = total - doneCount;
+  const scored = withStatus.filter(r=>r.X!==null);
+  const teamAvg = scored.length ? Math.round(scored.reduce((s,r)=>s+r.X,0)/scored.length*10)/10 : null;
+  const allDrafts = drafts.filter(d=>d[d.length-2]);
+  const orgAvg = allDrafts.length ? Math.round(allDrafts.reduce((s,d)=>s+Number(d[d.length-3]),0)/allDrafts.length*10)/10 : null;
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  set('teamStatTotal', total);
+  set('teamStatDone', doneCount);
+  set('teamStatDonePct', (total?Math.round(doneCount/total*100):0)+'%');
+  set('teamStatPending', pendingCount);
+  set('teamStatAvg', teamAvg==null?'—':teamAvg);
+  set('teamStatOrgAvg', 'องค์กร '+(orgAvg==null?'—':orgAvg));
 }
 
 /* ==========================================
