@@ -2215,6 +2215,9 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="card">
       <div class="card-h"><h3>รายชื่อพนักงาน</h3><div class="r">
+        <select id="orgFilterGroup" class="btn btn-sm" onchange="filterOrg()"><option value="">ทุกกลุ่ม</option></select>
+        <select id="orgFilterSection" class="btn btn-sm" onchange="filterOrg()"><option value="">ทุกแผนก</option></select>
+        <select id="orgFilterDivision" class="btn btn-sm" onchange="filterOrg()"><option value="">ทุกส่วน</option></select>
         <select id="orgFilterDept" class="btn btn-sm" onchange="filterOrg()"><option value="">ทุกฝ่าย</option></select>
         <input id="orgSearch" oninput="filterOrg()" placeholder="🔍 ค้นหา" style="padding:5px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;width:170px">
       </div></div>
@@ -3814,19 +3817,33 @@ function renderOrg(data) {
 }
 
 function populateOrgFilters(){
-  const sel = document.getElementById('orgFilterDept');
-  if(!sel) return;
-  const cur = sel.value;
-  const depts = [...new Set(MASTER_USERS.map(u=>u[6]).filter(Boolean))].sort();
-  sel.innerHTML = '<option value="">ทุกฝ่าย</option>' + depts.map(v=>`<option value="${v}">${v}</option>`).join('');
-  if(depts.includes(cur)) sel.value = cur;
+  const specs = [
+    { id:'orgFilterGroup',    idx:3, placeholder:'ทุกกลุ่ม' },
+    { id:'orgFilterSection',  idx:4, placeholder:'ทุกแผนก' },
+    { id:'orgFilterDivision', idx:5, placeholder:'ทุกส่วน' },
+    { id:'orgFilterDept',     idx:6, placeholder:'ทุกฝ่าย' },
+  ];
+  specs.forEach(({id, idx, placeholder}) => {
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const cur = sel.value;
+    const values = [...new Set(MASTER_USERS.map(u=>u[idx]).filter(Boolean))].sort();
+    sel.innerHTML = `<option value="">${placeholder}</option>` + values.map(v=>`<option value="${v}">${v}</option>`).join('');
+    if(values.includes(cur)) sel.value = cur;
+  });
 }
 
 function filterOrg(){
-  const dept = document.getElementById('orgFilterDept')?.value || '';
+  const group    = document.getElementById('orgFilterGroup')?.value    || '';
+  const section  = document.getElementById('orgFilterSection')?.value  || '';
+  const division = document.getElementById('orgFilterDivision')?.value || '';
+  const dept     = document.getElementById('orgFilterDept')?.value     || '';
   const q = (document.getElementById('orgSearch')?.value || '').toLowerCase();
   const f = MASTER_USERS.filter(u =>
-    (!dept || u[6] === dept) &&
+    (!group    || u[3] === group)    &&
+    (!section  || u[4] === section)  &&
+    (!division || u[5] === division) &&
+    (!dept     || u[6] === dept)     &&
     (!q || u[0].toLowerCase().includes(q) || u[1].toLowerCase().includes(q))
   );
   renderOrg(f);
