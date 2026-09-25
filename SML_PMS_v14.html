@@ -2215,8 +2215,8 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="card">
       <div class="card-h"><h3>รายชื่อพนักงาน</h3><div class="r">
-        <select class="btn btn-sm"><option>ทุกฝ่าย</option><option>ปฏิบัติการ</option><option>ขาย</option><option>บัญชี</option></select>
-        <input placeholder="🔍 ค้นหา" style="padding:5px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;width:170px">
+        <select id="orgFilterDept" class="btn btn-sm" onchange="filterOrg()"><option value="">ทุกฝ่าย</option></select>
+        <input id="orgSearch" oninput="filterOrg()" placeholder="🔍 ค้นหา" style="padding:5px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;width:170px">
       </div></div>
       <div class="tw"><table>
         <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>กลุ่ม</th><th>แผนก</th><th>ส่วน</th><th>ฝ่าย</th><th>ระดับ</th><th>หัวหน้า L1</th><th>หัวหน้า L2</th><th>ผู้อนุมัติ</th><th>สถานะ</th></tr></thead>
@@ -3813,6 +3813,25 @@ function renderOrg(data) {
   </tr>`).join('');
 }
 
+function populateOrgFilters(){
+  const sel = document.getElementById('orgFilterDept');
+  if(!sel) return;
+  const cur = sel.value;
+  const depts = [...new Set(MASTER_USERS.map(u=>u[6]).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">ทุกฝ่าย</option>' + depts.map(v=>`<option value="${v}">${v}</option>`).join('');
+  if(depts.includes(cur)) sel.value = cur;
+}
+
+function filterOrg(){
+  const dept = document.getElementById('orgFilterDept')?.value || '';
+  const q = (document.getElementById('orgSearch')?.value || '').toLowerCase();
+  const f = MASTER_USERS.filter(u =>
+    (!dept || u[6] === dept) &&
+    (!q || u[0].toLowerCase().includes(q) || u[1].toLowerCase().includes(q))
+  );
+  renderOrg(f);
+}
+
 /* ==========================================
    render ทีมงาน (pg-team) — กรองเฉพาะลูกน้องของ L1 ปัจจุบัน
    ========================================== */
@@ -3853,6 +3872,7 @@ setTimeout(() => {
   renderUsers(MASTER_USERS);
   populateUserFilters();
   renderOrg(MASTER_USERS);
+  populateOrgFilters();
   renderTeamFromMaster();
   if(typeof populateAttendanceEmpSelect==='function') populateAttendanceEmpSelect();
   if(typeof renderAttendanceList==='function') renderAttendanceList();
@@ -4334,6 +4354,7 @@ function saveUserFromModal() {
   renderUsers(MASTER_USERS);
   populateUserFilters();
   renderOrg(MASTER_USERS);
+  populateOrgFilters();
   closeM();
 }
 
@@ -5070,6 +5091,7 @@ async function loadEmployeesFromMs365(){
     renderUsers(MASTER_USERS);
     populateUserFilters();
     renderOrg(MASTER_USERS);
+    populateOrgFilters();
     renderTeamFromMaster();
     const cnt=document.getElementById('ms365EmpCount'); if(cnt) cnt.textContent=String(normalized.length);
     updateMs365Status('ok','Connected');
