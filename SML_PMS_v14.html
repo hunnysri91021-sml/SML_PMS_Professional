@@ -4639,6 +4639,27 @@ function populateOrgSelects(){
   const org = getOrgStructure();
   fillSelect('mu_group', org.groups);
   onOrgGroupChange(org);
+  populateSupervisorSelects();
+}
+/* สายบังคับบัญชา (หัวหน้า L1 / ผจก.ส่วน L2 / ผู้อนุมัติ) ต้องเลือกจากพนักงานจริงเท่านั้น
+   ห้ามพิมพ์เอง — กันชื่อพิมพ์ผิด/คนที่ไม่มีอยู่จริงในระบบ (CLAUDE.md #1, #3)
+   excludeId กันไม่ให้เลือกตัวเองเป็นหัวหน้าตัวเอง */
+function populateSupervisorSelects(excludeId){
+  const options = MASTER_USERS
+    .filter(u => u[12] !== 'resigned' && u[0] !== excludeId)
+    .map(u => ({ value: u[1], label: `${u[1]} — ${u[7]} (${u[0]})` }))
+    .sort((a,b) => a.label.localeCompare(b.label, 'th'));
+  const html = ['<option value="—">— ไม่มี (สูงสุดในองค์กร เช่น AGM/MD) —</option>']
+    .concat(options.map(o => `<option value="${o.value.replace(/"/g,'&quot;')}">${o.label}</option>`))
+    .join('');
+  ['mu_l1','mu_l2','mu_approver'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = html;
+    if(prev && options.some(o=>o.value===prev)) sel.value = prev;
+    else if(prev==='—') sel.value = '—';
+  });
 }
 function onOrgGroupChange(org){
   org = org || getOrgStructure();
@@ -4730,8 +4751,11 @@ function thaiDateToIso(str){
 }
 
 function clearUserModalForm(){
-  ['mu_id','mu_name','mu_position','mu_l1','mu_l2','mu_approver','mu_email'].forEach(id=>{
+  ['mu_id','mu_name','mu_position','mu_email'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['mu_l1','mu_l2','mu_approver'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='—';
   });
   const idEl=document.getElementById('mu_id'); if(idEl) idEl.removeAttribute('disabled');
   const role=document.getElementById('mu_role'); if(role) role.value='emp';
@@ -4761,9 +4785,11 @@ function openEditUser(id){
   set('mu_department', emp[6]);
   set('mu_position', emp[7]);
   set('mu_grade', emp[8]);
-  set('mu_l1', emp[9]);
-  set('mu_l2', emp[10]);
-  set('mu_approver', emp[11]);
+  if(typeof populateSupervisorSelects==='function') populateSupervisorSelects(emp[0]);
+  const setSupervisor=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value = val || '—'; };
+  setSupervisor('mu_l1', emp[9]);
+  setSupervisor('mu_l2', emp[10]);
+  setSupervisor('mu_approver', emp[11]);
   set('mu_status', emp[12]);
   const sdEl=document.getElementById('mu_startdate'); if(sdEl) sdEl.value = thaiDateToIso(emp[14]);
   set('mu_email', emp[15]);
@@ -7124,15 +7150,15 @@ document.addEventListener('input',e=>{
       <div class="fr">
         <div class="fg">
           <label>หัวหน้า L1</label>
-          <input id="mu_l1" placeholder="ชื่อหัวหน้าทางตรง">
+          <select id="mu_l1"></select>
         </div>
         <div class="fg">
           <label>ผจก.ส่วน L2</label>
-          <input id="mu_l2" placeholder="ชื่อผู้จัดการส่วน">
+          <select id="mu_l2"></select>
         </div>
         <div class="fg">
           <label>ผู้อนุมัติ</label>
-          <input id="mu_approver" placeholder="AGM / MD">
+          <select id="mu_approver"></select>
         </div>
       </div>
     </div>

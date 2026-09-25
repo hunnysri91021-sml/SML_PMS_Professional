@@ -199,6 +199,26 @@ touches employee/attendance/evaluation data.
     locally and never come from that source (PIN hash isn't and shouldn't
     be in the Excel employee table) — or the next sync silently deletes
     every employee's PIN, the same shape of bug as CLAUDE.md #6/#1.
+18. **"Supervisor"/"approver" fields (หัวหน้า L1, ผจก.ส่วน L2, ผู้อนุมัติ) are
+    a special case of #1/#3 worth calling out on its own: they look like
+    free text (a person's name) so it's tempting to leave them as
+    `<input>`, but they are really a reference to another `MASTER_USERS`
+    row and must be a `<select>` populated from it, never hand-typed.**
+    `mu_l1`/`mu_l2`/`mu_approver` in the Add/Edit Employee modal were
+    plain text inputs — HR could type any string, including a typo or a
+    person who doesn't exist, silently breaking every downstream
+    consumer that resolves these by exact name match (team scoping,
+    evaluation assignment, notification/reminder targeting). Fixed with
+    `populateSupervisorSelects(excludeId)`: options are every non-resigned
+    `MASTER_USERS` row (label shows name + position + code to disambiguate
+    duplicate names) plus one explicit `"—"` = "ไม่มี (สูงสุดในองค์กร)"
+    option for the top of the hierarchy (MD/AGM has no one above them —
+    that's real, not a missing value, so give it a real selectable option
+    rather than leaving the field blank or forcing free text). `excludeId`
+    keeps a person from being selectable as their own supervisor. Called
+    fresh every time the modal opens (`populateOrgSelects()`) so the list
+    always reflects current `MASTER_USERS`, and `openEditUser()` explicitly
+    pre-selects the row's real stored value after populating.
 
 ## Verification checklist for any change to this file
 
