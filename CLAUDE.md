@@ -88,6 +88,31 @@ touches employee/attendance/evaluation data.
    path — that would interrupt people who never asked to log in), or (b)
    be explicit that the feature is local-only.
 
+9. **An "✏️ แก้ไข" (edit) button must actually load the record's current
+   data into the form — never just open the same blank Add modal.** Found
+   on the employee list and employee detail view: `openM('mAddUser')`
+   opened an empty form regardless of which row was clicked, so editing
+   (and using any newly-added field) was impossible for existing records.
+   Fix pattern: a dedicated `openEditRecord(id)` that looks the record up,
+   sets every field's `.value` explicitly (including re-running any
+   cascading dropdowns and converting stored date formats back to the
+   `<input type="date">` format), and disables the identity/key field so
+   it can't accidentally be edited into a different record. Any "+ เพิ่ม"
+   (add-new) entry point must call a `clear*Form()` first so leftover
+   edit-mode state (a disabled ID field, a stale value) can't leak in.
+
+10. **A button that closes a modal and shows an `alert()`/toast claiming
+    success, with no underlying data or transport backing it, is not a
+    feature — it's a placeholder that will eventually be reported as
+    broken.** The "ส่ง Reminder" modal had a hardcoded "47 คน" target
+    count and channel checkboxes with no wiring at all behind them. When
+    building something like this in a static, backend-less app: compute
+    the target list live from `MASTER_USERS` (or whatever real store
+    applies), and for the action itself, only offer channels that can
+    actually work without a server — e.g. a `mailto:` link is honest and
+    works; a fake "sent via LINE/in-app notification" is not, and should
+    be visibly disabled with a one-line reason instead.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
