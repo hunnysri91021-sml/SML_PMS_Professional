@@ -2420,6 +2420,7 @@ tbody tr:hover{background:#f0f6ff!important}
           <div style="display:flex;gap:8px;margin-top:8px">
             <button class="btn btn-p" onclick="saveMs365Config()">💾 บันทึก Config</button>
             <button class="btn" onclick="testMs365Connection()">🔌 ทดสอบ (จะเปิด popup ให้ login ครั้งแรก)</button>
+            <button class="btn" onclick="resetMs365ConfigToDefault()">↺ รีเซ็ตเป็นค่าเริ่มต้นของระบบ</button>
           </div>
           <div id="ms365Status" style="margin-top:8px;font-size:12px;color:#64748b"></div>
         </div>
@@ -4727,8 +4728,8 @@ const GRAPH_SCOPES = ['Files.ReadWrite','Sites.ReadWrite.All','User.Read'];
    (ไม่ต้องตั้งค่าแยกทีละเครื่องผ่าน localStorage) — Tenant ID/Client ID ของแอป SPA
    ไม่ใช่ความลับ (ไม่มี client secret ในฝั่ง SPA) จึงฝังในโค้ดได้อย่างปลอดภัยตามมาตรฐาน MSAL */
 const DEFAULT_MS365_CONFIG = {
-  tenantId: 'e00dda6c-8f9b-4c9f-bf97-a0f549de0b0c',
-  clientId: '15405b27-0a7f-4efe-8eff-59f4b8be0969',
+  tenantId: '15405b27-0a7f-4efe-8eff-59f4b8be0969',
+  clientId: 'e00dda6c-8f9b-4c9f-bf97-a0f549de0b0c',
   siteUrl: 'https://siammotor.sharepoint.com/sites/Chosiya-HR',
   filePath: '_SML_PMS_Professiona/SML_PMS_Master.xlsx',
   employeeTable: 'Employees',
@@ -4783,6 +4784,16 @@ function saveMs365Config(){
   applyMs365ConfigToForm(cfg);
   msalInstance = null; ms365SiteCache = null;
   smlToast(isMs365Configured(cfg) ? 'บันทึกการตั้งค่า MS365 Excel แล้ว' : 'บันทึกโหมด Local แล้ว','ok');
+}
+
+/* ล้างค่าที่เคยบันทึกไว้ในเครื่องนี้ (localStorage) กลับไปใช้ค่าเริ่มต้นที่ฝังไว้ในไฟล์ —
+   ใช้เมื่อเคยบันทึก Tenant ID / Client ID ผิดไว้ในเบราว์เซอร์เครื่องนี้มาก่อน */
+function resetMs365ConfigToDefault(){
+  if(!confirm('รีเซ็ตการตั้งค่า MS365 ของเครื่องนี้กลับเป็นค่าเริ่มต้นของระบบ?')) return;
+  localStorage.removeItem(MS365_CONFIG_KEY);
+  msalInstance = null; ms365SiteCache = null;
+  const cfg = loadMs365Config();
+  smlToast('รีเซ็ตเป็นค่าเริ่มต้นแล้ว — Tenant ID/Client ID กลับไปใช้ค่าที่ถูกต้องของบริษัท','ok');
 }
 
 function switchMs365Tab(id, btn){
