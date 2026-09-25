@@ -2766,8 +2766,8 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       </div></div>
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">📄</div><b style="font-size:14.5px">ใบประเมินรายบุคคล</b>
-        <p style="font-size:12px;color:#475569;margin:6px 0 13px">ยังไม่รองรับการสร้าง PDF แบบ Batch/ZIP — ใช้ "🖨️ พิมพ์ใบประเมิน" ทีละคนที่หน้าแบบประเมินแทนได้</p>
-        <div style="display:flex;gap:6px"><button class="btn btn-sm" disabled title="ต้องใช้ไลบรารีสร้าง PDF/ZIP เพิ่มเติม">สร้าง PDF (ZIP)</button></div>
+        <p style="font-size:12px;color:#475569;margin:6px 0 13px">พิมพ์ใบประเมินของทุกคนที่อนุมัติแล้วในรอบนี้ต่อเนื่องกัน — ใช้ "บันทึกเป็น PDF" ในหน้าต่างพิมพ์ของเบราว์เซอร์เพื่อได้ไฟล์ PDF (ยังไม่รองรับรวมเป็น ZIP)</p>
+        <div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="printBatchApproved()">🖨️ พิมพ์/บันทึก PDF ทั้งชุด</button></div>
       </div></div>
       <div class="card" style="margin:0"><div class="card-b">
         <div style="font-size:29px;margin-bottom:9px">🎯</div><b style="font-size:14.5px">Talent & 9-Box</b>
@@ -5796,11 +5796,24 @@ function renderApproveQueue(){
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td></tr>`;
   }).join('') : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอการอนุมัติ</td></tr>';
 }
+const APPROVAL_SIGNATURE_KEY = 'smlPmsApprovalSignatures';
+/* เก็บลายเซ็นอิเล็กทรอนิกส์แยกต่างหากจาก draft (ไม่ต่อท้าย array ของ draft เพราะโค้ดหลายจุดอ่าน
+   d[d.length-1]=status / d[d.length-2]=grade / d[d.length-3]=X แบบอิงตำแหน่งท้าย — ต่อท้ายจะทำให้พัง) */
+function saveApprovalSignature(key, signedBy){
+  let sigs={};
+  try{ sigs=JSON.parse(localStorage.getItem(APPROVAL_SIGNATURE_KEY)||'{}'); }catch(e){ sigs={}; }
+  sigs[key] = { signedBy, signedAt: new Date().toISOString() };
+  localStorage.setItem(APPROVAL_SIGNATURE_KEY, JSON.stringify(sigs));
+}
+function getApprovalSignature(key){
+  try{ return JSON.parse(localStorage.getItem(APPROVAL_SIGNATURE_KEY)||'{}')[key] || null; }catch(e){ return null; }
+}
 function approveAllFinal(){
   const sign=(document.getElementById('mApproveSign')?.value||'').trim();
   if(!sign){ smlToast('กรุณาพิมพ์ชื่อ-สกุลเพื่อยืนยันลายเซ็นอิเล็กทรอนิกส์','warn'); return; }
   const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
   if(!rows.length){ smlToast('ไม่มีรายการรออนุมัติ','warn'); closeM(); return; }
+  rows.forEach(d=>saveApprovalSignature(draftKey(d), sign));
   updateDraftStatus(rows.map(draftKey),'Approved');
   closeM();
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติขั้นสุดท้าย', rows.length+' รายการ', 'ลงนามโดย '+sign+' — '+rows.map(d=>d[0]).join(', '));
@@ -5973,6 +5986,65 @@ function exportReportTable(){
     summary.map(s=>[s.dept, s.total, s.avg??'', s.counts.A, s.counts.B, s.counts.C, s.counts.D, s.counts.E]));
   smlToast('Export สรุปผลรายฝ่ายแล้ว','ok');
 }
+let _batchPrinting = false;
+/* ใบประเมินรายบุคคล PDF แบบ Batch — ไม่มีไลบรารี PDF/ZIP ในหน้านี้ จึงใช้ความสามารถพิมพ์เป็น PDF
+   ของเบราว์เซอร์เอง (window.print → "บันทึกเป็น PDF") กับเอกสารต่อเนื่องหลายหน้า หน้าละ 1 คน
+   ข้อมูลคะแนน/เกรด/ผู้ลงนามทั้งหมดดึงจากคิวผลประเมินจริงและ SML_FORMS จริง ไม่มีการสร้างข้อมูลปลอม */
+function printBatchApproved(){
+  if(_batchPrinting) return; _batchPrinting = true;
+  setTimeout(()=>{ _batchPrinting = false; }, 3000);
+  const rows = getDrafts().filter(d=>d[d.length-1]==='Approved');
+  if(!rows.length){ smlToast('ยังไม่มีใบประเมินที่อนุมัติแล้วในรอบนี้ให้พิมพ์','warn'); _batchPrinting=false; return; }
+
+  const printDate = new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+  const pages = rows.map(d => {
+    const code = d[0], name = d[1], cycle = d[2], level = d[3];
+    const cfg = SML_FORMS[level], lcfg = LEVEL_CONFIG[level];
+    const emp = MASTER_USERS.find(u=>u[0]===code);
+    const empPos = emp?.[7] || '—', empDept = emp?.[6] || '—', empGroup = emp?.[3] || '—';
+    const Y = d[d.length-5], Z = d[d.length-4], X = d[d.length-3], grade = d[d.length-2];
+    const sig = getApprovalSignature(draftKey(d));
+    const factorRows = (cfg?.factors||[]).map((f,fi)=>{
+      const key = fi<10 ? 4+fi : 4+10+(fi-10); // m0..m9 at d[4..13], l0..l3 at d[14..17]
+      const score = d[key];
+      return `<tr><td style="padding:4px 6px;font-size:10.5px">${f[0]}</td><td style="padding:4px 6px;text-align:center;font-size:10.5px">${f[2]}</td><td style="padding:4px 6px;text-align:center;font-size:10.5px;font-weight:700">${score==null?'—':score}</td></tr>`;
+    }).join('');
+    return `<div style="page-break-after:always;padding:24px;font-family:'Sarabun',sans-serif">
+      <div style="text-align:center;margin-bottom:14px">
+        <div style="font-weight:700;font-size:15px">บริษัท สยามกลการโลจิสติกส์ จำกัด</div>
+        <div style="font-size:12px;color:#475569">แบบประเมินผลการปฏิบัติงาน — รอบ ${cycle}</div>
+      </div>
+      <table style="width:100%;font-size:11px;margin-bottom:10px"><tr>
+        <td><b>ชื่อ-สกุล:</b> ${name} (${code})</td><td><b>ตำแหน่ง:</b> ${empPos}</td></tr>
+        <tr><td><b>กลุ่ม:</b> ${empGroup}</td><td><b>ฝ่าย:</b> ${empDept}</td></tr>
+        <tr><td><b>ระดับแบบฟอร์ม:</b> ${lcfg?.label||level}</td><td><b>เกรด:</b> ${grade}</td></tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #cbd5e1;margin-bottom:10px">
+        <thead><tr style="background:#f1f5f9"><th style="padding:4px 6px;font-size:10.5px;text-align:left">ปัจจัยการประเมิน</th><th style="padding:4px 6px;font-size:10.5px">น้ำหนัก</th><th style="padding:4px 6px;font-size:10.5px">คะแนน</th></tr></thead>
+        <tbody>${factorRows}</tbody>
+      </table>
+      <table style="width:100%;font-size:11px;margin-bottom:20px">
+        <tr><td><b>Y (ผลงาน):</b> ${Y}</td><td><b>Z (เวลาทำงาน):</b> ${Z}</td><td><b>X (คะแนนรวม):</b> ${X}</td><td><b>เกรด:</b> ${grade}</td></tr>
+      </table>
+      <div style="border-top:1px solid #cbd5e1;padding-top:14px;font-size:11px">
+        <div><b>ลงนามอนุมัติโดย:</b> ${sig ? sig.signedBy : '—'}</div>
+        <div><b>วันที่อนุมัติ:</b> ${sig ? new Date(sig.signedAt).toLocaleDateString('th-TH') : '—'}</div>
+        <div style="margin-top:16px;color:#94a3b8">พิมพ์เมื่อ ${printDate}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const area = document.getElementById('sml-print-area');
+  if(!area){ smlToast('ไม่พบพื้นที่พิมพ์เอกสาร','warn'); _batchPrinting=false; return; }
+  area.innerHTML = pages;
+  area.style.display = 'block';
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','พิมพ์ใบประเมินแบบ Batch (PDF)', rows.length+' คน', rows.map(d=>d[0]).join(', '));
+  setTimeout(()=>{
+    window.print();
+    setTimeout(()=>{ area.style.display='none'; }, 800);
+  }, 100);
+}
+
 function exportAttendanceVsScore(){
   const rows = getReportData().filter(r=>r.X!==null).map(r=>{
     const att = ATTENDANCE[r.code];
