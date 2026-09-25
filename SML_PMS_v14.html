@@ -7614,14 +7614,24 @@ function onManualEmpChange(){
   if(!box || !text) return;
   const emp = MASTER_USERS.find(u=>u[0]===code);
   if(!code || !emp){ box.style.display='none'; return; }
-  text.innerHTML = `<b>${emp[1]}</b> · ${emp[7]||'—'} · ${emp[3]||'—'} / ${emp[6]||'—'}`;
+  const dupNote = ATTENDANCE[code]
+    ? `<br><span style="color:#b45309">⚠️ มีข้อมูลวันลาของพนักงานคนนี้อยู่แล้ว (วันลารวม ≈ ${computeZDays(ATTENDANCE[code]).toFixed(2)} วัน) — ระบบจะไม่ให้บันทึกซ้ำ กรุณาลบข้อมูลเดิมในตารางด้านล่างก่อน หากต้องการแก้ไข</span>`
+    : '';
+  text.innerHTML = `<b>${emp[1]}</b> · ${emp[7]||'—'} · ${emp[3]||'—'} / ${emp[6]||'—'}${dupNote}`;
   box.style.display='';
 }
+/* กันบันทึกซ้ำ: รหัสพนักงานที่มีข้อมูลวันลาอยู่แล้วใน ATTENDANCE จะบันทึกทับไม่ได้จากฟอร์มนี้
+   ต้องลบข้อมูลเดิมออกก่อน (ปุ่ม 🗑️ ในตาราง) — ป้องกันการกรอกซ้ำโดยไม่ตั้งใจที่จะทำให้ข้อมูลวันลา
+   จริงของคนคนนั้นถูกเขียนทับเงียบๆ โดยไม่รู้ตัว */
 function saveManualAttendance(){
   const code=(document.getElementById('mn_emp')?.value||'').trim();
   if(!code){ smlToast('กรุณาเลือกรหัสพนักงาน','warn'); return; }
   const emp=MASTER_USERS.find(u=>u[0]===code);
   if(!emp){ smlToast('ไม่พบรหัสพนักงาน '+code+' ในข้อมูลพนักงานจริง','warn'); return; }
+  if(ATTENDANCE[code]){
+    smlToast('มีข้อมูลวันลาของ '+emp[1]+' ('+code+') อยู่แล้ว — ห้ามบันทึกซ้ำ กรุณาลบข้อมูลเดิมในตารางด้านล่างก่อนหากต้องการแก้ไข','warn');
+    return;
+  }
   const num=(id)=>Number(document.getElementById(id)?.value)||0;
   ATTENDANCE[code]={
     name: emp[1],
