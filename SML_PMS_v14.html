@@ -1441,6 +1441,10 @@ tbody tr:hover{background:#f0f6ff!important}
       </div>
     </div>
 
+    <div class="al al-i" id="sysStatusBanner" style="margin-bottom:14px">
+      <span>🔄</span><div id="sysStatusBannerText">กำลังตรวจสอบสถานะข้อมูล...</div>
+    </div>
+
     <div class="al al-w">
       <span>⏰</span><div><b>เหลืออีก 6 วันก่อนปิดขั้นตอน "หัวหน้าแผนก / Leader"</b>
       ยังมีใบประเมินค้าง 12 ใบ — กำหนดส่ง ภายในเดือน ธันวาคม 2569</div>
@@ -2469,6 +2473,7 @@ tbody tr:hover{background:#f0f6ff!important}
           <div class="card-b">
             <div style="font-size:12px;color:#475569;margin-bottom:10px">Pending: <b id="appraisalPending">0 รายการ</b></div>
             <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAppraisals()">📤 Push ผลประเมิน → Excel</button>
+            <div id="pendingListArea" style="margin-top:10px;max-height:180px;overflow:auto"></div>
           </div>
         </div>
         <div class="card"><div class="card-h"><h3>⬇️ Export รายงาน</h3></div>
@@ -3893,6 +3898,8 @@ setTimeout(() => {
   renderTeamFromMaster();
   if(typeof populateAttendanceEmpSelect==='function') populateAttendanceEmpSelect();
   if(typeof renderAttendanceList==='function') renderAttendanceList();
+  if(typeof renderSysStatusBanner==='function') renderSysStatusBanner();
+  if(typeof renderPendingList==='function') renderPendingList();
 }, 120);
 
 
@@ -4780,7 +4787,33 @@ function recalc() {
 const MS365_CONFIG_KEY = 'smlPmsMs365GraphConfig';
 const MS365_LOCAL_DRAFT_KEY = 'smlPmsEvaluationDrafts';
 const MS365_SYNC_LOG_KEY = 'smlPmsMs365SyncLog';
+const SYS_STATUS_KEY = 'smlPmsSystemStatus';
 const GRAPH_SCOPES = ['Files.ReadWrite','Sites.ReadWrite.All','User.Read'];
+
+/* บันทึกว่าเครื่องนี้ (Admin) อัปเดตข้อมูลเข้า/ออก MS365 ล่าสุดเมื่อไหร่ — แสดงให้ทุก role เห็นบนแดชบอร์ด */
+function markSystemUpdated(note){
+  const status = { at: new Date().toISOString(), note };
+  localStorage.setItem(SYS_STATUS_KEY, JSON.stringify(status));
+  renderSysStatusBanner();
+}
+function renderSysStatusBanner(){
+  const el = document.getElementById('sysStatusBannerText');
+  if(!el) return;
+  let status = null;
+  try{ status = JSON.parse(localStorage.getItem(SYS_STATUS_KEY) || 'null'); }catch(e){}
+  let pendingCount = 0;
+  try{ pendingCount = (JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]')).length; }catch(e){}
+  const parts = [];
+  if(status){
+    parts.push(`<b>ข้อมูลอัปเดตล่าสุด:</b> ${new Date(status.at).toLocaleString('th-TH')}${status.note ? ' — '+status.note : ''} (ของเครื่องนี้)`);
+  } else {
+    parts.push('ยังไม่มีประวัติการอัปเดตข้อมูลจาก MS365 บนเครื่องนี้');
+  }
+  if(pendingCount > 0){
+    parts.push(`<span style="color:#d97706">⏳ มีผลประเมิน ${pendingCount} รายการ รอ Admin นำเข้า/Push เข้า Excel</span>`);
+  }
+  el.innerHTML = parts.join(' · ');
+}
 
 /* ค่า config องค์กรเดียวกัน ฝังไว้ในไฟล์เพื่อให้ทุกเครื่อง/ทุกคนที่เปิดแอปนี้ได้ค่าเดียวกันอัตโนมัติ
    (ไม่ต้องตั้งค่าแยกทีละเครื่องผ่าน localStorage) — Tenant ID/Client ID ของแอป SPA
@@ -5037,6 +5070,8 @@ function saveEvaluationLocal(payload){
   try{ rows=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ rows=[]; }
   rows.unshift(payload);
   localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(rows.slice(0,50)));
+  renderSysStatusBanner();
+  if(typeof renderPendingList==='function') renderPendingList();
 }
 
 async function saveEvaluationToMs365(status='Draft'){
@@ -5165,6 +5200,7 @@ async function ms365SyncEmployees(silent=false){
   set('empSyncTime', new Date().toLocaleString('th-TH'));
   set('empSyncCount', (failed ? before : cnt) + ' รายการ');
   appendSyncLog(failed ? 'Sync พนักงานล้มเหลว — ดูรายละเอียดใน toast' : `Sync พนักงาน: ดึงข้อมูล ${cnt} รายการจาก Excel${silent?' (auto)':''}`, !failed);
+  if(!failed) markSystemUpdated(`Sync พนักงาน ${cnt} รายการ`);
 }
 
 /* Auto sync — ทำงานเฉพาะตอนอยู่หน้า MS365 Excel เท่านั้น: sync ทันทีที่เข้าหน้า
@@ -5194,6 +5230,7 @@ async function ms365SyncAttendance(){
     updateMs365Status('ok','Connected');
     smlToast('นำเข้าเวลาทำงานจาก Excel แล้ว ' + rows.length + ' แถว','ok');
     appendSyncLog(`Sync เวลา HRGO: นำเข้า ${rows.length} แถว`, true);
+    markSystemUpdated(`Sync เวลา HRGO ${rows.length} แถว`);
   }catch(err){
     updateMs365Status('warn','Sync failed');
     smlToast('นำเข้าเวลาทำงานไม่สำเร็จ: ' + err.message,'warn');
@@ -5251,10 +5288,28 @@ async function importMergedDataFile(input){
   renderAttendanceList();
   const setPending=(v)=>{const el=document.getElementById('appraisalPending'); if(el) el.textContent=v+' รายการ';};
   setPending(drafts.length);
+  renderPendingList();
   if(box) box.innerHTML = `นำเข้า ${fileCount} ไฟล์สำเร็จ · ผลประเมินใหม่ ${evalCount} รายการ · ข้อมูลวันลา ${attCount} คน` + (failCount ? ` · <span style="color:#dc2626">ล้มเหลว ${failCount} ไฟล์</span>` : '');
   appendSyncLog(`นำเข้าไฟล์จากผู้ไม่มี MS365: ${fileCount} ไฟล์ · ผลประเมิน ${evalCount} · วันลา ${attCount}${failCount?' · ล้มเหลว '+failCount:''}`, failCount===0);
+  if(evalCount || attCount) markSystemUpdated(`รับไฟล์จากพนักงาน ${fileCount} ไฟล์`);
   smlToast(evalCount || attCount ? 'นำเข้าข้อมูลสำเร็จ — กด "Push ผลประเมิน → Excel" เพื่อส่งต่อ' : 'ไม่มีข้อมูลใหม่ในไฟล์ที่เลือก', evalCount||attCount ? 'ok' : 'warn');
   input.value = '';
+}
+
+function renderPendingList(){
+  const box = document.getElementById('pendingListArea');
+  if(!box) return;
+  let drafts=[];
+  try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ drafts=[]; }
+  if(!drafts.length){
+    box.innerHTML = '<div style="color:#94a3b8;font-size:12px">ไม่มีผลประเมินค้าง Push</div>';
+    return;
+  }
+  box.innerHTML = `<table style="width:100%;font-size:12px"><thead><tr>
+      <th style="text-align:left">รหัส</th><th style="text-align:left">ชื่อ-สกุล</th><th>ระดับ</th><th>สถานะ</th>
+    </tr></thead><tbody>` +
+    drafts.map(d => `<tr><td>${d[0]}</td><td>${d[1]}</td><td style="text-align:center">${d[3]||'—'}</td><td style="text-align:center">${d[d.length-1]||'—'}</td></tr>`).join('') +
+    `</tbody></table>`;
 }
 
 async function ms365PushAppraisals(){
@@ -5273,14 +5328,18 @@ async function ms365PushAppraisals(){
     return;
   }
   let ok=0, fail=0;
+  const remaining=[];
   for(const payload of drafts){
     try{ await graphAddTableRow(cfg.evaluationTable, payload); ok++; }
-    catch(e){ fail++; }
+    catch(e){ fail++; remaining.push(payload); }
   }
-  setPending(fail);
+  localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(remaining));
+  setPending(remaining.length);
+  renderPendingList();
   updateMs365Status(fail ? 'warn' : 'ok', fail ? 'บาง Push ไม่สำเร็จ' : 'Connected');
   smlToast(`Push ผลประเมินสำเร็จ ${ok} รายการ${fail ? ' · ล้มเหลว '+fail+' รายการ' : ''}`, fail ? 'warn' : 'ok');
   appendSyncLog(`Push ผลประเมิน: สำเร็จ ${ok} รายการ${fail ? ' · ล้มเหลว '+fail : ''}`, fail===0);
+  if(ok) markSystemUpdated(`Push ผลประเมิน ${ok} รายการเข้า Excel`);
 }
 
 async function ms365ExportReport(){
