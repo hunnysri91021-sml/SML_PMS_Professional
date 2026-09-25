@@ -43,6 +43,12 @@ body{font-family:'Segoe UI',Tahoma,'Sarabun',sans-serif;background:var(--bg);col
 .role-box select{border:none;background:none;font-size:12.5px;font-weight:700;color:var(--p-dark);cursor:pointer;outline:none;font-family:inherit}
 .bell{position:relative;font-size:17px;cursor:pointer}
 .bell span{position:absolute;top:-3px;right:-5px;background:var(--err);color:#fff;font-size:9px;padding:1px 4px;border-radius:8px}
+.notif-panel{position:absolute;top:32px;right:-10px;width:320px;max-height:380px;overflow-y:auto;background:#fff;border:1px solid var(--bd);border-radius:10px;box-shadow:0 8px 28px rgba(15,35,65,.16);z-index:200;text-align:left;cursor:default}
+.notif-panel-head{padding:12px 14px;font-weight:700;font-size:13px;border-bottom:1px solid var(--bd);color:var(--t1)}
+.notif-item{display:flex;gap:9px;padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:12.5px;cursor:pointer}
+.notif-item:hover{background:#f8fafc}
+.notif-item:last-child{border-bottom:none}
+.notif-empty{padding:22px 14px;text-align:center;color:#94a3b8;font-size:12.5px}
 .avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;display:grid;place-items:center;font-weight:700;font-size:12.5px}
 .content{padding:22px;flex:1}
 
@@ -1424,7 +1430,12 @@ tbody tr:hover{background:#f0f6ff!important}
           <option value="emp">🙋 พนักงานปฏิบัติการ</option>
         </select>
       </div>
-      <div class="bell">🔔<span>4</span></div>
+      <div class="bell" id="notifBell" onclick="toggleNotifPanel(event)">🔔<span id="notifBadge" style="display:none">0</span>
+        <div class="notif-panel" id="notifPanel" style="display:none" onclick="event.stopPropagation()">
+          <div class="notif-panel-head">🔔 การแจ้งเตือน</div>
+          <div id="notifList"></div>
+        </div>
+      </div>
       <div class="avatar" id="av">AD</div>
     </div>
   </header>
@@ -2166,8 +2177,8 @@ tbody tr:hover{background:#f0f6ff!important}
       <button class="btn btn-p" onclick="clearUserModalForm();openM('mAddUser')">＋ เพิ่มพนักงาน</button>
     </div></div>
 
-    <div class="al al-e" id="orgHierarchyBanner" style="display:none"><span>⚠️</span><div><b id="orgHierarchyBannerText"></b> <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true)">ตรวจสอบอีกครั้ง</button></div></div>
-    <div class="al al-i" id="orgHierarchyOkBanner" style="display:none"><span>✅</span><div>ไม่พบปัญหาสายบังคับบัญชา <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true)">ตรวจสอบอีกครั้ง</button></div></div>
+    <div class="al al-e" id="orgHierarchyBanner" style="display:none"><span>⚠️</span><div><b id="orgHierarchyBannerText"></b> <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true);renderNotifBell()">ตรวจสอบอีกครั้ง</button></div></div>
+    <div class="al al-i" id="orgHierarchyOkBanner" style="display:none"><span>✅</span><div>ไม่พบปัญหาสายบังคับบัญชา <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true);renderNotifBell()">ตรวจสอบอีกครั้ง</button></div></div>
 
     <div class="card">
       <div class="card-h"><h3>รายชื่อพนักงาน</h3><div class="r">
@@ -4032,6 +4043,7 @@ setTimeout(() => {
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
   if(typeof renderReportRows==='function') renderReportRows();
+  if(typeof renderNotifBell==='function') renderNotifBell();
 }, 120);
 
 
@@ -5016,6 +5028,7 @@ function markSystemUpdated(note){
   const status = { at: new Date().toISOString(), note };
   localStorage.setItem(SYS_STATUS_KEY, JSON.stringify(status));
   renderSysStatusBanner();
+  if(typeof renderNotifBell==='function') renderNotifBell();
   /* best-effort: เขียนสถานะเดียวกันขึ้น Excel กลาง เพื่อให้ทุกเครื่องที่มี MS365 login เห็นตรงกัน
      ไม่ await เพราะไม่อยากบล็อก flow หลัก และถ้าไม่มีตาราง SystemStatus ก็ fail เงียบๆ */
   pushSystemStatusToMs365(note, pendingCount);
@@ -5751,6 +5764,7 @@ function renderWorkflowPages(){
   if(typeof renderPendingList==='function') renderPendingList();
   if(typeof renderReportRows==='function') renderReportRows();
   if(typeof renderCycleStats==='function') renderCycleStats();
+  if(typeof renderNotifBell==='function') renderNotifBell();
 }
 
 /* ====== Audit Log — บันทึกเหตุการณ์จริงที่เกิดขึ้น (เก็บในเบราว์เซอร์เครื่องนี้) ====== */
@@ -6052,6 +6066,59 @@ function checkHierarchyIssues(showToast){
   }
   if(showToast) smlToast(total ? `พบปัญหา ${total} รายการ` : 'ไม่พบปัญหาสายบังคับบัญชา','ok');
   return { noL1, circular };
+}
+
+/* ====== การแจ้งเตือน (กระดิ่ง) — สรุปรายการที่ต้องติดตามจริง คำนวณจากข้อมูลจริงเท่านั้น ====== */
+function getNotifications(){
+  const items = [];
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  const submitted = drafts.filter(d=>d[d.length-1]==='Submitted').length;
+  const l2reviewed = drafts.filter(d=>d[d.length-1]==='L2Reviewed').length;
+  const calibrated = drafts.filter(d=>d[d.length-1]==='Calibrated').length;
+  if(submitted) items.push({ icon:'📝', text:`มีใบประเมิน ${submitted} รายการ รอสอบทานขั้นที่ 2`, page:'review' });
+  if(l2reviewed) items.push({ icon:'⚖️', text:`มีใบประเมิน ${l2reviewed} รายการ รอ Calibration`, page:'calib' });
+  if(calibrated) items.push({ icon:'✅', text:`มีใบประเมิน ${calibrated} รายการ รออนุมัติขั้นสุดท้าย`, page:'approve' });
+
+  const hier = (typeof checkHierarchyIssues==='function') ? checkHierarchyIssues(false) : {noL1:[],circular:[]};
+  const hierCount = hier.noL1.length + hier.circular.length;
+  if(hierCount) items.push({ icon:'⚠️', text:`พบปัญหาสายบังคับบัญชา ${hierCount} รายการ`, page:'org' });
+
+  let pendingPush = 0;
+  try{ pendingPush = JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY)||'[]').filter(d=>d[d.length-1]==='Approved').length; }catch(e){}
+  if(pendingPush) items.push({ icon:'📤', text:`มีผลประเมิน ${pendingPush} รายการ อนุมัติแล้ว รอ Push เข้า Excel`, page:'ms365' });
+
+  return items;
+}
+function toggleNotifPanel(e){
+  if(e) e.stopPropagation();
+  const panel = document.getElementById('notifPanel');
+  if(!panel) return;
+  const willOpen = panel.style.display==='none';
+  panel.style.display = willOpen ? '' : 'none';
+  if(willOpen) renderNotifBell();
+}
+document.addEventListener('click', ()=>{
+  const panel = document.getElementById('notifPanel');
+  if(panel) panel.style.display='none';
+});
+function goToNotif(page){
+  document.getElementById('notifPanel').style.display='none';
+  document.querySelector(`.nav-item[data-pg="${page}"]`)?.click();
+}
+function renderNotifBell(){
+  const badge = document.getElementById('notifBadge');
+  const list = document.getElementById('notifList');
+  if(!badge || !list) return;
+  const items = getNotifications();
+  if(items.length){
+    badge.style.display='';
+    badge.textContent = items.length > 9 ? '9+' : String(items.length);
+  } else {
+    badge.style.display='none';
+  }
+  list.innerHTML = items.length
+    ? items.map(n=>`<div class="notif-item" onclick="goToNotif('${n.page}')"><span>${n.icon}</span><span>${n.text}</span></div>`).join('')
+    : '<div class="notif-empty">ไม่มีรายการที่ต้องติดตามตอนนี้</div>';
 }
 
 async function ms365PushAppraisals(){
