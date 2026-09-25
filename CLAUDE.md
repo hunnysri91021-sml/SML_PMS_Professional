@@ -113,6 +113,30 @@ touches employee/attendance/evaluation data.
     works; a fake "sent via LINE/in-app notification" is not, and should
     be visibly disabled with a one-line reason instead.
 
+11. **A multi-stage approval/workflow page (Review → Calibration → Approve,
+    or anything shaped like it) needs one real status field driving all of
+    them — never separate hardcoded tables per stage.** All three pages
+    were static sample HTML with independent fake counts that could never
+    agree with each other. Fix pattern: one shared store (here, the
+    evaluation draft queue, `MS365_LOCAL_DRAFT_KEY`) carries a `status`
+    field with an explicit linear set of values; each stage's page is a
+    filtered view of that same store (`d[status]==='Submitted'`, etc.),
+    and its actions (`getCheckedKeys` + `updateDraftStatus`) mutate that
+    one field. This also means: before adding a new terminal state (like
+    `Approved`), re-check every place that already reads that store
+    unconditionally (e.g. `ms365PushAppraisals()` used to push every
+    draft regardless of stage — it must filter to the terminal status) and
+    every place computing "has this person submitted yet" (`
+    getReminderTargets()` — must treat every non-`Draft` status as
+    submitted, not just the literal string `'Submitted'`).
+12. **A "queue key" (`empCode|cycle|level` here) must be deduplicated on
+    write, not just on push.** `saveEvaluationLocal()` used to `unshift` a
+    new entry on every save, so re-saving the same person/cycle/level
+    silently piled up duplicate rows instead of updating the existing one
+    — the same shape of bug as CLAUDE.md #7, just one step earlier in the
+    pipeline. Any "save/submit this record" function needs to filter out
+    the existing entry with the same natural key before adding the new one.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
