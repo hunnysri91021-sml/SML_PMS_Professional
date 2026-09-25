@@ -2115,7 +2115,8 @@ tbody tr:hover{background:#f0f6ff!important}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span></div></div>
+      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button></div></div>
+      <div id="attPushStatus" style="padding:0 16px 4px;font-size:11.5px;color:#64748b"></div>
       <div class="tw"><table>
         <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
         <tbody id="attRows"></tbody>
@@ -6448,7 +6449,9 @@ function renderDashboardWorkflowSteps(participants, drafts){
     const idx = statusOrder.indexOf(stage);
     return participants.filter(u => statusOrder.indexOf(statusOf(u[0])) >= idx).length;
   };
+  const attReady = participants.filter(u => !!ATTENDANCE[u[0]]).length;
   const steps = [
+    { label:'ข้อมูลเวลา (คะแนน Z) พร้อมใช้', count: attReady },
     { label:'พนักงานส่งแบบประเมินตนเอง', count: countAtLeast('Submitted') },
     { label:'ผ่านสอบทาน L2', count: countAtLeast('L2Reviewed') },
     { label:'ผ่าน Calibration', count: countAtLeast('Calibrated') },
@@ -7570,6 +7573,7 @@ function importHrgoFile(input){
       // ถ้าเปิดฟอร์มประเมินของพนักงานคนที่เพิ่ง Import อยู่ ให้รีเฟรชคะแนน Z ทันที
       if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
       if(typeof recalc==='function') recalc();
+      if(typeof renderCycleStats==='function') renderCycleStats();
       const unmatchedMsg = unmatched.length ? ` · ไม่พบรหัส ${unmatched.length} รายการในข้อมูลพนักงานจริง (${unmatched.slice(0,5).join(', ')}${unmatched.length>5?'…':''}) — ข้ามไป` : '';
       smlToast(`Import ข้อมูล HRGO สำเร็จ ${imported} รายการ` + (skipped?` (ข้าม ${skipped} แถวว่าง)`:'') + unmatchedMsg, unmatched.length ? 'warn' : 'ok');
       if(typeof appendAuditLog==='function') appendAuditLog('attendance','Import ไฟล์ HRGO', f.name, imported+' รายการสำเร็จ'+(unmatched.length?' · '+unmatched.length+' รายการไม่พบในระบบ':''));
@@ -7616,6 +7620,7 @@ function saveManualAttendance(){
   renderAttendanceList();
   if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
   if(typeof recalc==='function') recalc();
+  if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof appendAuditLog==='function') appendAuditLog('attendance','กรอกข้อมูลวันลาด้วยตนเอง', code, emp[1]);
   smlToast('บันทึกข้อมูลวันลาของ '+emp[1]+' ('+code+') เรียบร้อย','ok');
   ['mn_emp','mn_absent','mn_late','mn_early','mn_personal','mn_sick','mn_medcert'].forEach(id=>{
@@ -7628,6 +7633,8 @@ function deleteAttendanceRow(code){
   delete ATTENDANCE[code];
   saveAttendance();
   renderAttendanceList();
+  if(typeof recalc==='function') recalc();
+  if(typeof renderCycleStats==='function') renderCycleStats();
   smlToast('ลบข้อมูลเรียบร้อย','ok');
 }
 function renderAttendanceList(){
@@ -7642,6 +7649,43 @@ function renderAttendanceList(){
     return `<tr><td><b>${code}</b></td><td>${name}</td><td>${a.absentDay||0}</td><td>${a.lateCount||0}</td><td>${a.earlyCount||0}</td><td>${a.personalDay||0}</td><td>${a.sickDay||0}</td><td>${zDays.toFixed(2)}</td>
       <td><button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${code}')">🗑️</button></td></tr>`;
   }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน</td></tr>';
+  if(typeof renderAttendancePushStatus==='function') renderAttendancePushStatus();
+}
+
+/* สถานะความพร้อมของข้อมูลเวลา (สำหรับคะแนน Z) เทียบกับผู้เข้ารอบประเมินจริงทั้งหมด
+   คำนวณสดจาก ATTENDANCE ทุกครั้ง — คะแนน Z ที่แบบประเมินใช้จริงดึงจากสโตร์เดียวกันนี้อยู่แล้ว
+   (computeZScore()) ปุ่ม "ส่งข้อมูลเข้าแบบประเมินผล" จึงไม่ใช่การย้ายข้อมูล แต่เป็นการยืนยัน/
+   รีเฟรชทุกหน้าที่เกี่ยวข้องให้เห็นตัวเลขล่าสุดพร้อมกัน */
+function renderAttendancePushStatus(){
+  const el = document.getElementById('attPushStatus');
+  if(!el) return;
+  const participants = (typeof getEvalParticipants==='function') ? getEvalParticipants() : [];
+  const ready = participants.filter(u => !!ATTENDANCE[u[0]]).length;
+  el.textContent = participants.length
+    ? `พร้อมใช้คำนวณคะแนน Z แล้ว ${ready}/${participants.length} คน (ของผู้เข้ารอบประเมินจริง)`
+    : 'ยังไม่มีผู้เข้ารอบประเมิน (ตรวจสอบ "คุณสมบัติผู้ได้รับการประเมิน" ที่หน้ารอบประเมิน)';
+}
+
+/* ปุ่ม "ส่งข้อมูลเข้าแบบประเมินผล" — ข้อมูล ATTENDANCE ถูกแบบประเมิน (computeZScore) อ่านสดอยู่แล้ว
+   ทุกครั้งที่เปิดฟอร์ม ปุ่มนี้จึงทำหน้าที่ยืนยันจุดหนึ่งที่ชัดเจนว่า "ส่งแล้ว" พร้อมรีเฟรชทุกหน้าที่
+   เกี่ยวกับการประเมิน (Dashboard/รอบประเมิน/ฟอร์มที่เปิดอยู่) ให้เห็นตัวเลขและคะแนนที่คำนวณตาม
+   สัดส่วน Y/Z จริงของแต่ละระดับ (LEVEL_CONFIG) ทันที ไม่ต้องสลับหน้าไปมาเพื่อให้รีเฟรช */
+function pushAttendanceToEvaluation(){
+  const participants = (typeof getEvalParticipants==='function') ? getEvalParticipants() : [];
+  const withData = participants.filter(u => !!ATTENDANCE[u[0]]);
+  const withoutData = participants.filter(u => !ATTENDANCE[u[0]]);
+  if(!Object.keys(ATTENDANCE).length){
+    smlToast('ยังไม่มีข้อมูลเวลาที่จะส่ง — Import ไฟล์ HRGO หรือกรอกด้วยตนเองก่อน','warn');
+    return;
+  }
+  if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
+  if(typeof recalc==='function') recalc();
+  if(typeof renderCycleStats==='function') renderCycleStats();
+  renderAttendancePushStatus();
+  const zPctList = LV_KEYS.map(k => `${LEVEL_CONFIG[k].label.split(' ')[0]} Z${LEVEL_CONFIG[k].Zpct}%`).join(' · ');
+  if(typeof appendAuditLog==='function') appendAuditLog('attendance','ส่งข้อมูลเวลาเข้าแบบประเมินผล', '-', `พร้อมใช้ ${withData.length}/${participants.length} คน`);
+  const missingMsg = withoutData.length ? ` · ยังไม่มีข้อมูล ${withoutData.length} คน (${withoutData.slice(0,3).map(u=>u[0]).join(', ')}${withoutData.length>3?'…':''})` : '';
+  smlToast(`ส่งข้อมูลเวลาเข้าแบบประเมินผลแล้ว ${withData.length}/${participants.length} คน — ระบบคำนวณคะแนน Z ตามสัดส่วนของแต่ละระดับทันที (${zPctList})${missingMsg}`, withoutData.length ? 'warn' : 'ok');
 }
 
 function previewEmployeeImport(input){
