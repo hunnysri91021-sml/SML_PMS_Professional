@@ -2449,6 +2449,7 @@ tbody tr:hover{background:#f0f6ff!important}
             <tr><td><b style="color:#0891b2">🎯 KPI_Goals</b></td><td>เป้าหมาย KPI · Cascade</td><td style="font-size:11px">KPI_ID · Name · Unit · Target · Weight · Scope · Year · Status</td><td style="text-align:center"><span class="bd b-p">สองทาง</span></td><td style="text-align:center"><span class="bd b-y">⏳ Manual</span></td></tr>
             <tr style="background:#f9fafb"><td><b style="color:#dc2626">📅 Cycles</b></td><td>รอบการประเมินและตั้งค่า</td><td style="font-size:11px">Cycle_ID · Year · Start · End · YZMode · Status</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-y">⏳ Manual</span></td></tr>
             <tr><td><b style="color:#475569">📋 AuditLog</b></td><td>ประวัติการเปลี่ยนแปลง</td><td style="font-size:11px">Timestamp · UserID · Action · Target · OldVal · NewVal</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-ok">✅ ทุก action</span></td></tr>
+            <tr style="background:#f9fafb"><td><b style="color:#0284c7">🔔 SystemStatus</b></td><td>สถานะอัปเดตล่าสุด (สำหรับแบนเนอร์แจ้งเตือนหน้าแดชบอร์ด — ต้องสร้างตารางนี้เองก่อนใช้งาน)</td><td style="font-size:11px">UpdatedAt · Note · PendingCount</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-y">⏳ ทุกครั้งที่ Sync/Push</span></td></tr>
           </tbody>
         </table></div>
       </div>
@@ -3900,6 +3901,7 @@ setTimeout(() => {
   if(typeof renderAttendanceList==='function') renderAttendanceList();
   if(typeof renderSysStatusBanner==='function') renderSysStatusBanner();
   if(typeof renderPendingList==='function') renderPendingList();
+  if(typeof refreshSysStatusFromMs365==='function') refreshSysStatusFromMs365();
 }, 120);
 
 
@@ -4792,27 +4794,51 @@ const GRAPH_SCOPES = ['Files.ReadWrite','Sites.ReadWrite.All','User.Read'];
 
 /* บันทึกว่าเครื่องนี้ (Admin) อัปเดตข้อมูลเข้า/ออก MS365 ล่าสุดเมื่อไหร่ — แสดงให้ทุก role เห็นบนแดชบอร์ด */
 function markSystemUpdated(note){
+  const pendingCount = (()=>{ try{ return (JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY)||'[]')).length; }catch(e){ return 0; } })();
   const status = { at: new Date().toISOString(), note };
   localStorage.setItem(SYS_STATUS_KEY, JSON.stringify(status));
   renderSysStatusBanner();
+  /* best-effort: เขียนสถานะเดียวกันขึ้น Excel กลาง เพื่อให้ทุกเครื่องที่มี MS365 login เห็นตรงกัน
+     ไม่ await เพราะไม่อยากบล็อก flow หลัก และถ้าไม่มีตาราง SystemStatus ก็ fail เงียบๆ */
+  pushSystemStatusToMs365(note, pendingCount);
 }
+
+let sysStatusRemote = null;
 function renderSysStatusBanner(){
   const el = document.getElementById('sysStatusBannerText');
   if(!el) return;
-  let status = null;
-  try{ status = JSON.parse(localStorage.getItem(SYS_STATUS_KEY) || 'null'); }catch(e){}
+  let local = null;
+  try{ local = JSON.parse(localStorage.getItem(SYS_STATUS_KEY) || 'null'); }catch(e){}
   let pendingCount = 0;
   try{ pendingCount = (JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]')).length; }catch(e){}
+
   const parts = [];
-  if(status){
-    parts.push(`<b>ข้อมูลอัปเดตล่าสุด:</b> ${new Date(status.at).toLocaleString('th-TH')}${status.note ? ' — '+status.note : ''} (ของเครื่องนี้)`);
+  /* ใช้สถานะจาก MS365 (ทุกเครื่องเห็นตรงกัน) ถ้าดึงได้ ไม่งั้น fallback เป็นสถานะของเครื่องนี้เอง */
+  const useRemote = sysStatusRemote && (!local || new Date(sysStatusRemote.at) >= new Date(local.at));
+  if(useRemote){
+    parts.push(`<b>ข้อมูลอัปเดตล่าสุด:</b> ${new Date(sysStatusRemote.at).toLocaleString('th-TH')}${sysStatusRemote.note ? ' — '+sysStatusRemote.note : ''}`);
+    if(Number(sysStatusRemote.pendingCount) > 0){
+      parts.push(`<span style="color:#d97706">⏳ มีผลประเมิน ${sysStatusRemote.pendingCount} รายการ รอ Admin นำเข้า/Push เข้า Excel</span>`);
+    }
+  } else if(local){
+    parts.push(`<b>ข้อมูลอัปเดตล่าสุด:</b> ${new Date(local.at).toLocaleString('th-TH')}${local.note ? ' — '+local.note : ''} (ของเครื่องนี้)`);
+    if(pendingCount > 0){
+      parts.push(`<span style="color:#d97706">⏳ มีผลประเมิน ${pendingCount} รายการ รอ Admin นำเข้า/Push เข้า Excel</span>`);
+    }
   } else {
-    parts.push('ยังไม่มีประวัติการอัปเดตข้อมูลจาก MS365 บนเครื่องนี้');
-  }
-  if(pendingCount > 0){
-    parts.push(`<span style="color:#d97706">⏳ มีผลประเมิน ${pendingCount} รายการ รอ Admin นำเข้า/Push เข้า Excel</span>`);
+    parts.push('ยังไม่มีประวัติการอัปเดตข้อมูลบนเครื่องนี้');
+    if(pendingCount > 0){
+      parts.push(`<span style="color:#d97706">⏳ มีผลประเมิน ${pendingCount} รายการ รอ Admin นำเข้า/Push เข้า Excel</span>`);
+    }
   }
   el.innerHTML = parts.join(' · ');
+}
+
+/* เรียกตอนโหลดหน้าเว็บ — พยายามดึงสถานะกลางจาก MS365 แบบเงียบ (ไม่ล็อกอิน ถ้ายังไม่เคย login)
+   ใช้ได้กับทุก role ที่เคย login MS365 ไว้แล้วในเครื่องนี้ ไม่ใช่แค่ Admin */
+async function refreshSysStatusFromMs365(){
+  const remote = await fetchSystemStatusFromMs365();
+  if(remote){ sysStatusRemote = remote; renderSysStatusBanner(); }
 }
 
 /* ค่า config องค์กรเดียวกัน ฝังไว้ในไฟล์เพื่อให้ทุกเครื่อง/ทุกคนที่เปิดแอปนี้ได้ค่าเดียวกันอัตโนมัติ
@@ -4933,7 +4959,11 @@ function downloadExcelTemplate(){
      'l01','l02','l03','l04','Y','Z','X','เกรด','Status'],
     [['SML-001','สมชาย วงศ์ดี','2569','op',10,10,10,10,10,10,10,10,10,10,'','','','',70,27,97,'A','Submitted']]
   );
-  smlToast('ดาวน์โหลด Template ตาราง Excel แล้ว 2 ไฟล์ (สร้าง Table ใน Excel แล้วตั้งชื่อให้ตรงก่อนอัปโหลดขึ้น SharePoint)','ok');
+  dl('SystemStatus_Template.csv',
+    ['UpdatedAt','Note','PendingCount'],
+    [[new Date().toISOString(), 'ตัวอย่าง: Push ผลประเมิน 3 รายการเข้า Excel', 0]]
+  );
+  smlToast('ดาวน์โหลด Template ตาราง Excel แล้ว 3 ไฟล์ (สร้าง Table ใน Excel แล้วตั้งชื่อให้ตรงก่อนอัปโหลดขึ้น SharePoint — SystemStatus ใช้สำหรับแบนเนอร์แจ้งเตือนหน้าแดชบอร์ด)','ok');
 }
 
 function updateMs365Status(type, text){
@@ -5021,6 +5051,52 @@ async function graphAddTableRow(tableName, rowValues){
   return graphFetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
     "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows/add",
     { method:'POST', body: JSON.stringify({ values: [rowValues] }) });
+}
+
+/* ====== SystemStatus (cross-device) — ทุกเครื่องที่มี MS365 login แล้ว (แม้ไม่ใช่ Admin)
+   จะเห็นสถานะ "ข้อมูลอัปเดตล่าสุดเมื่อไหร่" อันเดียวกัน โดยอ่าน/เขียนตาราง "SystemStatus"
+   ในไฟล์ Excel กลาง — ต้องสร้างตารางชื่อ SystemStatus (คอลัมน์: UpdatedAt, Note, PendingCount)
+   ไว้ในไฟล์ SML_PMS_Master.xlsx ก่อน มิฉะนั้นจะ fail เงียบๆ แล้ว fallback ไปใช้สถานะในเครื่องแทน */
+const SML365_STATUS_TABLE = 'SystemStatus';
+
+async function pushSystemStatusToMs365(note, pendingCount){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    await graphAddTableRow(SML365_STATUS_TABLE, [new Date().toISOString(), note, pendingCount]);
+  }catch(e){ /* เงียบไว้ — ไม่ให้กระทบ flow หลัก เผื่อยังไม่มีตาราง SystemStatus ในไฟล์ */ }
+}
+
+/* ขอ Graph token แบบ "เงียบ" เท่านั้น — ถ้ายังไม่เคย login ไว้ในเครื่องนี้ จะคืนค่า null ทันที
+   ไม่เด้ง popup ให้ล็อกอิน (ใช้สำหรับดึงสถานะแบบ read-only ให้คนที่ไม่มี MS365 ไม่ถูกรบกวน) */
+async function getGraphTokenSilent(){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return null;
+  try{
+    const instance = getMsalInstance();
+    if(typeof instance.initialize === 'function'){ try{ await instance.initialize(); }catch(e){} }
+    const accounts = instance.getAllAccounts();
+    if(!accounts.length) return null;
+    const resp = await instance.acquireTokenSilent({ scopes: GRAPH_SCOPES, account: accounts[0] });
+    return resp.accessToken;
+  }catch(e){ return null; }
+}
+
+async function fetchSystemStatusFromMs365(){
+  const token = await getGraphTokenSilent();
+  if(!token) return null;
+  try{
+    const { driveId, itemId } = await resolveMs365Site();
+    const res = await fetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+      "/workbook/tables('" + encodeURIComponent(SML365_STATUS_TABLE) + "')/rows",
+      { headers: { Authorization: 'Bearer ' + token } });
+    if(!res.ok) return null;
+    const data = await res.json();
+    const rows = (data.value || []).map(r => (r.values && r.values[0]) || []);
+    if(!rows.length) return null;
+    const last = rows[rows.length - 1];
+    return { at: last[0], note: last[1], pendingCount: last[2] };
+  }catch(e){ return null; }
 }
 
 function calcCurrentEvalSummary(){
