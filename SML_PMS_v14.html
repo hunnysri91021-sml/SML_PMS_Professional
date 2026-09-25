@@ -4766,16 +4766,14 @@ function clearUserModalForm(){
   const pot=document.getElementById('mu_potential'); if(pot) pot.value='';
   const pinEl=document.getElementById('mu_pinStatus');
   if(pinEl){ pinEl.textContent='บันทึกพนักงานใหม่ก่อน จึงตั้ง PIN ได้'; pinEl.style.color='#94a3b8'; }
+  const hint=document.getElementById('mu_idHint'); if(hint) hint.textContent='';
 }
 
-/* เปิด modal พร้อมดึงข้อมูลปัจจุบันของพนักงานคนนั้นมาเติมในฟอร์ม (แก้ไขจริง ไม่ใช่ฟอร์มเปล่า) */
-function openEditUser(id){
-  openM('mAddUser');
-  const emp = MASTER_USERS.find(u=>u[0]===id);
-  if(!emp){ clearUserModalForm(); return; }
+/* เติมข้อมูลลงฟอร์มจากพนักงานจริงคนหนึ่งใน MASTER_USERS — ใช้ร่วมกันทั้งตอนกดปุ่ม "แก้ไข"
+   และตอนพิมพ์รหัสพนักงานที่มีอยู่แล้วในฟอร์ม "+ เพิ่ม" (กันไม่ให้สร้างซ้ำ/พิมพ์มือทับของเดิม) */
+function fillUserFormFields(emp){
   const set=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value = (val && val!=='—') ? val : ''; };
   set('mu_id', emp[0]);
-  document.getElementById('mu_id')?.setAttribute('disabled','disabled'); // รหัสพนักงานคือ key ห้ามแก้ระหว่างเช็คอิน
   set('mu_name', emp[1]);
   set('mu_role', emp[2]);
   set('mu_group', emp[3]);
@@ -4796,6 +4794,34 @@ function openEditUser(id){
   set('mu_email', emp[15]);
   set('mu_potential', emp[16]);
   if(typeof renderPinStatus==='function') renderPinStatus(emp[0]);
+}
+
+/* เปิด modal พร้อมดึงข้อมูลปัจจุบันของพนักงานคนนั้นมาเติมในฟอร์ม (แก้ไขจริง ไม่ใช่ฟอร์มเปล่า) */
+function openEditUser(id){
+  openM('mAddUser');
+  const emp = MASTER_USERS.find(u=>u[0]===id);
+  if(!emp){ clearUserModalForm(); return; }
+  fillUserFormFields(emp);
+  document.getElementById('mu_id')?.setAttribute('disabled','disabled'); // รหัสพนักงานคือ key ห้ามแก้ระหว่างเช็คอิน
+  const hint=document.getElementById('mu_idHint'); if(hint) hint.textContent='';
+}
+
+/* เวลาอยู่ในฟอร์ม "+ เพิ่มพนักงาน" (รหัสยังพิมพ์ได้) แล้วพิมพ์รหัสที่มีอยู่จริงในระบบแล้ว
+   ให้ดึงข้อมูลจริงของคนนั้นมาเติมอัตโนมัติทันที กันไม่ให้ HR สร้างซ้ำ/เขียนทับข้อมูลเดิมด้วยฟอร์มเปล่า */
+function onEmployeeIdInput(){
+  const idEl = document.getElementById('mu_id');
+  const hint = document.getElementById('mu_idHint');
+  if(!idEl || idEl.disabled) return; // อยู่ในโหมดแก้ไขอยู่แล้ว ไม่ต้องเช็คซ้ำ
+  const code = idEl.value.trim();
+  if(!code){ if(hint) hint.textContent=''; return; }
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(emp){
+    fillUserFormFields(emp);
+    idEl.value = code; // fillUserFormFields ตั้งค่าเดียวกันอยู่แล้ว กันไว้เผื่อ trim ต่าง
+    if(hint) hint.textContent = `พบพนักงานคนนี้ในระบบแล้ว (${emp[1]}) — ดึงข้อมูลปัจจุบันมาแสดง บันทึกจะเป็นการแก้ไข ไม่ใช่เพิ่มใหม่`;
+  } else if(hint){
+    hint.textContent = '';
+  }
 }
 
 /* ====== ส่งการแจ้งเตือน (Reminder) — ดึงกลุ่มเป้าหมาย/อีเมลจากข้อมูลพนักงานจริงเสมอ
@@ -7079,7 +7105,8 @@ document.addEventListener('input',e=>{
     <div class="fr">
       <div class="fg" style="max-width:140px">
         <label>รหัสพนักงาน <i>*</i></label>
-        <input id="mu_id" placeholder="SML-001 / KTG-001">
+        <input id="mu_id" placeholder="SML-001 / KTG-001" oninput="onEmployeeIdInput()">
+        <div id="mu_idHint" style="font-size:10.5px;color:#64748b;margin-top:2px"></div>
       </div>
       <div class="fg">
         <label>ชื่อ-สกุล <i>*</i></label>
