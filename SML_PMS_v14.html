@@ -79,7 +79,7 @@ body{font-family:'Segoe UI',Tahoma,'Sarabun',sans-serif;background:var(--bg);col
 .stat .lb{font-size:11.5px;color:var(--t2);font-weight:600;display:flex;align-items:center;gap:5px}
 .stat .vl{font-size:27px;font-weight:800;margin:5px 0 2px}
 .stat .sb{font-size:11.5px;color:var(--t3)}
-.stat .up{color:var(--ok);font-weight:700}
+.stat .trend-up{color:var(--ok);font-weight:700}
 
 /* TABLE */
 .tw{overflow-x:auto}
@@ -1451,7 +1451,7 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="grid g4" style="margin-bottom:18px">
       <div class="stat s-i"><div class="lb">👥 พนักงานในรอบ</div><div class="vl" id="dashTotalParticipants">0</div><div class="sb">SML + KTG + CNK ที่ผ่านทดลองงาน</div></div>
-      <div class="stat s-ok"><div class="lb">✅ เสร็จสมบูรณ์</div><div class="vl" id="dashCompleted">0</div><div class="sb"><span class="up" id="dashCompletedPct">0%</span> ของทั้งหมด</div></div>
+      <div class="stat s-ok"><div class="lb">✅ เสร็จสมบูรณ์</div><div class="vl" id="dashCompleted">0</div><div class="sb"><span class="trend-up" id="dashCompletedPct">0%</span> ของทั้งหมด</div></div>
       <div class="stat s-w"><div class="lb">⏳ รอดำเนินการ</div><div class="vl" id="dashPending">0</div><div class="sb">อยู่ระหว่างขั้นตอน</div></div>
       <div class="stat s-e"><div class="lb">⚠️ เกินกำหนด</div><div class="vl" id="dashOverdue">0</div><div class="sb">ต้องติดตามด่วน</div></div>
     </div>
@@ -1459,29 +1459,17 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="card">
       <div class="card-h"><h3>สถานะความคืบหน้าตามขั้นตอน</h3><div class="r"><span class="bd b-b">รอบกำลังดำเนินการ</span></div></div>
       <div class="card-b">
-        <div class="wf">
-          <div class="wf-s done"><div class="wf-c">✓</div><div class="wf-t">พนักงานประเมินตนเอง</div><div class="wf-d">99/99</div></div>
-          <div class="wf-s cur"><div class="wf-c">2</div><div class="wf-t">หัวหน้าแผนก / Leader</div><div class="wf-d">87/99</div></div>
-          <div class="wf-s"><div class="wf-c">3</div><div class="wf-t">ผู้จัดการส่วน (L2)</div><div class="wf-d">0/99</div></div>
-          <div class="wf-s"><div class="wf-c">4</div><div class="wf-t">Calibration (HR)</div><div class="wf-d">ยังไม่เริ่ม</div></div>
-          <div class="wf-s"><div class="wf-c">5</div><div class="wf-t">AGM/MD อนุมัติ</div><div class="wf-d">ยังไม่เริ่ม</div></div>
-          <div class="wf-s"><div class="wf-c">6</div><div class="wf-t">พนักงานรับทราบผล</div><div class="wf-d">ยังไม่เริ่ม</div></div>
+        <div class="wf" id="dashWorkflowSteps">
         </div>
       </div>
     </div>
 
     <div class="grid g2">
       <div class="card">
-        <div class="card-h"><h3>การกระจายเกรด (คาดการณ์)</h3></div>
+        <div class="card-h"><h3>การกระจายเกรด (ของจริงในรอบนี้)</h3></div>
         <div class="card-b">
-          <div class="bars">
-            <div class="bar"><div class="v">10</div><div class="b" style="height:50%;background:#16a34a"></div><div class="l">A ดีมาก (10%)</div></div>
-            <div class="bar"><div class="v">20</div><div class="b" style="height:100%;background:#3b82f6"></div><div class="l">B ดี (20%)</div></div>
-            <div class="bar"><div class="v">40</div><div class="b" style="height:100%;background:#60a5fa"></div><div class="l">C ปานกลาง (40%)</div></div>
-            <div class="bar"><div class="v">20</div><div class="b" style="height:50%;background:#f59e0b"></div><div class="l">D พอใช้ (20%)</div></div>
-            <div class="bar"><div class="v">10</div><div class="b" style="height:28%;background:#dc2626"></div><div class="l">E ปรับปรุง (10%)</div></div>
-          </div>
-          <div class="al al-i" style="margin:15px 0 0"><span>ℹ️</span><div>สัดส่วนตามเกณฑ์ SML · ระดับ A:B:C:D:E = <b>10%:20%:40%:20%:10%</b> ของแต่ละหน่วยงาน</div></div>
+          <div class="bars" id="dashGradeBars"></div>
+          <div class="al al-i" style="margin:15px 0 0"><span>ℹ️</span><div>เกณฑ์อ้างอิง SML · ระดับ A:B:C:D:E = <b>10%:20%:40%:20%:10%</b> — แสดงเฉพาะคนที่มีผลประเมินแล้ว</div></div>
         </div>
       </div>
 
@@ -1494,19 +1482,9 @@ tbody tr:hover{background:#f0f6ff!important}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>9-Box Grid — ศักยภาพ vs ผลงาน</h3><div class="r"><button class="btn btn-sm">ดูรายละเอียด</button></div></div>
+      <div class="card-h"><h3>9-Box Grid — ศักยภาพ vs ผลงาน</h3></div>
       <div class="card-b">
-        <div class="box9">
-          <div class="bx" style="background:#fef3c7"><span>ศักยภาพสูง / ผลงานต่ำ</span><b>18</b></div>
-          <div class="bx" style="background:#dbeafe"><span>ศักยภาพสูง / ผลงานกลาง</span><b>76</b></div>
-          <div class="bx" style="background:#dcfce7"><span>⭐ Star</span><b>42</b></div>
-          <div class="bx" style="background:#fee2e2"><span>ศักยภาพกลาง / ผลงานต่ำ</span><b>54</b></div>
-          <div class="bx" style="background:#f1f5f9"><span>Core Player</span><b>688</b></div>
-          <div class="bx" style="background:#dbeafe"><span>High Performer</span><b>194</b></div>
-          <div class="bx" style="background:#fee2e2"><span>⚠️ Under Performer</span><b>36</b></div>
-          <div class="bx" style="background:#fef3c7"><span>ศักยภาพต่ำ / ผลงานกลาง</span><b>98</b></div>
-          <div class="bx" style="background:#f1f5f9"><span>Specialist</span><b>42</b></div>
-        </div>
+        <div class="al al-w"><span>⚠️</span><div><b>ยังไม่รองรับ</b> — 9-Box ต้องใช้ข้อมูล "ศักยภาพ (Potential)" ต่อคนซึ่งระบบยังไม่มีการเก็บข้อมูลนี้จริง (มีเฉพาะคะแนนผลงานจากแบบประเมิน) เมื่อเพิ่มการประเมินศักยภาพเข้าระบบแล้วจะเปิดใช้งานส่วนนี้ได้</div></div>
       </div>
     </div>
   </section>
@@ -1711,7 +1689,7 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="grid g4" style="margin-bottom:18px">
       <div class="stat s-ok"><div class="lb">🏆 เกรดสุดท้าย</div><div class="vl" style="color:#16a34a">A</div><div class="sb">ดีมาก · FY2568</div></div>
-      <div class="stat"><div class="lb">📊 คะแนนรวม</div><div class="vl">91.25</div><div class="sb"><span class="up">▲ 4.10</span> จากปีก่อน · (Y+Z)</div></div>
+      <div class="stat"><div class="lb">📊 คะแนนรวม</div><div class="vl">91.25</div><div class="sb"><span class="trend-up">▲ 4.10</span> จากปีก่อน · (Y+Z)</div></div>
       <div class="stat s-i"><div class="lb">📈 อันดับในฝ่าย</div><div class="vl">3<small style="font-size:14px">/48</small></div><div class="sb">Top 6%</div></div>
       <div class="stat s-w"><div class="lb">💰 ปรับเงินเดือน</div><div class="vl">6.0%</div><div class="sb">โบนัส 2.5 เดือน</div></div>
     </div>
@@ -4673,14 +4651,8 @@ function sendReminder(){
 function closeM(){document.querySelectorAll('.ov').forEach(o=>o.classList.remove('on'))}
 document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM();});
 
-/* ====== MOCK DATA RENDER ====== */
-const depts=[['ฝ่าย Yard & PDI (SML)',35,96],['ฝ่าย Accessory Install (SML)',28,88],['ฝ่าย HR & GA (SML)',8,100],['ฝ่าย IT / Safety / GA (SML)',6,100],['กลุ่ม KTG Outsource',15,80],['กลุ่ม CNK Outsource',7,71]];
-document.getElementById('deptProg').innerHTML=depts.map(d=>`
-<div style="margin-bottom:13px">
-  <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px">
-    <b>${d[0]}</b><span style="color:#475569">${Math.round(d[1]*d[2]/100)}/${d[1]} · ${d[2]}%</span></div>
-  <div class="pg"><i class="${d[2]>=90?'ok':d[2]>=70?'':'wa'}" style="width:${d[2]}%"></i></div>
-</div>`).join('');
+/* แถบความคืบหน้ารายฝ่าย + การกระจายเกรดบนแดชบอร์ด — render จากข้อมูลจริง
+   ดูฟังก์ชัน renderDashDeptProgress()/renderDashGradeBars() ที่ถูกเรียกจาก renderCycleStats() */
 
 const comps=[['ความเป็นผู้นำ (Leadership)','น้ำหนัก 2',4],['การวิเคราะห์และแก้ไขปัญหา','น้ำหนัก 2',3],['การวางแผนและจัดระบบงาน','น้ำหนัก 2',4],['การดูแลและพัฒนาผู้ใต้บังคับบัญชา','น้ำหนัก 2',4]];
 ['compRows','leaderRows'].forEach(rid=>{ const _el=document.getElementById(rid); if(_el) _el.innerHTML=comps.map(c=>`
@@ -5967,6 +5939,83 @@ function renderCycleStats(){
   set('csL2Count', l2Count+' คน');
   set('csProgressPct', pct+'%');
   set('mSaveCycleCount', total+' คน');
+
+  renderDashboardWorkflowSteps(participants, drafts);
+  renderDashDeptProgress(participants, drafts);
+  renderDashGradeBars(drafts);
+}
+
+function renderDashDeptProgress(participants, drafts){
+  const box = document.getElementById('deptProg');
+  if(!box) return;
+  const submittedCodes = new Set(drafts.filter(d=>d[d.length-1]!=='Draft').map(d=>d[0]));
+  const depts = [...new Set(participants.map(u=>u[6]||u[4]||'—'))].sort();
+  if(!depts.length){ box.innerHTML = '<div style="color:#94a3b8;font-size:12px">ยังไม่มีข้อมูลพนักงาน</div>'; return; }
+  box.innerHTML = depts.map(dept=>{
+    const list = participants.filter(u=>(u[6]||u[4]||'—')===dept);
+    const done = list.filter(u=>submittedCodes.has(u[0])).length;
+    const pct = list.length ? Math.round(done/list.length*100) : 0;
+    return `<div style="margin-bottom:13px">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px">
+        <b>${dept}</b><span style="color:#475569">${done}/${list.length} · ${pct}%</span></div>
+      <div class="pg"><i class="${pct>=90?'ok':pct>=70?'':'wa'}" style="width:${pct}%"></i></div>
+    </div>`;
+  }).join('');
+}
+
+function renderDashGradeBars(drafts){
+  const box = document.getElementById('dashGradeBars');
+  if(!box) return;
+  const graded = drafts.filter(d=>d[d.length-2]);
+  if(!graded.length){
+    box.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:20px 0;text-align:center">ยังไม่มีผลประเมินที่มีเกรดในรอบนี้</div>';
+    return;
+  }
+  const counts = {A:0,B:0,C:0,D:0,E:0};
+  graded.forEach(d=>{ const g=d[d.length-2]; if(counts[g]!==undefined) counts[g]++; });
+  const colors = {A:'#16a34a',B:'#3b82f6',C:'#60a5fa',D:'#f59e0b',E:'#dc2626'};
+  const labels = {A:'A ดีมาก',B:'B ดี',C:'C ปานกลาง',D:'D พอใช้',E:'E ปรับปรุง'};
+  const max = Math.max(...Object.values(counts), 1);
+  box.innerHTML = Object.keys(counts).map(g=>{
+    const n = counts[g];
+    const pct = graded.length ? Math.round(n/graded.length*100) : 0;
+    return `<div class="bar"><div class="v">${n}</div><div class="b" style="height:${Math.max(4,Math.round(n/max*100))}%;background:${colors[g]}"></div><div class="l">${labels[g]} (${pct}%)</div></div>`;
+  }).join('');
+}
+
+/* แถบ "สถานะความคืบหน้าตามขั้นตอน" บนแดชบอร์ด — สะท้อนขั้นตอนจริง 4 ขั้นที่ระบบติดตามได้จริง
+   (Submitted → L2Reviewed → Calibrated → Approved) แทนสมมติฐาน 6 ขั้นเดิมที่ไม่มีข้อมูลจริงรองรับ
+   (เช่น "หัวหน้าแผนกประเมิน" หรือ "พนักงานรับทราบผล" ที่ระบบยังไม่มีสถานะเก็บไว้จริง) */
+function renderDashboardWorkflowSteps(participants, drafts){
+  const box = document.getElementById('dashWorkflowSteps');
+  if(!box) return;
+  const statusOrder = ['Draft','Submitted','L2Reviewed','Calibrated','Approved'];
+  const statusOf = (code) => {
+    const d = drafts.find(x=>x[0]===code);
+    return d ? d[d.length-1] : 'Draft';
+  };
+  const total = participants.length;
+  const countAtLeast = (stage) => {
+    const idx = statusOrder.indexOf(stage);
+    return participants.filter(u => statusOrder.indexOf(statusOf(u[0])) >= idx).length;
+  };
+  const steps = [
+    { label:'พนักงานส่งแบบประเมินตนเอง', count: countAtLeast('Submitted') },
+    { label:'ผ่านสอบทาน L2', count: countAtLeast('L2Reviewed') },
+    { label:'ผ่าน Calibration', count: countAtLeast('Calibrated') },
+    { label:'อนุมัติขั้นสุดท้าย (AGM/MD)', count: countAtLeast('Approved') },
+  ];
+  let curFound = false;
+  box.innerHTML = steps.map((s,i)=>{
+    const done = total>0 && s.count===total;
+    const isCur = !done && !curFound && s.count>0;
+    const isNext = !done && !curFound && s.count===0;
+    let cls = 'wf-s';
+    if(done) cls += ' done';
+    else if(isCur){ cls += ' cur'; curFound = true; }
+    const icon = done ? '✓' : String(i+1);
+    return `<div class="${cls}"><div class="wf-c">${icon}</div><div class="wf-t">${s.label}</div><div class="wf-d">${s.count}/${total}</div></div>`;
+  }).join('');
 }
 
 /* ตรวจสายบังคับบัญชาจริง: หา (1) พนักงาน/หัวหน้าที่ไม่มีหัวหน้าระดับ 1 และ (2) วน L1 ย้อนกลับมาซ้ำ (circular) */
