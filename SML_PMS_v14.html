@@ -2104,9 +2104,12 @@ tbody tr:hover{background:#f0f6ff!important}
       </div>
       <div class="card-b">
         <div class="fr" style="margin-bottom:12px">
-          <div class="fg"><label>พนักงาน <i>*</i></label>
-            <select id="mn_emp"></select>
+          <div class="fg"><label>รหัสพนักงาน <i>*</i></label>
+            <select id="mn_emp" onchange="onManualEmpChange()"></select>
           </div>
+        </div>
+        <div class="al al-i" id="mn_empInfo" style="display:none;margin-bottom:12px">
+          <span>👤</span><div id="mn_empInfoText"></div>
         </div>
         <div class="fr" style="flex-wrap:wrap">
           <div class="fg" style="max-width:110px"><label>ขาดงาน (วัน)</label><input type="number" id="mn_absent" min="0" value="0"></div>
@@ -6322,11 +6325,15 @@ function importHrgoFile(input){
         startIdx = 1; // มีแค่แถว label ไทย ไม่มี machine header
       }
 
-      let imported=0, skipped=0;
+      let imported=0, skipped=0, unmatched=[];
       for(let i=startIdx;i<lines.length;i++){
         const c=parseDelimitedLine(lines[i], delim);
         const code=(c[0]||'').trim();
         if(!code){ skipped++; continue; }
+        /* ชื่อต้องดึงจากข้อมูลพนักงานจริง (MASTER_USERS) เสมอ ไม่ใช้ชื่อจากไฟล์ HRGO
+           เพราะไฟล์อาจสะกดผิด/ไม่ตรงกับข้อมูลจริง — รหัสพนักงานคือ key เดียวที่เชื่อถือได้ */
+        const emp = MASTER_USERS.find(u=>u[0]===code);
+        if(!emp){ unmatched.push(code); continue; }
         /* ลำดับคอลัมน์ตรงกับ HRGO_TEMPLATE_HEADERS:
            0 emp_code, 1 full_name, 2 absent_day, 3 late_count, 4 late_min,
            5 personal_day, 6 personal_hr, 7 personal_min,
@@ -6334,7 +6341,7 @@ function importHrgoFile(input){
            11 total_day, 12 total_hr, 13 total_min, 14 med_cert_cumulative */
         const num=(v)=>Number(v)||0;
         const rec={
-          name:(c[1]||'').trim(),
+          name: emp[1],
           lateCount:num(c[3]), earlyCount:0, // มาสาย/กลับก่อน รวมเป็นครั้งเดียวในไฟล์ (ดูหมายเหตุ)
           absentDay:num(c[2]),
           personalDay:num(c[5]), personalHr:num(c[6]), personalMin:num(c[7]),
@@ -6344,14 +6351,15 @@ function importHrgoFile(input){
         ATTENDANCE[code]=rec;
         imported++;
       }
-      if(!imported){ smlToast('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าไฟล์ตรงตาม Template','warn'); return; }
+      if(!imported && !unmatched.length){ smlToast('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าไฟล์ตรงตาม Template','warn'); return; }
 
       saveAttendance();
       renderAttendanceList();
       // ถ้าเปิดฟอร์มประเมินของพนักงานคนที่เพิ่ง Import อยู่ ให้รีเฟรชคะแนน Z ทันที
       if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
       if(typeof recalc==='function') recalc();
-      smlToast(`Import ข้อมูล HRGO สำเร็จ ${imported} รายการ` + (skipped?` (ข้าม ${skipped} แถวที่ไม่มีรหัสพนักงาน)`:''), 'ok');
+      const unmatchedMsg = unmatched.length ? ` · ไม่พบรหัส ${unmatched.length} รายการในข้อมูลพนักงานจริง (${unmatched.slice(0,5).join(', ')}${unmatched.length>5?'…':''}) — ข้ามไป` : '';
+      smlToast(`Import ข้อมูล HRGO สำเร็จ ${imported} รายการ` + (skipped?` (ข้าม ${skipped} แถวว่าง)`:'') + unmatchedMsg, unmatched.length ? 'warn' : 'ok');
     }catch(err){
       smlToast('อ่านไฟล์ไม่สำเร็จ: '+err.message, 'warn');
     }
@@ -6362,15 +6370,31 @@ function importHrgoFile(input){
 /* กรอกข้อมูลวันลารายบุคคลด้วยมือ — ใช้แทน/เสริมการ Import ไฟล์ */
 function populateAttendanceEmpSelect(){
   const sel=document.getElementById('mn_emp'); if(!sel) return;
-  sel.innerHTML = MASTER_USERS.map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]}</option>`).join('');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— เลือกรหัสพนักงาน —</option>' +
+    MASTER_USERS.map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]}</option>`).join('');
+  if(MASTER_USERS.some(u=>u[0]===cur)) sel.value = cur;
+  onManualEmpChange();
+}
+/* เลือกรหัสแล้วดึงรายละเอียดพนักงานจากข้อมูลจริง (MASTER_USERS) ขึ้นมาแสดงยืนยันก่อนบันทึกวันลา */
+function onManualEmpChange(){
+  const code=(document.getElementById('mn_emp')?.value||'').trim();
+  const box=document.getElementById('mn_empInfo');
+  const text=document.getElementById('mn_empInfoText');
+  if(!box || !text) return;
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(!code || !emp){ box.style.display='none'; return; }
+  text.innerHTML = `<b>${emp[1]}</b> · ${emp[7]||'—'} · ${emp[3]||'—'} / ${emp[6]||'—'}`;
+  box.style.display='';
 }
 function saveManualAttendance(){
   const code=(document.getElementById('mn_emp')?.value||'').trim();
-  if(!code){ smlToast('กรุณาเลือกพนักงาน','warn'); return; }
-  const num=(id)=>Number(document.getElementById(id)?.value)||0;
+  if(!code){ smlToast('กรุณาเลือกรหัสพนักงาน','warn'); return; }
   const emp=MASTER_USERS.find(u=>u[0]===code);
+  if(!emp){ smlToast('ไม่พบรหัสพนักงาน '+code+' ในข้อมูลพนักงานจริง','warn'); return; }
+  const num=(id)=>Number(document.getElementById(id)?.value)||0;
   ATTENDANCE[code]={
-    name: emp ? emp[1] : (ATTENDANCE[code]?.name||''),
+    name: emp[1],
     absentDay:num('mn_absent'),
     lateCount:num('mn_late'),
     earlyCount:num('mn_early'),
@@ -6382,7 +6406,7 @@ function saveManualAttendance(){
   renderAttendanceList();
   if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
   if(typeof recalc==='function') recalc();
-  smlToast('บันทึกข้อมูลวันลาของ '+code+' เรียบร้อย','ok');
+  smlToast('บันทึกข้อมูลวันลาของ '+emp[1]+' ('+code+') เรียบร้อย','ok');
 }
 function deleteAttendanceRow(code){
   if(!confirm('ลบข้อมูลวันลาของ '+code+' ?')) return;
@@ -6398,7 +6422,7 @@ function renderAttendanceList(){
   el.innerHTML = codes.length ? codes.map(code=>{
     const a=ATTENDANCE[code];
     const emp=MASTER_USERS.find(u=>u[0]===code);
-    const name=a.name || emp?.[1] || '—';
+    const name=emp?.[1] || a.name || '—';
     const zDays=computeZDays(a);
     return `<tr><td><b>${code}</b></td><td>${name}</td><td>${a.absentDay||0}</td><td>${a.lateCount||0}</td><td>${a.earlyCount||0}</td><td>${a.personalDay||0}</td><td>${a.sickDay||0}</td><td>${zDays.toFixed(2)}</td>
       <td><button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${code}')">🗑️</button></td></tr>`;
