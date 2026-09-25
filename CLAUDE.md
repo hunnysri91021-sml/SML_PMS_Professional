@@ -242,6 +242,25 @@ touches employee/attendance/evaluation data.
     `MASTER_USERS` by code), and the same skip-and-report for codes with
     no matching employee, then actually calling `saveAttendance()`,
     `renderAttendanceList()`, `recalc()`, and `renderCycleStats()`.
+20. **A duplicate-write guard should not just refuse the second write —
+    it should offer the real edit path, or it just breaks legitimate
+    updates.** The first version of the manual attendance "don't allow
+    duplicate save" fix (`saveManualAttendance()`) hard-blocked saving
+    over an existing `ATTENDANCE[code]` and told HR to delete the old
+    record first — technically prevented the accidental-overwrite bug,
+    but also removed the ability to correct a typo or update someone's
+    leave count, which is a real, expected operation. Fixed the same way
+    as the CLAUDE.md #9 edit-button pattern: `onManualEmpChange()` now
+    detects an existing record and loads its real values into the form
+    fields (so the person sees and edits real current data, never a
+    blank form that would silently replace it), the save button's label
+    switches to "✏️ บันทึกการแก้ไข", and `saveManualAttendance()` keeps a
+    single write path for both create and update (`isEdit = !!ATTENDANCE[code]`
+    only changes the toast/audit-log wording, not the logic) rather than
+    forking into two functions that could drift apart. The general rule:
+    when guarding against an accidental duplicate/overwrite, ask "does
+    this block a legitimate edit too?" — if yes, the fix is load-real-
+    data-into-the-form, not refuse-and-redirect-to-delete.
 
 ## Verification checklist for any change to this file
 

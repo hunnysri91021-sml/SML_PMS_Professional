@@ -2079,7 +2079,7 @@ tbody tr:hover{background:#f0f6ff!important}
           <div class="fg"><label>ใบรับรองแพทย์สะสม</label><input type="text" id="mn_medcert" placeholder="เช่น 10.5.0"></div>
         </div>
         <div class="template-actions">
-          <button class="btn btn-p" onclick="saveManualAttendance()">💾 บันทึกข้อมูลวันลา</button>
+          <button class="btn btn-p" id="mn_saveBtn" onclick="saveManualAttendance()">💾 บันทึกข้อมูลวันลา</button>
         </div>
       </div>
     </div>
@@ -7606,32 +7606,42 @@ function populateAttendanceEmpSelect(){
   list.innerHTML = MASTER_USERS.map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]}</option>`).join('');
   onManualEmpChange();
 }
-/* เลือกรหัสแล้วดึงรายละเอียดพนักงานจากข้อมูลจริง (MASTER_USERS) ขึ้นมาแสดงยืนยันก่อนบันทึกวันลา */
+/* เลือกรหัสแล้วดึงรายละเอียดพนักงานจากข้อมูลจริง (MASTER_USERS) ขึ้นมาแสดงยืนยันก่อนบันทึกวันลา
+   ถ้ารหัสนี้มีข้อมูลวันลาอยู่แล้ว ให้ดึงค่าจริงมาเติมในฟอร์มทันที (โหมดแก้ไข) แทนที่จะปล่อยให้กรอก
+   ทับด้วยฟอร์มเปล่าโดยไม่รู้ว่ามีของเดิมอยู่ — ป้องกันบันทึกซ้ำแบบไม่ตั้งใจ แต่ยังแก้ไขข้อมูลจริงได้ */
 function onManualEmpChange(){
   const code=(document.getElementById('mn_emp')?.value||'').trim();
   const box=document.getElementById('mn_empInfo');
   const text=document.getElementById('mn_empInfoText');
+  const saveBtn=document.getElementById('mn_saveBtn');
   if(!box || !text) return;
   const emp = MASTER_USERS.find(u=>u[0]===code);
-  if(!code || !emp){ box.style.display='none'; return; }
-  const dupNote = ATTENDANCE[code]
-    ? `<br><span style="color:#b45309">⚠️ มีข้อมูลวันลาของพนักงานคนนี้อยู่แล้ว (วันลารวม ≈ ${computeZDays(ATTENDANCE[code]).toFixed(2)} วัน) — ระบบจะไม่ให้บันทึกซ้ำ กรุณาลบข้อมูลเดิมในตารางด้านล่างก่อน หากต้องการแก้ไข</span>`
+  if(!code || !emp){ box.style.display='none'; if(saveBtn) saveBtn.textContent='💾 บันทึกข้อมูลวันลา'; return; }
+  const existing = ATTENDANCE[code];
+  const setVal=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v; };
+  if(existing){
+    setVal('mn_absent', existing.absentDay||0);
+    setVal('mn_late', existing.lateCount||0);
+    setVal('mn_early', existing.earlyCount||0);
+    setVal('mn_personal', existing.personalDay||0);
+    setVal('mn_sick', existing.sickDay||0);
+    setVal('mn_medcert', existing.medCert||'');
+    if(saveBtn) saveBtn.textContent='✏️ บันทึกการแก้ไข';
+  } else if(saveBtn) saveBtn.textContent='💾 บันทึกข้อมูลวันลา';
+  const dupNote = existing
+    ? `<br><span style="color:#b45309">✏️ กำลังแก้ไขข้อมูลเดิม (วันลารวมเดิม ≈ ${computeZDays(existing).toFixed(2)} วัน) — ค่าด้านล่างดึงจากข้อมูลจริงมาให้แล้ว แก้แล้วกดบันทึกเพื่ออัปเดต</span>`
     : '';
   text.innerHTML = `<b>${emp[1]}</b> · ${emp[7]||'—'} · ${emp[3]||'—'} / ${emp[6]||'—'}${dupNote}`;
   box.style.display='';
 }
-/* กันบันทึกซ้ำ: รหัสพนักงานที่มีข้อมูลวันลาอยู่แล้วใน ATTENDANCE จะบันทึกทับไม่ได้จากฟอร์มนี้
-   ต้องลบข้อมูลเดิมออกก่อน (ปุ่ม 🗑️ ในตาราง) — ป้องกันการกรอกซ้ำโดยไม่ตั้งใจที่จะทำให้ข้อมูลวันลา
-   จริงของคนคนนั้นถูกเขียนทับเงียบๆ โดยไม่รู้ตัว */
+/* บันทึกวันลาด้วยตนเอง — ถ้ารหัสนี้มีข้อมูลอยู่แล้วคือ "แก้ไข" (อัปเดตค่าจริง ไม่ใช่สร้างซ้ำ) ถ้ายังไม่มี
+   คือ "เพิ่มใหม่" ทั้งสองทางเขียนผ่านฟังก์ชันเดียวกัน กันไม่ให้มีสองที่เขียนลง ATTENDANCE ต่างจังหวะกัน */
 function saveManualAttendance(){
   const code=(document.getElementById('mn_emp')?.value||'').trim();
   if(!code){ smlToast('กรุณาเลือกรหัสพนักงาน','warn'); return; }
   const emp=MASTER_USERS.find(u=>u[0]===code);
   if(!emp){ smlToast('ไม่พบรหัสพนักงาน '+code+' ในข้อมูลพนักงานจริง','warn'); return; }
-  if(ATTENDANCE[code]){
-    smlToast('มีข้อมูลวันลาของ '+emp[1]+' ('+code+') อยู่แล้ว — ห้ามบันทึกซ้ำ กรุณาลบข้อมูลเดิมในตารางด้านล่างก่อนหากต้องการแก้ไข','warn');
-    return;
-  }
+  const isEdit = !!ATTENDANCE[code];
   const num=(id)=>Number(document.getElementById(id)?.value)||0;
   ATTENDANCE[code]={
     name: emp[1],
@@ -7647,8 +7657,8 @@ function saveManualAttendance(){
   if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
   if(typeof recalc==='function') recalc();
   if(typeof renderCycleStats==='function') renderCycleStats();
-  if(typeof appendAuditLog==='function') appendAuditLog('attendance','กรอกข้อมูลวันลาด้วยตนเอง', code, emp[1]);
-  smlToast('บันทึกข้อมูลวันลาของ '+emp[1]+' ('+code+') เรียบร้อย','ok');
+  if(typeof appendAuditLog==='function') appendAuditLog('attendance', isEdit?'แก้ไขข้อมูลวันลาด้วยตนเอง':'กรอกข้อมูลวันลาด้วยตนเอง', code, emp[1]);
+  smlToast((isEdit?'อัปเดต':'บันทึก')+'ข้อมูลวันลาของ '+emp[1]+' ('+code+') เรียบร้อย','ok');
   ['mn_emp','mn_absent','mn_late','mn_early','mn_personal','mn_sick','mn_medcert'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value = id==='mn_emp'||id==='mn_medcert' ? '' : '0';
   });
