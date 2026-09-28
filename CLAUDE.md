@@ -435,6 +435,29 @@ touches employee/attendance/evaluation data.
     `loadEmployeesFromMs365()`), not just once at page load, or it goes
     stale the moment someone's added/edited/synced.
 
+29. **A live `<select>` populated from `MASTER_USERS` (#18) is still slow
+    to use once the org has enough people that HR has to scroll/search
+    a long list by eye.** For "หัวหน้า L1"/"ผจก.ส่วน L2"/"ผู้อนุมัติ" in
+    Add/Edit Employee, added a code-entry `<input list="empCodeList">`
+    (reusing the shared datalist from #28) in front of each existing
+    `<select>`: `onSupervisorCodeInput(which)` looks the typed code up in
+    `MASTER_USERS`, shows a real confirm/warn note (`✅ name — position
+    (code)` or `⚠️ ไม่พบรหัสนี้ในระบบ`, never a silent no-op), and sets the
+    `<select>`'s value to that person's real name if found. Storage
+    format is deliberately unchanged — `MASTER_USERS[9]/[10]/[11]` still
+    hold the supervisor's *name*, exactly as #18 established, so every
+    downstream name-matching consumer keeps working; the code input is
+    purely a faster way to drive the same `<select>`, not a new data
+    path. `onSupervisorSelectChange(which)` keeps the two in sync the
+    other direction too (picking straight from the dropdown, the old
+    way, back-fills the code box + note), and `fillUserFormFields()`
+    calls it after prefilling each select so opening an existing
+    employee for edit shows the resolved code+note immediately, not just
+    an empty code box next to a filled dropdown. The old `<select>`
+    itself is left fully intact and usable on its own — satisfies "if
+    this person isn't in Excel yet, let HR pick manually" without a
+    separate code path.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

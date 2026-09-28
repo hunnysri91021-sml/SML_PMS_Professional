@@ -4757,6 +4757,46 @@ function populateSupervisorSelects(excludeId){
     else if(prev==='—') sel.value = '—';
   });
 }
+
+/* พิมพ์รหัสพนักงานในช่อง "หัวหน้า L1"/"ผจก.ส่วน L2"/"ผู้อนุมัติ" -> ดึงชื่อจริงจาก MASTER_USERS
+   (ซึ่งซิงก์มาจาก Excel จริงผ่าน loadEmployeesFromMs365()) มาเลือกให้อัตโนมัติใน <select> ที่มีอยู่เดิม
+   ทันที แทนที่ต้องไล่หาในลิสต์ยาวๆ — ยังคงเก็บค่าจริงเป็น "ชื่อ" ใน MASTER_USERS[9]/[10]/[11] เหมือนเดิม
+   (ไม่เปลี่ยนรูปแบบข้อมูล กัน consumer ปลายทางที่ resolve ด้วยชื่อพัง) ช่อง <select> เดิมยังเลือกเองตรงๆ
+   ได้เสมอถ้าไม่รู้รหัส หรือถ้ายังไม่มีคนนี้ใน Excel เลย (ตามที่ขอ "ถ้าไม่มีให้เลือกได้") */
+function onSupervisorCodeInput(which){
+  const codeEl = document.getElementById('mu_'+which+'_code');
+  const sel = document.getElementById('mu_'+which);
+  const note = document.getElementById('mu_'+which+'_note');
+  if(!codeEl || !sel) return;
+  const code = codeEl.value.trim();
+  if(!code){ if(note) note.textContent=''; return; }
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(!emp){
+    if(note){ note.textContent = '⚠️ ไม่พบรหัสนี้ในระบบ — เลือกจากรายชื่อด้านล่างได้แทน'; note.style.color = '#dc2626'; }
+    return;
+  }
+  if(Array.from(sel.options).some(o=>o.value===emp[1])) sel.value = emp[1];
+  if(note){ note.textContent = `✅ ${emp[1]} — ${emp[7]} (${emp[0]})`; note.style.color = '#16a34a'; }
+}
+/* เลือกจาก <select> ตรงๆ (แบบเดิม) -> เติมรหัสและข้อความยืนยันในช่องพิมพ์รหัสให้ตรงกันเสมอ
+   สองช่องนี้จึงเป็นคนละทางเข้าของค่าเดียวกัน ไม่ใช่แหล่งข้อมูลคนละชุด */
+function onSupervisorSelectChange(which){
+  const sel = document.getElementById('mu_'+which);
+  const codeEl = document.getElementById('mu_'+which+'_code');
+  const note = document.getElementById('mu_'+which+'_note');
+  if(!sel) return;
+  if(!sel.value || sel.value==='—'){
+    if(codeEl) codeEl.value='';
+    if(note) note.textContent='';
+    return;
+  }
+  const emp = MASTER_USERS.find(u=>u[1]===sel.value);
+  if(codeEl) codeEl.value = emp ? emp[0] : '';
+  if(note){
+    note.textContent = emp ? `✅ ${emp[1]} — ${emp[7]} (${emp[0]})` : '';
+    note.style.color = '#16a34a';
+  }
+}
 function onOrgGroupChange(org){
   org = org || getOrgStructure();
   const group = document.getElementById('mu_group')?.value;
@@ -4858,6 +4898,12 @@ function clearUserModalForm(){
   ['mu_l1','mu_l2','mu_approver'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='—';
   });
+  ['mu_l1_code','mu_l2_code','mu_approver_code'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['mu_l1_note','mu_l2_note','mu_approver_note'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.textContent='';
+  });
   const idEl=document.getElementById('mu_id'); if(idEl) idEl.removeAttribute('disabled');
   const role=document.getElementById('mu_role'); if(role) role.value='emp';
   const grade=document.getElementById('mu_grade'); if(grade) grade.value='G1';
@@ -4886,10 +4932,14 @@ function fillUserFormFields(emp){
   set('mu_position', emp[7]);
   set('mu_grade', emp[8]);
   if(typeof populateSupervisorSelects==='function') populateSupervisorSelects(emp[0]);
-  const setSupervisor=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value = val || '—'; };
-  setSupervisor('mu_l1', emp[9]);
-  setSupervisor('mu_l2', emp[10]);
-  setSupervisor('mu_approver', emp[11]);
+  const setSupervisor=(which,val)=>{
+    const el=document.getElementById('mu_'+which);
+    if(el) el.value = val || '—';
+    if(typeof onSupervisorSelectChange==='function') onSupervisorSelectChange(which);
+  };
+  setSupervisor('l1', emp[9]);
+  setSupervisor('l2', emp[10]);
+  setSupervisor('approver', emp[11]);
   set('mu_status', emp[12]);
   const sdEl=document.getElementById('mu_startdate'); if(sdEl) sdEl.value = thaiDateToIso(emp[14]);
   set('mu_email', emp[15]);
@@ -7586,15 +7636,21 @@ document.addEventListener('input',e=>{
       <div class="fr">
         <div class="fg">
           <label>หัวหน้า L1</label>
-          <select id="mu_l1"></select>
+          <input id="mu_l1_code" list="empCodeList" placeholder="พิมพ์รหัสพนักงาน แล้วชื่อจะขึ้นให้อัตโนมัติ" autocomplete="off" oninput="onSupervisorCodeInput('l1')" style="margin-bottom:5px">
+          <select id="mu_l1" onchange="onSupervisorSelectChange('l1')"></select>
+          <div id="mu_l1_note" style="font-size:11px;margin-top:3px"></div>
         </div>
         <div class="fg">
           <label>ผจก.ส่วน L2</label>
-          <select id="mu_l2"></select>
+          <input id="mu_l2_code" list="empCodeList" placeholder="พิมพ์รหัสพนักงาน แล้วชื่อจะขึ้นให้อัตโนมัติ" autocomplete="off" oninput="onSupervisorCodeInput('l2')" style="margin-bottom:5px">
+          <select id="mu_l2" onchange="onSupervisorSelectChange('l2')"></select>
+          <div id="mu_l2_note" style="font-size:11px;margin-top:3px"></div>
         </div>
         <div class="fg">
           <label>ผู้อนุมัติ</label>
-          <select id="mu_approver"></select>
+          <input id="mu_approver_code" list="empCodeList" placeholder="พิมพ์รหัสพนักงาน แล้วชื่อจะขึ้นให้อัตโนมัติ" autocomplete="off" oninput="onSupervisorCodeInput('approver')" style="margin-bottom:5px">
+          <select id="mu_approver" onchange="onSupervisorSelectChange('approver')"></select>
+          <div id="mu_approver_note" style="font-size:11px;margin-top:3px"></div>
         </div>
       </div>
     </div>
