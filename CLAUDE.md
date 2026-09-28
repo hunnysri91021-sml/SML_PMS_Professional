@@ -867,19 +867,44 @@ touches employee/attendance/evaluation data.
     button per row — no way to correct a typo in someone's leave count
     without deleting and re-entering from scratch, the same gap CLAUDE.md
     #9 already found and fixed for the employee list and #20 fixed at the
-    save layer.** The save layer was already correct — `onManualEmpChange()`
-    (#20) already detects an existing `ATTENDANCE[code]` and loads its
-    real values into the "กรอกข้อมูลวันลารายบุคคล" form when that code is
-    typed in — there just wasn't a button anywhere that used it from the
-    list itself. Added `editAttendanceRow(code)`: sets `mn_emp`'s value to
-    the row's code and calls the *same* `onManualEmpChange()` the input's
-    own `oninput` already calls, then scrolls the form into view — no new
-    data-loading logic, since duplicating that would risk it drifting
-    from the real edit-detection path the same way CLAUDE.md #1 warns
-    against for any "copy" of real data. Confirms the same general rule
-    as #9/#20: when a list needs an edit affordance and a working edit
-    path already exists elsewhere on the page, wire a button to the real
-    path — don't rebuild a second one.
+    save layer.** First pass added `editAttendanceRow(code)` that filled
+    the *top* "กรอกข้อมูลวันลารายบุคคล" form and scrolled to it — reused
+    the existing edit-detection in `onManualEmpChange()` (#20), correct
+    but required leaving the row/scrolling. User asked for the save
+    button to live in the row itself instead — see #44 for the actual
+    inline-edit implementation that superseded this scroll-to-form
+    version. General rule either way: when a list needs an edit
+    affordance and a working edit path already exists elsewhere on the
+    page, wire a button to the real path — don't rebuild a second one.
+
+44. **Follow-up to #43: HR asked for the edit to happen inline in the row
+    ("ปุ่ม save ด้วย" — a save button directly in the list, not a scroll
+    up to a separate form).** Rebuilding the write logic a second time
+    inside the inline-edit path would have been exactly the "two places
+    write `ATTENDANCE` at different times" bug CLAUDE.md #20 already
+    warns about, just one layer further in — so first extracted the one
+    real write path, `writeAttendanceRecord(code, vals)` (resolves the
+    employee from `MASTER_USERS`, writes `ATTENDANCE[code]`, calls
+    `saveAttendance()`/`recalc()`/`renderCycleStats()`/`appendAuditLog()`,
+    returns `{emp,isEdit}` or `null` for an unknown code), and made both
+    `saveManualAttendance()` (the top form) and the new
+    `saveAttendanceRowInline(code)` call it — never two divergent copies
+    of the same write. `editingAttendanceCode` (module-level, one value —
+    editing two rows "at once" would make it ambiguous which 💾 saves
+    which) tracks which row `renderAttendanceList()` should render as
+    editable; that row gets number `<input>`s (ids `attEdit_absent` etc.,
+    reused since only one row is ever in edit mode) prefilled from the
+    real `ATTENDANCE[code]`, plus 💾 `saveAttendanceRowInline(code)` and
+    ✖️ `cancelEditAttendanceRow()` buttons in place of ✏️/🗑️. `ใบรับรอง
+    แพทย์สะสม` (`medCert`) isn't a column in this table, so the inline
+    save explicitly carries the existing stored value through rather
+    than defaulting it to empty and silently wiping it (would have been
+    the same shape of data loss as CLAUDE.md #1's "never let a re-save
+    of partial fields blank out the rest of the record"). Cancel discards
+    the in-row edits without writing (verified with a test that types a
+    new value, cancels, and confirms `ATTENDANCE` is unchanged) — the top
+    form and its own edit-detection flow (#20/#43) are left fully intact
+    as an alternate path for the same data.
 
 ## Verification checklist for any change to this file
 

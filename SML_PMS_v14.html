@@ -4246,6 +4246,8 @@ function renderPinStatus(code){
    ========================================== */
 const ATTENDANCE_KEY = 'smlPmsAttendance';
 let ATTENDANCE = {};
+/* รหัสพนักงานที่กำลังแก้ไขแบบ inline ในตาราง "รายชื่อที่มีข้อมูลเวลาแล้ว" — null = ไม่มีแถวไหนอยู่ในโหมดแก้ไข */
+let editingAttendanceCode = null;
 function loadAttendance(){
   try{ ATTENDANCE = JSON.parse(localStorage.getItem(ATTENDANCE_KEY) || '{}'); }catch(e){ ATTENDANCE = {}; }
 }
@@ -8730,53 +8732,84 @@ function onManualEmpChange(){
   text.innerHTML = `<b>${emp[1]}</b> · ${emp[7]||'—'} · ${emp[3]||'—'} / ${emp[6]||'—'}${dupNote}`;
   box.style.display='';
 }
-/* บันทึกวันลาด้วยตนเอง — ถ้ารหัสนี้มีข้อมูลอยู่แล้วคือ "แก้ไข" (อัปเดตค่าจริง ไม่ใช่สร้างซ้ำ) ถ้ายังไม่มี
-   คือ "เพิ่มใหม่" ทั้งสองทางเขียนผ่านฟังก์ชันเดียวกัน กันไม่ให้มีสองที่เขียนลง ATTENDANCE ต่างจังหวะกัน */
+/* จุดเขียน ATTENDANCE[code] จุดเดียว — ทั้งฟอร์ม "กรอกข้อมูลวันลารายบุคคล" ด้านบน (saveManualAttendance)
+   และการแก้ไข inline ในตารางรายชื่อ (saveAttendanceRowInline) เรียกผ่านฟังก์ชันนี้ทั้งคู่ กันไม่ให้มี
+   สองที่เขียนลง ATTENDANCE ต่างจังหวะกัน (ดู CLAUDE.md #20) — คืนค่า {emp,isEdit} หรือ null ถ้าไม่พบรหัส */
+function writeAttendanceRecord(code, vals){
+  const emp=MASTER_USERS.find(u=>u[0]===code);
+  if(!emp) return null;
+  const isEdit = !!ATTENDANCE[code];
+  ATTENDANCE[code]={
+    name: emp[1],
+    absentDay: vals.absentDay,
+    lateCount: vals.lateCount,
+    earlyCount: vals.earlyCount,
+    personalDay: vals.personalDay,
+    sickDay: vals.sickDay,
+    medCert: vals.medCert
+  };
+  saveAttendance();
+  if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
+  if(typeof recalc==='function') recalc();
+  if(typeof renderCycleStats==='function') renderCycleStats();
+  if(typeof appendAuditLog==='function') appendAuditLog('attendance', isEdit?'แก้ไขข้อมูลวันลาด้วยตนเอง':'กรอกข้อมูลวันลาด้วยตนเอง', code, emp[1]);
+  return { emp, isEdit };
+}
 function saveManualAttendance(){
   const code=(document.getElementById('mn_emp')?.value||'').trim();
   if(!code){ smlToast('กรุณาเลือกรหัสพนักงาน','warn'); return; }
-  const emp=MASTER_USERS.find(u=>u[0]===code);
-  if(!emp){ smlToast('ไม่พบรหัสพนักงาน '+code+' ในข้อมูลพนักงานจริง','warn'); return; }
-  const isEdit = !!ATTENDANCE[code];
+  if(!MASTER_USERS.find(u=>u[0]===code)){ smlToast('ไม่พบรหัสพนักงาน '+code+' ในข้อมูลพนักงานจริง','warn'); return; }
   const num=(id)=>Number(document.getElementById(id)?.value)||0;
-  ATTENDANCE[code]={
-    name: emp[1],
+  const result = writeAttendanceRecord(code, {
     absentDay:num('mn_absent'),
     lateCount:num('mn_late'),
     earlyCount:num('mn_early'),
     personalDay:num('mn_personal'),
     sickDay:num('mn_sick'),
     medCert:(document.getElementById('mn_medcert')?.value||'').trim()
-  };
-  saveAttendance();
+  });
   renderAttendanceList();
-  if(typeof currentLevel!=='undefined' && currentLevel && typeof renderZStats==='function') renderZStats(currentLevel);
-  if(typeof recalc==='function') recalc();
-  if(typeof renderCycleStats==='function') renderCycleStats();
-  if(typeof appendAuditLog==='function') appendAuditLog('attendance', isEdit?'แก้ไขข้อมูลวันลาด้วยตนเอง':'กรอกข้อมูลวันลาด้วยตนเอง', code, emp[1]);
-  smlToast((isEdit?'อัปเดต':'บันทึก')+'ข้อมูลวันลาของ '+emp[1]+' ('+code+') เรียบร้อย','ok');
+  smlToast((result.isEdit?'อัปเดต':'บันทึก')+'ข้อมูลวันลาของ '+result.emp[1]+' ('+code+') เรียบร้อย','ok');
   ['mn_emp','mn_absent','mn_late','mn_early','mn_personal','mn_sick','mn_medcert'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value = id==='mn_emp'||id==='mn_medcert' ? '' : '0';
   });
   onManualEmpChange();
 }
-/* ปุ่ม ✏️ ในตาราง "รายชื่อที่มีข้อมูลเวลาแล้ว" — ก่อนหน้านี้มีแค่ 🗑️ ลบ ไม่มีทางแก้ไข ต้องลบแล้วกรอกใหม่
-   ทั้งที่ฟอร์ม "กรอกข้อมูลวันลารายบุคคล" ด้านบนรองรับโหมดแก้ไขอยู่แล้ว (onManualEmpChange ดึงค่าจริงมา
-   เติมให้เมื่อรหัสมีข้อมูลอยู่แล้ว — ดู CLAUDE.md #20) เพียงแค่ไม่มีปุ่มเรียกใช้จากแถวในตาราง ฟังก์ชันนี้
-   จึงแค่เติมรหัสลงช่อง แล้วเรียก onManualEmpChange() ตัวเดิม (ไม่มี path เขียนข้อมูลแยกใหม่) พร้อมเลื่อน
-   จอไปที่ฟอร์มให้เห็นค่าที่ดึงมาทันที */
+/* ปุ่ม ✏️ ในตาราง "รายชื่อที่มีข้อมูลเวลาแล้ว" — เดิมมีแค่ 🗑️ ลบ ไม่มีทางแก้ไข ต้องลบแล้วกรอกใหม่ (CLAUDE.md
+   #43 เวอร์ชันแรกแก้ด้วยการเลื่อนไปกรอกที่ฟอร์มด้านบน แต่ผู้ใช้ขอปุ่ม "บันทึก" แบบ inline ในแถวโดยตรง
+   แทนการเลื่อนขึ้นไปฟอร์มด้านบน) ตอนนี้กดแล้วแถวนั้นเปลี่ยนเป็นช่องกรอกตัวเลขในตาราง พร้อมปุ่ม 💾/✖️
+   ทีละแถวเดียวเท่านั้น (editingAttendanceCode เก็บรหัสเดียว) กันไม่ให้แก้หลายแถวพร้อมกันแล้วสับสนว่า
+   ปุ่ม 💾 ใบไหนบันทึกแถวไหน */
 function editAttendanceRow(code){
-  const input=document.getElementById('mn_emp');
-  if(!input) return;
-  input.value=code;
-  onManualEmpChange();
-  input.scrollIntoView({behavior:'smooth', block:'center'});
-  input.focus();
+  editingAttendanceCode = code;
+  renderAttendanceList();
+}
+function cancelEditAttendanceRow(){
+  editingAttendanceCode = null;
+  renderAttendanceList();
+}
+/* บันทึกแถวที่แก้ไข inline — เขียนผ่าน writeAttendanceRecord() เดียวกับฟอร์มด้านบน ไม่ใช่ path แยก
+   ช่อง "ใบรับรองแพทย์สะสม" ไม่ได้แสดงเป็นคอลัมน์ในตาราง จึงคงค่าเดิมไว้ ไม่ล้างทิ้งตอนแก้ไข inline */
+function saveAttendanceRowInline(code){
+  const num=(id)=>Number(document.getElementById(id)?.value)||0;
+  const result = writeAttendanceRecord(code, {
+    absentDay:num('attEdit_absent'),
+    lateCount:num('attEdit_late'),
+    earlyCount:num('attEdit_early'),
+    personalDay:num('attEdit_personal'),
+    sickDay:num('attEdit_sick'),
+    medCert: ATTENDANCE[code]?.medCert || ''
+  });
+  if(!result){ smlToast('ไม่พบรหัสพนักงาน '+code+' ในข้อมูลพนักงานจริง','warn'); return; }
+  editingAttendanceCode = null;
+  renderAttendanceList();
+  smlToast('อัปเดตข้อมูลวันลาของ '+result.emp[1]+' ('+code+') เรียบร้อย','ok');
 }
 function deleteAttendanceRow(code){
   if(!confirm('ลบข้อมูลวันลาของ '+code+' ?')) return;
   delete ATTENDANCE[code];
   saveAttendance();
+  if(editingAttendanceCode===code) editingAttendanceCode=null;
   renderAttendanceList();
   if(typeof recalc==='function') recalc();
   if(typeof renderCycleStats==='function') renderCycleStats();
@@ -8791,6 +8824,18 @@ function renderAttendanceList(){
     const emp=MASTER_USERS.find(u=>u[0]===code);
     const name=emp?.[1] || a.name || '—';
     const zDays=computeZDays(a);
+    if(editingAttendanceCode===code){
+      const numIn=(id,val)=>`<input type="number" id="${id}" min="0" value="${val||0}" style="width:60px">`;
+      return `<tr style="background:#fffbea">
+        <td><b>${code}</b></td><td>${name}</td>
+        <td>${numIn('attEdit_absent', a.absentDay)}</td>
+        <td>${numIn('attEdit_late', a.lateCount)}</td>
+        <td>${numIn('attEdit_early', a.earlyCount)}</td>
+        <td>${numIn('attEdit_personal', a.personalDay)}</td>
+        <td>${numIn('attEdit_sick', a.sickDay)}</td>
+        <td>${zDays.toFixed(2)}</td>
+        <td><button class="btn btn-sm btn-p" onclick="saveAttendanceRowInline('${code}')">💾</button> <button class="btn btn-sm" onclick="cancelEditAttendanceRow()">✖️</button></td></tr>`;
+    }
     return `<tr><td><b>${code}</b></td><td>${name}</td><td>${a.absentDay||0}</td><td>${a.lateCount||0}</td><td>${a.earlyCount||0}</td><td>${a.personalDay||0}</td><td>${a.sickDay||0}</td><td>${zDays.toFixed(2)}</td>
       <td><button class="btn btn-sm" onclick="editAttendanceRow('${code}')">✏️</button> <button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${code}')">🗑️</button></td></tr>`;
   }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน</td></tr>';
