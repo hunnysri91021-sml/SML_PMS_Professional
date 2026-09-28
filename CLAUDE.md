@@ -458,6 +458,32 @@ touches employee/attendance/evaluation data.
     this person isn't in Excel yet, let HR pick manually" without a
     separate code path.
 
+30. **Never hardcode "the real column order of an external Excel table" as
+    inline indices scattered across multiple functions — an HR-managed
+    sheet's actual column order is a fact from the field, not something
+    to assume from a "sounds reasonable" order.** `normalizeMs365Employee()`
+    assumed the `Employees` table's columns matched `MASTER_USERS`'s own
+    field order (Grade before L1/L2/Approver, StartDate/Email at the
+    end). The real sheet HR uses has them in a different real order —
+    `วันเริ่มงาน`/`Email` come right after `ตำแหน่ง`, *before* `Grade`.
+    Reading with the wrong assumed order silently shifted every field
+    from `grade` onward — visible in production as the employee detail
+    page showing "วันเริ่มงาน: active" (the literal value of the `Status`
+    column, landed in the wrong slot). Same shape of bug as CLAUDE.md #5
+    (positional indices are load-bearing) but one layer further out: the
+    external system's layout, not just this app's own arrays. Fixed by
+    centralizing the real order in one array, `EXCEL_EMPLOYEE_COLS`
+    (verified against HR's actual header row screenshot, not guessed),
+    and having *both* `normalizeMs365Employee()` (read) and
+    `pushSingleEmployeeToExcel()` (write, #27) map through it by field
+    name (`EXCEL_EMPLOYEE_COLS.indexOf('grade')`) instead of a bare
+    numeric index — so read and write can never drift apart from each
+    other again, and the one place to fix if HR ever reorders Excel
+    columns again is this one array. Before trusting *any* fixed-position
+    parsing of an external spreadsheet this app doesn't fully control,
+    ask for (or verify against) a real screenshot of its header row —
+    never assume the order "should" match this app's internal shape.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -3995,9 +3995,13 @@ async function pushSingleEmployeeToExcel(code){
   const emp = MASTER_USERS.find(u=>u[0]===code);
   if(!emp) return;
   try{
-    const row = [emp[0], emp[1], emp[2], emp[3], emp[4], emp[5], emp[6], emp[7], emp[8],
-                 emp[9], emp[10], emp[11], emp[12], emp[13], emp[14], emp[15]||'', emp[16]||''];
-    await graphUpsertTableRow(cfg.employeeTable, 0, code, row);
+    const byKey = {
+      id: emp[0], name: emp[1], role: emp[2], group: emp[3], section: emp[4], division: emp[5],
+      department: emp[6], position: emp[7], grade: emp[8], l1: emp[9], l2: emp[10], approver: emp[11],
+      status: emp[12], lastLogin: emp[13], startDate: emp[14], email: emp[15]||'', potential: emp[16]||''
+    };
+    const row = EXCEL_EMPLOYEE_COLS.map(k => byKey[k]);
+    await graphUpsertTableRow(cfg.employeeTable, EXCEL_EMPLOYEE_COLS.indexOf('id'), code, row);
     if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
   }catch(e){
     if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) ไม่สำเร็จ: ${e.message}`, false);
@@ -6017,21 +6021,35 @@ async function testMs365Connection(){
   }
 }
 
-/* row = array ตามลำดับคอลัมน์จริงของ sheet "Employees":
-   EmpID, ชื่อ-สกุล, บทบาท, กลุ่ม, แผนก, ส่วน, ฝ่าย, ตำแหน่ง, Grade, หัวหน้า L1, หัวหน้า L2, ผู้อนุมัติ, Status, Login ล่าสุด
-   (ตรงกับลำดับ MASTER_USERS แทบทั้งหมดอยู่แล้ว) */
+/* ลำดับคอลัมน์ "จริง" ของตาราง Employees ใน Excel — ยืนยันจาก Header Row จริงที่ HR ส่งมา
+   (28/9/2569): EmpID, ชื่อ-สกุล, บทบาท, กลุ่ม, แผนก, ส่วน, ฝ่าย, ตำแหน่ง, วันเริ่มงาน, Email,
+   Grade, หัวหน้า L1, หัวหน้า L2, ผู้อนุมัติ, Status, Potential, Login ล่าสุด — ไม่ตรงกับลำดับ
+   MASTER_USERS! (เช่น วันเริ่มงาน/Email มาก่อน Grade ใน Excel แต่ MASTER_USERS เก็บไว้หลัง Status)
+   นี่คือบั๊กจริงที่เคยเกิด: โค้ดเดิมอ่านแบบระบุตำแหน่งตรงๆ (g(8)=Grade) ทั้งที่ Excel จริงตำแหน่งนั้น
+   คือวันเริ่มงาน ทำให้หน้าโปรไฟล์พนักงานขึ้น "วันเริ่มงาน: active" (ค่าจาก Status คอลัมน์ผิดที่)
+   แก้โดยรวมศูนย์ลำดับคอลัมน์จริงไว้ที่ EXCEL_EMPLOYEE_COLS จุดเดียว ทั้งขาอ่าน (normalizeMs365Employee)
+   และขาเขียน (pushSingleEmployeeToExcel) ต้อง map ผ่านตัวนี้เท่านั้น ห้าม hardcode ตำแหน่งคอลัมน์ตรงๆ
+   อีก — ถ้า Excel มีคนไปสลับคอลัมน์ใหม่อีกในอนาคต แก้ที่ตัวแปรนี้ตัวเดียวพอ (ดู CLAUDE.md #30) */
+const EXCEL_EMPLOYEE_COLS = ['id','name','role','group','section','division','department','position',
+  'startDate','email','grade','l1','l2','approver','status','potential','lastLogin'];
+
 function normalizeMs365Employee(row){
-  const g = i => { const v = row?.[i]; return (v===undefined||v===null) ? '' : String(v).trim(); };
-  const roleRaw = g(2).toLowerCase();
+  const g = key => {
+    const i = EXCEL_EMPLOYEE_COLS.indexOf(key);
+    const v = row?.[i];
+    return (v===undefined||v===null) ? '' : String(v).trim();
+  };
+  const roleRaw = g('role').toLowerCase();
   const role = roleRaw.includes('sysadmin') || roleRaw.includes('super') ? 'sysadmin' : roleRaw.includes('admin') ? 'admin' : roleRaw.includes('exec') ? 'exec' : roleRaw.includes('manager') || roleRaw==='l2' ? 'l2' : roleRaw.includes('leader') || roleRaw==='l1' ? 'l1' : (roleRaw || 'emp');
-  const statusRaw = g(12).toLowerCase();
+  const statusRaw = g('status').toLowerCase();
   const status = statusRaw.includes('inactive') || statusRaw.includes('off') ? 'inactive' : statusRaw.includes('probation') ? 'probation' : statusRaw.includes('resign') ? 'resigned' : 'active';
   return [
-    g(0), g(1), role, g(3), g(4), g(5), g(6), g(7), g(8), g(9), g(10), g(11), status,
-    g(13) || new Date().toLocaleString('th-TH'),
-    g(14) || '—',
-    g(15),
-    ['high','medium','low'].includes(g(16).toLowerCase()) ? g(16).toLowerCase() : ''
+    g('id'), g('name'), role, g('group'), g('section'), g('division'), g('department'), g('position'), g('grade'),
+    g('l1'), g('l2'), g('approver'), status,
+    g('lastLogin') || new Date().toLocaleString('th-TH'),
+    g('startDate') || '—',
+    g('email'),
+    ['high','medium','low'].includes(g('potential').toLowerCase()) ? g('potential').toLowerCase() : ''
   ];
 }
 
