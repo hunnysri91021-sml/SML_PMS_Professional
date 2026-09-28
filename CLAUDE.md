@@ -395,6 +395,31 @@ touches employee/attendance/evaluation data.
     `SEND_AS_EMAIL` mailbox, same reasoning as the SharePoint
     Application Access Policy for #25.
 
+27. **A field editable in the app's own Add/Edit form (not just admin-only
+    fields like PIN/evalLevel) still needs a push-back path to Excel, or
+    "saved in the web" quietly means "saved on this one device/browser
+    only."** HR could type a real email into `mu_email` and save it —
+    `saveUserFromModal()` wrote it into `MASTER_USERS[15]` and the toast
+    said "อัปเดตข้อมูล...เรียบร้อย," which read exactly like a real save,
+    but nothing pushed it to the shared Excel `Employees` table, so any
+    other device (including the one used for a later "ดึงข้อมูลพนักงานจาก
+    Excel" sync) would never see it — the same shape of bug as #19/#26,
+    just for a plain data field instead of a settings/notification one.
+    Fixed with `pushSingleEmployeeToExcel(code)`: builds the row in the
+    *exact* column order `normalizeMs365Employee()` expects (id, name,
+    role, group, section, division, dept, position, grade, l1, l2,
+    approver, status, lastLogin, startDate, email, potential — 17
+    columns, deliberately excluding `pinHash`/`evalLevel`, which are not
+    real columns in that sheet per #17/#23) and `graphUpsertTableRow()`s
+    it into `cfg.employeeTable` keyed by EmpID, so repeat saves update
+    one Excel row rather than piling up duplicates (#21). Called from
+    `saveUserFromModal()` on every add/edit, same best-effort/no-blocking
+    pattern as `pushSingleEmployeeSettings()`. When adding any other
+    field to the Add/Edit Employee form, check whether it's meant to be
+    shared across devices (if so, it must round-trip to Excel the same
+    way) or genuinely local-only (if so, say so in the UI) — never leave
+    it ambiguous.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

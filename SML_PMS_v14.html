@@ -3985,6 +3985,25 @@ async function pushSingleEmployeeSettings(code){
   }
 }
 
+/* Push ข้อมูลพนักงานคนเดียว (รวม Email) กลับขึ้นตาราง Employees จริงใน Excel แบบเงียบๆ
+   หลัง HR แก้ไข/เพิ่มพนักงานผ่านหน้าเว็บ — กันปัญหาที่แก้ไว้ในเครื่องเดียวแล้วเครื่องอื่น/เว็บของ
+   คนอื่นไม่เห็น เพราะ localStorage เป็นแบบ per-device (CLAUDE.md #8) ลำดับคอลัมน์ต้องตรงกับ
+   normalizeMs365Employee() ทุกประการ (ไม่รวม pinHash/evalLevel ซึ่งไม่ใช่คอลัมน์ในตารางนี้) */
+async function pushSingleEmployeeToExcel(code){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(!emp) return;
+  try{
+    const row = [emp[0], emp[1], emp[2], emp[3], emp[4], emp[5], emp[6], emp[7], emp[8],
+                 emp[9], emp[10], emp[11], emp[12], emp[13], emp[14], emp[15]||'', emp[16]||''];
+    await graphUpsertTableRow(cfg.employeeTable, 0, code, row);
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
+  }catch(e){
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) ไม่สำเร็จ: ${e.message}`, false);
+  }
+}
+
 function renderPinStatus(code){
   const el = document.getElementById('mu_pinStatus');
   if(!el) return;
@@ -4805,6 +4824,7 @@ function saveUserFromModal() {
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
   if(evalLevel && typeof pushSingleEmployeeSettings==='function') pushSingleEmployeeSettings(id);
+  if(typeof pushSingleEmployeeToExcel==='function') pushSingleEmployeeToExcel(id);
   closeM();
 }
 
