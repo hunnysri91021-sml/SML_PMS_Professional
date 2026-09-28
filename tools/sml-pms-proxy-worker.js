@@ -109,14 +109,34 @@ async function getAppToken(env) {
   return cachedToken;
 }
 
+/* เดิม error จาก resolveSite() บอกแค่ "Requested site could not be found" เฉยๆ ไม่บอกว่า
+   ลองเรียก URL ไหนไป ทำให้แยกไม่ออกว่า SITE_URL สะกดผิด/ไฟล์อยู่ผิดที่/หรือสิทธิ์ Application
+   เข้าไซต์นี้ไม่ได้ ตอนนี้แต่ละขั้น (หา site → หา drive → หาไฟล์) จะห่อ error ด้วยข้อความบอก
+   ชัดเจนว่ากำลังลองเรียกอะไร กับ URL จริงที่ใช้ ช่วยวินิจฉัยได้เองโดยไม่ต้องใช้ Graph Explorer */
 let cachedSite = null;
 async function resolveSite(env, token) {
   if (cachedSite) return cachedSite;
   const siteUrl = new URL(env.SITE_URL);
-  const site = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${siteUrl.hostname}:${siteUrl.pathname}`);
-  const drive = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${site.id}/drive`);
+  const siteLookupUrl = `https://graph.microsoft.com/v1.0/sites/${siteUrl.hostname}:${siteUrl.pathname}`;
+  let site;
+  try {
+    site = await graphGet(token, siteLookupUrl);
+  } catch (e) {
+    throw new Error(`หา SharePoint site ไม่เจอ (SITE_URL="${env.SITE_URL}", เรียก ${siteLookupUrl}): ${e.message}`);
+  }
+  let drive;
+  try {
+    drive = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${site.id}/drive`);
+  } catch (e) {
+    throw new Error(`เจอ site แล้ว (id=${site.id}) แต่หา document library (drive) ไม่เจอ: ${e.message}`);
+  }
   const filePath = (env.FILE_PATH || 'SML_PMS_Master.xlsx').replace(/^\/+/, '');
-  const item = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root:/${encodeURI(filePath)}`);
+  let item;
+  try {
+    item = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root:/${encodeURI(filePath)}`);
+  } catch (e) {
+    throw new Error(`เจอ site/drive แล้ว แต่หาไฟล์ไม่เจอ (FILE_PATH="${env.FILE_PATH}"): ${e.message}`);
+  }
   cachedSite = { driveId: drive.id, itemId: item.id };
   return cachedSite;
 }
