@@ -3890,9 +3890,15 @@ async function doLogin(){
   const code = (codeEl?.value || '').trim();
   const pin = (pinEl?.value || '').trim();
   errEl.style.display = 'none';
-  /* ดึง PIN/แบบฟอร์มประเมินล่าสุดจาก Excel แบบเงียบก่อนตรวจสอบ (ถ้าเครื่องนี้เคย login MS365
-     ไว้แล้วเท่านั้น — จะได้ใช้ PIN เดียวกันได้จากหลายเครื่อง) เครื่องที่ไม่เคย login มาก่อนเลย
-     (เช่น มือถือส่วนตัวที่เพิ่งเปิดครั้งแรก) จะข้ามขั้นนี้ไปเงียบๆ ไม่กระทบการ login ปกติ */
+  /* ดึงข้อมูลพนักงาน (ชื่อ/เกรด/สังกัด ฯลฯ) + PIN/แบบฟอร์มประเมินล่าสุดจาก Excel แบบเงียบก่อน
+     ตรวจสอบทุกครั้งที่ล็อกอิน — เพราะ MASTER_USERS เริ่มต้นจากข้อมูลตัวอย่างที่ฝังในไฟล์เสมอตอน
+     โหลดหน้าเว็บใหม่ (ไม่ได้จำข้อมูลจริงข้ามการรีโหลด) เดิมมีแค่ ms365SyncEmployeeSettingsSilent()
+     (ซิงก์แค่ PIN/evalLevel) ทำให้ field อื่นอย่าง Grade/สังกัด ที่เพิ่งบันทึกไปยัง Excel ดูเหมือน
+     "หาย" ทุกครั้งที่เปิดเว็บใหม่ จนกว่าจะมีคนกดปุ่ม Sync เองที่หน้า MS365 — ตอนนี้ Worker URL/Key
+     ฝังเป็นค่าเริ่มต้นแล้ว (CLAUDE.md #31) จึง sync แบบเงียบได้ทุกเครื่องโดยไม่ต้อง login Microsoft */
+  if(typeof ms365SyncEmployees === 'function'){
+    try{ await ms365SyncEmployees(true); }catch(e){}
+  }
   if(typeof ms365SyncEmployeeSettingsSilent === 'function'){
     try{ await ms365SyncEmployeeSettingsSilent(); }catch(e){}
   }
@@ -6061,7 +6067,7 @@ function normalizeMs365Employee(row){
   ];
 }
 
-async function loadEmployeesFromMs365(){
+async function loadEmployeesFromMs365(silent=false){
   saveMs365Config();
   try{
     const cfg = loadMs365Config();
@@ -6087,10 +6093,10 @@ async function loadEmployeesFromMs365(){
     if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
     const cnt=document.getElementById('ms365EmpCount'); if(cnt) cnt.textContent=String(normalized.length);
     updateMs365Status('ok','Connected');
-    smlToast('โหลด Employee Master จาก Excel แล้ว ' + normalized.length + ' รายการ','ok');
+    if(!silent) smlToast('โหลด Employee Master จาก Excel แล้ว ' + normalized.length + ' รายการ','ok');
   }catch(err){
     updateMs365Status('warn','Load failed');
-    smlToast('โหลด Employee Master ไม่สำเร็จ: ' + err.message,'warn');
+    if(!silent) smlToast('โหลด Employee Master ไม่สำเร็จ: ' + err.message,'warn');
   }
 }
 
@@ -6132,7 +6138,7 @@ async function ms365SyncEmployees(silent=false){
     return;
   }
   const before = MASTER_USERS.length;
-  await loadEmployeesFromMs365();
+  await loadEmployeesFromMs365(silent);
   const cnt = MASTER_USERS.length;
   const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
   const status = document.getElementById('ms365Status')?.textContent || '';
@@ -7920,14 +7926,21 @@ document.addEventListener('input',e=>{
 
 /* คืนสถานะ login ที่เคยเข้าไว้แล้วในแท็บนี้ (sessionStorage — หายเมื่อปิดแท็บ) */
 (function(){
-  function tryRestoreSession(){
+  async function tryRestoreSession(){
     try{
       const raw = sessionStorage.getItem(SML_SESSION_KEY);
       if(!raw) return;
       const s = JSON.parse(raw);
       const u = MASTER_USERS.find(x => x[0] === s.code);
-      if(u) applySession(u);
-      else sessionStorage.removeItem(SML_SESSION_KEY);
+      if(!u){ sessionStorage.removeItem(SML_SESSION_KEY); return; }
+      applySession(u); // แสดงข้อมูลที่มีอยู่ก่อนทันที กันจอว่าง ระหว่างรอ sync จาก Excel
+      /* เพจนี้รีโหลดแล้ว MASTER_USERS กลับไปเป็นข้อมูลตัวอย่างที่ฝังในไฟล์เสมอ (เหมือน doLogin())
+         ต้อง sync ซ้ำแบบเงียบทุกครั้งที่มี session ค้างอยู่แล้วโหลดหน้าใหม่ ไม่ใช่แค่ตอน login ครั้งแรก
+         มิฉะนั้น Grade/evalLevel ที่เพิ่งบันทึกไปจะดูเหมือน "หาย" ทุกครั้งที่รีเฟรชหน้า */
+      if(typeof ms365SyncEmployees === 'function'){ try{ await ms365SyncEmployees(true); }catch(e){} }
+      if(typeof ms365SyncEmployeeSettingsSilent === 'function'){ try{ await ms365SyncEmployeeSettingsSilent(); }catch(e){} }
+      const fresh = MASTER_USERS.find(x => x[0] === s.code);
+      if(fresh) applySession(fresh);
     }catch(e){}
   }
   if(document.readyState === 'loading'){

@@ -509,6 +509,34 @@ touches employee/attendance/evaluation data.
     rotate, update them here (and redeploy) rather than asking every
     device to reconfigure itself.
 
+32. **A silent "sync PIN/evalLevel from Excel at login" (#24) is not the
+    same as syncing the *rest* of the employee record — and `MASTER_USERS`
+    resets to the file's hardcoded demo baseline on every page load/reload
+    regardless, since this app has no persistent client-side cache of its
+    own.** `doLogin()` already called `ms365SyncEmployeeSettingsSilent()`
+    (PIN + evalLevel only, from the small `EmployeeSettings` table)
+    before checking the login code, but never the full `Employees` table
+    — so Grade, org fields, etc. that HR had just saved (and which #27
+    now correctly pushes to Excel) looked like they "reverted" on every
+    normal page reload, until someone manually clicked "📥 ดึงข้อมูล
+    พนักงานจาก Excel." Worse, `tryRestoreSession()` (fires on every page
+    load when a session is already active in `sessionStorage`, which is
+    the common case — most reloads during a work session, not fresh
+    logins) restored the session using whatever stale data was in the
+    freshly-reloaded `MASTER_USERS` and never synced at all. Fixed by
+    calling `ms365SyncEmployees(true)` (silent — added a `silent` param
+    all the way through `loadEmployeesFromMs365()` too, since its own
+    success/failure toasts weren't actually gated by the outer function's
+    `silent` flag before this) in both `doLogin()` and the async
+    `tryRestoreSession()` (which now also re-applies the session with the
+    freshly-synced record once the sync completes, after an immediate
+    first `applySession()` with the stale-but-available data so the UI
+    isn't blank while waiting). This only became viable as an "always
+    silent, every load" sync once the Worker URL/key were baked in as
+    defaults (#31) — before that, a device without local Worker config
+    would have hit the same blocked-popup problem #31 fixed, just
+    triggered on every reload instead of only on save.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
