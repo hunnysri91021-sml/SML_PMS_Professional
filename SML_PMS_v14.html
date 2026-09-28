@@ -1538,7 +1538,16 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="al al-i"><span>ℹ️</span><div><b>ระบบจะเลือกแบบฟอร์มตามระดับพนักงานอัตโนมัติ</b> · ใน Demo สามารถกดเลือก 4 ระดับเพื่อทดสอบแบบฟอร์ม · <b>กรุณาส่งแบบประเมินภายในระยะเวลาที่กำหนด</b> เมื่อส่งแล้วจะไม่สามารถแก้ไขได้ เว้นแต่หัวหน้าตีกลับ</div></div>
 
-    <!-- เลือกระดับตำแหน่ง -->
+    <!-- รหัสพนักงาน — ดึงแบบฟอร์มที่ Admin กำหนดไว้ให้อัตโนมัติ -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div class="fg" style="margin:0"><label>รหัสพนักงาน</label><input id="evalCodeGate" placeholder="SML-001" oninput="onEvalCodeGateChange()" style="width:160px"></div>
+        <div id="evalLevelAssignedNote" style="font-size:12px;color:#64748b"></div>
+      </div>
+    </div>
+
+    <!-- เลือกระดับตำแหน่ง — ถ้า Admin กำหนดแบบฟอร์มให้พนักงานคนนี้แล้ว ระบบจะเลือกให้อัตโนมัติและ
+         ล็อกปุ่มอื่นไว้ กันเลือกแบบฟอร์มผิดระดับ (Admin ระบบ/Admin HR ยังสลับดูแบบฟอร์มอื่นได้ตามปกติ) -->
     <div class="card" style="margin-bottom:18px">
       <div class="card-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
         <span style="font-size:13px;font-weight:600;color:var(--t2)">แบบประเมินตามระดับ:</span>
@@ -3069,7 +3078,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
           <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>ระบบดึงผู้ประเมินแต่ละคนอัตโนมัติจากสายบังคับบัญชาจริงในทะเบียนพนักงาน (หัวหน้า L1 / L2 / ผู้อนุมัติ) — HR ไม่ต้องมอบหมายเองทีละคน หากมีรายชื่อขาดหัวหน้า ระบบจะเตือนไว้ด้านล่าง</div></div>
           <div id="assignMissingWarn"></div>
           <div class="tw"><table>
-            <thead><tr><th>พนักงาน</th><th>หัวหน้า L1</th><th>หัวหน้า L2</th><th>ผู้อนุมัติ</th><th style="text-align:center">สถานะการมอบหมาย</th></tr></thead>
+            <thead><tr><th>พนักงาน</th><th>แบบฟอร์มที่ใช้</th><th>หัวหน้า L1</th><th>หัวหน้า L2</th><th>ผู้อนุมัติ</th><th style="text-align:center">สถานะการมอบหมาย</th></tr></thead>
             <tbody id="assignRows"></tbody>
           </table></div>
         </div>
@@ -3788,25 +3797,25 @@ setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); renderCascadeRows
    status: active / probation / inactive / resigned
    ============================================================ */
 const MASTER_USERS = [
-  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email  [16]potential(ศักยภาพ: high/medium/low หรือว่างถ้ายังไม่ประเมิน)  [17]pinHash(SHA-256 ของ PIN เข้าสู่ระบบ — ยืนยันตัวตนเบื้องต้นเท่านั้น ไม่ใช่รหัสผ่านจริง, ว่างถ้ายังไม่ตั้ง)
-  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563','','',''],
-  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564','','',''],
-  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565','','',''],
-  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561','','',''],
-  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559','','',''],
-  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565','','',''],
-  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563','','',''],
-  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560','','',''],
-  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564','','',''],
-  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568','','',''],
-  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562','','',''],
-  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564','','',''],
-  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560','','',''],
-  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555','','',''],
-  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564','','',''],
-  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563','','',''],
-  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565','','',''],
-  ['SML-SYS1','ผู้ดูแลระบบ IT', 'sysadmin','SML Staff','IT & System (SML)',      'ส่วน IT',  'ฝ่ายสนับสนุน',     'ผู้ดูแลระบบ (System Admin)','M2','—','—','—','active','—','25/09/2569','','','240e8f428109187aea4d198ac27057647a0c83afc2497a35125fb6a7d758133f'],
+  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email  [16]potential(ศักยภาพ: high/medium/low หรือว่างถ้ายังไม่ประเมิน)  [17]pinHash(SHA-256 ของ PIN เข้าสู่ระบบ — ยืนยันตัวตนเบื้องต้นเท่านั้น ไม่ใช่รหัสผ่านจริง, ว่างถ้ายังไม่ตั้ง)  [18]evalLevel(แบบฟอร์มประเมินที่ Admin กำหนด: op/of/ldr/mgr — ว่างถ้ายังไม่กำหนด ให้เดาจาก role)
+  ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563','','','','op'],
+  ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564','','','','op'],
+  ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565','','','','op'],
+  ['SML-004','สุดา มีสุข',     'l1', 'SML Staff',  'HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'หัวหน้าแผนก HR&GA',     'M1','อรุณ ศิริ',     'Awe HR&GA',  'คุณเชิดชัย','active',   '12/09/68 09:00', '01/04/2561','','','','ldr'],
+  ['SML-005','อรุณ ศิริ',      'l2', 'SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'ผู้จัดการส่วน Accessory','M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '08/09/68 08:30', '16/07/2559','','','','mgr'],
+  ['SML-006','วิภา รักงาน',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ',     'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:15', '20/09/2565','','','','op'],
+  ['SML-007','มานพ ดีใจ',      'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','inactive', '01/08/68 09:20', '05/02/2563','','','','op'],
+  ['SML-008','วิชัย กล้าหาญ',  'l1', 'SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'หัวหน้าแผนกปฏิบัติการ', 'M1','อรุณ ศิริ',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:50', '11/11/2560','','','','ldr'],
+  ['SML-009','ณัฐพล ศรีสุข',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่',            'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '09/09/68 08:05', '18/05/2564','','','','of'],
+  ['SML-010','ศิริพร วงศ์ดี',  'emp','SML Staff',  'HR & GA (SML)',            'ส่วน GA',  'ฝ่ายสนับสนุน',     'เจ้าหน้าที่บัญชี',      'G2','สุดา มีสุข',    'Awe HR&GA',  'คุณเชิดชัย','probation','06/09/68 08:00', '01/07/2568','','','','of'],
+  ['SML-011','กิตติ พัฒนา',    'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'เจ้าหน้าที่คลัง',       'G2','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '07/09/68 07:55', '25/08/2562','','','','of'],
+  ['SML-012','ธีระ มั่นใจ',    'emp','SML Staff',  'Accessory Install (SML)', 'ส่วน ACC','ฝ่ายปฏิบัติการ',   'พนักงานผลิต',            'G1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:10', '14/12/2564','','','','op'],
+  ['SML-HR1','Awe HR&GA',       'admin','SML Staff','HR & GA (SML)',            'ส่วน HR',  'ฝ่ายสนับสนุน',     'AMGR HR & GA',           'M2','คุณเชิดชัย',   '—',           'คุณเชิดชัย','active',   '14/09/68 08:00', '03/03/2560','','','','mgr'],
+  ['SML-MD1','คุณเชิดชัย',     'exec','SML Staff', 'Executive',               'ส่วนบริหาร','ฝ่ายบริหาร',     'AGM / MD-SML',           'E1','—',             '—',           '—',          'active',   '13/09/68 09:30', '01/01/2555','','','','mgr'],
+  ['KTG-001','สมพร KTG',        'emp','KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'พนักงาน KTG',            'G1','วิชัย กล้าหาญ','อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 07:45', '09/10/2564','','','','op'],
+  ['KTG-002','นภา KTG',         'l1', 'KTG',        'KTG Outsource',           'ส่วน KTG','ฝ่ายปฏิบัติการ',   'หัวหน้า KTG',            'M1','อรุณ ศิริ',     'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:40', '19/06/2563','','','','ldr'],
+  ['CNK-001','วิชัย CNK',       'emp','CNK',         'CNK Outsource',           'ส่วน CNK','ฝ่ายปฏิบัติการ',   'พนักงาน CNK',            'G1','นภา KTG',       'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 08:10', '30/03/2565','','','','op'],
+  ['SML-SYS1','ผู้ดูแลระบบ IT', 'sysadmin','SML Staff','IT & System (SML)',      'ส่วน IT',  'ฝ่ายสนับสนุน',     'ผู้ดูแลระบบ (System Admin)','M2','—','—','—','active','—','25/09/2569','','','240e8f428109187aea4d198ac27057647a0c83afc2497a35125fb6a7d758133f',''],
 ];
 
 /* ==========================================
@@ -3836,6 +3845,11 @@ function applySession(u){
   if(nameEl) nameEl.textContent = `👤 ${u[1]} (${u[0]})`;
   const evalCodeEl = document.getElementById('evalCode');
   if(evalCodeEl && !evalCodeEl.value) evalCodeEl.value = u[0];
+  const evalCodeGateEl = document.getElementById('evalCodeGate');
+  if(evalCodeGateEl && !evalCodeGateEl.value){
+    evalCodeGateEl.value = u[0];
+    if(typeof onEvalCodeGateChange === 'function') onEvalCodeGateChange();
+  }
 }
 
 async function doLogin(){
@@ -4675,13 +4689,14 @@ function saveUserFromModal() {
   const startDate= startRaw ? new Date(startRaw+'T00:00:00').toLocaleDateString('th-TH') : '—';
   const email    = (document.getElementById('mu_email')?.value || '').trim();
   const potential= document.getElementById('mu_potential')?.value || '';
+  const evalLevel= document.getElementById('mu_evallevel')?.value || '';
 
   if (!id || !name || !role || !group || !section || !position || !grade || !status) {
     smlToast('กรุณากรอกข้อมูลที่มี * ให้ครบถ้วน', 'warn');
     return;
   }
 
-  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential,pinHash] */
+  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential,pinHash,evalLevel] */
   const existingRow = MASTER_USERS.find(u => u[0] === id);
   const newUser = [id, name, role, group, section, division||'—', dept||'—',
                    position, grade, l1||'—', l2||'—', approver||'—', status,
@@ -4689,7 +4704,8 @@ function saveUserFromModal() {
                    startRaw ? startDate : (existingRow?.[14] || '—'),
                    email || existingRow?.[15] || '',
                    potential || existingRow?.[16] || '',
-                   existingRow?.[17] || ''];
+                   existingRow?.[17] || '',
+                   evalLevel];
 
   const existing = MASTER_USERS.findIndex(u => u[0] === id);
   if (existing >= 0) {
@@ -4746,6 +4762,7 @@ function clearUserModalForm(){
   const status=document.getElementById('mu_status'); if(status) status.value='active';
   const sd=document.getElementById('mu_startdate'); if(sd) sd.value='';
   const pot=document.getElementById('mu_potential'); if(pot) pot.value='';
+  const evl=document.getElementById('mu_evallevel'); if(evl) evl.value='';
   const pinEl=document.getElementById('mu_pinStatus');
   if(pinEl){ pinEl.textContent='บันทึกพนักงานใหม่ก่อน จึงตั้ง PIN ได้'; pinEl.style.color='#94a3b8'; }
   const hint=document.getElementById('mu_idHint'); if(hint) hint.textContent='';
@@ -4775,6 +4792,7 @@ function fillUserFormFields(emp){
   const sdEl=document.getElementById('mu_startdate'); if(sdEl) sdEl.value = thaiDateToIso(emp[14]);
   set('mu_email', emp[15]);
   set('mu_potential', emp[16]);
+  const evlEl=document.getElementById('mu_evallevel'); if(evlEl) evlEl.value = emp[18] || '';
   if(typeof renderPinStatus==='function') renderPinStatus(emp[0]);
 }
 
@@ -5030,6 +5048,45 @@ const GRADE_KEYS = ['Ap','A','B','Cp','C'];
 const GRADE_LABELS = ['A+','A','B','C+','C'];
 const GRADE_COLORS = ['#dcfce7','#dbeafe','#f1f5f9','#fef3c7','#fee2e2'];
 const GRADE_TEXT   = ['#15803d','#1d4ed8','#475569','#b45309','#b91c1c'];
+
+/* แบบฟอร์มประเมินที่ใช้จริงสำหรับพนักงานคนหนึ่ง — ยึด MASTER_USERS[18] (ที่ Admin ระบบ/Admin HR
+   กำหนดไว้ที่หน้าเพิ่ม/แก้ไขพนักงาน) เป็นหลักเสมอ ถ้ายังไม่เคยกำหนดค่อยเดาแบบหยาบจาก role:
+   หัวหน้าแผนก(l1)->ldr, ผจก./ผู้บริหาร(l2/admin/exec)->mgr ส่วน role 'emp' เดาไม่ได้ว่าเป็นสาย
+   ปฏิบัติการ(op)หรือสำนักงาน(of) จึงต้องให้ Admin กำหนดเองเท่านั้น ไม่เดามั่ว */
+function getAssignedEvalLevel(emp){
+  if(!emp) return '';
+  if(emp[18]) return emp[18];
+  if(emp[2]==='l1') return 'ldr';
+  if(emp[2]==='l2' || emp[2]==='admin' || emp[2]==='exec') return 'mgr';
+  return '';
+}
+
+/* พิมพ์/เปลี่ยนรหัสพนักงานที่ช่องด้านบนแบบฟอร์มประเมิน -> ดึงแบบฟอร์มที่ Admin กำหนดไว้มาเลือกให้
+   อัตโนมัติทันที และล็อกปุ่มเลือกระดับอื่นไว้ (กันคนเลือกแบบฟอร์มผิดระดับเอง) ยกเว้น Admin ระบบ/
+   Admin HR ที่ยังต้องสลับดูแบบฟอร์มระดับอื่นเพื่อสอบทาน/ตรวจสอบได้ตามปกติ */
+function onEvalCodeGateChange(){
+  const code = (document.getElementById('evalCodeGate')?.value || '').trim();
+  const note = document.getElementById('evalLevelAssignedNote');
+  const isAdminViewer = CURRENT_SESSION_USER && ['admin','sysadmin'].includes(CURRENT_SESSION_USER[2]);
+  LV_KEYS.forEach(k=>{ const btn=document.getElementById('lv-'+k); if(btn) btn.disabled = false; });
+  const evalCodeEl = document.getElementById('evalCode');
+  if(!code){ if(note) note.textContent=''; return; }
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(!emp){ if(note){ note.textContent = 'ไม่พบรหัสพนักงานนี้ในระบบ'; note.style.color = '#dc2626'; } return; }
+  if(evalCodeEl) evalCodeEl.value = code;
+  const assigned = getAssignedEvalLevel(emp);
+  if(assigned){
+    setEvalLevel(assigned);
+    if(evalCodeEl) evalCodeEl.value = code;
+    if(!isAdminViewer){
+      LV_KEYS.forEach(k=>{ if(k!==assigned){ const btn=document.getElementById('lv-'+k); if(btn) btn.disabled = true; } });
+    }
+    if(note){ note.textContent = `✅ แบบฟอร์มของ ${emp[1]} ที่ Admin กำหนดไว้: ${LEVEL_CONFIG[assigned].label}`; note.style.color = '#16a34a'; }
+  } else if(note){
+    note.textContent = `⚠️ ยังไม่ได้กำหนดแบบฟอร์มประเมินสำหรับ ${emp[1]} — ติดต่อ Admin ระบบ/Admin HR ให้กำหนดที่หน้า "ผู้ใช้ & สิทธิ์" ก่อน`;
+    note.style.color = '#b45309';
+  }
+}
 
 function setEvalLevel(lv) {
   currentLevel = lv;
@@ -5688,8 +5745,13 @@ async function loadEmployeesFromMs365(){
     if(!rows.length) throw new Error('ไม่พบแถวข้อมูลในตาราง ' + cfg.employeeTable);
     const normalized = rows.map(normalizeMs365Employee).filter(r=>r[0] && r[1]);
     if(!normalized.length) throw new Error('ไม่พบ EmpID / ชื่อ-สกุล ในข้อมูลที่อ่านได้');
-    /* PIN login ผูกกับเครื่องนี้เท่านั้น ไม่ได้อยู่ใน Excel — ต้องคงค่าเดิมไว้ ไม่ให้ sync ล้าง PIN ทิ้ง */
-    normalized.forEach(r => { r[17] = MASTER_USERS.find(u => u[0] === r[0])?.[17] || ''; });
+    /* PIN login และแบบฟอร์มประเมินที่ Admin กำหนด ผูกกับระบบนี้เท่านั้น ไม่ได้อยู่ใน Excel Employee Master
+       ต้องคงค่าเดิมไว้ ไม่ให้ sync ล้างทิ้ง (บั๊กแบบเดียวกับที่เคยเกิดกับ PIN — ดู CLAUDE.md #17/#6) */
+    normalized.forEach(r => {
+      const old = MASTER_USERS.find(u => u[0] === r[0]);
+      r[17] = old?.[17] || '';
+      r[18] = old?.[18] || '';
+    });
     MASTER_USERS.splice(0, MASTER_USERS.length, ...normalized);
     renderUsers(MASTER_USERS);
     populateUserFilters();
@@ -6429,15 +6491,33 @@ function exportNineBox(){
 /* ====== Evaluation Assignment — derived automatically จากสายบังคับบัญชาจริงในทะเบียนพนักงาน
    (u[9]=หัวหน้า L1, u[10]=หัวหน้า L2, u[11]=ผู้อนุมัติ) ไม่มีตารางแยก ไม่ให้ HR มอบหมายเองทีละคน
    ตามที่ระบุ: "ห้ามสร้างข้อมูลซ้ำหลายชุดที่ขัดแย้งกัน — Employee Master ต้องเป็น Source of Truth" */
+/* สายบังคับบัญชาที่ "ต้องมี" ต่างกันตามบทบาทของคนที่ถูกประเมินเอง:
+   - emp: ต้องมีหัวหน้า L1 เป็นผู้ประเมินคนแรกเสมอ
+   - l1 (หัวหน้าแผนกเอง): ไม่ต้องมี "หัวหน้า L1" ซ้อนอีกชั้น (ตัวเองคือ L1 อยู่แล้ว) แต่ต้องมีคน
+     สอบทาน/อนุมัติเหนือขึ้นไป (L2 หรือผู้อนุมัติ อย่างใดอย่างหนึ่ง)
+   - l2 (ผจก.ส่วน): ต้องมีผู้อนุมัติขั้นสุดท้าย (เช่น AGM/MD)
+   - exec/admin/สูงสุดในองค์กร: ไม่ต้องมีใครอยู่เหนืออีก ไม่ต้องเช็ค
+   เดิมเช็คแค่ role emp/l1 ต้องมี l1[9] เท่านั้น ทำให้คนที่เป็นหัวหน้าแผนก/ผจก.ส่วนจริงถูกฟ้องว่า
+   "ขาดหัวหน้า L1" ทั้งที่ระดับนั้นไม่ควรมีอยู่แล้ว หรือไม่ถูกเช็คอะไรเลยทั้งที่ไม่มีผู้อนุมัติจริง */
 function getEvaluationAssignments(participants){
   const list = participants || getEvalParticipants();
   return list.map(u => {
-    const needsL1 = u[2]==='emp' || u[2]==='l1';
     const l1 = u[9] && u[9]!=='—' ? u[9] : '';
     const l2 = u[10] && u[10]!=='—' ? u[10] : '';
     const approver = u[11] && u[11]!=='—' ? u[11] : '';
-    const missing = needsL1 && !l1;
-    return { code:u[0], name:u[1], role:u[2], l1, l2, approver, missing };
+    let missing = false, missingReason = '';
+    if(u[2]==='emp'){
+      missing = !l1;
+      missingReason = 'ขาดหัวหน้า L1';
+    } else if(u[2]==='l1'){
+      missing = !l2 && !approver;
+      missingReason = 'ขาดผู้สอบทาน (L2 หรือผู้อนุมัติ)';
+    } else if(u[2]==='l2'){
+      missing = !approver;
+      missingReason = 'ขาดผู้อนุมัติขั้นสุดท้าย';
+    }
+    const evalLevel = getAssignedEvalLevel(u);
+    return { code:u[0], name:u[1], role:u[2], l1, l2, approver, missing, missingReason, evalLevel };
   });
 }
 function renderAssignments(participants){
@@ -6448,16 +6528,17 @@ function renderAssignments(participants){
   tbody.innerHTML = rows.length ? rows.map(r=>`
     <tr style="${r.missing?'background:#fef2f2':''}">
       <td><b>${r.name}</b><small style="display:block;color:#94a3b8">${r.code}</small></td>
-      <td>${r.l1 || '<span style="color:#dc2626">— ไม่มี —</span>'}</td>
+      <td>${r.evalLevel ? LEVEL_CONFIG[r.evalLevel].label : '<span style="color:#dc2626">— ยังไม่กำหนด —</span>'}</td>
+      <td>${r.l1 || '<span style="color:#cbd5e1">—</span>'}</td>
       <td>${r.l2 || '<span style="color:#cbd5e1">—</span>'}</td>
       <td>${r.approver || '<span style="color:#cbd5e1">—</span>'}</td>
-      <td style="text-align:center">${r.missing ? '<span class="bd b-r">⚠️ ขาดหัวหน้า L1</span>' : '<span class="bd b-g">✓ ครบถ้วน</span>'}</td>
-    </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในรอบ</td></tr>';
+      <td style="text-align:center">${r.missing ? `<span class="bd b-r">⚠️ ${r.missingReason}</span>` : '<span class="bd b-g">✓ ครบถ้วน</span>'}</td>
+    </tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในรอบ</td></tr>';
   const missingCount = rows.filter(r=>r.missing).length;
   const warnBox = document.getElementById('assignMissingWarn');
   if(warnBox){
     warnBox.innerHTML = missingCount
-      ? `<div class="al al-e" style="margin-bottom:12px"><span>⚠️</span><div><b>พบ ${missingCount} คนที่ยังไม่มีหัวหน้า L1 ในทะเบียนพนักงาน</b> — ระบบจะมอบหมายผู้ประเมินให้ไม่ได้จนกว่าจะแก้ไขที่หน้า "ผังองค์กร & พนักงาน"</div></div>`
+      ? `<div class="al al-e" style="margin-bottom:12px"><span>⚠️</span><div><b>พบ ${missingCount} คนที่สายบังคับบัญชายังไม่ครบ</b> — ระบบจะมอบหมายผู้ประเมินให้ไม่ได้จนกว่าจะแก้ไขที่หน้า "ผังองค์กร & พนักงาน"</div></div>`
       : '';
   }
 }
@@ -6465,8 +6546,8 @@ function exportAssignments(){
   const rows = getEvaluationAssignments();
   if(!rows.length){ smlToast('ไม่มีข้อมูลให้ Export','warn'); return; }
   downloadCsv('Evaluation_Assignment_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','สถานะ'],
-    rows.map(r=>[r.code,r.name,r.role,r.l1,r.l2,r.approver, r.missing?'ขาดหัวหน้า L1':'ครบถ้วน']));
+    ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท','แบบฟอร์มที่ใช้','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','สถานะ'],
+    rows.map(r=>[r.code,r.name,r.role, r.evalLevel?LEVEL_CONFIG[r.evalLevel].label:'ยังไม่กำหนด', r.l1,r.l2,r.approver, r.missing?r.missingReason:'ครบถ้วน']));
   smlToast('Export การมอบหมายผู้ประเมินแล้ว ('+rows.length+' คน)','ok');
 }
 
@@ -7309,6 +7390,20 @@ document.addEventListener('input',e=>{
           <option value="low">ต่ำ</option>
         </select>
         <div style="font-size:10.5px;color:#64748b;margin-top:2px">ใช้คำนวณ 9-Box Grid (ศักยภาพ vs ผลงาน) — ถ้าไม่ระบุจะไม่ถูกนับใน 9-Box</div>
+      </div>
+    </div>
+
+    <div class="fr">
+      <div class="fg">
+        <label>แบบฟอร์มประเมินที่ใช้ (Evaluation Level)</label>
+        <select id="mu_evallevel">
+          <option value="">— ใช้ค่าเริ่มต้นตามบทบาท —</option>
+          <option value="op">🔵 พนักงานปฏิบัติการ (PDI/Yard/ซ่อมบำรุง)</option>
+          <option value="of">🩷 พนักงานสำนักงาน</option>
+          <option value="ldr">🟢 หัวหน้าแผนก / Leader / วิศวกร</option>
+          <option value="mgr">🟡 ผู้จัดการส่วน</option>
+        </select>
+        <div style="font-size:10.5px;color:#64748b;margin-top:2px">กำหนดโดย Admin ระบบ/Admin HR เท่านั้น — ระบบจะล็อกแบบฟอร์มนี้ให้พนักงานคนนี้อัตโนมัติตอนเข้าประเมินตนเอง กันเลือกแบบฟอร์มผิดระดับ</div>
       </div>
     </div>
 

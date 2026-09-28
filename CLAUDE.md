@@ -274,6 +274,43 @@ touches employee/attendance/evaluation data.
     person's attendance twice updates one Excel row, never creates a
     second. Before adding a new "push local data to Excel" function,
     decide which shape the data has and pick the matching primitive.
+22. **A "who reviews whom" chain check must be role-aware, not a single
+    blanket rule.** `getEvaluationAssignments()` only ever checked
+    `role==='emp' || role==='l1'` need `l1[9]` set, so a real department
+    head (`l1`) or division manager (`l2`) being evaluated was flagged
+    "ขาดหัวหน้า L1" (missing L1 supervisor) even when they had a
+    perfectly real L2/approver above them — because someone who already
+    *is* the L1 doesn't have another L1 over them, that field being empty
+    is correct, not missing. Fixed by branching what "complete" means by
+    the evaluatee's own role: `emp` needs `l1`; `l1` needs `l2` OR
+    `approver` (either is a valid next reviewer); `l2` needs `approver`;
+    `exec`/`admin` (top of org) need nothing. Same shape of mistake as
+    CLAUDE.md #1/#18 (a supervisor-chain field's meaning changes with
+    context, don't apply one rule to every role) — when a workflow
+    depends on org hierarchy, list every role that participates and ask
+    "what does 'complete' mean for *this* role" instead of writing one
+    condition and assuming it generalizes.
+23. **"Which form does this person use" must be an admin-assigned fact on
+    the employee record, not a free choice made at evaluation time.** The
+    "ประเมินตนเอง" page let anyone click any of the 4 level buttons
+    (`lv-op`/`lv-of`/`lv-ldr`/`lv-mgr`) regardless of their real role —
+    nothing tied a person to the one form they should use, so the wrong
+    form could be filled and scored under the wrong Y/Z weighting.
+    Added `MASTER_USERS[18]` (`evalLevel`, admin-set, append-only per
+    CLAUDE.md #5) with a `mu_evallevel` dropdown in the Add/Edit Employee
+    modal (reachable only from admin-gated pages, matching "กำหนดโดย
+    Admin ระบบ/Admin HR"), `getAssignedEvalLevel(emp)` (uses the explicit
+    assignment first, falls back to a role-based guess only for `l1`→ldr
+    and `l2`/`admin`/`exec`→mgr — role `emp` is genuinely ambiguous
+    between op/of and is never guessed, it must be assigned), and
+    `onEvalCodeGateChange()` wired to a new code-entry field that
+    auto-applies the assigned level and disables the other three level
+    buttons so a regular user can't pick the wrong one (an
+    `admin`/`sysadmin` viewer keeps all buttons enabled, since they
+    legitimately need to check other people's forms). Preserved across
+    an MS365 employee sync the same way PIN hashes are (re-merged by
+    code before the array replace) since it isn't and shouldn't be a
+    column in the Excel Employee Master.
 
 ## Verification checklist for any change to this file
 
