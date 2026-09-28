@@ -484,6 +484,31 @@ touches employee/attendance/evaluation data.
     ask for (or verify against) a real screenshot of its header row —
     never assume the order "should" match this app's internal shape.
 
+31. **The Worker's whole point (#25) — "zero setup on any device, even one
+    that's never touched Microsoft" — only holds if the Worker's own
+    `workerUrl`/`workerApiKey` are themselves zero-setup.** They were left
+    blank in `DEFAULT_MS365_CONFIG` (only `tenantId`/`clientId`/`siteUrl`
+    were baked in), so only the one admin device where someone had
+    manually typed them into the MS365 setup form actually routed through
+    the Worker — every other device (a fresh phone opening the app for
+    the first time) had `isWorkerConfigured(cfg)` false and silently fell
+    back to the old delegated MSAL path, which calls `loginPopup()` with
+    no cached account. That popup call, several `await`s deep inside a
+    background push like `pushSingleEmployeeToExcel()`, loses the
+    original click's "user gesture" context by the time it fires, so
+    mobile browsers block it — the field-reported symptom was "the save
+    button does nothing." Fixed by baking the real `workerUrl`/
+    `workerApiKey` into `DEFAULT_MS365_CONFIG` itself, same as
+    `tenantId`/`clientId` already were — `loadMs365Config()`'s existing
+    merge logic (`stored[k] || DEFAULT_MS365_CONFIG[k]`, from CLAUDE.md
+    #6) picks this up automatically with zero other code changes, on
+    every device, new or old. This doesn't change the key's real security
+    posture (#25 already treats it as a low-grade gate visible in
+    DevTools on any configured device) — it just makes "configured"
+    universal instead of per-device. If the Worker URL/key ever need to
+    rotate, update them here (and redeploy) rather than asking every
+    device to reconfigure itself.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

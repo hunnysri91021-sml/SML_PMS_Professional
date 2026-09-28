@@ -5510,8 +5510,16 @@ const DEFAULT_MS365_CONFIG = {
   filePath: '_SML_PMS_Professiona/SML_PMS_Master.xlsx',
   employeeTable: 'Employees',
   evaluationTable: 'Appraisals',
-  workerUrl: '',
-  workerApiKey: ''
+  /* Worker URL/API Key ฝังเป็นค่าเริ่มต้นเหมือน tenantId/clientId ด้านบน — จุดประสงค์ทั้งหมดของ
+     Worker (CLAUDE.md #25) คือให้ "ทุกเครื่อง แม้เครื่องที่ไม่เคย login Microsoft เลย" ใช้ได้ทันที
+     โดยไม่ต้องตั้งค่าอะไรเอง ถ้าปล่อยว่างไว้ให้แต่ละเครื่องกรอกเอง (ใน localStorage ของเครื่องนั้น)
+     จะพลาดเป้าหมายนี้ไปเลย — เครื่อง/มือถือใหม่ที่ไม่เคยตั้งค่าจะยังไหลไปทาง MSAL เดิมที่พยายามเปิด
+     popup login Microsoft อยู่ดี (ถูกเบราว์เซอร์บล็อกเงียบๆ เห็นเป็น "ปุ่มกดแล้วไม่มีอะไรเกิดขึ้น")
+     PROXY_API_KEY เป็นกุญแจชั้นต่ำอยู่แล้วตามที่เอกสารบอก (เห็นได้จาก DevTools Network tab อยู่แล้ว
+     แม้ตอนที่ต้องกรอกเอง) ความปลอดภัยจริงมาจาก SharePoint Application Access Policy ฝั่ง Worker
+     ไม่ใช่ตัว Key เอง ฝังไว้ตรงนี้จึงไม่ได้ลดความปลอดภัยลงกว่าที่เป็นอยู่ */
+  workerUrl: 'https://smlpmsms365proxy.hunnysri91021.workers.dev',
+  workerApiKey: 'Tingtang1'
 };
 
 let msalInstance = null;
