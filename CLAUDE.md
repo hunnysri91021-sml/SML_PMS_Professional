@@ -674,6 +674,37 @@ touches employee/attendance/evaluation data.
     init, same as every other page-specific render function in this
     file's nav dispatcher.
 
+37. **The "ตั้งค่าผู้ใช้ & บทบาท" page's 6 role cards were pure mock HTML,
+    and their "ดูสิทธิ์"/"แก้ไข" buttons routed through `actionByText()`
+    (a generic text-matching dispatcher built to make demo buttons show
+    *some* plausible toast) into the same `mEditRole` modal every time,
+    hardcoded to "หัวหน้าแผนก / Leader (L1)" regardless of which card was
+    clicked — editing the Employee card showed Leader's name and
+    checkboxes, and the save button was `closeM();alert('บันทึกบทบาท
+    เรียบร้อย')` with zero real inputs behind it (ids didn't even exist
+    on the fields).** Same shape of bug as #9 (edit opens the wrong/
+    blank data) stacked with #10 (fake success alert). Fixed with a real
+    per-role store, `ROLE_PERMS` (`ROLE_PERMS_KEY`, `ROLE_DEFS` for the
+    6 real role keys already used everywhere else in this file —
+    `sysadmin`/`admin`/`exec`/`l2`/`l1`/`emp`, never a new custom role
+    key), following the exact same load/merge/reset pattern as
+    `NAV_PERMS`/`loadNavPerms()` immediately above it in the file.
+    `editRole(key)` populates the modal from that role's real stored
+    name/description/10 permission checkboxes; `saveRoleFromModal()`
+    writes them back keyed by role, re-renders the cards
+    (`renderRoleCards()`, replacing the static `<div class="role-card">`
+    markup), and persists — verified a renamed role survives a real
+    page reload. `resetRolePermsToDefault()` mirrors
+    `resetNavPerms()`. Left "+ เพิ่มบทบาทใหม่" *not* wired to fake-create
+    a new role: dozens of places in this file (nav permissions,
+    evaluation-assignment logic, role badges) switch on these exact 6
+    role-key strings, so a genuinely new role wouldn't function anywhere
+    else in the app even if the modal "succeeded" — replaced its fake
+    `alert('สร้างบทบาทใหม่เรียบร้อย')` with an honest explanation of why
+    (CLAUDE.md #10's "visibly disable it with a one-line reason" rule),
+    rather than building a create-flow whose result would silently not
+    work anywhere.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

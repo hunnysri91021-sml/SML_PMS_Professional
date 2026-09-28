@@ -2869,69 +2869,9 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   </div>
 
   <div class="card">
-    <div class="card-h"><h3>ภาพรวมบทบาทและสิทธิ์</h3><div class="r"><span class="bd b-b">6 บทบาทหลัก</span></div></div>
+    <div class="card-h"><h3>ภาพรวมบทบาทและสิทธิ์</h3><div class="r"><span class="bd b-b">6 บทบาทหลัก</span> <button class="btn btn-sm" onclick="resetRolePermsToDefault()">↺ รีเซ็ตเป็นค่าเริ่มต้น</button></div></div>
     <div class="card-b">
-      <div class="role-grid">
-        <div class="role-card admin" style="border-color:#dc2626">
-          <div class="role-top"><div class="role-avatar" style="background:#fee2e2;color:#dc2626">🛡️</div><div class="role-title"><b>Super Admin</b><span>Admin ระบบสูงสุด / System Owner</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
-          <div class="permission-list">
-            <div class="permission"><span class="yes">✓</span> มองเห็นทุกฟังก์ชันในระบบ</div><div class="permission"><span class="yes">✓</span> ประเมิน/สอบทาน/Calibration/อนุมัติ</div>
-            <div class="permission"><span class="yes">✓</span> ตั้งค่าระบบทั้งหมด</div><div class="permission"><span class="yes">✓</span> รายงาน & Export</div>
-            <div class="permission"><span class="yes">✓</span> จัดการผู้ใช้ & บทบาท</div><div class="permission"><span class="yes">✓</span> Audit Log</div>
-          </div>
-          <div class="role-actions"><button class="btn btn-sm">ดูสิทธิ์</button><button class="btn btn-sm btn-p">แก้ไข</button></div>
-        </div>
-
-        <div class="role-card admin">
-          <div class="role-top"><div class="role-avatar">👑</div><div class="role-title"><b>Admin</b><span>HR & GA</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
-          <div class="permission-list">
-            <div class="permission"><span class="yes">✓</span> จัดการผู้ใช้</div><div class="permission"><span class="yes">✓</span> ตั้งค่ารอบ</div>
-            <div class="permission"><span class="yes">✓</span> แบบประเมิน</div><div class="permission"><span class="yes">✓</span> รายงาน & Export</div>
-            <div class="permission"><span class="no">—</span> ประเมิน/สอบทาน/Calibration/อนุมัติ</div><div class="permission"><span class="yes">✓</span> Audit Log</div>
-          </div>
-          <div class="role-actions"><button class="btn btn-sm">ดูสิทธิ์</button><button class="btn btn-sm btn-p">แก้ไข</button></div>
-        </div>
-
-        <div class="role-card exec">
-          <div class="role-top"><div class="role-avatar">💼</div><div class="role-title"><b>Executive</b><span>AGM / MD / ผู้บริหาร</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
-          <div class="permission-list">
-            <div class="permission"><span class="yes">✓</span> ดู Dashboard</div><div class="permission"><span class="yes">✓</span> อนุมัติผล</div>
-            <div class="permission"><span class="yes">✓</span> Calibration</div><div class="permission"><span class="yes">✓</span> รายงาน & Export</div>
-            <div class="permission"><span class="no">—</span> แก้ไขแบบประเมิน</div><div class="permission"><span class="no">—</span> จัดการผู้ใช้</div>
-          </div>
-          <div class="role-actions"><button class="btn btn-sm">ดูสิทธิ์</button><button class="btn btn-sm btn-p">แก้ไข</button></div>
-        </div>
-
-        <div class="role-card manager">
-          <div class="role-top"><div class="role-avatar">🎯</div><div class="role-title"><b>Manager (L2)</b><span>ผู้จัดการส่วน</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
-          <div class="permission-list">
-            <div class="permission"><span class="yes">✓</span> ประเมินทีม</div><div class="permission"><span class="yes">✓</span> สอบทาน L1</div>
-            <div class="permission"><span class="yes">✓</span> Calibration</div><div class="permission"><span class="yes">✓</span> ดูรายงาน</div>
-            <div class="permission"><span class="no">—</span> อนุมัติขั้นสุดท้าย</div><div class="permission"><span class="no">—</span> ตั้งค่าระบบ</div>
-          </div>
-          <div class="role-actions"><button class="btn btn-sm">ดูสิทธิ์</button><button class="btn btn-sm btn-p">แก้ไข</button></div>
-        </div>
-
-        <div class="role-card leader">
-          <div class="role-top"><div class="role-avatar">👔</div><div class="role-title"><b>Leader (L1)</b><span>หัวหน้าแผนก / Leader / Engineer</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
-          <div class="permission-list">
-            <div class="permission"><span class="yes">✓</span> ประเมินทีม</div><div class="permission"><span class="yes">✓</span> ดูผลทีม</div>
-            <div class="permission"><span class="yes">✓</span> บันทึกความคิดเห็น</div><div class="permission"><span class="yes">✓</span> ตีกลับการประเมิน</div>
-            <div class="permission"><span class="no">—</span> Calibration</div><div class="permission"><span class="no">—</span> อนุมัติขั้นสุดท้าย</div>
-          </div>
-          <div class="role-actions"><button class="btn btn-sm">ดูสิทธิ์</button><button class="btn btn-sm btn-p">แก้ไข</button></div>
-        </div>
-
-        <div class="role-card employee">
-          <div class="role-top"><div class="role-avatar">🙋</div><div class="role-title"><b>Employee</b><span>พนักงานปฏิบัติการ / สำนักงาน</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
-          <div class="permission-list">
-            <div class="permission"><span class="yes">✓</span> ประเมินตนเอง</div><div class="permission"><span class="yes">✓</span> ดูผลประเมิน</div>
-            <div class="permission"><span class="yes">✓</span> รับทราบผล</div><div class="permission"><span class="yes">✓</span> แผนพัฒนา</div>
-            <div class="permission"><span class="no">—</span> ประเมินผู้อื่น</div><div class="permission"><span class="no">—</span> รายงานผู้บริหาร</div>
-          </div>
-          <div class="role-actions"><button class="btn btn-sm">ดูสิทธิ์</button><button class="btn btn-sm btn-p">แก้ไข</button></div>
-        </div>
-      </div>
+      <div class="role-grid" id="roleCardsGrid"></div>
     </div>
   </div>
 
@@ -3318,6 +3258,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
     if(typeof stopMs365AutoSync==='function') stopMs365AutoSync();
   }
   if(p==='settings' && typeof renderNavPermEditor==='function') renderNavPermEditor();
+  if(p==='settings' && typeof renderRoleCards==='function') renderRoleCards();
   if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
@@ -3387,6 +3328,105 @@ function renderNavPermEditor(){
     </div>`;
 }
 loadNavPerms();
+
+/* ====== การ์ดบทบาท & สิทธิ์ (หน้า "ตั้งค่าผู้ใช้ & บทบาท") ======
+   เดิม 6 การ์ดนี้เป็น HTML ฝังตายตัว และปุ่ม "แก้ไข"/"ดูสิทธิ์" ทุกใบวิ่งไปที่ actionByText()
+   (ตัว dispatcher เดาการกระทำจากข้อความปุ่ม ใช้กับปุ่ม demo ทั่วไฟล์) ซึ่งเปิด modal เดิมที่ฝัง
+   ค่า "หัวหน้าแผนก / Leader (L1)" ตายตัวเสมอ ไม่ว่าจะกดการ์ดไหน — แก้ไขคน Employee แล้วเห็นชื่อ/
+   ติ๊กของ Leader แทน และปุ่มบันทึกก็แค่ alert หลอกไม่มีข้อมูลจริงอยู่เบื้องหลังเลย (บั๊กแบบเดียวกับ
+   CLAUDE.md #9 + #10) แก้โดยสร้าง ROLE_PERMS จริงต่อ role key (6 คีย์เดียวกับที่ใช้ทั่วระบบ:
+   sysadmin/admin/exec/l2/l1/emp) ผูกกับ localStorage + reset path (ตามแพทเทิร์น NAV_PERMS ด้านบน) */
+const ROLE_PERMS_KEY = 'smlPmsRolePerms';
+const ROLE_DEFS = [
+  {key:'sysadmin', icon:'🛡️', avatarBg:'#fee2e2', avatarColor:'#dc2626', cardClass:'admin', borderColor:'#dc2626',
+    name:'Super Admin', desc:'Admin ระบบสูงสุด / System Owner',
+    perms:{selfEval:true, teamEval:true, reviewL2:true, calibration:true, finalApprove:true, dashTeam:true, dashOrg:true, importTime:true, exportReport:true, adminSettings:true}},
+  {key:'admin', icon:'👑', avatarBg:'', avatarColor:'', cardClass:'admin', borderColor:'',
+    name:'Admin', desc:'HR & GA',
+    perms:{selfEval:true, teamEval:false, reviewL2:false, calibration:false, finalApprove:false, dashTeam:true, dashOrg:true, importTime:true, exportReport:true, adminSettings:true}},
+  {key:'exec', icon:'💼', avatarBg:'', avatarColor:'', cardClass:'exec', borderColor:'',
+    name:'Executive', desc:'AGM / MD / ผู้บริหาร',
+    perms:{selfEval:true, teamEval:false, reviewL2:false, calibration:true, finalApprove:true, dashTeam:true, dashOrg:true, importTime:false, exportReport:true, adminSettings:false}},
+  {key:'l2', icon:'🎯', avatarBg:'', avatarColor:'', cardClass:'manager', borderColor:'',
+    name:'Manager (L2)', desc:'ผู้จัดการส่วน',
+    perms:{selfEval:true, teamEval:true, reviewL2:true, calibration:true, finalApprove:false, dashTeam:true, dashOrg:false, importTime:false, exportReport:true, adminSettings:false}},
+  {key:'l1', icon:'👔', avatarBg:'', avatarColor:'', cardClass:'leader', borderColor:'',
+    name:'Leader (L1)', desc:'หัวหน้าแผนก / Leader / Engineer',
+    perms:{selfEval:true, teamEval:true, reviewL2:false, calibration:false, finalApprove:false, dashTeam:true, dashOrg:false, importTime:false, exportReport:false, adminSettings:false}},
+  {key:'emp', icon:'🙋', avatarBg:'', avatarColor:'', cardClass:'employee', borderColor:'',
+    name:'Employee', desc:'พนักงานปฏิบัติการ / สำนักงาน',
+    perms:{selfEval:true, teamEval:false, reviewL2:false, calibration:false, finalApprove:false, dashTeam:false, dashOrg:false, importTime:false, exportReport:false, adminSettings:false}}
+];
+const ROLE_PERM_LABELS = {selfEval:'ประเมินตนเอง', teamEval:'ประเมินลูกน้องทางตรง (L1)', reviewL2:'สอบทาน L2',
+  calibration:'Calibration', finalApprove:'อนุมัติขั้นสุดท้าย', dashTeam:'ดู Dashboard ทีม',
+  dashOrg:'ดู Dashboard องค์กร', importTime:'Import ข้อมูลเวลา', exportReport:'Export รายงาน', adminSettings:'ตั้งค่าระบบ (Admin)'};
+let ROLE_PERMS = {};
+function loadRolePerms(){
+  let saved={};
+  try{ saved=JSON.parse(localStorage.getItem(ROLE_PERMS_KEY)||'{}'); }catch(e){ saved={}; }
+  ROLE_PERMS = {};
+  ROLE_DEFS.forEach(r=>{
+    const s = saved[r.key] || {};
+    ROLE_PERMS[r.key] = { name: s.name || r.name, desc: s.desc || r.desc, perms: { ...r.perms, ...(s.perms||{}) } };
+  });
+}
+function saveRolePerms(){ localStorage.setItem(ROLE_PERMS_KEY, JSON.stringify(ROLE_PERMS)); }
+function resetRolePermsToDefault(){
+  if(!confirm('รีเซ็ตชื่อ/คำอธิบาย/สิทธิ์ของทุกบทบาทกลับเป็นค่าเริ่มต้นของระบบ?')) return;
+  localStorage.removeItem(ROLE_PERMS_KEY);
+  loadRolePerms();
+  renderRoleCards();
+  smlToast('รีเซ็ตบทบาทเป็นค่าเริ่มต้นแล้ว','ok');
+}
+function renderRoleCards(){
+  const grid = document.getElementById('roleCardsGrid'); if(!grid) return;
+  grid.innerHTML = ROLE_DEFS.map(def=>{
+    const r = ROLE_PERMS[def.key] || def;
+    const items = Object.keys(ROLE_PERM_LABELS).map(k=>{
+      const on = !!r.perms[k];
+      return `<div class="permission"><span class="${on?'yes':'no'}">${on?'✓':'—'}</span> ${ROLE_PERM_LABELS[k]}</div>`;
+    }).join('');
+    const avatarStyle = def.avatarBg ? ` style="background:${def.avatarBg};color:${def.avatarColor}"` : '';
+    const cardStyle = def.borderColor ? ` style="border-color:${def.borderColor}"` : '';
+    return `<div class="role-card ${def.cardClass}"${cardStyle}>
+      <div class="role-top"><div class="role-avatar"${avatarStyle}>${def.icon}</div><div class="role-title"><b>${r.name}</b><span>${r.desc}</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
+      <div class="permission-list">${items}</div>
+      <div class="role-actions"><button class="btn btn-sm" onclick="editRole('${def.key}')">ดูสิทธิ์</button><button class="btn btn-sm btn-p" onclick="editRole('${def.key}')">แก้ไข</button></div>
+    </div>`;
+  }).join('');
+}
+let editingRoleKey = null;
+function editRole(key){
+  const r = ROLE_PERMS[key];
+  if(!r){ smlToast('ไม่พบบทบาทนี้ในระบบ','warn'); return; }
+  editingRoleKey = key;
+  const setV=(id,val)=>{ const el=document.getElementById(id); if(el) el.value = val ?? ''; };
+  setV('role_name', r.name);
+  setV('role_desc', r.desc);
+  Object.keys(ROLE_PERM_LABELS).forEach(k=>{
+    const el = document.getElementById('rp_'+k);
+    if(el) el.checked = !!r.perms[k];
+  });
+  const title = document.getElementById('mEditRoleTitle');
+  if(title) title.textContent = '✏️ แก้ไขบทบาท: ' + r.name;
+  openM('mEditRole');
+}
+function saveRoleFromModal(){
+  if(!editingRoleKey){ closeM(); return; }
+  const name = document.getElementById('role_name')?.value?.trim();
+  const desc = document.getElementById('role_desc')?.value?.trim();
+  if(!name){ smlToast('กรุณากรอกชื่อบทบาท','warn'); return; }
+  const perms = {};
+  Object.keys(ROLE_PERM_LABELS).forEach(k=>{ perms[k] = !!document.getElementById('rp_'+k)?.checked; });
+  ROLE_PERMS[editingRoleKey] = { name, desc, perms };
+  saveRolePerms();
+  renderRoleCards();
+  if(typeof appendAuditLog==='function') appendAuditLog('role','แก้ไขบทบาท', editingRoleKey, name);
+  editingRoleKey = null;
+  closeM();
+  smlToast('บันทึกบทบาทเรียบร้อย','ok');
+}
+loadRolePerms();
 
 function setRole(r){
   document.querySelectorAll('[data-role]').forEach(el=>{
@@ -4434,6 +4474,7 @@ setTimeout(() => {
   if(typeof populateAttendanceEmpSelect==='function') populateAttendanceEmpSelect();
   if(typeof renderAttendanceList==='function') renderAttendanceList();
   if(typeof renderCyclesTable==='function') renderCyclesTable();
+  if(typeof renderRoleCards==='function') renderRoleCards();
   if(typeof renderSysStatusBanner==='function') renderSysStatusBanner();
   if(typeof renderPendingList==='function') renderPendingList();
   if(typeof refreshSysStatusFromMs365==='function') refreshSysStatusFromMs365();
@@ -8069,42 +8110,40 @@ document.addEventListener('input',e=>{
 
 <!-- Modal: Edit Role -->
 <div class="ov" id="mEditRole"><div class="md" style="max-width:560px">
-  <div class="md-h"><h3>✏️ แก้ไขบทบาท</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-h"><h3 id="mEditRoleTitle">✏️ แก้ไขบทบาท</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="fg"><label>ชื่อบทบาท</label><input value="หัวหน้าแผนก / Leader (L1)"></div>
-    <div class="fg"><label>คำอธิบาย</label><input value="หัวหน้างาน ประเมินลูกน้องทางตรง"></div>
+    <div class="fg"><label>ชื่อบทบาท</label><input id="role_name"></div>
+    <div class="fg"><label>คำอธิบาย</label><input id="role_desc"></div>
     <div class="fg"><label>สิทธิ์การเข้าถึง</label></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;font-size:13px">
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" checked style="width:auto"> ประเมินตนเอง</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" checked style="width:auto"> ประเมินลูกน้องทางตรง (L1)</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" style="width:auto"> สอบทาน L2</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" style="width:auto"> Calibration</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" style="width:auto"> อนุมัติขั้นสุดท้าย</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" checked style="width:auto"> ดู Dashboard ทีม</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" style="width:auto"> ดู Dashboard องค์กร</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" style="width:auto"> Import ข้อมูลเวลา</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" style="width:auto"> Export รายงาน</label>
-      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" style="width:auto"> ตั้งค่าระบบ (Admin)</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_selfEval" style="width:auto"> ประเมินตนเอง</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_teamEval" style="width:auto"> ประเมินลูกน้องทางตรง (L1)</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_reviewL2" style="width:auto"> สอบทาน L2</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_calibration" style="width:auto"> Calibration</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_finalApprove" style="width:auto"> อนุมัติขั้นสุดท้าย</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_dashTeam" style="width:auto"> ดู Dashboard ทีม</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_dashOrg" style="width:auto"> ดู Dashboard องค์กร</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_importTime" style="width:auto"> Import ข้อมูลเวลา</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_exportReport" style="width:auto"> Export รายงาน</label>
+      <label style="display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--bd);border-radius:7px"><input type="checkbox" id="rp_adminSettings" style="width:auto"> ตั้งค่าระบบ (Admin)</label>
     </div>
   </div>
   <div class="md-f">
     <button class="btn" onclick="closeM()">ยกเลิก</button>
-    <button class="btn btn-p" onclick="closeM();alert('บันทึกบทบาทเรียบร้อย')">บันทึก</button>
+    <button class="btn btn-p" onclick="saveRoleFromModal()">บันทึก</button>
   </div>
 </div></div>
 
-<!-- Modal: Add Role -->
+<!-- Modal: Add Role — บทบาทใหม่ (นอกเหนือ 6 บทบาทมาตรฐาน) ยังใช้งานจริงไม่ได้ เพราะทั้งระบบ
+     (สิทธิ์เมนู, การมอบหมายงานประเมิน, ฯลฯ) ผูกกับ 6 role key คงที่นี้โดยตรงหลายสิบจุด — บอกตามจริง
+     แทนที่จะแกล้งสร้างสำเร็จ (ดู CLAUDE.md #10) -->
 <div class="ov" id="mAddRole"><div class="md" style="max-width:480px">
   <div class="md-h"><h3>+ เพิ่มบทบาทใหม่</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="fg"><label>ชื่อบทบาท <i>*</i></label><input placeholder="เช่น ที่ปรึกษา / HR Specialist"></div>
-    <div class="fg"><label>รหัสบทบาท <i>*</i></label><input placeholder="เช่น hr_spec (ตัวพิมพ์เล็ก ไม่มีช่องว่าง)"></div>
-    <div class="fg"><label>คำอธิบาย</label><textarea rows="2" placeholder="อธิบายหน้าที่และขอบเขตสิทธิ์"></textarea></div>
-    <div class="al al-w"><span>⚠️</span><div>หลังสร้างบทบาท ไปกำหนดสิทธิ์เพิ่มเติมได้ที่ "แก้ไขบทบาท"</div></div>
+    <div class="al al-w"><span>⚠️</span><div>ระบบนี้รองรับเฉพาะ 6 บทบาทมาตรฐาน (Super Admin, Admin, Executive, Manager, Leader, Employee) เท่านั้น — ยังไม่รองรับการสร้างบทบาทใหม่นอกเหนือจากนี้ เพราะสิทธิ์เมนูและการมอบหมายงานประเมินทั้งระบบผูกกับ 6 บทบาทนี้โดยตรง ต้องการเพิ่มบทบาทใหม่จริงๆ ติดต่อผู้พัฒนาระบบ</div></div>
   </div>
   <div class="md-f">
-    <button class="btn" onclick="closeM()">ยกเลิก</button>
-    <button class="btn btn-p" onclick="closeM();alert('สร้างบทบาทใหม่เรียบร้อย')">สร้าง</button>
+    <button class="btn btn-p" onclick="closeM()">เข้าใจแล้ว</button>
   </div>
 </div></div>
 
