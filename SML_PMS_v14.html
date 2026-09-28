@@ -6581,7 +6581,7 @@ async function importMergedDataFile(input){
   saveAttendance();
   renderAttendanceList();
   const setPending=(v)=>{const el=document.getElementById('appraisalPending'); if(el) el.textContent=v+' รายการ';};
-  setPending(drafts.length);
+  setPending(getPendingAppraisals().length);
   renderPendingList();
   if(box) box.innerHTML = `นำเข้า ${fileCount} ไฟล์สำเร็จ · ผลประเมินใหม่ ${evalCount} รายการ · ข้อมูลวันลา ${attCount} คน` + (failCount ? ` · <span style="color:#dc2626">ล้มเหลว ${failCount} ไฟล์</span>` : '');
   appendSyncLog(`นำเข้าไฟล์จากผู้ไม่มี MS365: ${fileCount} ไฟล์ · ผลประเมิน ${evalCount} · วันลา ${attCount}${failCount?' · ล้มเหลว '+failCount:''}`, failCount===0);
@@ -6590,11 +6590,17 @@ async function importMergedDataFile(input){
   input.value = '';
 }
 
+/* "ค้าง Push" ที่แท้จริง = Approved แล้วแต่ยังไม่เคย push สำเร็จ (เช็คจาก PUSHED_APPRAISALS_KEY) —
+   รายการที่ยัง Draft/Submitted/Calibrated ไม่นับว่า "ค้าง Push" เพราะยังไม่ถึงเวลา push (ตาม
+   เงื่อนไขเดิมของ ms365PushAppraisals() ที่ push เฉพาะ Approved) ส่วนรายการที่ push สำเร็จแล้วก็ไม่
+   นับซ้ำ แม้จะยังอยู่ใน getDrafts() ตลอดไปก็ตาม (ดู PUSHED_APPRAISALS_KEY ด้านบน) */
+function getPendingAppraisals(){
+  return getDrafts().filter(d => d[d.length-1]==='Approved' && !isAppraisalPushed(draftKey(d)));
+}
 function renderPendingList(){
   const box = document.getElementById('pendingListArea');
   if(!box) return;
-  let drafts=[];
-  try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ drafts=[]; }
+  const drafts = getPendingAppraisals();
   if(!drafts.length){
     box.innerHTML = '<div style="color:#94a3b8;font-size:12px">ไม่มีผลประเมินค้าง Push</div>';
     return;
@@ -6616,6 +6622,26 @@ function getDrafts(){
 }
 function saveDrafts(drafts){ localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(drafts)); }
 function draftKey(d){ return d[0]+'|'+d[2]+'|'+d[3]; }
+
+/* เดิม ms365PushAppraisals() เอารายการที่ Approved+push สำเร็จแล้ว "ลบออกจาก" MS365_LOCAL_DRAFT_KEY
+   ทันที (กันไม่ให้ re-push ซ้ำ ตาม CLAUDE.md #7) — แต่คิวเดียวกันนี้ยังเป็นแหล่งข้อมูลเดียวที่หน้า
+   Report/Dashboard/พิมพ์ใบประเมิน Batch ใช้ด้วย (getDrafts() ผ่าน getReportData()/departmentSummary()/
+   printBatchApproved()) พอลบทิ้งหลัง push แล้ว คนที่ประเมินเสร็จ+อนุมัติ+push ไป Excel เรียบร้อยแล้ว
+   จะหายไปจากรายงาน/แดชบอร์ด/พิมพ์ใบประเมินในเครื่องนั้นทันที (เห็นคะแนนเฉลี่ย/เกรด A-E เป็น 0/—
+   ทั้งที่ประเมินจริงแล้ว) — ตอนนี้ graphUpsertTableRow() รองรับคีย์ผสมแล้ว (CLAUDE.md #41) re-push
+   ซ้ำจึงไม่ทำให้เกิดแถวซ้ำใน Excel อีกต่อไป จึง**ไม่ต้องลบออกจากคิวอีกแล้ว** — ใช้ store แยกนี้
+   (key เดียวกับ draftKey) แค่จำว่า "อันไหน push สำเร็จแล้ว" สำหรับนับจำนวน "ค้าง Push" จริงๆ
+   เท่านั้น ไม่กระทบ getDrafts()/รายงานที่ต้องเห็นข้อมูลครบทุกคนเสมอ */
+const PUSHED_APPRAISALS_KEY = 'smlPmsPushedAppraisals';
+function markAppraisalPushed(key){
+  let pushed={};
+  try{ pushed=JSON.parse(localStorage.getItem(PUSHED_APPRAISALS_KEY)||'{}'); }catch(e){ pushed={}; }
+  pushed[key] = new Date().toISOString();
+  localStorage.setItem(PUSHED_APPRAISALS_KEY, JSON.stringify(pushed));
+}
+function isAppraisalPushed(key){
+  try{ return !!JSON.parse(localStorage.getItem(PUSHED_APPRAISALS_KEY)||'{}')[key]; }catch(e){ return false; }
+}
 function updateDraftStatus(keys, newStatus){
   const keySet = new Set(keys);
   const drafts = getDrafts();
@@ -7380,16 +7406,16 @@ function renderNotifBell(){
 }
 
 async function ms365PushAppraisals(){
-  let drafts=[];
-  try{ drafts=JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ drafts=[]; }
+  const drafts = getDrafts();
   const setPending=(v)=>{const el=document.getElementById('appraisalPending'); if(el) el.textContent=v+' รายการ';};
-  /* Push ขึ้น Excel เฉพาะรายการที่ผ่านอนุมัติขั้นสุดท้ายแล้ว (สถานะ Approved) เท่านั้น
-     รายการที่ยังอยู่ระหว่าง Draft/Submitted/L2Reviewed/Calibrated ต้องไม่หลุดเข้า Excel ก่อนเวลา */
-  const toPush = drafts.filter(d=>d[d.length-1]==='Approved');
-  const notReady = drafts.filter(d=>d[d.length-1]!=='Approved');
+  /* Push ขึ้น Excel เฉพาะรายการที่ผ่านอนุมัติขั้นสุดท้ายแล้ว (สถานะ Approved) และยังไม่เคย push
+     สำเร็จมาก่อน (เช็คจาก PUSHED_APPRAISALS_KEY) — รายการที่ยังอยู่ระหว่าง Draft/Submitted/
+     L2Reviewed/Calibrated ต้องไม่หลุดเข้า Excel ก่อนเวลา */
+  const toPush = drafts.filter(d=>d[d.length-1]==='Approved' && !isAppraisalPushed(draftKey(d)));
   if(!toPush.length){
-    smlToast(drafts.length ? 'มีผลประเมินค้างอยู่ '+drafts.length+' รายการ แต่ยังไม่ผ่านอนุมัติขั้นสุดท้าย (Approved)' : 'ไม่มีผลประเมินค้าง Push','warn');
-    setPending(drafts.length);
+    const pendingApproved = drafts.filter(d=>d[d.length-1]==='Approved' && !isAppraisalPushed(draftKey(d))).length;
+    smlToast(pendingApproved ? 'มีผลประเมินค้างอยู่ '+pendingApproved+' รายการ' : 'ไม่มีผลประเมินค้าง Push (Approved ทุกรายการ push แล้ว)','warn');
+    setPending(pendingApproved);
     return;
   }
   const cfg = loadMs365Config();
@@ -7398,14 +7424,20 @@ async function ms365PushAppraisals(){
     appendSyncLog('Push ผลประเมิน: ยังไม่ได้ตั้งค่า MS365', false);
     return;
   }
+  /* ไม่ลบรายการออกจากคิวหลัง push อีกต่อไป (ต่างจาก CLAUDE.md #7 ที่ใช้กับคิวอื่น) — Appraisals
+     ต้องคงอยู่ใน getDrafts() ตลอดไป เพราะ Report/Dashboard/พิมพ์ใบประเมิน Batch ยังต้องอ่านจากตรงนี้
+     (ดู CLAUDE.md #42) แค่ mark ว่า push สำเร็จแล้วพอ — re-push ซ้ำปลอดภัยแล้วเพราะ upsert คีย์ผสม
+     (#41) ไม่สร้างแถวซ้ำใน Excel */
   let ok=0, fail=0;
-  const remaining=[...notReady];
   for(const payload of toPush){
-    try{ await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], payload); ok++; }
-    catch(e){ fail++; remaining.push(payload); }
+    try{
+      await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], payload);
+      markAppraisalPushed(draftKey(payload));
+      ok++;
+    }
+    catch(e){ fail++; }
   }
-  localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(remaining));
-  setPending(remaining.length);
+  setPending(getPendingAppraisals().length);
   renderPendingList();
   updateMs365Status(fail ? 'warn' : 'ok', fail ? 'บาง Push ไม่สำเร็จ' : 'Connected');
   smlToast(`Push ผลประเมินสำเร็จ ${ok} รายการ${fail ? ' · ล้มเหลว '+fail+' รายการ' : ''}`, fail ? 'warn' : 'ok');

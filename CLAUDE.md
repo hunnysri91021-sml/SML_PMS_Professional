@@ -829,6 +829,40 @@ touches employee/attendance/evaluation data.
     fix has no effect until they redeploy it, unlike every purely-client
     fix in this file which goes live the moment GitHub Pages updates.
 
+42. **`ms365PushAppraisals()` deleted an Approved evaluation from the local
+    queue the moment it successfully pushed to Excel — but that same
+    queue (`MS365_LOCAL_DRAFT_KEY`, read via `getDrafts()`) is also the
+    sole local data source for `getReportData()`/`departmentSummary()`/
+    the Dashboard charts/`printBatchApproved()`.** So the instant a
+    fully-completed evaluation was pushed, it vanished from every local
+    report/print on that device — reported in production as the
+    "สรุปผลรายฝ่าย" department summary showing 0/— average and 0 in
+    every grade column even for departments with people who had actually
+    completed the full evaluation cycle (their record was real, it just
+    wasn't in `getDrafts()` anymore). This delete-after-push existed
+    specifically to stop re-pushing the same Approved record as a
+    duplicate Excel row (CLAUDE.md #7's shape of bug) — but #41 already
+    made `ms365PushAppraisals()`'s Excel write a composite-key **upsert**,
+    so re-pushing the same person/cycle/level now safely overwrites one
+    Excel row instead of duplicating it, which means the delete-from-
+    local-queue was no longer needed to prevent that and was actively
+    breaking every local report instead. Fixed by never deleting from
+    `MS365_LOCAL_DRAFT_KEY` on push; push-state is now tracked in a
+    separate store, `PUSHED_APPRAISALS_KEY` (`markAppraisalPushed(key)`/
+    `isAppraisalPushed(key)`, same `draftKey()` as the natural key), used
+    only to compute "ค้าง Push" counts (`getPendingAppraisals()` — drafts
+    that are `Approved` AND not yet marked pushed) so the UI's pending
+    count and `renderPendingList()` don't re-count something already
+    pushed, while `getDrafts()` itself stays the complete, permanent
+    local history every report/print/dashboard function already assumes
+    it is. General rule this confirms alongside #7: a "don't re-send a
+    duplicate" guard belongs on the *transport* (the upsert key), not on
+    deleting the local record of what happened — deleting local state to
+    avoid a remote-duplicate problem will always eventually break
+    whatever else reads that same local state, and once #41 made the
+    remote side idempotent, the local-delete workaround had no remaining
+    justification.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
