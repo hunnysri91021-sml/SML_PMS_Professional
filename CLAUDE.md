@@ -705,6 +705,28 @@ touches employee/attendance/evaluation data.
     rather than building a create-flow whose result would silently not
     work anywhere.
 
+38. **`printEvalForm()` hardcoded `const u = MASTER_USERS[0]`** — literally
+    "whichever employee happens to be first in the array" — and used
+    `u[3]/u[5]/u[6]/u[14]/u[9]/u[10]/u[11]` (Group/Division/Department/
+    StartDate/L1/L2/Exec) directly with **no fallback to the actual
+    employee being printed at all**, unlike `empName`/`empCode`/`empPos`
+    which at least fell back to `u` only when the DOM field was empty.
+    So every printed evaluation form showed the *first* MASTER_USERS
+    row's org/supervisor/start-date fields, correct only by coincidence
+    if that happened to be the same person as the form — reported in
+    production as "รหัสพนักงานไม่ตรง" (a real employee's printed form
+    showing another employee's group/dept/L1/L2, e.g. sysadmin's, since
+    row order can change after any Excel sync per CLAUDE.md #30). Same
+    class of bug as CLAUDE.md #1 (never trust a positional/first-match
+    guess — resolve identity by the real code) except here there wasn't
+    even an attempt to use the actual `empCode` for these 7 fields.
+    Fixed by resolving `u` from `MASTER_USERS.find(x=>x[0]===empCode)`
+    (with `empCode` itself sourced from the real `evalCode` field first,
+    `MASTER_USERS[0]` only as the last-resort fallback when nothing is
+    set at all — e.g. opening the form completely fresh) before reading
+    any of these 7 fields, so the whole employee-info block on the
+    printed form is now for the same one real person throughout.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -4550,10 +4550,13 @@ function printEvalForm() {
   const lcfg = LEVEL_CONFIG[lv];
   if (!cfg||!lcfg) return;
 
-  /* employee info */
-  const u       = MASTER_USERS[0];
+  /* employee info — เดิม bug: u = MASTER_USERS[0] ตายตัว (ตัวแรกในอาร์เรย์เสมอ ไม่ใช่คนที่กำลัง
+     ประเมินอยู่จริง) ทำให้กลุ่ม/ส่วน/ฝ่าย/วันเริ่มงาน/L1/L2/ผู้บริหาร บนใบพิมพ์ผิดคนเสมอถ้าคนแรกใน
+     MASTER_USERS ไม่ใช่เจ้าของฟอร์ม (เช่นหลัง sync จาก Excel ที่ลำดับแถวเปลี่ยนได้) ต้อง resolve
+     จากรหัสพนักงานจริงของฟอร์มนี้เท่านั้น (ดู CLAUDE.md #1) */
+  const empCode = document.getElementById('evalCode')?.value  || MASTER_USERS[0][0];
+  const u       = MASTER_USERS.find(x=>x[0]===empCode) || MASTER_USERS[0];
   const empName = document.getElementById('evalName')?.value  || u[1];
-  const empCode = document.getElementById('evalCode')?.value  || u[0];
   const empPos  = document.getElementById('evalPos')?.value   || u[7];
   const empGroup  = u[3];                                           /* กลุ่ม (Group) */
   const empSection= document.getElementById('evalDept')?.value || u[4]; /* แผนก (Section) */
