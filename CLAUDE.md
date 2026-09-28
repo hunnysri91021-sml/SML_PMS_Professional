@@ -568,6 +568,58 @@ touches employee/attendance/evaluation data.
     (current-state vs. append-only-archive) before assuming they should
     all get the same auto-pull treatment.
 
+34. **A "โครงสร้าง Sheets" documentation table listing every Excel table's
+    sync status can itself be exactly the kind of unbacked claim CLAUDE.md
+    #10/#19 warns about — check each row against real code, don't trust
+    the ✅ marks.** The Sheets tab claimed `AuditLog` pushed "ทุก action"
+    and `Approvals` pushed "✅ อนุมัติ", but grepping the whole file found
+    zero `graphAddTableRow`/`graphUpsertTableRow` calls for either table
+    — `appendAuditLog()` only ever wrote to `localStorage`, and none of
+    the 5 real approval/reject actions (L2 review, calibration, final
+    approve, and their two reject counterparts) touched Excel at all.
+    `KPI_Goals` and `Cycles` were worse: **`goalKpiData` had no
+    persistence at all** — not even `localStorage` — so it reset to
+    empty on every page reload; only `loadSampleKpi()` (a manual demo-
+    data button) ever populated it. Fixed all four:
+    - `appendAuditLog()` now calls `pushAuditLogEntryToExcel(entry)`
+      (fire-and-forget, `graphAddTableRow`, never awaited/never blocks —
+      this function fires on nearly every action in the app) after every
+      write, same append-only reasoning as `Appraisals` (#21).
+    - `pushApprovalRecordToExcel(empCode, cycle, step, comment)` is
+      called from `approveReviewSelected()`/`rejectReviewSelected()`/
+      `confirmCalibration()`/`approveAllFinal()`/`rejectApproveAll()` —
+      one row per person per step, also append-only (a re-approval is a
+      new historical event, not a state update).
+    - `goalKpiData` got real `localStorage` persistence
+      (`KPI_LOCAL_KEY`/`loadKpiData()`/`saveKpiData()`, loaded at script
+      init like `loadAttendance()`) as a *prerequisite* for sync — you
+      can't usefully sync data that doesn't survive a reload. Each KPI
+      is upserted (`pushKpiToExcel`, keyed by `KPI_ID`, since a KPI is
+      "current state of one goal," not an event — CLAUDE.md #21 logic
+      applies) on create/activate, and `ms365SyncKpiGoals(silent)`
+      pulls + replaces `goalKpiData` wholesale (mirroring
+      `loadEmployeesFromMs365()`) as part of the same silent-sync group
+      from #32/#33. Deliberately did *not* fix `editGoalKpi(id)` (still
+      opens a blank modal, the CLAUDE.md #9 bug) — that's a separate,
+      pre-existing gap not required to make sync itself work; noted here
+      so it isn't mistaken for done.
+    - `Cycles` is a single "current cycle" settings object
+      (`smlPmsCycleSetup`), not a real multi-cycle history — upserted
+      with a **fixed** key `'CURRENT'` (not the cycle's name, which is
+      editable and would otherwise fork a new row every rename) via
+      `pushCycleSetupToExcel()`/`ms365SyncCycleSetup(silent)`. Its real
+      columns (`Cycle_ID·Name·Start·End·Status·SavedAt`) were adapted
+      from — not forced to match — the doc table's original idealized
+      schema (`Cycle_ID·Year·Start·End·YZMode·Status`), since the app
+      has no real `Year`/`YZMode` fields to source honestly (#14).
+    - Updated the Sheets tab's table itself to describe what each sync
+      path actually does now, instead of leaving stale/aspirational
+      claims next to the real behavior.
+    General rule this confirms: a docs/status table asserting "this
+    syncs" is a claim to verify against the code, not a spec to assume
+    is already implemented — and before extending sync to a new table,
+    check whether its *local* data even persists across a reload first.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

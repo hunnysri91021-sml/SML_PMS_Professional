@@ -2438,13 +2438,13 @@ tbody tr:hover{background:#f0f6ff!important}
         <div class="tw"><table>
           <thead><tr><th>Sheet</th><th>วัตถุประสงค์</th><th>Columns หลัก</th><th style="text-align:center;width:90px">ทิศทาง</th><th style="text-align:center;width:90px">Auto Sync</th></tr></thead>
           <tbody>
-            <tr><td><b style="color:#2563eb">📋 Employees</b></td><td>ข้อมูลพนักงาน (MASTER_USERS)</td><td style="font-size:11px">ID · Name · Role · Dept · Position · Grade · L1 · L2 · Exec · Status</td><td style="text-align:center"><span class="bd b-b">Excel→PMS</span></td><td style="text-align:center"><span class="bd b-ok">✅ 5 นาที</span></td></tr>
-            <tr style="background:#f9fafb"><td><b style="color:#7c3aed">🕐 Attendance</b></td><td>เวลาทำงาน HRGO · Z Score</td><td style="font-size:11px">EmpID · Period · Late · EarlyOut · SickDays · PersonalDays · ZScore</td><td style="text-align:center"><span class="bd b-b">Excel→PMS</span></td><td style="text-align:center"><span class="bd b-ok">✅ Import</span></td></tr>
-            <tr><td><b style="color:#059669">📝 Appraisals</b></td><td>ผลการประเมินทุกรอบ</td><td style="font-size:11px">EmpID · Cycle · Level · m0–m13 · Y · Z · X · Grade · Status</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-ok">✅ Submit</span></td></tr>
-            <tr style="background:#f9fafb"><td><b style="color:#d97706">✅ Approvals</b></td><td>ประวัติการอนุมัติแต่ละขั้น</td><td style="font-size:11px">EmpID · Cycle · Step · ApprovedBy · ApprovedAt · Comment</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-ok">✅ อนุมัติ</span></td></tr>
-            <tr><td><b style="color:#0891b2">🎯 KPI_Goals</b></td><td>เป้าหมาย KPI · Cascade</td><td style="font-size:11px">KPI_ID · Name · Unit · Target · Weight · Scope · Year · Status</td><td style="text-align:center"><span class="bd b-p">สองทาง</span></td><td style="text-align:center"><span class="bd b-y">⏳ Manual</span></td></tr>
-            <tr style="background:#f9fafb"><td><b style="color:#dc2626">📅 Cycles</b></td><td>รอบการประเมินและตั้งค่า</td><td style="font-size:11px">Cycle_ID · Year · Start · End · YZMode · Status</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-y">⏳ Manual</span></td></tr>
-            <tr><td><b style="color:#475569">📋 AuditLog</b></td><td>ประวัติการเปลี่ยนแปลง</td><td style="font-size:11px">Timestamp · UserID · Action · Target · OldVal · NewVal</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-ok">✅ ทุก action</span></td></tr>
+            <tr><td><b style="color:#2563eb">📋 Employees</b></td><td>ข้อมูลพนักงาน (MASTER_USERS)</td><td style="font-size:11px">EmpID · ชื่อ-สกุล · บทบาท · กลุ่ม · แผนก · ส่วน · ฝ่าย · ตำแหน่ง · วันเริ่มงาน · Email · Grade · L1 · L2 · ผู้อนุมัติ · Status · Potential · Login ล่าสุด</td><td style="text-align:center"><span class="bd b-p">สองทาง</span></td><td style="text-align:center"><span class="bd b-ok">✅ ทุก login/รีเฟรช</span></td></tr>
+            <tr style="background:#f9fafb"><td><b style="color:#7c3aed">🕐 Attendance</b></td><td>เวลาทำงาน HRGO · Z Score</td><td style="font-size:11px">EmpID · Period · Late · EarlyOut · SickDays · PersonalDays · ZScore</td><td style="text-align:center"><span class="bd b-p">สองทาง</span></td><td style="text-align:center"><span class="bd b-ok">✅ ทุก login/รีเฟรช</span></td></tr>
+            <tr><td><b style="color:#059669">📝 Appraisals</b></td><td>ผลการประเมินที่ผ่านอนุมัติขั้นสุดท้ายแล้วเท่านั้น (Draft/Submitted/Calibrated ยังเป็น local ต่อเครื่อง)</td><td style="font-size:11px">EmpID · Cycle · Level · m0–m13 · Y · Z · X · Grade · Status</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-ok">✅ ตอน Push (Approved เท่านั้น)</span></td></tr>
+            <tr style="background:#f9fafb"><td><b style="color:#d97706">✅ Approvals</b></td><td>ประวัติการอนุมัติ/ตีกลับแต่ละขั้น (L2/Calibration/อนุมัติขั้นสุดท้าย)</td><td style="font-size:11px">EmpID · Cycle · Step · ApprovedBy · ApprovedAt · Comment</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-ok">✅ ทุกครั้งที่อนุมัติ/ตีกลับ</span></td></tr>
+            <tr><td><b style="color:#0891b2">🎯 KPI_Goals</b></td><td>เป้าหมาย KPI</td><td style="font-size:11px">KPI_ID · Name · Unit · Target · Weight · Scope · Year · Status</td><td style="text-align:center"><span class="bd b-p">สองทาง</span></td><td style="text-align:center"><span class="bd b-ok">✅ ตอนเพิ่ม/เปิดใช้ + ทุก login</span></td></tr>
+            <tr style="background:#f9fafb"><td><b style="color:#dc2626">📅 Cycles</b></td><td>การตั้งค่ารอบประเมินปัจจุบัน (1 รอบต่อครั้ง)</td><td style="font-size:11px">Cycle_ID(CURRENT) · Name · Start · End · Status · SavedAt</td><td style="text-align:center"><span class="bd b-p">สองทาง</span></td><td style="text-align:center"><span class="bd b-ok">✅ ตอนบันทึก + ทุก login</span></td></tr>
+            <tr><td><b style="color:#475569">📋 AuditLog</b></td><td>ประวัติการเปลี่ยนแปลง</td><td style="font-size:11px">Timestamp · UserID · Type · Action · Target · Detail</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-ok">✅ ทุก action</span></td></tr>
             <tr style="background:#f9fafb"><td><b style="color:#0284c7">🔔 SystemStatus</b></td><td>สถานะอัปเดตล่าสุด (สำหรับแบนเนอร์แจ้งเตือนหน้าแดชบอร์ด — ต้องสร้างตารางนี้เองก่อนใช้งาน)</td><td style="font-size:11px">UpdatedAt · Note · PendingCount</td><td style="text-align:center"><span class="bd b-g">PMS→Excel</span></td><td style="text-align:center"><span class="bd b-y">⏳ ทุกครั้งที่ Sync/Push</span></td></tr>
           </tbody>
         </table></div>
@@ -3558,6 +3558,12 @@ const KPI_STATUS  = {draft:'<span class="bd b-s">⏸️ Draft</span>', active:'<
 
 let goalKpiData = [];
 let goalCascadeData = [];
+const KPI_LOCAL_KEY = 'smlPmsKpiGoals';
+function loadKpiData(){
+  try{ const saved = JSON.parse(localStorage.getItem(KPI_LOCAL_KEY)||'null'); if(Array.isArray(saved)) goalKpiData = saved; }catch(e){}
+}
+function saveKpiData(){ localStorage.setItem(KPI_LOCAL_KEY, JSON.stringify(goalKpiData)); }
+loadKpiData();
 
 const goalSampleKpis = [
   {id:'k1', name:'ผลผลิตตามแผน (Output vs Plan)', unit:'คัน', pct:25, scope:'org', year:'', target:'≥95%', type:'ปริมาณ', status:'draft'},
@@ -3637,9 +3643,11 @@ function activateGoalKpi(id) {
   if(!k) return;
   if(k.status==='active') {
     k.status='draft'; k.year='';
+    saveKpiData();
     smlToast('ยกเลิก KPI จากรอบแล้ว','warn');
     renderGoalKpi(goalKpiData);
     goalStatUpdate();
+    if(typeof pushKpiToExcel==='function') pushKpiToExcel(k);
   } else {
     activatingKpiId = id;
     const pctEl = document.getElementById('activateTotalPct');
@@ -3668,7 +3676,9 @@ function confirmKpiActivate(){
     const draftKpis = goalKpiData.filter(k=>k.status==='draft');
     if(!draftKpis.length){ smlToast('ไม่มี KPI สถานะ Draft ให้เปิดใช้งาน','warn'); closeM(); return; }
     draftKpis.forEach(k=>{ k.status='active'; k.year=year; });
+    saveKpiData();
     renderGoalKpi(goalKpiData); goalStatUpdate(); closeM();
+    if(typeof pushKpiToExcel==='function') draftKpis.forEach(k=>pushKpiToExcel(k));
     if(typeof appendAuditLog==='function') appendAuditLog('kpi','เปิดใช้งาน KPI ทั้งหมด', draftKpis.length+' รายการ', 'รอบ FY'+year);
     smlToast('เปิดใช้งาน KPI ทั้งหมด '+draftKpis.length+' รายการในรอบ FY'+year+' แล้ว','ok');
     return;
@@ -3677,11 +3687,54 @@ function confirmKpiActivate(){
   if(!k){ closeM(); return; }
   k.status = 'active';
   k.year = year;
+  saveKpiData();
   renderGoalKpi(goalKpiData);
   goalStatUpdate();
   closeM();
+  if(typeof pushKpiToExcel==='function') pushKpiToExcel(k);
   if(typeof appendAuditLog==='function') appendAuditLog('kpi','เปิดใช้งาน KPI', k.name, 'รอบ FY'+year);
   smlToast('เปิดใช้งาน KPI "'+k.name+'" ในรอบ FY'+year+' แล้ว','ok');
+}
+
+/* KPI แต่ละตัวคือ "สถานะปัจจุบันของเป้าหมายนั้น" (แก้ไข/เปิดใช้งานซ้ำได้) ไม่ใช่เหตุการณ์ที่เกิดซ้ำ
+   จึงต้อง upsert ด้วยรหัส KPI (col 0) เหมือน Employees/Attendance ไม่ใช่ append แบบ AuditLog/
+   Approvals — คอลัมน์เรียงตามที่ระบุไว้ในหน้า "โครงสร้าง Sheets": KPI_ID·Name·Unit·Target·Weight·
+   Scope·Year·Status */
+function pushKpiToExcel(kpi){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg) || !kpi || !kpi.id) return;
+  graphUpsertTableRow('KPI_Goals', 0, kpi.id,
+    [kpi.id, kpi.name, kpi.unit, kpi.target, kpi.pct, kpi.scope, kpi.year||'', kpi.status])
+    .catch(()=>{});
+}
+/* ดึง KPI ทั้งหมดจาก Excel มาแทนที่ goalKpiData ในเครื่องนี้ (เหมือน loadEmployeesFromMs365())
+   คอลัมน์ "Type" (ปริมาณ/คุณภาพ/...) ไม่ได้อยู่ใน schema จริงของตาราง Excel นี้ — ถ้าเจอ KPI ตัวนี้
+   ในเครื่องอยู่แล้วให้คงค่า type เดิมไว้ ถ้าไม่เคยมีเลยปล่อยว่าง ห้ามเดาค่าใส่ไปเอง (ดู CLAUDE.md #14) */
+async function ms365SyncKpiGoals(silent=false){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    const rows = await graphListTableRows('KPI_Goals');
+    if(!rows.length) return;
+    const oldById = new Map(goalKpiData.map(k=>[k.id,k]));
+    const parsed = rows.map(r => {
+      const id = String(r[0]??'').trim();
+      return {
+        id, name: String(r[1]??'').trim(), unit: String(r[2]??'').trim(),
+        target: String(r[3]??'').trim(), pct: Number(r[4])||0,
+        scope: String(r[5]??'').trim()||'org', year: String(r[6]??'').trim(),
+        status: String(r[7]??'').trim()||'draft', type: oldById.get(id)?.type || ''
+      };
+    }).filter(k=>k.id && k.name);
+    if(!parsed.length) return;
+    goalKpiData = parsed;
+    saveKpiData();
+    if(typeof renderGoalKpi==='function') renderGoalKpi(goalKpiData);
+    if(typeof goalStatUpdate==='function') goalStatUpdate();
+    if(!silent) smlToast('ดึง KPI จาก Excel แล้ว '+parsed.length+' รายการ','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึง KPI ไม่สำเร็จ: '+e.message,'warn');
+  }
 }
 
 function addKpiFromModal() {
@@ -3694,9 +3747,11 @@ function addKpiFromModal() {
   if(!name||!unit||!pct){smlToast('กรุณากรอกชื่อ หน่วยวัด และน้ำหนัก','warn');return;}
   const newKpi = {id:'k'+(Date.now()), name, unit, pct, scope, type, target, year:'', status:'draft'};
   goalKpiData.push(newKpi);
+  saveKpiData();
   renderGoalKpi(goalKpiData);
   goalStatUpdate();
   closeM();
+  if(typeof pushKpiToExcel==='function') pushKpiToExcel(newKpi);
   smlToast('เพิ่ม KPI เรียบร้อย','ok');
 }
 
@@ -3907,6 +3962,12 @@ async function doLogin(){
      รายงานวันลาไม่ค้างข้อมูลเก่าเหมือนที่เคยเกิดกับ Grade (ดู CLAUDE.md #32) */
   if(typeof ms365SyncAttendance === 'function'){
     try{ await ms365SyncAttendance(true); }catch(e){}
+  }
+  if(typeof ms365SyncKpiGoals === 'function'){
+    try{ await ms365SyncKpiGoals(true); }catch(e){}
+  }
+  if(typeof ms365SyncCycleSetup === 'function'){
+    try{ await ms365SyncCycleSetup(true); }catch(e){}
   }
   const u = MASTER_USERS.find(x => x[0] === code);
   if(!u || u[12] === 'resigned'){
@@ -6380,10 +6441,21 @@ function renderReviewQueue(){
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','')">สอบทานแบบฟอร์ม</button></td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
 }
+/* Push ประวัติการอนุมัติ/ตีกลับแต่ละขั้นขึ้น Excel ตาราง Approvals แบบ append (เหตุการณ์ 1 ครั้ง =
+   1 แถวเสมอ เหมือน AuditLog/Appraisals — ไม่ใช่ "สถานะปัจจุบัน" ที่ควร upsert) fire-and-forget
+   เช่นเดียวกับ pushAuditLogEntryToExcel() — ไม่บล็อก/ไม่ทำให้ action หลักพังถ้า push ไม่สำเร็จ */
+function pushApprovalRecordToExcel(empCode, cycle, step, comment){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  const approvedBy = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[1]) || currentActorLabel();
+  graphAddTableRow('Approvals', [empCode, cycle, step, approvedBy, new Date().toISOString(), comment||''])
+    .catch(()=>{});
+}
 function approveReviewSelected(){
   const keys=getCheckedKeys('review-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   updateDraftStatus(keys,'L2Reviewed');
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L2Reviewed',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทาน L2', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ผ่านสอบทาน L2 แล้ว '+keys.length+' รายการ — เข้าสู่ขั้น Calibration','ok');
 }
@@ -6391,6 +6463,7 @@ function rejectReviewSelected(){
   const keys=getCheckedKeys('review-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   updateDraftStatus(keys,'Draft');
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedL2Review',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากสอบทาน L2', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้แก้ไข '+keys.length+' รายการ','warn');
 }
@@ -6431,6 +6504,7 @@ function confirmCalibration(){
   });
   saveDrafts(drafts);
   renderWorkflowPages();
+  inputs.forEach(inp=>{ const [empCode,cycle]=inp.dataset.key.split('|'); pushApprovalRecordToExcel(empCode,cycle,'Calibrated','X='+inp.value); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration', inputs.length+' รายการ', inputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
   smlToast('ยืนยันผล Calibration แล้ว '+inputs.length+' รายการ','ok');
 }
@@ -6471,6 +6545,7 @@ function approveAllFinal(){
   rows.forEach(d=>saveApprovalSignature(draftKey(d), sign));
   updateDraftStatus(rows.map(draftKey),'Approved');
   closeM();
+  rows.forEach(d=>pushApprovalRecordToExcel(d[0], d[2], 'Approved', 'ลงนามโดย '+sign));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติขั้นสุดท้าย', rows.length+' รายการ', 'ลงนามโดย '+sign+' — '+rows.map(d=>d[0]).join(', '));
   smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+')','ok');
 }
@@ -6479,6 +6554,7 @@ function rejectApproveAll(){
   if(!rows.length){ smlToast('ไม่มีรายการให้ตีกลับ','warn'); return; }
   if(!confirm('ตีกลับรายการที่ผ่าน Calibration ทั้งหมด '+rows.length+' รายการ กลับไปสอบทาน L2 อีกครั้ง?')) return;
   updateDraftStatus(rows.map(draftKey),'L2Reviewed');
+  rows.forEach(d=>pushApprovalRecordToExcel(d[0], d[2], 'RejectedFinalApproval', ''));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากอนุมัติขั้นสุดท้าย', rows.length+' รายการ', rows.map(d=>d[0]).join(', '));
   smlToast('ตีกลับแล้ว '+rows.length+' รายการ','warn');
 }
@@ -6529,9 +6605,21 @@ function currentActorLabel(){
 function appendAuditLog(type, action, target, detail){
   let rows=[];
   try{ rows=JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]'); }catch(e){ rows=[]; }
-  rows.unshift({ at: new Date().toISOString(), user: currentActorLabel(), type, action, target, detail });
+  const entry = { at: new Date().toISOString(), user: currentActorLabel(), type, action, target, detail };
+  rows.unshift(entry);
   localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(rows.slice(0,1000)));
   if(document.getElementById('pg-audit')?.classList.contains('on') && typeof renderAuditLog==='function') renderAuditLog();
+  if(typeof pushAuditLogEntryToExcel==='function') pushAuditLogEntryToExcel(entry);
+}
+/* Push แต่ละ action ขึ้น Excel ตาราง AuditLog แบบ append (เหตุการณ์ 1 ครั้ง = 1 แถวเสมอ ไม่มีวัน
+   แก้ไขย้อนหลัง — ใช้ graphAddTableRow() ไม่ใช่ upsert ตาม CLAUDE.md #21) เรียกจาก appendAuditLog()
+   ทุกครั้งแบบ fire-and-forget (ไม่ await) เพราะฟังก์ชันนี้ถูกเรียกแทบทุก action ในระบบ ห้ามให้การ
+   push ไป Excel ทำให้ action หลักช้าลงหรือพังถ้า push ไม่สำเร็จ — localStorage ในเครื่องนี้ยังเป็น
+   สำเนาจริงเสมอไม่ว่าผลของการ push จะเป็นอย่างไร */
+function pushAuditLogEntryToExcel(entry){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  graphAddTableRow('AuditLog', [entry.at, entry.user, entry.type, entry.action, entry.target, entry.detail]).catch(()=>{});
 }
 function getAuditLog(){ try{ return JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]'); }catch(e){ return []; } }
 function clearAuditLog(){
@@ -7570,7 +7658,44 @@ function saveCycleSetup(){
   const title=document.querySelector('#pg-cycle .ph h2');
   if(title && data.name) title.dataset.cycleName=data.name;
   if(typeof renderCycleStats==='function') renderCycleStats();
+  if(typeof pushCycleSetupToExcel==='function') pushCycleSetupToExcel();
   smlToast('บันทึกการตั้งค่ารอบประเมินเรียบร้อย','ok');
+}
+/* การตั้งค่ารอบประเมินในเครื่องนี้มีแค่ "รอบปัจจุบัน" ชุดเดียว (ไม่ใช่ประวัติหลายรอบ) จึง upsert
+   ด้วย key คงที่ 'CURRENT' เสมอ (ไม่ใช้ชื่อรอบเป็น key เพราะชื่อแก้ได้ จะได้แถวใหม่ซ้อนทุกครั้งที่
+   เปลี่ยนชื่อ) คอลัมน์จริงตรงนี้ต่างจาก schema ที่หน้า "โครงสร้าง Sheets" เคยอธิบายไว้ (Cycle_ID·
+   Year·Start·End·YZMode·Status) เพราะข้อมูลจริงที่มีในระบบคือ "ชื่อรอบ+สถานะ+ช่วงวันที่" ไม่มี
+   Year/YZMode แยกเป็นฟิลด์จริง — ใช้ตามข้อมูลจริงที่มี ไม่ยัดค่าที่ไม่มีทางรู้ (ดู CLAUDE.md #14) */
+async function pushCycleSetupToExcel(silent=true){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  const data = getCycleSetupData();
+  if(!data || !data.name) return;
+  try{
+    await graphUpsertTableRow('Cycles', 0, 'CURRENT', ['CURRENT', data.name, data.start||'', data.end||'', data.status||'', data.savedAt||'']);
+    appendSyncLog(`Push การตั้งค่ารอบประเมิน "${data.name}" เข้า Excel`, true);
+  }catch(e){
+    appendSyncLog(`Push การตั้งค่ารอบประเมินไม่สำเร็จ: ${e.message}`, false);
+  }
+}
+async function ms365SyncCycleSetup(silent=false){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    const rows = await graphListTableRows('Cycles');
+    const row = rows.find(r => String(r[0]??'').trim() === 'CURRENT');
+    if(!row || !row[1]) return;
+    const data = { name: row[1]||'', start: row[2]||'', end: row[3]||'', status: row[4]||'', savedAt: row[5]||new Date().toISOString() };
+    localStorage.setItem('smlPmsCycleSetup', JSON.stringify(data));
+    const n=document.getElementById('cycleNameSetup'), s=document.getElementById('cycleStatusSetup'), a=document.getElementById('cycleStartSetup'), b=document.getElementById('cycleEndSetup');
+    if(n) n.value=data.name; if(s) s.value=data.status; if(a) a.value=data.start; if(b) b.value=data.end;
+    const title=document.querySelector('#pg-cycle .ph h2');
+    if(title && data.name) title.dataset.cycleName=data.name;
+    if(typeof renderCycleStats==='function') renderCycleStats();
+    if(!silent) smlToast('ดึงการตั้งค่ารอบประเมินจาก Excel แล้ว','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึงการตั้งค่ารอบประเมินไม่สำเร็จ: '+e.message,'warn');
+  }
 }
 
 /* Delegate remaining buttons that do not have an explicit handler. */
@@ -7948,6 +8073,8 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncEmployees === 'function'){ try{ await ms365SyncEmployees(true); }catch(e){} }
       if(typeof ms365SyncEmployeeSettingsSilent === 'function'){ try{ await ms365SyncEmployeeSettingsSilent(); }catch(e){} }
       if(typeof ms365SyncAttendance === 'function'){ try{ await ms365SyncAttendance(true); }catch(e){} }
+      if(typeof ms365SyncKpiGoals === 'function'){ try{ await ms365SyncKpiGoals(true); }catch(e){} }
+      if(typeof ms365SyncCycleSetup === 'function'){ try{ await ms365SyncCycleSetup(true); }catch(e){} }
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
     }catch(e){}
