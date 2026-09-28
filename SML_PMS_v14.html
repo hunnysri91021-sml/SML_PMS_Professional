@@ -2446,6 +2446,14 @@ tbody tr:hover{background:#f0f6ff!important}
             <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAttendance()">📤 Push ข้อมูลเวลา → Excel</button>
           </div>
         </div>
+        <div class="card"><div class="card-h"><h3>🔑 PIN & แบบฟอร์มประเมิน</h3></div>
+          <div class="card-b">
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:10px">PIN เข้าระบบ และแบบฟอร์มประเมินที่กำหนดให้แต่ละคน sync ผ่านตารางนี้ — ให้พนักงานล็อกอินจากมือถือ/เครื่องอื่นแล้วเจอ PIN และแบบฟอร์มเดียวกันได้ ต้องสร้างตาราง "EmployeeSettings" ในไฟล์ Excel ก่อน (คอลัมน์: EmpCode, PinHash, EvalLevel, UpdatedAt)</div>
+            <button class="btn btn-p" style="width:100%;justify-content:center;margin-bottom:8px" onclick="ms365SyncEmployeeSettings()">📥 ดึง PIN/แบบฟอร์ม จาก Excel</button>
+            <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushEmployeeSettings()">📤 Push PIN/แบบฟอร์ม → Excel</button>
+            <div style="font-size:10.5px;color:#94a3b8;margin-top:8px">ตั้ง/รีเซ็ต PIN หรือเปลี่ยนแบบฟอร์มที่หน้า "ผู้ใช้ & สิทธิ์" จะ Push ให้อัตโนมัติอยู่แล้ว ปุ่มนี้ไว้กดซ้ำเองเผื่อ Push อัตโนมัติไม่สำเร็จ</div>
+          </div>
+        </div>
         <div class="card"><div class="card-h"><h3>📤 Push ผลประเมิน</h3></div>
           <div class="card-b">
             <div style="font-size:12px;color:#475569;margin-bottom:10px">Pending: <b id="appraisalPending">0 รายการ</b></div>
@@ -3859,6 +3867,12 @@ async function doLogin(){
   const code = (codeEl?.value || '').trim();
   const pin = (pinEl?.value || '').trim();
   errEl.style.display = 'none';
+  /* ดึง PIN/แบบฟอร์มประเมินล่าสุดจาก Excel แบบเงียบก่อนตรวจสอบ (ถ้าเครื่องนี้เคย login MS365
+     ไว้แล้วเท่านั้น — จะได้ใช้ PIN เดียวกันได้จากหลายเครื่อง) เครื่องที่ไม่เคย login มาก่อนเลย
+     (เช่น มือถือส่วนตัวที่เพิ่งเปิดครั้งแรก) จะข้ามขั้นนี้ไปเงียบๆ ไม่กระทบการ login ปกติ */
+  if(typeof ms365SyncEmployeeSettingsSilent === 'function'){
+    try{ await ms365SyncEmployeeSettingsSilent(); }catch(e){}
+  }
   const u = MASTER_USERS.find(x => x[0] === code);
   if(!u || u[12] === 'resigned'){
     errEl.textContent = 'ไม่พบรหัสพนักงานนี้ในระบบ (หรือพนักงานลาออกแล้ว)';
@@ -3903,6 +3917,23 @@ async function resetUserPin(code){
   if(typeof appendAuditLog === 'function') appendAuditLog('employee', 'ตั้ง/รีเซ็ต PIN', emp[0], emp[1]);
   alert(`ตั้ง PIN ใหม่ให้ ${emp[1]} (${emp[0]}) เรียบร้อย\n\nPIN: ${pin}\n\nกรุณาแจ้ง PIN นี้ให้พนักงานเป็นการส่วนตัว — ระบบจะไม่แสดง PIN นี้ซ้ำอีก`);
   if(typeof renderPinStatus === 'function') renderPinStatus(code);
+  if(typeof pushSingleEmployeeSettings === 'function') pushSingleEmployeeSettings(code);
+}
+
+/* Push PIN hash + แบบฟอร์มประเมินของพนักงานคนเดียว ขึ้น Excel ทันทีแบบเงียบๆ (ไม่มี toast กวนใจ
+   นอกจาก sync log) — เรียกอัตโนมัติหลังตั้ง/รีเซ็ต PIN หรือแก้แบบฟอร์มประเมิน กันไม่ให้ Admin ต้อง
+   จำไปกดปุ่ม Push เองทุกครั้ง ยังมีปุ่ม Push แบบทั้งหมดไว้ที่หน้า MS365 Sync สำรองไว้ด้วย */
+async function pushSingleEmployeeSettings(code){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(!emp) return;
+  try{
+    await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, code, [code, emp[17]||'', emp[18]||'', new Date().toISOString()]);
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push การตั้งค่า ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
+  }catch(e){
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push การตั้งค่า ${emp[1]} (${code}) ไม่สำเร็จ: ${e.message}`, false);
+  }
 }
 
 function renderPinStatus(code){
@@ -4724,6 +4755,7 @@ function saveUserFromModal() {
   populateOrgFilters();
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
+  if(evalLevel && typeof pushSingleEmployeeSettings==='function') pushSingleEmployeeSettings(id);
   closeM();
 }
 
@@ -5620,6 +5652,98 @@ async function fetchSystemStatusFromMs365(){
     const last = rows[rows.length - 1];
     return { at: last[0], note: last[1], pendingCount: last[2] };
   }catch(e){ return null; }
+}
+
+/* ====== EmployeeSettings (cross-device) — PIN hash + แบบฟอร์มประเมินที่ Admin กำหนดต้องใช้ได้
+   จากหลายเครื่อง/มือถือของพนักงานเอง จึงต้องมีตารางกลางใน Excel ชื่อ "EmployeeSettings"
+   (คอลัมน์: EmpCode, PinHash, EvalLevel, UpdatedAt) ต่างจาก SystemStatus ตรงที่สองค่านี้กระทบ
+   การเข้าระบบจริงของพนักงาน จึงรายงาน error ตรงๆ เมื่อ push/sync ไม่สำเร็จ ไม่ fallback เงียบๆ */
+const EMPLOYEE_SETTINGS_TABLE = 'EmployeeSettings';
+
+/* ผสานแถวจาก Excel เข้า MASTER_USERS จริง (โดยรหัสพนักงาน) — ใช้ร่วมกันทั้งโหมดกดเองและโหมด
+   เงียบตอน login ค่าว่างในแถว Excel จะไม่ไปเขียนทับของเดิมในเครื่อง (กันกรณีบางคนยังไม่เคย push) */
+function applyEmployeeSettingsRows(rows){
+  let applied = 0;
+  rows.forEach(r=>{
+    const code = String(r[0]||'').trim();
+    if(!code) return;
+    const emp = MASTER_USERS.find(u=>u[0]===code);
+    if(!emp) return;
+    const pinHash = String(r[1]||'').trim();
+    const evalLevel = String(r[2]||'').trim();
+    if(pinHash) emp[17] = pinHash;
+    if(evalLevel) emp[18] = evalLevel;
+    applied++;
+  });
+  return applied;
+}
+
+/* Push PIN hash + แบบฟอร์มประเมินของพนักงานทุกคนที่มีค่าตั้งไว้ในเครื่องนี้ ขึ้น Excel จริง
+   ใช้ upsert (คีย์ = รหัสพนักงาน) กันแถวซ้ำเวลากด push หลายรอบ (เหมือน ms365PushAttendance) */
+async function ms365PushEmployeeSettings(){
+  const rows = MASTER_USERS.filter(u => u[17] || u[18]);
+  if(!rows.length){ smlToast('ยังไม่มีข้อมูล PIN หรือแบบฟอร์มประเมินที่ตั้งไว้ในเครื่องนี้ให้ Push','warn'); return; }
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
+    smlToast('ยังไม่ได้ตั้งค่า MS365 — ข้อมูลจะยังอยู่แค่ในเครื่องนี้เท่านั้น','warn');
+    appendSyncLog('Push การตั้งค่าพนักงาน: ยังไม่ได้ตั้งค่า MS365', false);
+    return;
+  }
+  let ok=0, fail=0;
+  for(const u of rows){
+    try{ await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, u[0], [u[0], u[17]||'', u[18]||'', new Date().toISOString()]); ok++; }
+    catch(e){ fail++; }
+  }
+  updateMs365Status(fail?'warn':'ok', fail?'บาง Push ไม่สำเร็จ':'Connected');
+  smlToast(`Push การตั้งค่าพนักงาน (PIN/แบบฟอร์ม) เข้า Excel สำเร็จ ${ok} คน` + (fail?` · ล้มเหลว ${fail} คน — ตรวจสอบว่ามีตาราง "${EMPLOYEE_SETTINGS_TABLE}" ในไฟล์ Excel แล้วหรือยัง`:''), fail?'warn':'ok');
+  appendSyncLog(`Push การตั้งค่าพนักงาน: สำเร็จ ${ok} คน${fail?' · ล้มเหลว '+fail:''}`, fail===0);
+  if(ok){ markSystemUpdated(`Push การตั้งค่าพนักงาน ${ok} คนเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push PIN/แบบฟอร์มประเมินเข้า Excel', EMPLOYEE_SETTINGS_TABLE, ok+' คนสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
+}
+
+/* ดึง PIN/แบบฟอร์มประเมินล่าสุดจาก Excel มาไว้ในเครื่องนี้ — โหมดกดเอง (Admin ตั้งใจกด ยอมให้เด้ง
+   popup login ได้ถ้ายังไม่เคย login) ใช้ตอนต้องการรีเฟรชข้อมูลบนเครื่อง Admin/HR เอง */
+async function ms365SyncEmployeeSettings(){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
+    smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงการตั้งค่าพนักงานจาก Excel ได้','warn');
+    appendSyncLog('Sync การตั้งค่าพนักงาน: ยังไม่ได้ตั้งค่า MS365', false);
+    return;
+  }
+  try{
+    const rows = await graphListTableRows(EMPLOYEE_SETTINGS_TABLE);
+    const applied = applyEmployeeSettingsRows(rows);
+    renderUsers(MASTER_USERS);
+    if(typeof renderCycleStats==='function') renderCycleStats();
+    updateMs365Status('ok','Connected');
+    smlToast(`ดึงการตั้งค่าพนักงาน (PIN/แบบฟอร์ม) จาก Excel แล้ว ${applied} คน`, 'ok');
+    appendSyncLog(`Sync การตั้งค่าพนักงาน: ${applied} คน`, true);
+    markSystemUpdated(`Sync การตั้งค่าพนักงาน ${applied} คน`);
+    if(typeof appendAuditLog==='function') appendAuditLog('ms365','Sync PIN/แบบฟอร์มประเมินจาก Excel', EMPLOYEE_SETTINGS_TABLE, applied+' คน');
+  }catch(err){
+    updateMs365Status('warn','Sync failed');
+    smlToast('ดึงการตั้งค่าพนักงานไม่สำเร็จ: ' + err.message + ' — ตรวจสอบว่ามีตาราง "'+EMPLOYEE_SETTINGS_TABLE+'" ในไฟล์ Excel แล้วหรือยัง','warn');
+    appendSyncLog('Sync การตั้งค่าพนักงานล้มเหลว: ' + err.message, false);
+  }
+}
+
+/* เวอร์ชัน "เงียบ" สำหรับดึงมาใช้ตอน login อัตโนมัติ — ใช้ token แบบ silent เท่านั้น (ไม่เด้ง popup
+   ให้ใครที่ไม่เคย login MS365 มาก่อนบนเครื่องนั้น) เครื่องที่ไม่เคยมี MS365 session มาก่อนเลย
+   (เช่น มือถือส่วนตัวที่เพิ่งเปิดเว็บครั้งแรก) จะข้ามไปเงียบๆ แล้วใช้ข้อมูลที่มีอยู่ในเครื่องแทน —
+   นี่คือข้อจำกัดจริงของสถาปัตยกรรม client-side ล้วนแบบนี้ ไม่ใช่บั๊ก: อ่านข้อมูลที่ต้องยืนยันตัวตน
+   จาก Excel ได้ก็ต่อเมื่อเครื่องนั้นเคยมีคนล็อกอิน MS365 ไว้แล้วอย่างน้อย 1 ครั้งเท่านั้น */
+async function ms365SyncEmployeeSettingsSilent(){
+  try{
+    const token = await getGraphTokenSilent();
+    if(!token) return 0;
+    const { driveId, itemId } = await resolveMs365Site();
+    const res = await fetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+      "/workbook/tables('" + encodeURIComponent(EMPLOYEE_SETTINGS_TABLE) + "')/rows",
+      { headers: { Authorization: 'Bearer ' + token } });
+    if(!res.ok) return 0;
+    const data = await res.json();
+    const rows = (data.value || []).map(r => (r.values && r.values[0]) || []);
+    return applyEmployeeSettingsRows(rows);
+  }catch(e){ return 0; }
 }
 
 function calcCurrentEvalSummary(){

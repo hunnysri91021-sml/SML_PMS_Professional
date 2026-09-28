@@ -311,6 +311,33 @@ touches employee/attendance/evaluation data.
     an MS365 employee sync the same way PIN hashes are (re-merged by
     code before the array replace) since it isn't and shouldn't be a
     column in the Excel Employee Master.
+24. **PIN hash and assigned evaluation level (`MASTER_USERS[17]`/`[18]`)
+    were device-local only — set on one browser, invisible everywhere
+    else, including the employee's own phone.** Added a real Excel
+    round-trip via a new `EmployeeSettings` table (columns: EmpCode,
+    PinHash, EvalLevel, UpdatedAt), reusing `graphUpsertTableRow()` so
+    repeated pushes update one row per employee rather than piling up
+    duplicates (same reasoning as CLAUDE.md #21 for attendance).
+    `ms365PushEmployeeSettings()`/`ms365SyncEmployeeSettings()` are the
+    interactive (button-triggered, popup-login allowed) pair;
+    `pushSingleEmployeeSettings(code)` fires automatically after
+    `resetUserPin()` and after saving an employee with an `evalLevel`
+    set, so Admin doesn't have to remember a separate push step.
+    **Important architectural limit, not a bug:** `doLogin()` also calls
+    `ms365SyncEmployeeSettingsSilent()` before checking the PIN, but it
+    uses `getGraphTokenSilent()` (per CLAUDE.md #8 — never
+    `loginPopup`/`acquireTokenPopup` on a read path nobody asked to
+    trigger) and returns `0` immediately if the device has no cached
+    MSAL session. A device that has *never* done an interactive MS365
+    login (a personal phone opening the app for the first time) cannot
+    silently pull protected Excel data — there is no way around this in
+    a pure client-side SPA using delegated user auth without either an
+    interactive login on that device or a backend holding app-level
+    credentials (which this project deliberately doesn't have, since a
+    client-secret embedded in public JS is not a secret). State this
+    limit plainly to the user rather than implying "any device, always,
+    automatically" — the honest scope is "any device that has logged
+    into MS365 at least once, or after Admin pushes/commits the data."
 
 ## Verification checklist for any change to this file
 
