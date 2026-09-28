@@ -2609,7 +2609,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <div class="ph-act">
         <span class="bd b-y" style="font-size:11px;padding:5px 10px" id="goalDraftBadge">⚠️ ยังไม่ได้เปิดใช้งาน 0 รายการ</span>
         <button class="btn" onclick="openBulkKpiActivate()">🔓 เปิดใช้งาน KPI ในรอบนี้</button>
-        <button class="btn btn-p" onclick="openM('mAddKpi')">+ เพิ่ม KPI</button>
+        <button class="btn btn-p" onclick="openAddKpiModal()">+ เพิ่ม KPI</button>
       </div>
     </div>
 
@@ -2649,7 +2649,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
             <option value="person">รายบุคคล</option>
           </select>
           <button class="btn btn-sm" onclick="loadSampleKpi()">📥 โหลดตัวอย่าง</button>
-          <button class="btn btn-sm btn-p" onclick="openM('mAddKpi')">+ เพิ่ม KPI</button>
+          <button class="btn btn-sm btn-p" onclick="openAddKpiModal()">+ เพิ่ม KPI</button>
         </div>
       </div>
       <div class="tw">
@@ -3635,7 +3635,40 @@ function goalStatUpdate() {
   if(el('goalDraftBadge')) el('goalDraftBadge').textContent = draft>0 ? `⚠️ ยังไม่ได้เปิดใช้งาน ${draft} รายการ` : '✅ เปิดใช้งานครบทุก KPI แล้ว';
 }
 
-function editGoalKpi(id) { openM('mAddKpi'); }
+/* เดิม "✏️" แก้ไข KPI แค่เปิดฟอร์มเปล่าเหมือนปุ่มเพิ่มใหม่ทุกประการ ไม่โหลดข้อมูลเดิมมาให้เลย
+   (บั๊กแบบเดียวกับ CLAUDE.md #9) แก้โดยเซ็ตทุกช่องในฟอร์มจากค่าจริงของ KPI ตัวนั้น + จำ id ที่กำลัง
+   แก้ไว้ใน editingKpiId ให้ addKpiFromModal() รู้ว่าต้องอัปเดตของเดิม ไม่ใช่สร้างใหม่ซ้อน */
+let editingKpiId = null;
+function editGoalKpi(id) {
+  const k = goalKpiData.find(x=>x.id===id);
+  if(!k){ smlToast('ไม่พบ KPI นี้ในระบบ','warn'); return; }
+  editingKpiId = id;
+  const set=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value = val ?? ''; };
+  set('mKpiName', k.name);
+  set('mKpiUnit', k.unit);
+  set('mKpiPct', k.pct);
+  set('mKpiTarget', k.target);
+  set('mKpiType', k.type);
+  set('mKpiScope', k.scope);
+  set('mKpiYear', k.year);
+  set('mKpiNote', k.note);
+  const title = document.querySelector('#mAddKpi .md-h h3');
+  if(title) title.textContent = '✏️ แก้ไข KPI: ' + k.name;
+  openM('mAddKpi');
+}
+/* ทางเข้า "+ เพิ่ม KPI" ต้องล้างสถานะแก้ไขเดิมทิ้งก่อนเสมอ (เหมือน clearUserModalForm ของ
+   Add/Edit Employee) กัน editingKpiId ค้างจากการกด ✏️ ครั้งก่อนแล้วมาเขียนทับ KPI ผิดตัว */
+function openAddKpiModal(){
+  editingKpiId = null;
+  ['mKpiName','mKpiUnit','mKpiTarget','mKpiNote'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const pct=document.getElementById('mKpiPct'); if(pct) pct.value='';
+  const type=document.getElementById('mKpiType'); if(type) type.value='ปริมาณ';
+  const scope=document.getElementById('mKpiScope'); if(scope) scope.value='org';
+  const year=document.getElementById('mKpiYear'); if(year) year.value='';
+  const title = document.querySelector('#mAddKpi .md-h h3');
+  if(title) title.textContent = '📌 เพิ่ม / แก้ไข KPI';
+  openM('mAddKpi');
+}
 
 let activatingKpiId = null;
 function activateGoalKpi(id) {
@@ -3744,14 +3777,33 @@ function addKpiFromModal() {
   const scope = document.getElementById('mKpiScope')?.value||'org';
   const type = document.getElementById('mKpiType')?.value||'ปริมาณ';
   const target = document.getElementById('mKpiTarget')?.value?.trim()||'—';
+  const year = document.getElementById('mKpiYear')?.value||'';
+  const note = document.getElementById('mKpiNote')?.value?.trim()||'';
   if(!name||!unit||!pct){smlToast('กรุณากรอกชื่อ หน่วยวัด และน้ำหนัก','warn');return;}
-  const newKpi = {id:'k'+(Date.now()), name, unit, pct, scope, type, target, year:'', status:'draft'};
+
+  if(editingKpiId){
+    const k = goalKpiData.find(x=>x.id===editingKpiId);
+    if(!k){ smlToast('ไม่พบ KPI นี้ในระบบ (อาจถูกลบไปแล้ว)','warn'); editingKpiId=null; closeM(); return; }
+    Object.assign(k, {name, unit, pct, scope, type, target, year, note});
+    saveKpiData();
+    renderGoalKpi(goalKpiData);
+    goalStatUpdate();
+    editingKpiId = null;
+    closeM();
+    if(typeof pushKpiToExcel==='function') pushKpiToExcel(k);
+    if(typeof appendAuditLog==='function') appendAuditLog('kpi','แก้ไข KPI', k.name, unit+' · น้ำหนัก '+pct+'%');
+    smlToast('แก้ไข KPI เรียบร้อย','ok');
+    return;
+  }
+
+  const newKpi = {id:'k'+(Date.now()), name, unit, pct, scope, type, target, year, note, status:'draft'};
   goalKpiData.push(newKpi);
   saveKpiData();
   renderGoalKpi(goalKpiData);
   goalStatUpdate();
   closeM();
   if(typeof pushKpiToExcel==='function') pushKpiToExcel(newKpi);
+  if(typeof appendAuditLog==='function') appendAuditLog('kpi','เพิ่ม KPI ใหม่', newKpi.name, unit+' · น้ำหนัก '+pct+'%');
   smlToast('เพิ่ม KPI เรียบร้อย','ok');
 }
 

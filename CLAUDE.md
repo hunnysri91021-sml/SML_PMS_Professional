@@ -620,6 +620,28 @@ touches employee/attendance/evaluation data.
     is already implemented — and before extending sync to a new table,
     check whether its *local* data even persists across a reload first.
 
+35. **`editGoalKpi(id)` was the same CLAUDE.md #9 bug found and fixed
+    elsewhere (employee edit, manual attendance edit) — clicking "✏️" on
+    a KPI opened the exact same blank "+ เพิ่ม KPI" modal, discarding
+    whatever you typed as a brand-new KPI instead of updating the one
+    you clicked.** Fixed with the same pattern: `editGoalKpi(id)` now
+    sets every field's `.value` from the real `goalKpiData` record
+    (`name`/`unit`/`pct`/`target`/`type`/`scope`/`year`/`note` — `note`
+    and `year` were sitting unused in the modal's HTML the whole time,
+    never read *or* written by `addKpiFromModal()`; wired both up while
+    touching this, since leaving them silently ignored right next to a
+    "real" edit form would just be the same bug in a new shape) and
+    remembers which KPI is being edited in `editingKpiId`.
+    `addKpiFromModal()` branches on `editingKpiId`: set →
+    `Object.assign()` onto the existing object in place (upsert to
+    Excel via the same `pushKpiToExcel()` from #34, keyed by the same
+    `id` — never a new row); unset → create as before. The two
+    "+ เพิ่ม KPI" entry points now call a new `openAddKpiModal()` (the
+    `clearUserModalForm()` pattern from #9) that explicitly resets
+    `editingKpiId = null` and blanks every field — skipping this step
+    is exactly how a stale edit target would silently overwrite the
+    wrong KPI the next time someone clicked "+ เพิ่ม" instead of "✏️".
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
