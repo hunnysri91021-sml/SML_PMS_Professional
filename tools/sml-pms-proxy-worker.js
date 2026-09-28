@@ -1,0 +1,168 @@
+/*
+ * SML PMS — MS365 Proxy (Cloudflare Worker)
+ *
+ * ทำไมต้องมีไฟล์นี้: ปกติเว็บ SML_PMS_v14.html คุยกับ Microsoft Graph API ตรงๆ ด้วยสิทธิ์
+ * "delegated" ของผู้ใช้แต่ละคน (MSAL.js) ซึ่งต้องมีคน login Microsoft อย่างน้อย 1 ครั้งต่อเครื่อง
+ * ถ้ามีพนักงานหลายร้อยคนและไม่ต้องการให้ใครต้อง login Microsoft เลย ต้องมี "ตัวกลาง" ที่ถือ
+ * สิทธิ์แบบ Application (client credentials) แทนทุกคนไว้ฝั่งเซิร์ฟเวอร์ — นี่คือตัวกลางนั้น
+ *
+ * Worker นี้ไม่เก็บ/ประมวลผลอะไรเลยนอกจาก: รับคำขอจากเว็บ SML PMS, แลก Client Secret เป็น
+ * access token แบบ Application permission, แล้วส่งต่อคำขอไปยัง Microsoft Graph ตาราง Excel
+ * ที่กำหนดไว้เท่านั้น (ผ่าน SITE_URL/FILE_PATH ที่ตั้งเป็น Secret ของ Worker เอง ไม่ได้มาจาก
+ * เว็บ) เพื่อไม่ให้ Client Secret หลุดไปอยู่ในโค้ดฝั่งเบราว์เซอร์ ซึ่งเปิดดูได้จากใครก็ตาม
+ *
+ * วิธี deploy (Cloudflare, ฟรี):
+ *   1. สร้างบัญชี Cloudflare (ฟรี) → Workers & Pages → Create Worker
+ *   2. วางโค้ดไฟล์นี้ทั้งหมดแทนโค้ดตัวอย่าง แล้วกด Deploy
+ *   3. ไปที่ Settings → Variables → เพิ่ม Secret (encrypted) ทั้ง 6 ตัว:
+ *        TENANT_ID       = Azure AD Tenant ID
+ *        CLIENT_ID       = Azure AD App (client) ID ที่ขอสิทธิ์ Application แล้ว
+ *        CLIENT_SECRET   = Client secret ที่สร้างไว้ใน Azure AD (เห็นครั้งเดียวตอนสร้าง)
+ *        SITE_URL        = เช่น https://siammotor.sharepoint.com/sites/Chosiya-HR
+ *        FILE_PATH       = เช่น _SML_PMS_Professiona/SML_PMS_Master.xlsx
+ *        PROXY_API_KEY   = กุญแจที่ตั้งเอง (สุ่มยาวๆ) ให้ตรงกับที่กรอกในหน้า MS365 ของเว็บ
+ *   4. คัดลอก URL ของ Worker (เช่น https://sml-pms-proxy.<ชื่อบัญชี>.workers.dev) ไปกรอกที่
+ *      หน้า "เชื่อมต่อ MS365 Excel" → แท็บ "ขั้นตอนตั้งค่า" ช่อง "Proxy URL" / "Proxy API Key"
+ *
+ * ข้อกำหนดฝั่ง Azure AD ที่ทีม IT/แอดมิน M365 ต้องทำ (ใครก็ตามที่มี Global/Application
+ * Administrator หรือสิทธิ์เทียบเท่า):
+ *   - App registrations → เพิ่ม API permission (Application, ไม่ใช่ Delegated):
+ *       Microsoft Graph → Files.ReadWrite.All, Sites.Read.All
+ *   - กด "Grant admin consent" ให้ทั้งสองสิทธิ์
+ *   - แนะนำอย่างยิ่ง: ตั้ง SharePoint Application Access Policy จำกัดให้แอปนี้เข้าถึงได้แค่
+ *     ไซต์ Chosiya-HR ไซต์เดียว ไม่ใช่ทั้งองค์กร (ลดผลกระทบถ้า Client Secret หลุด)
+ *
+ * ความปลอดภัยของ PROXY_API_KEY: เป็นกุญแจร่วมง่ายๆ กันคนแปลกหน้ายิงคำขอมาที่ Worker เฉยๆ
+ * ไม่ใช่ความปลอดภัยระดับสูง (ใครเปิด DevTools ดู Network request จากเว็บที่ตั้งค่าไว้แล้วจะเห็นได้)
+ * — ความปลอดภัยจริงของสถาปัตยกรรมนี้อยู่ที่ Application Access Policy ข้างต้นที่จำกัดว่า Worker
+ * เข้าถึงได้แค่ไฟล์ Excel ไฟล์เดียว ไม่ใช่ทั้ง Tenant
+ */
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Api-Key',
+    };
+    if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+
+    const apiKey = request.headers.get('X-Api-Key');
+    if (!env.PROXY_API_KEY || apiKey !== env.PROXY_API_KEY) {
+      return json({ error: 'unauthorized' }, 401, cors);
+    }
+
+    try {
+      const token = await getAppToken(env);
+      const { driveId, itemId } = await resolveSite(env, token);
+
+      if (url.pathname === '/rows' && request.method === 'GET') {
+        const table = url.searchParams.get('table');
+        if (!table) return json({ error: 'missing table' }, 400, cors);
+        const rows = await listRows(token, driveId, itemId, table);
+        return json({ rows }, 200, cors);
+      }
+
+      if (url.pathname === '/rows/add' && request.method === 'POST') {
+        const { table, values } = await request.json();
+        if (!table || !values) return json({ error: 'missing table/values' }, 400, cors);
+        await addRow(token, driveId, itemId, table, values);
+        return json({ ok: true }, 200, cors);
+      }
+
+      if (url.pathname === '/rows/upsert' && request.method === 'POST') {
+        const { table, keyColIndex, keyValue, values } = await request.json();
+        if (!table || keyColIndex === undefined || keyValue === undefined || !values) {
+          return json({ error: 'missing table/keyColIndex/keyValue/values' }, 400, cors);
+        }
+        const result = await upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values);
+        return json({ ok: true, result }, 200, cors);
+      }
+
+      return json({ error: 'not found' }, 404, cors);
+    } catch (e) {
+      return json({ error: String((e && e.message) || e) }, 500, cors);
+    }
+  },
+};
+
+// โทเคนแคชไว้ในหน่วยความจำของ Worker instance เดียว (อายุสั้น ปลอดภัยกว่าขอใหม่ทุกครั้ง)
+let cachedToken = null;
+let cachedTokenExp = 0;
+async function getAppToken(env) {
+  if (cachedToken && Date.now() < cachedTokenExp - 60000) return cachedToken;
+  const res = await fetch(`https://login.microsoftonline.com/${env.TENANT_ID}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: env.CLIENT_ID,
+      client_secret: env.CLIENT_SECRET,
+      scope: 'https://graph.microsoft.com/.default',
+      grant_type: 'client_credentials',
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || 'token request failed');
+  cachedToken = data.access_token;
+  cachedTokenExp = Date.now() + data.expires_in * 1000;
+  return cachedToken;
+}
+
+let cachedSite = null;
+async function resolveSite(env, token) {
+  if (cachedSite) return cachedSite;
+  const siteUrl = new URL(env.SITE_URL);
+  const site = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${siteUrl.hostname}:${siteUrl.pathname}`);
+  const drive = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${site.id}/drive`);
+  const filePath = (env.FILE_PATH || 'SML_PMS_Master.xlsx').replace(/^\/+/, '');
+  const item = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${site.id}/drive/root:/${encodeURI(filePath)}`);
+  cachedSite = { driveId: drive.id, itemId: item.id };
+  return cachedSite;
+}
+
+async function graphGet(token, url) {
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  const data = await res.json();
+  if (!res.ok) throw new Error((data.error && data.error.message) || 'Graph GET failed: ' + res.status);
+  return data;
+}
+async function graphSend(token, url, method, body) {
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!res.ok) throw new Error((data.error && data.error.message) || 'Graph ' + method + ' failed: ' + res.status);
+  return data;
+}
+
+async function listRows(token, driveId, itemId, table) {
+  const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
+  const data = await graphGet(token, base);
+  return (data.value || []).map((r) => (r.values && r.values[0]) || []);
+}
+async function addRow(token, driveId, itemId, table, values) {
+  const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows/add`;
+  return graphSend(token, base, 'POST', { values: [values] });
+}
+async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values) {
+  const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
+  const data = await graphGet(token, base);
+  const rows = data.value || [];
+  const idx = rows.findIndex(
+    (r) => String((r.values && r.values[0] && r.values[0][keyColIndex]) ?? '').trim() === String(keyValue).trim()
+  );
+  if (idx >= 0 && rows[idx].index !== undefined) {
+    await graphSend(token, base + `/itemAt(index=${rows[idx].index})`, 'PATCH', { values: [values] });
+    return 'updated';
+  }
+  await graphSend(token, base + '/add', 'POST', { values: [values] });
+  return 'added';
+}
+
+function json(obj, status, headers) {
+  return new Response(JSON.stringify(obj), { status, headers: { ...headers, 'Content-Type': 'application/json' } });
+}

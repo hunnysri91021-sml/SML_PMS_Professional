@@ -2406,6 +2406,29 @@ tbody tr:hover{background:#f0f6ff!important}
           <div id="ms365Status" style="margin-top:8px;font-size:12px;color:#64748b"></div>
         </div>
       </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="card-h"><h3>🌐 Proxy (Cloudflare Worker) — ไม่ต้องให้พนักงานแต่ละคน Login MS365</h3><span class="bd b-g" id="ms365WorkerBadge">⚪ ยังไม่ได้ตั้งค่า Proxy</span></div>
+        <div class="card-b">
+          <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>
+            การตั้งค่าด้านบนต้องให้ <b>แต่ละคน</b> ล็อกอิน Microsoft ครั้งแรกก่อนถึงจะอ่าน/เขียน Excel ได้ (delegated permission) — ถ้ามีพนักงานหลายร้อยคนและไม่อยากให้ใครต้อง login Microsoft เลย
+            ให้ทีม IT/แอดมิน M365 ตั้ง <b>Application permission + Admin consent</b> แล้ว deploy Proxy เล็กๆ (Cloudflare Worker ฟรี) ตามขั้นตอนนี้:
+            <ol style="margin:8px 0 0 18px;padding:0">
+              <li>Azure Portal → App registrations → สร้างแอปใหม่ (หรือใช้ Client ID เดิมด้านบนก็ได้) → API permissions → เพิ่ม <code>Files.ReadWrite.All</code> และ <code>Sites.Read.All</code> แบบ <b>Application</b> (ไม่ใช่ Delegated) → กด Grant admin consent</li>
+              <li>Certificates & secrets → สร้าง Client secret ใหม่ → คัดลอกค่าเก็บไว้ (จะเห็นครั้งเดียว)</li>
+              <li>แนะนำให้ IT จำกัดสิทธิ์แอปนี้ด้วย SharePoint <b>Application Access Policy</b> ให้เข้าถึงได้แค่ไซต์ <code>Chosiya-HR</code> ไซต์เดียว ไม่ใช่ทั้งองค์กร (ลดความเสี่ยงถ้ากุญแจหลุด)</li>
+              <li>Deploy Worker (โค้ดพร้อมใช้ ขอจากผู้พัฒนา/แอดมินระบบ) ไปที่ Cloudflare (ฟรี) ตั้งค่า Secret 5 ตัวใน Worker: <code>TENANT_ID</code>, <code>CLIENT_ID</code>, <code>CLIENT_SECRET</code>, <code>SITE_URL</code>, <code>FILE_PATH</code>, และตั้งกุญแจของตัวเอง <code>PROXY_API_KEY</code></li>
+              <li>เอา URL ของ Worker (เช่น <code>https://sml-pms-proxy.xxx.workers.dev</code>) กับ <code>PROXY_API_KEY</code> มากรอกช่องด้านล่าง แล้วกดบันทึก</li>
+            </ol>
+          </div></div>
+          <div class="grid g2">
+            <div class="fg"><label>Proxy URL</label><input id="ms365WorkerUrl" placeholder="https://sml-pms-proxy.xxx.workers.dev"></div>
+            <div class="fg"><label>Proxy API Key</label><input id="ms365WorkerApiKey" type="password" placeholder="กุญแจที่ตั้งไว้ตอน deploy Worker"></div>
+          </div>
+          <div style="font-size:11px;color:#94a3b8;margin:4px 0 10px">เว้นว่างทั้งสองช่องนี้ = กลับไปใช้โหมด login MS365 รายคนตามปกติ (ค่าเริ่มต้น) กรอกทั้งคู่แล้วบันทึก = ทุกการอ่าน/เขียน Excel ในเว็บนี้ (พนักงาน, เวลา/วันลา, PIN/แบบฟอร์มประเมิน, ผลประเมิน) จะวิ่งผ่าน Proxy อัตโนมัติ ไม่ต้อง login MS365 อีกต่อไป</div>
+          <button class="btn btn-p" onclick="saveMs365Config()">💾 บันทึก Config</button>
+        </div>
+      </div>
     </div>
 
     <!-- TAB SHEETS -->
@@ -5385,7 +5408,9 @@ const DEFAULT_MS365_CONFIG = {
   siteUrl: 'https://siammotor.sharepoint.com/sites/Chosiya-HR',
   filePath: '_SML_PMS_Professiona/SML_PMS_Master.xlsx',
   employeeTable: 'Employees',
-  evaluationTable: 'Appraisals'
+  evaluationTable: 'Appraisals',
+  workerUrl: '',
+  workerApiKey: ''
 };
 
 let msalInstance = null;
@@ -5398,7 +5423,9 @@ function getMs365ConfigFromForm(){
     siteUrl: (document.getElementById('ms365SiteUrl')?.value || '').trim(),
     filePath: (document.getElementById('ms365FilePath')?.value || '').trim(),
     employeeTable: (document.getElementById('ms365EmployeeTable')?.value || 'Employees').trim(),
-    evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'Appraisals').trim()
+    evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'Appraisals').trim(),
+    workerUrl: (document.getElementById('ms365WorkerUrl')?.value || '').trim().replace(/\/+$/,''),
+    workerApiKey: (document.getElementById('ms365WorkerApiKey')?.value || '').trim()
   };
 }
 
@@ -5410,9 +5437,21 @@ function applyMs365ConfigToForm(cfg){
   set('ms365FilePath', cfg.filePath || '_SML_PMS_Professiona/SML_PMS_Master.xlsx');
   set('ms365EmployeeTable', cfg.employeeTable || 'Employees');
   set('ms365EvaluationTable', cfg.evaluationTable || 'Appraisals');
+  set('ms365WorkerUrl', cfg.workerUrl);
+  set('ms365WorkerApiKey', cfg.workerApiKey);
   const configured = !!(cfg.tenantId && cfg.clientId && cfg.siteUrl);
+  const workerOn = isWorkerConfigured(cfg);
   updateMs365Status(configured ? 'warn' : '', configured ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า');
-  const mode=document.getElementById('ms365Mode'); if(mode) mode.textContent = configured ? 'MS365 Graph API' : 'Local';
+  const mode=document.getElementById('ms365Mode'); if(mode) mode.textContent = workerOn ? 'MS365 ผ่าน Proxy (ไม่ต้อง login รายคน)' : (configured ? 'MS365 Graph API (ต้อง login MS365)' : 'Local');
+  const workerBadge = document.getElementById('ms365WorkerBadge');
+  if(workerBadge) workerBadge.textContent = workerOn ? '✅ เปิดใช้ Proxy — พนักงานไม่ต้อง login MS365' : '⚪ ยังไม่ได้ตั้งค่า Proxy';
+}
+
+/* ตั้งค่า Proxy (Cloudflare Worker) แล้วหรือยัง — ถ้าตั้งแล้ว ทุกการเรียก Graph API ในเว็บนี้จะ
+   วิ่งผ่าน Proxy แทน MSAL ทำให้ "อ่าน/เขียนได้โดยไม่ต้องให้พนักงานแต่ละคน login Microsoft เอง"
+   เพราะ Proxy ถือ Application permission (client credentials) แทนทุกคนไว้ฝั่งเซิร์ฟเวอร์ */
+function isWorkerConfigured(cfg){
+  return !!(cfg && cfg.workerUrl && cfg.workerApiKey);
 }
 
 function loadMs365Config(){
@@ -5574,7 +5613,29 @@ async function resolveMs365Site(){
   return ms365SiteCache;
 }
 
+/* เรียก Proxy (Cloudflare Worker) แทนการเรียก Graph API ตรงๆ — Proxy ถือ Application permission
+   (client credentials) แทนทุกคนไว้ฝั่งเซิร์ฟเวอร์ จึงไม่ต้องให้พนักงานแต่ละคน login MS365 เอง
+   ก่อนอ่าน/เขียนข้อมูลได้ ใช้ header X-Api-Key เป็นกุญแจร่วมกันเบื้องต้น (ไม่ใช่ความปลอดภัยระดับสูง
+   เหมือนกับ PIN — คนที่เปิด DevTools ดู network request จะเห็นได้ ความปลอดภัยจริงต้องพึ่ง Azure AD
+   Application Access Policy ที่จำกัดสิทธิ์แอปนี้ให้เข้าถึงได้แค่ไฟล์ Excel ไฟล์เดียว ไม่ใช่ทั้ง tenant) */
+async function workerFetch(cfg, path, options={}){
+  const res = await fetch(cfg.workerUrl + path, {
+    ...options,
+    headers: Object.assign({ 'X-Api-Key': cfg.workerApiKey, 'Content-Type':'application/json' }, options.headers||{})
+  });
+  const text = await res.text();
+  let data = {};
+  try{ data = text ? JSON.parse(text) : {}; }catch(e){ data = { raw:text }; }
+  if(!res.ok) throw new Error(data.error || ('Proxy HTTP '+res.status));
+  return data;
+}
+
 async function graphListTableRows(tableName){
+  const cfg = loadMs365Config();
+  if(isWorkerConfigured(cfg)){
+    const data = await workerFetch(cfg, '/rows?table=' + encodeURIComponent(tableName));
+    return data.rows || [];
+  }
   const { driveId, itemId } = await resolveMs365Site();
   const data = await graphFetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
     "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows");
@@ -5582,6 +5643,10 @@ async function graphListTableRows(tableName){
 }
 
 async function graphAddTableRow(tableName, rowValues){
+  const cfg = loadMs365Config();
+  if(isWorkerConfigured(cfg)){
+    return workerFetch(cfg, '/rows/add', { method:'POST', body: JSON.stringify({ table: tableName, values: rowValues }) });
+  }
   const { driveId, itemId } = await resolveMs365Site();
   return graphFetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
     "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows/add",
@@ -5594,6 +5659,11 @@ async function graphAddTableRow(tableName, rowValues){
    เจอแล้ว PATCH ทับแถวเดิม ไม่เจอค่อย add ใหม่ — กันปัญหาข้อมูลซ้ำฝั่ง Excel แบบเดียวกับที่กัน
    ฝั่งเว็บไปแล้ว (ห้ามบันทึกซ้ำในฟอร์มกรอกมือ) */
 async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
+  const cfg = loadMs365Config();
+  if(isWorkerConfigured(cfg)){
+    const data = await workerFetch(cfg, '/rows/upsert', { method:'POST', body: JSON.stringify({ table: tableName, keyColIndex, keyValue, values: rowValues }) });
+    return data.result || 'updated';
+  }
   const { driveId, itemId } = await resolveMs365Site();
   const base = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
     "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows";
@@ -5726,13 +5796,20 @@ async function ms365SyncEmployeeSettings(){
   }
 }
 
-/* เวอร์ชัน "เงียบ" สำหรับดึงมาใช้ตอน login อัตโนมัติ — ใช้ token แบบ silent เท่านั้น (ไม่เด้ง popup
-   ให้ใครที่ไม่เคย login MS365 มาก่อนบนเครื่องนั้น) เครื่องที่ไม่เคยมี MS365 session มาก่อนเลย
-   (เช่น มือถือส่วนตัวที่เพิ่งเปิดเว็บครั้งแรก) จะข้ามไปเงียบๆ แล้วใช้ข้อมูลที่มีอยู่ในเครื่องแทน —
-   นี่คือข้อจำกัดจริงของสถาปัตยกรรม client-side ล้วนแบบนี้ ไม่ใช่บั๊ก: อ่านข้อมูลที่ต้องยืนยันตัวตน
-   จาก Excel ได้ก็ต่อเมื่อเครื่องนั้นเคยมีคนล็อกอิน MS365 ไว้แล้วอย่างน้อย 1 ครั้งเท่านั้น */
+/* เวอร์ชัน "เงียบ" สำหรับดึงมาใช้ตอน login อัตโนมัติ —
+   ถ้าตั้งค่า Proxy (Cloudflare Worker) ไว้แล้ว: เรียกผ่าน Proxy ตรงๆ ได้เลย ไม่ต้องพึ่ง MSAL/
+   login MS365 ของใครทั้งสิ้น เพราะ Proxy ถือสิทธิ์แทนทุกคนไว้แล้ว — นี่คือทางที่ทำให้ "ทุกเครื่อง
+   ใช้ข้อมูลเดียวกันจริง แม้เป็นมือถือส่วนตัวที่ไม่เคย login MS365 มาก่อนเลย"
+   ถ้ายังไม่ได้ตั้งค่า Proxy: ใช้ token แบบ silent เท่านั้น (ไม่เด้ง popup ให้ใครที่ไม่เคย login
+   MS365 มาก่อนบนเครื่องนั้น) เครื่องที่ไม่เคยมี MS365 session มาก่อนเลยจะข้ามไปเงียบๆ แล้วใช้
+   ข้อมูลที่มีอยู่ในเครื่องแทน — นี่คือข้อจำกัดจริงของการไม่มี Proxy ไม่ใช่บั๊ก */
 async function ms365SyncEmployeeSettingsSilent(){
   try{
+    const cfg = loadMs365Config();
+    if(isWorkerConfigured(cfg)){
+      const rows = await graphListTableRows(EMPLOYEE_SETTINGS_TABLE);
+      return applyEmployeeSettingsRows(rows);
+    }
     const token = await getGraphTokenSilent();
     if(!token) return 0;
     const { driveId, itemId } = await resolveMs365Site();

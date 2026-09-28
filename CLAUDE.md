@@ -7,6 +7,12 @@ onto `claude/sharp-wozniak-03hehj` — keep both branches in sync after every
 push (`git checkout main && git merge <feature-branch> --no-edit && git push`,
 then switch back).
 
+`tools/sml-pms-proxy-worker.js` is a separate, optional Cloudflare Worker
+(deployed independently, not part of the GitHub Pages site) — see #25 below.
+It is the one piece of this project that is not client-side-only by design,
+and it exists specifically so employees never have to sign into Microsoft
+individually.
+
 ## Recurring mistakes found in this codebase — check for these before shipping
 
 Every item below was a real bug found and fixed in production code, not a
@@ -338,6 +344,36 @@ touches employee/attendance/evaluation data.
     limit plainly to the user rather than implying "any device, always,
     automatically" — the honest scope is "any device that has logged
     into MS365 at least once, or after Admin pushes/commits the data."
+25. **When "no device-local login, ever" is a hard requirement (many
+    employees, IT confirmed they can grant Application permission), the
+    honest fix is a small server-side proxy, not another client-side
+    trick.** #24's limit is real and unavoidable for a pure static page
+    using delegated (per-user) Graph auth. Added `tools/sml-pms-proxy-
+    worker.js`: a standalone Cloudflare Worker (deployed separately from
+    GitHub Pages, holding `CLIENT_SECRET`/`TENANT_ID`/etc. as Worker
+    secrets, never in the HTML) that authenticates to Graph via the
+    OAuth2 **client credentials flow** (Application permission,
+    `Files.ReadWrite.All` + `Sites.Read.All`, needs Azure AD admin
+    consent) and exposes three plain endpoints (`GET /rows`,
+    `POST /rows/add`, `POST /rows/upsert`) guarded by a shared
+    `X-Api-Key` header. On the client, `workerFetch()` + a `workerUrl`/
+    `workerApiKey` pair in `MS365_CONFIG` (`isWorkerConfigured(cfg)`)
+    make `graphListTableRows()`/`graphAddTableRow()`/
+    `graphUpsertTableRow()` route through the Worker instead of MSAL+
+    Graph when configured, and fall back to the original delegated flow
+    when the two fields are empty — every existing feature built on
+    those three functions (Employees, Attendance, EmployeeSettings,
+    Appraisals push) gets the "no login needed" behavior for free, with
+    zero changes to the call sites. `ms365SyncEmployeeSettingsSilent()`
+    (used at login) also prefers the Worker when configured, since a
+    Worker call can never trigger a popup — true zero-login sync for
+    every device once the Worker exists, including a phone that has
+    never touched Microsoft before. Be explicit that the shared API key
+    is a low-grade gate, not real security (visible in DevTools network
+    tab on any device that has it configured) — the real protection is
+    telling IT to scope the Azure AD app via a SharePoint Application
+    Access Policy to the one site, not the whole tenant, so a leaked key
+    can't reach unrelated company data.
 
 ## Verification checklist for any change to this file
 
