@@ -863,6 +863,24 @@ touches employee/attendance/evaluation data.
     remote side idempotent, the local-delete workaround had no remaining
     justification.
 
+43. **The "รายชื่อที่มีข้อมูลเวลาแล้ว" attendance list only had a 🗑️ delete
+    button per row — no way to correct a typo in someone's leave count
+    without deleting and re-entering from scratch, the same gap CLAUDE.md
+    #9 already found and fixed for the employee list and #20 fixed at the
+    save layer.** The save layer was already correct — `onManualEmpChange()`
+    (#20) already detects an existing `ATTENDANCE[code]` and loads its
+    real values into the "กรอกข้อมูลวันลารายบุคคล" form when that code is
+    typed in — there just wasn't a button anywhere that used it from the
+    list itself. Added `editAttendanceRow(code)`: sets `mn_emp`'s value to
+    the row's code and calls the *same* `onManualEmpChange()` the input's
+    own `oninput` already calls, then scrolls the form into view — no new
+    data-loading logic, since duplicating that would risk it drifting
+    from the real edit-detection path the same way CLAUDE.md #1 warns
+    against for any "copy" of real data. Confirms the same general rule
+    as #9/#20: when a list needs an edit affordance and a working edit
+    path already exists elsewhere on the page, wire a button to the real
+    path — don't rebuild a second one.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

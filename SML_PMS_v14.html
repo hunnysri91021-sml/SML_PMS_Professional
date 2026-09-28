@@ -8760,6 +8760,19 @@ function saveManualAttendance(){
   });
   onManualEmpChange();
 }
+/* ปุ่ม ✏️ ในตาราง "รายชื่อที่มีข้อมูลเวลาแล้ว" — ก่อนหน้านี้มีแค่ 🗑️ ลบ ไม่มีทางแก้ไข ต้องลบแล้วกรอกใหม่
+   ทั้งที่ฟอร์ม "กรอกข้อมูลวันลารายบุคคล" ด้านบนรองรับโหมดแก้ไขอยู่แล้ว (onManualEmpChange ดึงค่าจริงมา
+   เติมให้เมื่อรหัสมีข้อมูลอยู่แล้ว — ดู CLAUDE.md #20) เพียงแค่ไม่มีปุ่มเรียกใช้จากแถวในตาราง ฟังก์ชันนี้
+   จึงแค่เติมรหัสลงช่อง แล้วเรียก onManualEmpChange() ตัวเดิม (ไม่มี path เขียนข้อมูลแยกใหม่) พร้อมเลื่อน
+   จอไปที่ฟอร์มให้เห็นค่าที่ดึงมาทันที */
+function editAttendanceRow(code){
+  const input=document.getElementById('mn_emp');
+  if(!input) return;
+  input.value=code;
+  onManualEmpChange();
+  input.scrollIntoView({behavior:'smooth', block:'center'});
+  input.focus();
+}
 function deleteAttendanceRow(code){
   if(!confirm('ลบข้อมูลวันลาของ '+code+' ?')) return;
   delete ATTENDANCE[code];
@@ -8779,7 +8792,7 @@ function renderAttendanceList(){
     const name=emp?.[1] || a.name || '—';
     const zDays=computeZDays(a);
     return `<tr><td><b>${code}</b></td><td>${name}</td><td>${a.absentDay||0}</td><td>${a.lateCount||0}</td><td>${a.earlyCount||0}</td><td>${a.personalDay||0}</td><td>${a.sickDay||0}</td><td>${zDays.toFixed(2)}</td>
-      <td><button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${code}')">🗑️</button></td></tr>`;
+      <td><button class="btn btn-sm" onclick="editAttendanceRow('${code}')">✏️</button> <button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${code}')">🗑️</button></td></tr>`;
   }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน</td></tr>';
   if(typeof renderAttendancePushStatus==='function') renderAttendancePushStatus();
 }
