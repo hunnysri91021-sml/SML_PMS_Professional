@@ -1386,7 +1386,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <h2>🔐 เข้าสู่ระบบ SML PMS</h2>
     <p class="login-note">ยืนยันตัวตนด้วยรหัสพนักงาน + PIN — ใช้สำหรับระบุตัวตนเบื้องต้นในเครื่องนี้เท่านั้น ไม่ใช่ระบบความปลอดภัยระดับสูง สิทธิ์เข้าถึงข้อมูลจริงยังคุมที่ SharePoint permission ของไฟล์ Excel</p>
     <div id="loginErr" class="login-err" style="display:none"></div>
-    <div class="fg"><label>รหัสพนักงาน</label><input id="loginCode" placeholder="เช่น SML-001" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()"></div>
+    <div class="fg"><label>รหัสพนักงาน</label><input id="loginCode" list="empCodeList" placeholder="เช่น SML-001" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()"></div>
     <div class="fg"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 หลัก (เว้นว่างได้ถ้ายังไม่เคยตั้ง)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn btn-p" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
   </div>
@@ -1541,7 +1541,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <!-- รหัสพนักงาน — ดึงแบบฟอร์มที่ Admin กำหนดไว้ให้อัตโนมัติ -->
     <div class="card" style="margin-bottom:12px">
       <div class="card-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-        <div class="fg" style="margin:0"><label>รหัสพนักงาน</label><input id="evalCodeGate" placeholder="SML-001" oninput="onEvalCodeGateChange()" style="width:160px"></div>
+        <div class="fg" style="margin:0"><label>รหัสพนักงาน</label><input id="evalCodeGate" list="empCodeList" placeholder="SML-001" oninput="onEvalCodeGateChange()" style="width:160px"></div>
         <div id="evalLevelAssignedNote" style="font-size:12px;color:#64748b"></div>
       </div>
     </div>
@@ -2072,8 +2072,8 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="card-b">
         <div class="fr" style="margin-bottom:12px">
           <div class="fg"><label>รหัสพนักงาน <i>*</i></label>
-            <input id="mn_emp" list="mn_emp_list" placeholder="พิมพ์หรือเลือกรหัสพนักงาน เช่น SML-001" autocomplete="off" oninput="onManualEmpChange()" onchange="onManualEmpChange()">
-            <datalist id="mn_emp_list"></datalist>
+            <input id="mn_emp" list="empCodeList" placeholder="พิมพ์หรือเลือกรหัสพนักงาน เช่น SML-001" autocomplete="off" oninput="onManualEmpChange()" onchange="onManualEmpChange()">
+            <datalist id="empCodeList"></datalist>
           </div>
         </div>
         <div class="al al-i" id="mn_empInfo" style="display:none;margin-bottom:12px">
@@ -4821,6 +4821,7 @@ function saveUserFromModal() {
   populateUserFilters();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
+  if(typeof populateEmpCodeDatalist==='function') populateEmpCodeDatalist();
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
   if(evalLevel && typeof pushSingleEmployeeSettings==='function') pushSingleEmployeeSettings(id);
@@ -6005,6 +6006,7 @@ async function loadEmployeesFromMs365(){
     renderOrg(MASTER_USERS);
     populateOrgFilters();
     renderTeamFromMaster();
+    if(typeof populateEmpCodeDatalist==='function') populateEmpCodeDatalist();
     if(typeof renderCycleStats==='function') renderCycleStats();
     if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
     const cnt=document.getElementById('ms365EmpCount'); if(cnt) cnt.textContent=String(normalized.length);
@@ -7511,7 +7513,7 @@ document.addEventListener('input',e=>{
     <div class="fr">
       <div class="fg" style="max-width:140px">
         <label>รหัสพนักงาน <i>*</i></label>
-        <input id="mu_id" placeholder="SML-001 / KTG-001" oninput="onEmployeeIdInput()">
+        <input id="mu_id" list="empCodeList" placeholder="SML-001 / KTG-001" oninput="onEmployeeIdInput()">
         <div id="mu_idHint" style="font-size:10.5px;color:#64748b;margin-top:2px"></div>
       </div>
       <div class="fg">
@@ -8001,10 +8003,20 @@ function importHrgoFile(input){
   reader.readAsArrayBuffer(f);
 }
 
+/* Datalist กลางของทั้งระบบ — ทุกช่อง "กรอกรหัสพนักงาน" (Login, ประเมินตนเอง, เพิ่ม/แก้ไขพนักงาน,
+   บันทึกวันลาด้วยมือ ฯลฯ) ชี้มาที่ list="empCodeList" อันเดียวกัน เพื่อให้พิมพ์รหัสแล้วเห็นชื่อ-
+   ตำแหน่งจริงจาก MASTER_USERS ทันที (Autocomplete ของเบราว์เซอร์) แทนการพิมพ์รหัสมือเปล่าแล้ว
+   ต้องกดยืนยัน/รอผลก่อนถึงจะรู้ว่าใช่คนที่ต้องการหรือไม่ — ต้องเรียกซ้ำทุกจุดที่ MASTER_USERS
+   เปลี่ยน (เช่นเดียวกับ populateUserFilters/populateOrgFilters ดู CLAUDE.md #3) */
+function populateEmpCodeDatalist(){
+  const list=document.getElementById('empCodeList'); if(!list) return;
+  list.innerHTML = MASTER_USERS
+    .filter(u=>u[12]!=='resigned')
+    .map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]} — ${u[7]}</option>`).join('');
+}
 /* กรอกข้อมูลวันลารายบุคคลด้วยมือ — ใช้แทน/เสริมการ Import ไฟล์ */
 function populateAttendanceEmpSelect(){
-  const list=document.getElementById('mn_emp_list'); if(!list) return;
-  list.innerHTML = MASTER_USERS.map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]}</option>`).join('');
+  populateEmpCodeDatalist();
   onManualEmpChange();
 }
 /* เลือกรหัสแล้วดึงรายละเอียดพนักงานจากข้อมูลจริง (MASTER_USERS) ขึ้นมาแสดงยืนยันก่อนบันทึกวันลา

@@ -420,6 +420,21 @@ touches employee/attendance/evaluation data.
     way) or genuinely local-only (if so, say so in the UI) — never leave
     it ambiguous.
 
+28. **Every plain-text "employee code" input across the app should let HR
+    type the code and see the real name/position resolve — not just the
+    admin-only supervisor selects (#18).** `loginCode`, `evalCodeGate`, and
+    `mu_id` (Add/Edit Employee) were plain `<input>`s with only a
+    placeholder hint ("เช่น SML-001") — no way to browse or confirm you
+    typed the right code until submitting. `mn_emp` (manual attendance)
+    already had this via its own `<datalist>`; generalized it into one
+    shared `<datalist id="empCodeList">` (`populateEmpCodeDatalist()`,
+    excludes resigned employees, one option per employee formatted
+    `code — name — position`) that every code-entry field now points at
+    via `list="empCodeList"`. Same rule as #3: must be re-populated
+    everywhere `MASTER_USERS` changes (init bootstrap, `saveUserFromModal()`,
+    `loadEmployeesFromMs365()`), not just once at page load, or it goes
+    stale the moment someone's added/edited/synced.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
