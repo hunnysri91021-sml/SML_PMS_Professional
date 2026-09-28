@@ -374,6 +374,26 @@ touches employee/attendance/evaluation data.
     telling IT to scope the Azure AD app via a SharePoint Application
     Access Policy to the one site, not the whole tenant, so a leaked key
     can't reach unrelated company data.
+26. **`resetUserPin()`'s `alert()` is HR's only backup if an automated
+    delivery channel fails — never let the automated channel's success
+    be assumed.** Added real PIN-by-email: `tryEmailPin(emp, pin)`
+    calls the Worker's new `/send-mail` (Graph `/users/{mailbox}/
+    sendMail`, app-only, sends in the name of a real mailbox set as
+    `SEND_AS_EMAIL`) only when `isWorkerConfigured(cfg)` is true and the
+    employee has a real email on file; any other case — Worker not set
+    up, no email on record, or the send itself failing — returns
+    `{sent:false, reason}` with the real reason, never silently. The
+    `alert()` still always shows the raw PIN to HR regardless of
+    whether the email went out, and its wording changes based on the
+    real outcome ("✅ ส่งอีเมล...แล้ว" vs "⚠️ ไม่ได้ส่งอีเมลอัตโนมัติ
+    (เหตุผลจริง)") — this is the same shape of care as CLAUDE.md #10:
+    an automated action that might silently not happen must never be
+    assumed to have happened. Mail.Send (Application) permission is
+    tenant-wide by default (can email as *anyone* in the org) — the
+    Worker file documents the `New-ApplicationAccessPolicy` Exchange
+    Online command IT should run to restrict it to just the one
+    `SEND_AS_EMAIL` mailbox, same reasoning as the SharePoint
+    Application Access Policy for #25.
 
 ## Verification checklist for any change to this file
 

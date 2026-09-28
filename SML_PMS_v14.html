@@ -3927,7 +3927,28 @@ function doLogout(){
   location.reload();
 }
 
-/* ตั้ง/รีเซ็ต PIN ให้พนักงาน — แสดง PIN ที่สุ่มได้ครั้งเดียวตอนนั้นให้ HR ไปแจ้งเจ้าตัว
+/* ลองส่งอีเมลแจ้ง PIN ให้พนักงานอัตโนมัติผ่าน Proxy (Cloudflare Worker) — ทำได้ก็ต่อเมื่อ
+   ตั้งค่า Proxy ไว้แล้ว (isWorkerConfigured) และพนักงานคนนั้นมีอีเมลในระบบจริง ถ้าทำไม่ได้ด้วย
+   เหตุผลใดก็ตาม ให้บอกเหตุผลจริงกลับไป — ไม่ใช่ทำให้ resetUserPin() เชื่อว่าส่งสำเร็จ */
+async function tryEmailPin(emp, pin){
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
+  if(!emp[15]) return { sent:false, reason:'พนักงานคนนี้ยังไม่มีอีเมลบันทึกไว้ในระบบ' };
+  try{
+    await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({
+      toEmail: emp[15],
+      toName: emp[1],
+      subject: 'PIN เข้าสู่ระบบ SML PMS ของคุณ',
+      body: `เรียนคุณ ${emp[1]} (${emp[0]})\n\nPIN สำหรับเข้าสู่ระบบ SML PMS ของคุณคือ: ${pin}\n\nกรุณาเก็บ PIN นี้เป็นความลับ ห้ามบอกผู้อื่น\nหากไม่ได้ร้องขอ PIN นี้ กรุณาติดต่อ HR ทันที\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`
+    })});
+    return { sent:true };
+  }catch(e){
+    return { sent:false, reason: 'ส่งอีเมลไม่สำเร็จ: ' + e.message };
+  }
+}
+
+/* ตั้ง/รีเซ็ต PIN ให้พนักงาน — แสดง PIN ที่สุ่มได้ครั้งเดียวตอนนั้นให้ HR เห็นเสมอ (เผื่อส่งอีเมล
+   ไม่สำเร็จ) พร้อมพยายามส่งอีเมลแจ้งพนักงานอัตโนมัติถ้าตั้งค่า Proxy + มีอีเมลไว้แล้ว
    ไม่เคยเก็บ PIN ดิบไว้ที่ไหนอีก มีแต่ SHA-256 hash ใน MASTER_USERS[17] */
 async function resetUserPin(code){
   const emp = MASTER_USERS.find(u => u[0] === code);
@@ -3938,7 +3959,12 @@ async function resetUserPin(code){
   const pin = String(Math.floor(1000 + Math.random()*9000));
   emp[17] = await sha256Hex(pin);
   if(typeof appendAuditLog === 'function') appendAuditLog('employee', 'ตั้ง/รีเซ็ต PIN', emp[0], emp[1]);
-  alert(`ตั้ง PIN ใหม่ให้ ${emp[1]} (${emp[0]}) เรียบร้อย\n\nPIN: ${pin}\n\nกรุณาแจ้ง PIN นี้ให้พนักงานเป็นการส่วนตัว — ระบบจะไม่แสดง PIN นี้ซ้ำอีก`);
+  const emailResult = await tryEmailPin(emp, pin);
+  const emailNote = emailResult.sent
+    ? `\n\n✅ ส่งอีเมลแจ้ง PIN นี้ไปที่ ${emp[15]} เรียบร้อยแล้ว`
+    : `\n\n⚠️ ไม่ได้ส่งอีเมลอัตโนมัติ (${emailResult.reason}) — กรุณาแจ้ง PIN นี้ให้พนักงานเป็นการส่วนตัวเอง`;
+  alert(`ตั้ง PIN ใหม่ให้ ${emp[1]} (${emp[0]}) เรียบร้อย\n\nPIN: ${pin}${emailNote}\n\nระบบจะไม่แสดง PIN นี้ซ้ำอีก`);
+  if(emailResult.sent && typeof appendAuditLog === 'function') appendAuditLog('employee', 'ส่งอีเมล PIN อัตโนมัติ', emp[0], emp[15]);
   if(typeof renderPinStatus === 'function') renderPinStatus(code);
   if(typeof pushSingleEmployeeSettings === 'function') pushSingleEmployeeSettings(code);
 }

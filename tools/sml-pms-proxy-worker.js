@@ -14,23 +14,29 @@
  * วิธี deploy (Cloudflare, ฟรี):
  *   1. สร้างบัญชี Cloudflare (ฟรี) → Workers & Pages → Create Worker
  *   2. วางโค้ดไฟล์นี้ทั้งหมดแทนโค้ดตัวอย่าง แล้วกด Deploy
- *   3. ไปที่ Settings → Variables → เพิ่ม Secret (encrypted) ทั้ง 6 ตัว:
+ *   3. ไปที่ Settings → Variables → เพิ่ม Secret (encrypted) ทั้ง 7 ตัว:
  *        TENANT_ID       = Azure AD Tenant ID
  *        CLIENT_ID       = Azure AD App (client) ID ที่ขอสิทธิ์ Application แล้ว
  *        CLIENT_SECRET   = Client secret ที่สร้างไว้ใน Azure AD (เห็นครั้งเดียวตอนสร้าง)
  *        SITE_URL        = เช่น https://siammotor.sharepoint.com/sites/Chosiya-HR
  *        FILE_PATH       = เช่น _SML_PMS_Professiona/SML_PMS_Master.xlsx
  *        PROXY_API_KEY   = กุญแจที่ตั้งเอง (สุ่มยาวๆ) ให้ตรงกับที่กรอกในหน้า MS365 ของเว็บ
+ *        SEND_AS_EMAIL   = อีเมล HR/Admin จริงใน Microsoft 365 ที่จะใช้เป็น "ผู้ส่ง" เวลาส่ง PIN
+ *                          ให้พนักงานทางอีเมล (เช่น hr@siammotor.com) — ต้องเป็นกล่องอีเมลจริง
+ *                          ที่มีอยู่ในองค์กร ไม่ใช่ที่อยู่ลอยๆ
  *   4. คัดลอก URL ของ Worker (เช่น https://sml-pms-proxy.<ชื่อบัญชี>.workers.dev) ไปกรอกที่
  *      หน้า "เชื่อมต่อ MS365 Excel" → แท็บ "ขั้นตอนตั้งค่า" ช่อง "Proxy URL" / "Proxy API Key"
  *
  * ข้อกำหนดฝั่ง Azure AD ที่ทีม IT/แอดมิน M365 ต้องทำ (ใครก็ตามที่มี Global/Application
  * Administrator หรือสิทธิ์เทียบเท่า):
  *   - App registrations → เพิ่ม API permission (Application, ไม่ใช่ Delegated):
- *       Microsoft Graph → Files.ReadWrite.All, Sites.Read.All
- *   - กด "Grant admin consent" ให้ทั้งสองสิทธิ์
+ *       Microsoft Graph → Files.ReadWrite.All, Sites.Read.All, Mail.Send
+ *   - กด "Grant admin consent" ให้ทุกสิทธิ์
  *   - แนะนำอย่างยิ่ง: ตั้ง SharePoint Application Access Policy จำกัดให้แอปนี้เข้าถึงได้แค่
  *     ไซต์ Chosiya-HR ไซต์เดียว ไม่ใช่ทั้งองค์กร (ลดผลกระทบถ้า Client Secret หลุด)
+ *   - Mail.Send (Application) ให้แอปนี้ "ส่งอีเมลในนามใครก็ได้ในองค์กร" โดยดีฟอลต์ — แนะนำให้
+ *     IT จำกัดด้วย Exchange Online Application Access Policy ให้ส่งได้แค่ในนาม SEND_AS_EMAIL
+ *     กล่องเดียว (ดูคำสั่งท้ายไฟล์นี้)
  *
  * ความปลอดภัยของ PROXY_API_KEY: เป็นกุญแจร่วมง่ายๆ กันคนแปลกหน้ายิงคำขอมาที่ Worker เฉยๆ
  * ไม่ใช่ความปลอดภัยระดับสูง (ใครเปิด DevTools ดู Network request จากเว็บที่ตั้งค่าไว้แล้วจะเห็นได้)
@@ -55,6 +61,17 @@ export default {
 
     try {
       const token = await getAppToken(env);
+
+      /* /send-mail ไม่เกี่ยวกับ Excel เลย ไม่ต้อง resolveSite() (ซึ่งไปหา SharePoint site/ไฟล์)
+         แยกไว้ต่างหาก กันไม่ให้การส่งอีเมลไปติดพังเวลา SITE_URL/FILE_PATH ตั้งค่าไม่ถูกโดยไม่จำเป็น */
+      if (url.pathname === '/send-mail' && request.method === 'POST') {
+        const { toEmail, toName, subject, body } = await request.json();
+        if (!toEmail || !subject || !body) return json({ error: 'missing toEmail/subject/body' }, 400, cors);
+        if (!env.SEND_AS_EMAIL) return json({ error: 'ยังไม่ได้ตั้งค่า SEND_AS_EMAIL ใน Worker' }, 500, cors);
+        await sendMail(token, env.SEND_AS_EMAIL, toEmail, toName, subject, body);
+        return json({ ok: true }, 200, cors);
+      }
+
       const { driveId, itemId } = await resolveSite(env, token);
 
       if (url.pathname === '/rows' && request.method === 'GET') {
@@ -159,6 +176,20 @@ async function graphSend(token, url, method, body) {
   return data;
 }
 
+/* ส่งอีเมลจริงในนาม SEND_AS_EMAIL (ต้องเป็นกล่องอีเมลจริงในองค์กร) ผ่าน Microsoft Graph
+   /users/{email}/sendMail — endpoint นี้คืน 202 Accepted แบบไม่มี body เมื่อสำเร็จ */
+async function sendMail(token, fromEmail, toEmail, toName, subject, bodyText) {
+  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(fromEmail)}/sendMail`;
+  await graphSend(token, url, 'POST', {
+    message: {
+      subject,
+      body: { contentType: 'Text', content: bodyText },
+      toRecipients: [{ emailAddress: { address: toEmail, name: toName || toEmail } }],
+    },
+    saveToSentItems: true,
+  });
+}
+
 async function listRows(token, driveId, itemId, table) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
   const data = await graphGet(token, base);
@@ -186,3 +217,22 @@ async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, v
 function json(obj, status, headers) {
   return new Response(JSON.stringify(obj), { status, headers: { ...headers, 'Content-Type': 'application/json' } });
 }
+
+/*
+ * จำกัดสิทธิ์ Mail.Send ให้ส่งได้แค่ในนาม SEND_AS_EMAIL กล่องเดียว (แนะนำอย่างยิ่ง)
+ * ---------------------------------------------------------------------------
+ * Mail.Send (Application) แบบไม่จำกัดขอบเขต จะทำให้แอปนี้ "ส่งอีเมลในนามใครก็ได้ในองค์กร"
+ * ได้ตามค่าเริ่มต้น — ให้ทีม Exchange Online Admin รันคำสั่งนี้ใน Exchange Online PowerShell
+ * เพื่อจำกัดให้แอปนี้ส่งได้แค่ในนามกล่องอีเมลเดียวที่ตั้งไว้ใน SEND_AS_EMAIL:
+ *
+ *   Connect-ExchangeOnline
+ *   New-ApplicationAccessPolicy `
+ *     -AppId "e00dda6c-8f9b-4c9f-bf97-a0f549de0b0c" `
+ *     -PolicyScopeGroupId "hr@siammotor.com" `
+ *     -AccessRight RestrictAccess `
+ *     -Description "SML PMS Proxy — ส่งอีเมลได้แค่ในนาม hr@siammotor.com เท่านั้น"
+ *
+ * (แทน AppId และอีเมลด้วยค่าจริงของคุณ — ต้องตรงกับ CLIENT_ID และ SEND_AS_EMAIL ที่ตั้งไว้)
+ * ตรวจสอบด้วย: Test-ApplicationAccessPolicy -AppId "<CLIENT_ID>" -Identity "hr@siammotor.com"
+ * ต้องได้ผลลัพธ์ "Access Check Result: Granted"
+ */
