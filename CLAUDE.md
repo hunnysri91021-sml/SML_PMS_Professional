@@ -805,6 +805,30 @@ touches employee/attendance/evaluation data.
     need extending to match, which means another live Worker redeploy;
     flagged for a future pass, not silently left implying it's fine).
 
+41. **Fixed #40's flagged gap: `saveEvaluationToMs365()`/`ms365PushAppraisals()`
+    used `graphAddTableRow()` for the `Appraisals` table, so every repeated
+    "บันทึกร่าง" for the same person/cycle/level piled up a new Excel row
+    instead of updating one — needed an upsert, but `graphUpsertTableRow()`
+    only supported a single key column, and no single column in that
+    table uniquely identifies "this person's evaluation this cycle at
+    this level" (only the combination of EmpID+Cycle+Level does).**
+    Extended `graphUpsertTableRow()` (client) and the Worker's `upsertRow()`
+    identically — `keyColIndex`/`keyValue` now each accept either a plain
+    value (existing single-column behavior, unchanged, every other caller
+    keeps working with zero changes) or **parallel arrays** for a
+    composite key, matched via a shared `rowMatchesUpsertKey()` helper
+    duplicated in both places (client can't share code with the Worker,
+    so kept the two implementations byte-for-byte identical in logic —
+    if one ever changes, mirror it in the other or client/Worker will
+    silently disagree on what counts as a match). `saveEvaluationToMs365()`
+    and `ms365PushAppraisals()` now call it with `[0,2,3]` (EmpID/Cycle/
+    Level column indices) instead of `graphAddTableRow()`. **This changes
+    the Worker's own code, so it needs a real redeploy** (same
+    copy-paste-into-Cloudflare step as every other Worker change this
+    project has needed) — the updated file was sent to the user; this
+    fix has no effect until they redeploy it, unlike every purely-client
+    fix in this file which goes live the moment GitHub Pages updates.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

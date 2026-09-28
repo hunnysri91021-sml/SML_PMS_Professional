@@ -199,13 +199,21 @@ async function addRow(token, driveId, itemId, table, values) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows/add`;
   return graphSend(token, base, 'POST', { values: [values] });
 }
+// keyColIndex: ตัวเลขเดียว (คีย์คอลัมน์เดียว) หรืออาร์เรย์ของตัวเลข (คีย์ผสมหลายคอลัมน์ เช่น
+// [empCodeCol, cycleCol, levelCol] สำหรับตาราง Appraisals ที่รหัสพนักงานอย่างเดียวไม่พอระบุแถว)
+// keyValue ต้องเป็นอาร์เรย์คู่กันถ้า keyColIndex เป็นอาร์เรย์ — ต้องตรงกับตรรกะฝั่งเว็บ
+// (rowMatchesUpsertKey ใน SML_PMS_v14.html) ทุกประการ
+function rowMatchesUpsertKey(rowVals, keyColIndex, keyValue) {
+  if (Array.isArray(keyColIndex)) {
+    return keyColIndex.every((ci, i) => String(rowVals?.[ci] ?? '').trim() === String(keyValue[i]).trim());
+  }
+  return String(rowVals?.[keyColIndex] ?? '').trim() === String(keyValue).trim();
+}
 async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
   const data = await graphGet(token, base);
   const rows = data.value || [];
-  const idx = rows.findIndex(
-    (r) => String((r.values && r.values[0] && r.values[0][keyColIndex]) ?? '').trim() === String(keyValue).trim()
-  );
+  const idx = rows.findIndex((r) => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue));
   if (idx >= 0 && rows[idx].index !== undefined) {
     await graphSend(token, base + `/itemAt(index=${rows[idx].index})`, 'PATCH', { values: [values] });
     return 'updated';

@@ -5994,7 +5994,17 @@ async function graphAddTableRow(tableName, rowValues){
    แต่ไม่เหมาะกับ "สถานะปัจจุบันของคนคนหนึ่ง" (วันลาของ SML-001) ที่แก้ไขซ้ำได้ ถ้าใช้ add ซ้ำๆ
    จะได้แถวซ้ำของรหัสเดียวกันสะสมใน Excel ไปเรื่อยๆ ฟังก์ชันนี้จึงหาแถวเดิมด้วยคอลัมน์ key ก่อน
    เจอแล้ว PATCH ทับแถวเดิม ไม่เจอค่อย add ใหม่ — กันปัญหาข้อมูลซ้ำฝั่ง Excel แบบเดียวกับที่กัน
-   ฝั่งเว็บไปแล้ว (ห้ามบันทึกซ้ำในฟอร์มกรอกมือ) */
+   ฝั่งเว็บไปแล้ว (ห้ามบันทึกซ้ำในฟอร์มกรอกมือ)
+   keyColIndex รับได้ทั้งตัวเลขเดียว (คีย์คอลัมน์เดียว เช่น รหัสพนักงาน) และอาร์เรย์ของตัวเลข
+   (คีย์ผสมหลายคอลัมน์ เช่น [รหัสพนักงาน, รอบ, ระดับ] สำหรับตาราง Appraisals ที่รหัสพนักงานอย่าง
+   เดียวไม่พอจะระบุแถวได้ — คนคนเดียวมีได้หลายรอบ/หลายระดับ) keyValue ต้องเป็นอาร์เรย์คู่กันถ้า
+   keyColIndex เป็นอาร์เรย์ */
+function rowMatchesUpsertKey(rowVals, keyColIndex, keyValue){
+  if(Array.isArray(keyColIndex)){
+    return keyColIndex.every((ci,i) => String(rowVals?.[ci] ?? '').trim() === String(keyValue[i]).trim());
+  }
+  return String(rowVals?.[keyColIndex] ?? '').trim() === String(keyValue).trim();
+}
 async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
   const cfg = loadMs365Config();
   if(isWorkerConfigured(cfg)){
@@ -6006,7 +6016,7 @@ async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
     "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows";
   const data = await graphFetch(base);
   const rows = data.value || [];
-  const idx = rows.findIndex(r => String((r.values && r.values[0] && r.values[0][keyColIndex]) ?? '').trim() === String(keyValue).trim());
+  const idx = rows.findIndex(r => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue));
   if(idx >= 0 && rows[idx].index !== undefined){
     await graphFetch(base + '/itemAt(index=' + rows[idx].index + ')', { method:'PATCH', body: JSON.stringify({ values: [rowValues] }) });
     return 'updated';
@@ -6249,9 +6259,13 @@ async function saveEvaluationToMs365(status='Draft'){
     smlToast(`บันทึก ${status} ใน Browser แล้ว — ยังไม่ได้ตั้งค่า MS365`, 'warn');
     return { localOnly:true, payload };
   }
+  /* คนเดียวกัน/รอบเดียวกัน/ระดับเดียวกัน คือ "สถานะปัจจุบันของใบประเมินนั้น" (Draft ทับ Draft,
+     หรือ Draft ขยับเป็น Submitted) ไม่ใช่เหตุการณ์ใหม่ทุกครั้งที่กดบันทึก — ต้อง upsert ด้วยคีย์ผสม
+     [empCode, cycle, level] (คอลัมน์ 0,2,3) ไม่ใช่ add ซ้ำไปเรื่อยๆ เหมือนเดิม (เคยทำให้แถวซ้ำสะสม
+     ใน Excel ทุกครั้งที่กด "บันทึกร่าง" ซ้ำ — ดู CLAUDE.md #40) */
   let pushResult;
   try{
-    await graphAddTableRow(cfg.evaluationTable, payload);
+    await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], payload);
     updateMs365Status('ok','Connected');
     pushResult = { ok:true };
   }catch(err){
@@ -7387,7 +7401,7 @@ async function ms365PushAppraisals(){
   let ok=0, fail=0;
   const remaining=[...notReady];
   for(const payload of toPush){
-    try{ await graphAddTableRow(cfg.evaluationTable, payload); ok++; }
+    try{ await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], payload); ok++; }
     catch(e){ fail++; remaining.push(payload); }
   }
   localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(remaining));
