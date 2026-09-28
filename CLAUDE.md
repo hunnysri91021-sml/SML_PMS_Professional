@@ -537,6 +537,37 @@ touches employee/attendance/evaluation data.
     would have hit the same blocked-popup problem #31 fixed, just
     triggered on every reload instead of only on save.
 
+33. **The silent-sync-on-every-load fix (#32) only covered `Employees` +
+    `EmployeeSettings` — `Attendance` had the same "only syncs on a manual
+    button click, or an interval that only runs while the MS365 tab is
+    open" gap, so leave/lateness data edited in Excel looked stale on
+    every other page (Z-score, cycle stats) until someone happened to
+    visit that one tab. Extended the exact same treatment:
+    `ms365SyncAttendance()` gained the same `silent` param as
+    `ms365SyncEmployees()`/`loadEmployeesFromMs365()` (gates its
+    success/failure `smlToast`s only — `appendSyncLog()` still records
+    silently every time, same convention as the others), and both
+    `doLogin()` and `tryRestoreSession()` now call
+    `ms365SyncAttendance(true)` alongside the other two. **`Appraisals`
+    (evaluation submissions) is deliberately NOT part of this — don't
+    add a pull-sync for it without being asked.** Unlike `Employees`/
+    `Attendance`/`EmployeeSettings` (each row = "current state of one
+    entity," meant to be kept in sync both ways), `Appraisals` only ever
+    receives rows through `ms365PushAppraisals()`, which explicitly
+    filters to `status==='Approved'` only (CLAUDE.md #11) — the
+    Draft→Submitted→Calibrated workflow stages are intentionally
+    per-device local state (`MS365_LOCAL_DRAFT_KEY`) until final
+    approval, and the Excel table is a one-way archive of finished
+    results, not a live mirror of in-progress review state. Pulling it
+    back down would not fix "another reviewer's device doesn't see this
+    submission" (that's a real, separate architectural limit worth
+    surfacing honestly if asked about, not silently working around) and
+    risks reintroducing a stale-overwrite bug into the local draft
+    queue. When a request says "not everything syncs," enumerate the
+    real tables and check each against what it's *supposed* to mean
+    (current-state vs. append-only-archive) before assuming they should
+    all get the same auto-pull treatment.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

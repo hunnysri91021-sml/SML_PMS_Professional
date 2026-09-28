@@ -3902,6 +3902,12 @@ async function doLogin(){
   if(typeof ms365SyncEmployeeSettingsSilent === 'function'){
     try{ await ms365SyncEmployeeSettingsSilent(); }catch(e){}
   }
+  /* เวลาทำงาน/วันลา (ตาราง Attendance) เป็นอีกชีตที่ HR แก้ผ่าน Excel ตรงๆ บ่อย — เดิม sync ได้
+     แค่กดปุ่มเองหรือรอ interval ตอนอยู่หน้า MS365 เท่านั้น ซิงก์เงียบตรงนี้ด้วยเพื่อให้คะแนน Z /
+     รายงานวันลาไม่ค้างข้อมูลเก่าเหมือนที่เคยเกิดกับ Grade (ดู CLAUDE.md #32) */
+  if(typeof ms365SyncAttendance === 'function'){
+    try{ await ms365SyncAttendance(true); }catch(e){}
+  }
   const u = MASTER_USERS.find(x => x[0] === code);
   if(!u || u[12] === 'resigned'){
     errEl.textContent = 'ไม่พบรหัสพนักงานนี้ในระบบ (หรือพนักงานลาออกแล้ว)';
@@ -6166,11 +6172,13 @@ function stopMs365AutoSync(){
    แก้ให้ parse แถวจริงด้วยลำดับคอลัมน์เดียวกับ HRGO_TEMPLATE_HEADERS (ตารางชื่อ "Attendance" ต้อง
    มีคอลัมน์ตรงกับ Template HRGO) แล้วเขียนเข้า ATTENDANCE จริง เหมือน importHrgoFile() ทุกประการ
    รวมถึงกฎ "ชื่อต้องดึงจาก MASTER_USERS เสมอ ไม่เชื่อชื่อจากไฟล์" และ "รหัสที่ไม่มีจริงต้องข้าม+รายงาน" */
-async function ms365SyncAttendance(){
+async function ms365SyncAttendance(silent=false){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
-    smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงเวลาทำงานจาก Excel ได้ ใช้หน้า "นำเข้าเวลา HRGO" แทน','warn');
-    appendSyncLog('Sync เวลา HRGO: ยังไม่ได้ตั้งค่า MS365', false);
+    if(!silent){
+      smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงเวลาทำงานจาก Excel ได้ ใช้หน้า "นำเข้าเวลา HRGO" แทน','warn');
+      appendSyncLog('Sync เวลา HRGO: ยังไม่ได้ตั้งค่า MS365', false);
+    }
     return;
   }
   try{
@@ -6212,13 +6220,13 @@ async function ms365SyncAttendance(){
     set('attendSyncCount', imported + ' คน');
     updateMs365Status('ok','Connected');
     const unmatchedMsg = unmatched.length ? ` · ไม่พบรหัส ${unmatched.length} รายการในข้อมูลพนักงานจริง (${unmatched.slice(0,5).join(', ')}${unmatched.length>5?'…':''}) — ข้ามไป` : '';
-    smlToast(`นำเข้าเวลาทำงานจาก Excel แล้ว ${imported} คน` + unmatchedMsg, unmatched.length ? 'warn' : 'ok');
-    appendSyncLog(`Sync เวลา HRGO: นำเข้า ${imported} คน${unmatched.length?' · ข้าม '+unmatched.length+' รหัส':''}`, true);
+    if(!silent) smlToast(`นำเข้าเวลาทำงานจาก Excel แล้ว ${imported} คน` + unmatchedMsg, unmatched.length ? 'warn' : 'ok');
+    appendSyncLog(`Sync เวลา HRGO: นำเข้า ${imported} คน${unmatched.length?' · ข้าม '+unmatched.length+' รหัส':''}${silent?' (auto)':''}`, true);
     markSystemUpdated(`Sync เวลา HRGO ${imported} คน`);
     if(typeof appendAuditLog==='function') appendAuditLog('ms365','Sync เวลา HRGO จาก Excel', 'Attendance', imported+' คน'+(unmatched.length?' · ข้าม '+unmatched.length:''));
   }catch(err){
     updateMs365Status('warn','Sync failed');
-    smlToast('นำเข้าเวลาทำงานไม่สำเร็จ: ' + err.message,'warn');
+    if(!silent) smlToast('นำเข้าเวลาทำงานไม่สำเร็จ: ' + err.message,'warn');
     appendSyncLog('Sync เวลา HRGO ล้มเหลว: ' + err.message, false);
   }
 }
@@ -7939,6 +7947,7 @@ document.addEventListener('input',e=>{
          มิฉะนั้น Grade/evalLevel ที่เพิ่งบันทึกไปจะดูเหมือน "หาย" ทุกครั้งที่รีเฟรชหน้า */
       if(typeof ms365SyncEmployees === 'function'){ try{ await ms365SyncEmployees(true); }catch(e){} }
       if(typeof ms365SyncEmployeeSettingsSilent === 'function'){ try{ await ms365SyncEmployeeSettingsSilent(); }catch(e){} }
+      if(typeof ms365SyncAttendance === 'function'){ try{ await ms365SyncAttendance(true); }catch(e){} }
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
     }catch(e){}
