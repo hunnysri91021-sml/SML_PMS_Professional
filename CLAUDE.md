@@ -642,6 +642,38 @@ touches employee/attendance/evaluation data.
     is exactly how a stale edit target would silently overwrite the
     wrong KPI the next time someone clicked "+ เพิ่ม" instead of "✏️".
 
+36. **The "รอบการประเมิน" (Cycle) page's "รอบทั้งหมด" table was pure mock
+    HTML — 4 hardcoded `<tr>`s with fabricated "ผู้เข้าร่วม"/"ความคืบหน้า"
+    numbers (99/96/91 people, 71.5%/100%/100%/0%, CLAUDE.md #16) and
+    "ดู"/"แก้ไข" buttons with no `onclick` at all (#10) — and the
+    "+ สร้างรอบใหม่" modal's save button was `onclick="closeM()"`, a
+    pure no-op; none of its inputs even had `id`s to read from. This is
+    a *different* feature from the single-row "ตั้งค่ารอบประเมิน" Settings
+    panel (`cycleNameSetup` et al., wired to Excel in #34) — that one
+    edits "the current cycle," this one is a real multi-cycle list/
+    history page, and both happened to be named "Cycle" things on the
+    same nav page. Fixed with a real `cyclesList` array
+    (`CYCLES_LIST_KEY`, `localStorage`, seeded once from the mock rows'
+    *structural* fields only — id/name/year/dates — never their
+    fabricated participant/progress numbers, since those are now
+    computed live every render from real `getEvalParticipants()` +
+    `getDrafts().filter(d => d[2]===cycle.year)`, so they can never be
+    hardcoded-stale again). `editCycleFromList(id)` loads the real
+    record (CLAUDE.md #9 pattern, locks the id field as the key while
+    editing), `openAddCycleModal()` clears it + re-enables the id field
+    (rejects a duplicate id on save rather than silently overwriting),
+    and `saveCycleFromModal()` branches update-in-place vs. create like
+    every other modal in this file now does. Pushed to Excel via the
+    *same* `Cycles` table as #34's single-row settings, but keyed by
+    each cycle's own id instead of the fixed `'CURRENT'` sentinel — the
+    two mechanisms write different rows and don't collide.
+    `ms365SyncCyclesList(silent)` pulls + replaces `cyclesList` wholesale
+    (filtering out any `'CURRENT'` row, which belongs to the other
+    mechanism) as part of the same silent-sync group from #32/#33.
+    `renderCyclesTable()` is called on page nav (`p==='cycle'`) and at
+    init, same as every other page-specific render function in this
+    file's nav dispatcher.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -1853,18 +1853,13 @@ tbody tr:hover{background:#f0f6ff!important}
   <!-- ========== CYCLE (ADMIN) ========== -->
   <section class="page" id="pg-cycle">
     <div class="ph"><div><h2>รอบการประเมิน</h2><p>ประเมินอย่างน้อยปีละ 1 ครั้ง · ช่วงเดือน พฤศจิกายน – ธันวาคม</p></div>
-    <div class="ph-act"><button class="btn btn-p" onclick="openM('mCycle')">+ สร้างรอบใหม่</button></div></div>
+    <div class="ph-act"><button class="btn btn-p" onclick="openAddCycleModal()">+ สร้างรอบใหม่</button></div></div>
 
     <div class="card">
       <div class="card-h"><h3>รอบทั้งหมด</h3></div>
       <div class="tw"><table>
         <thead><tr><th>รหัสรอบ</th><th>ชื่อรอบ</th><th>ช่วงผลงาน</th><th>ผู้เข้าร่วม</th><th>ความคืบหน้า</th><th>สถานะ</th><th></th></tr></thead>
-        <tbody>
-          <tr><td><b>FY2025-ANNUAL</b></td><td>ประเมินประจำปี 2568</td><td>1 ม.ค. 68 – วันที่ประเมิน</td><td>99</td><td style="width:150px"><div class="pg"><i style="width:71%"></i></div><small style="font-size:11px;color:#94a3b8">71.5%</small></td><td><span class="bd b-g">● Active</span></td><td><button class="btn btn-sm">แก้ไข</button></td></tr>
-          <tr><td>FY2024-ANNUAL</td><td>ประเมินประจำปี 2567</td><td>1 ม.ค. 67 – วันที่ประเมิน</td><td>96</td><td><div class="pg"><i class="ok" style="width:100%"></i></div><small style="font-size:11px;color:#94a3b8">100%</small></td><td><span class="bd b-s">● Closed</span></td><td><button class="btn btn-sm">ดู</button></td></tr>
-          <tr><td>FY2023-ANNUAL</td><td>ประเมินประจำปี 2566</td><td>1 ม.ค. 66 – วันที่ประเมิน</td><td>91</td><td><div class="pg"><i class="ok" style="width:100%"></i></div><small style="font-size:11px;color:#94a3b8">100%</small></td><td><span class="bd b-s">● Closed</span></td><td><button class="btn btn-sm">ดู</button></td></tr>
-          <tr><td>FY2026-ANNUAL</td><td>ประเมินประจำปี 2569</td><td>1 ม.ค. 69 – วันที่ประเมิน</td><td>—</td><td><div class="pg"><i style="width:0%"></i></div><small style="font-size:11px;color:#94a3b8">0%</small></td><td><span class="bd b-y">● Draft</span></td><td><button class="btn btn-sm">แก้ไข</button></td></tr>
-        </tbody>
+        <tbody id="cyclesListRows"></tbody>
       </table></div>
     </div>
 
@@ -3248,16 +3243,17 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 </div></div>
 
 <div class="ov" id="mCycle"><div class="md">
-  <div class="md-h"><h3>📅 สร้างรอบการประเมินใหม่</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-h"><h3 id="mCycleTitle">📅 สร้างรอบการประเมินใหม่</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="fr"><div class="fg"><label>รหัสรอบ <i>*</i></label><input placeholder="FY2027-ANNUAL"></div><div class="fg"><label>ปีงบประมาณ <i>*</i></label><input type="number" value="2570"></div></div>
-    <div class="fg"><label>ชื่อรอบ <i>*</i></label><input placeholder="ประเมินประจำปี 2570"></div>
-    <div class="fr"><div class="fg"><label>ช่วงผลงานเริ่ม <i>*</i></label><input type="date"></div><div class="fg"><label>ช่วงผลงานสิ้นสุด <i>*</i></label><input type="date"></div></div>
+    <div class="fr"><div class="fg"><label>รหัสรอบ <i>*</i></label><input id="cy_code" placeholder="FY2027-ANNUAL"></div><div class="fg"><label>ปีงบประมาณ <i>*</i></label><input id="cy_year" type="number" value="2570"></div></div>
+    <div class="fg"><label>ชื่อรอบ <i>*</i></label><input id="cy_name" placeholder="ประเมินประจำปี 2570"></div>
+    <div class="fr"><div class="fg"><label>ช่วงผลงานเริ่ม <i>*</i></label><input id="cy_start" type="date"></div><div class="fg"><label>ช่วงผลงานสิ้นสุด <i>*</i></label><input id="cy_end" type="date"></div></div>
+    <div class="fg"><label>สถานะ</label><select id="cy_status"><option value="Draft">Draft — แบบร่าง</option><option value="Active">Active — กำลังดำเนินการ</option><option value="Closed">Closed — ปิดรอบแล้ว</option></select></div>
     <div class="fr"><div class="fg"><label>เกณฑ์เกรด</label><select><option>มาตรฐานองค์กร (A/B+/B/C/D)</option></select></div><div class="fg"><label>อายุงานขั้นต่ำ (เดือน)</label><input type="number" value="6"><small>พนักงานที่อายุงานน้อยกว่านี้จะถูกยกเว้น</small></div></div>
     <div class="fg"><label><input type="checkbox" checked style="width:auto;margin-right:6px">เปิดให้ประเมินตนเอง</label></div>
     <div class="fg"><label><input type="checkbox" checked style="width:auto;margin-right:6px">บังคับ Calibration ก่อนอนุมัติ</label></div>
   </div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="closeM()">บันทึกเป็นร่าง</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="saveCycleFromModal()">💾 บันทึก</button></div>
 </div></div>
 
 <div class="ov" id="mRule"><div class="md" style="max-width:520px">
@@ -3324,6 +3320,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='settings' && typeof renderNavPermEditor==='function') renderNavPermEditor();
   if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
+  if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
 });
 
 /* ====== ROLE SWITCH ====== */
@@ -4021,6 +4018,9 @@ async function doLogin(){
   if(typeof ms365SyncCycleSetup === 'function'){
     try{ await ms365SyncCycleSetup(true); }catch(e){}
   }
+  if(typeof ms365SyncCyclesList === 'function'){
+    try{ await ms365SyncCyclesList(true); }catch(e){}
+  }
   const u = MASTER_USERS.find(x => x[0] === code);
   if(!u || u[12] === 'resigned'){
     errEl.textContent = 'ไม่พบรหัสพนักงานนี้ในระบบ (หรือพนักงานลาออกแล้ว)';
@@ -4433,6 +4433,7 @@ setTimeout(() => {
   renderTeamFromMaster();
   if(typeof populateAttendanceEmpSelect==='function') populateAttendanceEmpSelect();
   if(typeof renderAttendanceList==='function') renderAttendanceList();
+  if(typeof renderCyclesTable==='function') renderCyclesTable();
   if(typeof renderSysStatusBanner==='function') renderSysStatusBanner();
   if(typeof renderPendingList==='function') renderPendingList();
   if(typeof refreshSysStatusFromMs365==='function') refreshSysStatusFromMs365();
@@ -7730,6 +7731,136 @@ async function pushCycleSetupToExcel(silent=true){
     appendSyncLog(`Push การตั้งค่ารอบประเมินไม่สำเร็จ: ${e.message}`, false);
   }
 }
+/* ====== รอบการประเมิน (รายการหลายรอบ) — หน้า "รอบการประเมิน" (pg-cycle) ======
+   เดิมตาราง "รอบทั้งหมด" เป็น HTML ฝังตายตัว 4 แถว (FY2025/2024/2023/2026) ตัวเลข "ผู้เข้าร่วม"/
+   "ความคืบหน้า" เป็นค่าแต่งขึ้นเอง (บั๊กแบบ CLAUDE.md #16) และปุ่ม "ดู"/"แก้ไข" ไม่มี onclick เลย
+   (บั๊กแบบ CLAUDE.md #10) แก้โดยสร้าง store จริง cyclesList (localStorage + sync ขึ้น Excel ตาราง
+   "Cycles" เดียวกับที่ #34 ใช้ แต่ key เป็นรหัสรอบจริงของแต่ละแถว ไม่ใช่ 'CURRENT' ตัวเดียวเหมือน
+   หน้าตั้งค่ารอบแบบสั้นใน Settings — สองกลไกนี้เขียนคนละแถวกัน ไม่ชนกัน) ตัวเลขผู้เข้าร่วม/
+   ความคืบหน้า **คำนวณสดทุกครั้งที่ render** จาก MASTER_USERS/getDrafts() จริง ไม่เก็บเป็นค่าคงที่ */
+const CYCLES_LIST_KEY = 'smlPmsCyclesList';
+let cyclesList = [];
+function loadCyclesList(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(CYCLES_LIST_KEY)||'null');
+    if(Array.isArray(saved) && saved.length){ cyclesList = saved; return; }
+  }catch(e){}
+  /* seed ครั้งแรกด้วยรอบตัวอย่างที่เคยเห็นในตาราง mock เดิม (เฉพาะข้อมูลเชิงโครงสร้างที่สมเหตุผล
+     เช่น ชื่อ/ปี — ไม่ใช่ตัวเลขผู้เข้าร่วม/% ความคืบหน้าที่เป็นของแต่งขึ้นเอง เพราะค่านั้นคำนวณสดแล้ว) */
+  cyclesList = [
+    {id:'FY2023-ANNUAL', name:'ประเมินประจำปี 2566', year:'2566', start:'2023-01-01', end:'', status:'Closed'},
+    {id:'FY2024-ANNUAL', name:'ประเมินประจำปี 2567', year:'2567', start:'2024-01-01', end:'', status:'Closed'},
+    {id:'FY2025-ANNUAL', name:'ประเมินประจำปี 2568', year:'2568', start:'2025-01-01', end:'', status:'Active'},
+    {id:'FY2026-ANNUAL', name:'ประเมินประจำปี 2569', year:'2569', start:'2026-01-01', end:'', status:'Draft'}
+  ];
+  saveCyclesList();
+}
+function saveCyclesList(){ localStorage.setItem(CYCLES_LIST_KEY, JSON.stringify(cyclesList)); }
+loadCyclesList();
+
+const CYCLE_STATUS_BADGE = {
+  Active: '<span class="bd b-g">● Active</span>',
+  Closed: '<span class="bd b-s">● Closed</span>',
+  Draft: '<span class="bd b-y">● Draft</span>'
+};
+function renderCyclesTable(){
+  const tbody = document.getElementById('cyclesListRows');
+  if(!tbody) return;
+  const participants = (typeof getEvalParticipants==='function') ? getEvalParticipants() : [];
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  tbody.innerHTML = cyclesList.length ? cyclesList.map(c=>{
+    const inCycle = drafts.filter(d => d[2]===c.year);
+    const done = inCycle.filter(d => d[d.length-1] !== 'Draft').length;
+    const total = participants.length;
+    const pct = total ? Math.round(done/total*1000)/10 : 0;
+    const periodLabel = (c.start ? new Date(c.start).toLocaleDateString('th-TH') : '—') + ' – วันที่ประเมิน';
+    const actionLabel = c.status==='Closed' ? 'ดู' : 'แก้ไข';
+    return `<tr><td><b>${c.id}</b></td><td>${c.name}</td><td>${periodLabel}</td>
+      <td>${total || '—'}</td>
+      <td style="width:150px"><div class="pg"><i class="${pct>=100?'ok':''}" style="width:${Math.min(pct,100)}%"></i></div><small style="font-size:11px;color:#94a3b8">${pct}%</small></td>
+      <td>${CYCLE_STATUS_BADGE[c.status]||c.status}</td>
+      <td><button class="btn btn-sm" onclick="editCycleFromList('${c.id}')">${actionLabel}</button></td></tr>`;
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีรอบการประเมิน — กด "+ สร้างรอบใหม่"</td></tr>';
+}
+
+let editingCycleId = null;
+function openAddCycleModal(){
+  editingCycleId = null;
+  ['cy_code','cy_name','cy_start','cy_end'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('cy_code')?.removeAttribute('disabled');
+  const yearEl=document.getElementById('cy_year'); if(yearEl) yearEl.value = new Date().getFullYear()+543;
+  const statusEl=document.getElementById('cy_status'); if(statusEl) statusEl.value = 'Draft';
+  const title=document.getElementById('mCycleTitle'); if(title) title.textContent = '📅 สร้างรอบการประเมินใหม่';
+  openM('mCycle');
+}
+function editCycleFromList(id){
+  const c = cyclesList.find(x=>x.id===id);
+  if(!c){ smlToast('ไม่พบรอบการประเมินนี้ในระบบ','warn'); return; }
+  editingCycleId = id;
+  const set=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value = val ?? ''; };
+  set('cy_code', c.id); set('cy_name', c.name); set('cy_year', c.year);
+  set('cy_start', c.start); set('cy_end', c.end); set('cy_status', c.status);
+  document.getElementById('cy_code')?.setAttribute('disabled','disabled'); // รหัสรอบคือ key ห้ามแก้ระหว่างแก้ไข
+  const title=document.getElementById('mCycleTitle');
+  if(title) title.textContent = (c.status==='Closed' ? '👁️ ดูรอบการประเมิน: ' : '✏️ แก้ไขรอบการประเมิน: ') + c.name;
+  openM('mCycle');
+}
+function saveCycleFromModal(){
+  const id = document.getElementById('cy_code')?.value?.trim();
+  const name = document.getElementById('cy_name')?.value?.trim();
+  const year = document.getElementById('cy_year')?.value?.trim();
+  const start = document.getElementById('cy_start')?.value||'';
+  const end = document.getElementById('cy_end')?.value||'';
+  const status = document.getElementById('cy_status')?.value||'Draft';
+  if(!id || !name || !year){ smlToast('กรุณากรอกรหัสรอบ ชื่อรอบ และปีงบประมาณให้ครบ','warn'); return; }
+
+  if(editingCycleId){
+    const c = cyclesList.find(x=>x.id===editingCycleId);
+    if(!c){ smlToast('ไม่พบรอบการประเมินนี้ในระบบ (อาจถูกลบไปแล้ว)','warn'); editingCycleId=null; closeM(); return; }
+    Object.assign(c, {name, year, start, end, status});
+    if(typeof appendAuditLog==='function') appendAuditLog('cycle','แก้ไขรอบการประเมิน', c.id, name+' — '+status);
+  } else {
+    if(cyclesList.some(x=>x.id===id)){ smlToast('รหัสรอบนี้มีอยู่แล้วในระบบ','warn'); return; }
+    cyclesList.push({id, name, year, start, end, status});
+    if(typeof appendAuditLog==='function') appendAuditLog('cycle','สร้างรอบการประเมินใหม่', id, name+' — '+status);
+  }
+  saveCyclesList();
+  renderCyclesTable();
+  document.getElementById('cy_code')?.removeAttribute('disabled');
+  editingCycleId = null;
+  closeM();
+  if(typeof pushCycleToExcel==='function') pushCycleToExcel(cyclesList.find(x=>x.id===id));
+  smlToast('บันทึกรอบการประเมินเรียบร้อย','ok');
+}
+/* รอบแต่ละรอบคือ "สถานะปัจจุบันของรอบนั้น" (แก้ไขซ้ำได้ เช่น เปลี่ยนจาก Draft เป็น Active แล้วปิดรอบ
+   ภายหลัง) จึง upsert ด้วยรหัสรอบ (col 0) เหมือน KPI/Employees ไม่ใช่ append — ใช้ตาราง Excel
+   "Cycles" ตัวเดียวกับที่หน้าตั้งค่ารอบสั้น (#34) ใช้ แต่คนละแถวกัน (key คนละค่า ไม่ชนกัน) */
+function pushCycleToExcel(c){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg) || !c) return;
+  graphUpsertTableRow('Cycles', 0, c.id, [c.id, c.name, c.start||'', c.end||'', c.status||'', new Date().toISOString()])
+    .catch(()=>{});
+}
+async function ms365SyncCyclesList(silent=false){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    const rows = await graphListTableRows('Cycles');
+    const parsed = rows
+      .filter(r => String(r[0]??'').trim() && String(r[0]??'').trim() !== 'CURRENT')
+      .map(r => ({ id: String(r[0]).trim(), name: String(r[1]??'').trim(), start: String(r[2]??'').trim(),
+        end: String(r[3]??'').trim(), status: String(r[4]??'').trim()||'Draft',
+        year: (String(r[1]??'').match(/\d{4}/)||[])[0] || '' }));
+    if(!parsed.length) return;
+    cyclesList = parsed;
+    saveCyclesList();
+    renderCyclesTable();
+    if(!silent) smlToast('ดึงรอบการประเมินจาก Excel แล้ว '+parsed.length+' รอบ','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึงรอบการประเมินไม่สำเร็จ: '+e.message,'warn');
+  }
+}
+
 async function ms365SyncCycleSetup(silent=false){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)) return;
@@ -8127,6 +8258,7 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncAttendance === 'function'){ try{ await ms365SyncAttendance(true); }catch(e){} }
       if(typeof ms365SyncKpiGoals === 'function'){ try{ await ms365SyncKpiGoals(true); }catch(e){} }
       if(typeof ms365SyncCycleSetup === 'function'){ try{ await ms365SyncCycleSetup(true); }catch(e){} }
+      if(typeof ms365SyncCyclesList === 'function'){ try{ await ms365SyncCyclesList(true); }catch(e){} }
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
     }catch(e){}
