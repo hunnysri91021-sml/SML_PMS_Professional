@@ -906,6 +906,65 @@ touches employee/attendance/evaluation data.
     form and its own edit-detection flow (#20/#43) are left fully intact
     as an alternate path for the same data.
 
+45. **L1/L2 logged in could see everyone's data — every evaluation-workflow
+    page, the report/dashboard, and the "ประเมินทีมงาน" manager filter
+    showed the whole company, not just the viewer's own subordinates.**
+    The "team" page (step 2) already filtered by `u[9]===managerName`, but
+    the `<select>` of pickable managers was built from every `u[9]` value
+    in the whole company (`populateTeamManagerSelect()`), so any logged-in
+    L1 could pick a *different* manager's name and browse their team —
+    the filter existed but nothing constrained *which* manager you could
+    become. The review (step 3)/calibration (step 4)/approve (step 5)
+    queues, the dashboard's participant-derived stats/9-Box/assignment
+    table, and "รายงาน & Export" didn't filter by viewer at all — they
+    read `getDrafts()`/`MASTER_USERS` unconditionally. Added one central
+    helper, `getMyScopedEmpCodes()`, keyed off `CURRENT_SESSION_USER`
+    (the real logged-in identity from the PIN gate — **not** `#roleSel`,
+    which is only a Demo UI preview switch admin/sysadmin can use to look
+    at other roles' screens without actually losing their own full
+    access): returns a `Set` of allowed employee codes for `l1` (direct
+    reports only, via `u[9]===myName`) and `l2` (the *whole* chain under
+    them — every employee whose `u[10]===myName`, which already covers
+    both the L1s reporting to this L2 and those L1s' own teams, since
+    every employee's `u[10]` field already names their real L2 per
+    CLAUDE.md #22 — not just people who report to this L2 directly), or
+    `null` (unrestricted) for `admin`/`sysadmin`/`exec` — those roles
+    need company-wide oversight, so they were deliberately left
+    unscoped, and so was `emp` (never asked for, and scoping it would
+    have broken other UI that already assumes `emp` sees org-wide
+    averages for comparison). Wired into the one real chokepoint,
+    `getEvalParticipants()` (already the shared base for dashboard
+    stats/9-Box/`getEvaluationAssignments()`), so scoping it there
+    cascaded to every consumer with no other changes needed — plus
+    separately into `getReportData()` (report/export) and the review/
+    calib/approve queue renderers (which read `getDrafts()` directly,
+    not through `getEvalParticipants()`). One leak this missed on the
+    first pass: `renderDashGradeBars(drafts)` took the *raw* unscoped
+    `drafts` array straight from `renderCycleStats()` instead of the
+    already-scoped `participants` list every sibling render function
+    there uses — the company-wide grade distribution bars would have
+    kept leaking to L1/L2 even after everything else was scoped, since
+    it doesn't look anything up by employee code the way
+    `renderDashboardWorkflowSteps()` does; fixed by filtering `drafts`
+    through the same `getMyScopedEmpCodes()` before passing it in.
+    `populateTeamManagerSelect()` also got its own fix beyond just using
+    the helper: L1's `<select>` is now forced to their own name and
+    disabled (not just filtered — actively locked, since a stale
+    `<option>` value from a previous session could otherwise survive a
+    role switch), and L2's option list is now built from real L1
+    employee rows in their chain (`u[2]==='l1' && u[10]===myName`)
+    instead of scanning for `u[9]` values in use — which incidentally
+    also means an L2's newly-assigned L1 with zero current reports still
+    shows up as selectable, closing a small pre-existing gap in the old
+    "only managers who already have someone reporting to them appear"
+    logic. General lesson: a page-level filter (like the team page's
+    `u[9]===managerName`) is not the same as *scoping who gets to pick
+    the filter value* — check both, and when several pages/widgets all
+    derive from one shared base function, fixing scope at that one base
+    point is far safer than patching every consumer individually, but
+    still grep for consumers that bypass the base function and read the
+    raw store directly (as `renderDashGradeBars()` did here).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
