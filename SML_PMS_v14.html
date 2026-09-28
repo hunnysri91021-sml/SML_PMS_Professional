@@ -3893,8 +3893,18 @@ function deleteCascade(i){
   smlToast('ลบเรียบร้อย','ok');
 }
 
-/* ====== IDP — แผนพัฒนาเฉพาะบุคคล (เกรด D/E) ====== */
+/* ====== IDP — แผนพัฒนาเฉพาะบุคคล (เกรด D/E) ======
+   เดิม idpData ไม่มีที่เก็บถาวรเลย (แค่ let idpData = []) รีเฟรชหน้าเว็บแล้วหายหมดทันที และไม่เคย
+   sync ขึ้น Excel เลย (บั๊กแบบเดียวกับ goalKpiData ก่อนแก้ — ดู CLAUDE.md #34) เพิ่ม localStorage
+   ก่อนเป็นพื้นฐาน แล้วค่อย sync ขึ้น Excel ตาราง "IDP" ใหม่ คีย์ด้วยรหัสพนักงาน (1 คนต่อ 1 แผนที่
+   active อยู่ — saveIdp() จึงต้องกันบันทึกซ้ำรหัสเดียวกันด้วย เหมือน CLAUDE.md #12) */
+const IDP_LOCAL_KEY = 'smlPmsIdpData';
 let idpData = [];
+function loadIdpData(){
+  try{ const saved = JSON.parse(localStorage.getItem(IDP_LOCAL_KEY)||'null'); if(Array.isArray(saved)) idpData = saved; }catch(e){}
+}
+function saveIdpDataLocal(){ localStorage.setItem(IDP_LOCAL_KEY, JSON.stringify(idpData)); }
+loadIdpData();
 function populateIdpModal(){
   const sel = document.getElementById('mIdpEmp');
   if(!sel) return;
@@ -3935,29 +3945,68 @@ function saveIdp(){
   if(!emp){ smlToast('กรุณาเลือกพนักงาน','warn'); return; }
   const plan = (document.getElementById('mIdpPlan')?.value || '').trim();
   if(!plan){ smlToast('กรุณากรอกแผนพัฒนา','warn'); return; }
-  idpData.push({
+  /* คนเดียวกันต้องมีแค่ 1 แผนที่ active เสมอ — บันทึกซ้ำต้องทับของเดิม ไม่ใช่สร้างแถวใหม่ซ้อน
+     (เหมือน saveEvaluationLocal() ดู CLAUDE.md #12) */
+  idpData = idpData.filter(p=>p.code!==code);
+  const newIdp = {
     code, name: emp[1], dept: emp[6]||emp[4]||'—',
     grade: document.getElementById('mIdpGrade')?.value || 'D',
     plan, due: document.getElementById('mIdpDue')?.value || '',
     owner: document.getElementById('mIdpOwner')?.value || '',
     metric: (document.getElementById('mIdpMetric')?.value||'').trim(),
     status: 'pending'
-  });
+  };
+  idpData.push(newIdp);
+  saveIdpDataLocal();
   renderIdpRows();
   closeM();
+  if(typeof pushIdpToExcel==='function') pushIdpToExcel(newIdp);
   if(typeof appendAuditLog==='function') appendAuditLog('kpi','บันทึก IDP', code, emp[1]+' — '+plan.slice(0,60));
   smlToast('บันทึก IDP ของ '+emp[1]+' เรียบร้อย','ok');
 }
 function toggleIdpStatus(i){
   if(!idpData[i]) return;
   idpData[i].status = idpData[i].status==='done' ? 'pending' : 'done';
+  saveIdpDataLocal();
   renderIdpRows();
+  if(typeof pushIdpToExcel==='function') pushIdpToExcel(idpData[i]);
 }
+/* ลบแค่ในเครื่องนี้ — ยังไม่มี graphDeleteTableRow() ในระบบ (ไม่มีฟังก์ชันลบแถวออกจาก Excel
+   ให้ตารางใดๆ เลยจนถึงตอนนี้) แถวเดิมใน Excel จะยังค้างอยู่จนกว่าจะลบเองใน Excel โดยตรง หรือมีคน
+   push ทับด้วยรหัสเดียวกันอีกครั้ง — บอกไว้ตรงนี้เพื่อไม่ให้เข้าใจผิดว่าลบแล้วหายจาก Excel ด้วย */
 function deleteIdp(i){
-  if(!confirm('ลบ IDP นี้?')) return;
+  if(!confirm('ลบ IDP นี้? (ลบเฉพาะในเครื่องนี้ — ถ้าเคย sync ขึ้น Excel แล้ว ต้องลบที่ Excel เองด้วย)')) return;
   idpData.splice(i,1);
+  saveIdpDataLocal();
   renderIdpRows();
-  smlToast('ลบเรียบร้อย','ok');
+  smlToast('ลบเรียบร้อย (เฉพาะเครื่องนี้)','ok');
+}
+
+function pushIdpToExcel(p){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg) || !p) return;
+  graphUpsertTableRow('IDP', 0, p.code, [p.code, p.name, p.dept, p.grade, p.plan, p.due||'', p.owner||'', p.metric||'', p.status])
+    .catch(()=>{});
+}
+async function ms365SyncIdp(silent=false){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    const rows = await graphListTableRows('IDP');
+    if(!rows.length) return;
+    const parsed = rows.map(r=>({
+      code:String(r[0]??'').trim(), name:String(r[1]??'').trim(), dept:String(r[2]??'').trim(),
+      grade:String(r[3]??'').trim(), plan:String(r[4]??'').trim(), due:String(r[5]??'').trim(),
+      owner:String(r[6]??'').trim(), metric:String(r[7]??'').trim(), status:String(r[8]??'').trim()||'pending'
+    })).filter(p=>p.code && p.name);
+    if(!parsed.length) return;
+    idpData = parsed;
+    saveIdpDataLocal();
+    if(typeof renderIdpRows==='function') renderIdpRows();
+    if(!silent) smlToast('ดึง IDP จาก Excel แล้ว '+parsed.length+' รายการ','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึง IDP ไม่สำเร็จ: '+e.message,'warn');
+  }
 }
 
 // init goal page
@@ -4060,6 +4109,15 @@ async function doLogin(){
   }
   if(typeof ms365SyncCyclesList === 'function'){
     try{ await ms365SyncCyclesList(true); }catch(e){}
+  }
+  if(typeof ms365SyncFormWeights === 'function'){
+    try{ await ms365SyncFormWeights(true); }catch(e){}
+  }
+  if(typeof ms365SyncIdp === 'function'){
+    try{ await ms365SyncIdp(true); }catch(e){}
+  }
+  if(typeof ms365SyncApprovalSignatures === 'function'){
+    try{ await ms365SyncApprovalSignatures(true); }catch(e){}
   }
   const u = MASTER_USERS.find(x => x[0] === code);
   if(!u || u[12] === 'resigned'){
@@ -6634,12 +6692,45 @@ function saveApprovalSignature(key, signedBy){
 function getApprovalSignature(key){
   try{ return JSON.parse(localStorage.getItem(APPROVAL_SIGNATURE_KEY)||'{}')[key] || null; }catch(e){ return null; }
 }
+/* ลายเซ็นเดิมเก็บแค่เครื่องที่กดอนุมัติ — พิมพ์ใบประเมินจากเครื่องอื่นจะเห็น "—" แทนชื่อผู้ลงนามจริง
+   ดึงกลับมาจากตาราง Approvals ที่ push ไว้แล้ว (#34, มีคอลัมน์ Comment เก็บ "ลงนามโดย {ชื่อ}")
+   แทนที่จะสร้างตารางใหม่ซ้ำซ้อน — คีย์ในนี้เปลี่ยนจาก draftKey (empCode|cycle|level) เป็นแค่
+   empCode|cycle เพราะตาราง Approvals ไม่มีคอลัมน์ level ให้จับคู่กลับ (ระดับฟอร์มไม่กระทบว่าใคร
+   เป็นคนลงนามอนุมัติจริง) **ข้อจำกัดจริงที่ยังเหลืออยู่ ไม่ใช่บั๊ก**: ฟังก์ชันนี้ทำให้ "ชื่อผู้ลงนาม"
+   ถูกต้องข้ามเครื่องได้ แต่ printBatchApproved() เองยังวน getDrafts() ซึ่งเป็น local-only ต่อเครื่อง
+   (ตามที่ตั้งใจไว้ใน CLAUDE.md #33) ถ้าเครื่องนั้นไม่มี draft สถานะ Approved อยู่ในเครื่องเลย ก็จะไม่มี
+   อะไรให้พิมพ์ตั้งแต่แรก ไม่ใช่แค่ลายเซ็นหาย */
+async function ms365SyncApprovalSignatures(silent=true){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    const rows = await graphListTableRows('Approvals');
+    if(!rows.length) return;
+    let sigs={};
+    try{ sigs=JSON.parse(localStorage.getItem(APPROVAL_SIGNATURE_KEY)||'{}'); }catch(e){ sigs={}; }
+    rows.forEach(r=>{
+      const empCode=String(r[0]??'').trim(), cycle=String(r[1]??'').trim(), step=String(r[2]??'').trim();
+      if(step!=='Approved' || !empCode || !cycle) return;
+      const approvedBy=String(r[3]??'').trim(), approvedAt=String(r[4]??'').trim(), comment=String(r[5]??'').trim();
+      const signedBy = comment.replace(/^ลงนามโดย\s*/,'').trim() || approvedBy;
+      const key = empCode+'|'+cycle;
+      const existing = sigs[key];
+      if(!existing || new Date(approvedAt) >= new Date(existing.signedAt)){
+        sigs[key] = { signedBy, signedAt: approvedAt };
+      }
+    });
+    localStorage.setItem(APPROVAL_SIGNATURE_KEY, JSON.stringify(sigs));
+    if(!silent) smlToast('ดึงลายเซ็นอนุมัติจาก Excel แล้ว','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึงลายเซ็นอนุมัติไม่สำเร็จ: '+e.message,'warn');
+  }
+}
 function approveAllFinal(){
   const sign=(document.getElementById('mApproveSign')?.value||'').trim();
   if(!sign){ smlToast('กรุณาพิมพ์ชื่อ-สกุลเพื่อยืนยันลายเซ็นอิเล็กทรอนิกส์','warn'); return; }
   const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
   if(!rows.length){ smlToast('ไม่มีรายการรออนุมัติ','warn'); closeM(); return; }
-  rows.forEach(d=>saveApprovalSignature(draftKey(d), sign));
+  rows.forEach(d=>saveApprovalSignature(d[0]+'|'+d[2], sign));
   updateDraftStatus(rows.map(draftKey),'Approved');
   closeM();
   rows.forEach(d=>pushApprovalRecordToExcel(d[0], d[2], 'Approved', 'ลงนามโดย '+sign));
@@ -6843,7 +6934,7 @@ function printBatchApproved(){
     const emp = MASTER_USERS.find(u=>u[0]===code);
     const empPos = emp?.[7] || '—', empDept = emp?.[6] || '—', empGroup = emp?.[3] || '—';
     const Y = d[d.length-5], Z = d[d.length-4], X = d[d.length-3], grade = d[d.length-2];
-    const sig = getApprovalSignature(draftKey(d));
+    const sig = getApprovalSignature(d[0]+'|'+d[2]);
     const factorRows = (cfg?.factors||[]).map((f,fi)=>{
       const key = fi<10 ? 4+fi : 4+10+(fi-10); // m0..m9 at d[4..13], l0..l3 at d[14..17]
       const score = d[key];
@@ -7457,8 +7548,59 @@ function saveFormOverrides(){
   const out={};
   Object.keys(SML_FORMS).forEach(lv=>{ out[lv]=SML_FORMS[lv].factors; });
   localStorage.setItem(SML_FORMS_STORAGE_KEY, JSON.stringify(out));
+  if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel();
 }
 loadFormOverrides();
+
+/* ====== น้ำหนักปัจจัยแบบประเมิน (SML_FORMS) — sync ขึ้น Excel ======
+   เดิม saveFormOverrides() บันทึกแค่ localStorage ของเครื่องนี้ ถ้า Admin แก้น้ำหนักคะแนนที่
+   เครื่องหนึ่ง พนักงานที่ประเมินตนเองจากเครื่อง/มือถืออื่นจะยังใช้น้ำหนักเก่าอยู่ — กระทบความถูกต้อง/
+   ความยุติธรรมของคะแนนทั้งองค์กรโดยตรง เพราะทุกคนต้องใช้น้ำหนักชุดเดียวกันในรอบเดียวกัน ไม่ใช่แค่
+   "เห็นข้อมูลไม่ตรงกัน" เฉยๆ เหมือนฟีเจอร์อื่น จึงต้อง sync ทั้งขาอ่าน/เขียนเหมือนกับ MASTER_USERS
+   หนึ่งแถวต่อหนึ่งระดับฟอร์ม (op/of/ldr/mgr) เก็บ factors ทั้งชุดเป็น JSON เพราะจำนวน/เนื้อหาปัจจัย
+   แก้ไขได้อิสระ ไม่ใช่คอลัมน์ตายตัว */
+const FORM_WEIGHTS_TABLE = 'FormWeights';
+async function pushFormWeightsToExcel(){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    for(const lv of Object.keys(SML_FORMS)){
+      await graphUpsertTableRow(FORM_WEIGHTS_TABLE, 0, lv, [lv, JSON.stringify(SML_FORMS[lv].factors), new Date().toISOString()]);
+    }
+    if(typeof appendSyncLog==='function') appendSyncLog('Push น้ำหนักแบบประเมินเข้า Excel', true);
+  }catch(e){
+    if(typeof appendSyncLog==='function') appendSyncLog('Push น้ำหนักแบบประเมินไม่สำเร็จ: '+e.message, false);
+  }
+}
+async function ms365SyncFormWeights(silent=false){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    const rows = await graphListTableRows(FORM_WEIGHTS_TABLE);
+    if(!rows.length) return;
+    let applied = 0;
+    rows.forEach(r=>{
+      const lv = String(r[0]??'').trim();
+      if(!SML_FORMS[lv]) return;
+      try{
+        const factors = JSON.parse(r[1]);
+        if(Array.isArray(factors) && factors.length){
+          SML_FORMS[lv].factors = factors;
+          recalcFormTotals(SML_FORMS[lv]);
+          applied++;
+        }
+      }catch(e){}
+    });
+    if(!applied) return;
+    const out={};
+    Object.keys(SML_FORMS).forEach(k=>{ out[k]=SML_FORMS[k].factors; });
+    localStorage.setItem(SML_FORMS_STORAGE_KEY, JSON.stringify(out));
+    if(typeof showTplDetail==='function' && typeof currentTplLevel!=='undefined' && currentTplLevel) showTplDetail(currentTplLevel);
+    if(!silent) smlToast('ดึงน้ำหนักแบบประเมินจาก Excel แล้ว '+applied+' ระดับ','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึงน้ำหนักแบบประเมินไม่สำเร็จ: '+e.message,'warn');
+  }
+}
 const SML_GRADE = {Aplus:15,A:14,B:13,Cplus:12,C:11};
 function smlScoreByWeight(w){
   return w===1 ? {Aplus:5,A:4,B:3,Cplus:2,C:1} :
@@ -8301,6 +8443,9 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncKpiGoals === 'function'){ try{ await ms365SyncKpiGoals(true); }catch(e){} }
       if(typeof ms365SyncCycleSetup === 'function'){ try{ await ms365SyncCycleSetup(true); }catch(e){} }
       if(typeof ms365SyncCyclesList === 'function'){ try{ await ms365SyncCyclesList(true); }catch(e){} }
+      if(typeof ms365SyncFormWeights === 'function'){ try{ await ms365SyncFormWeights(true); }catch(e){} }
+      if(typeof ms365SyncIdp === 'function'){ try{ await ms365SyncIdp(true); }catch(e){} }
+      if(typeof ms365SyncApprovalSignatures === 'function'){ try{ await ms365SyncApprovalSignatures(true); }catch(e){} }
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
     }catch(e){}

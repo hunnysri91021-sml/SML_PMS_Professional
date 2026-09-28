@@ -727,6 +727,55 @@ touches employee/attendance/evaluation data.
     any of these 7 fields, so the whole employee-info block on the
     printed form is now for the same one real person throughout.
 
+39. **A full audit ("check every tab, does it relate to Excel, does web-
+    saved data show up on other devices") found 3 more real gaps beyond
+    what had already been fixed — two of them data-integrity issues, not
+    just cross-device visibility ones:**
+    - **Form factor weights (`SML_FORMS`)** — `saveFormOverrides()` only
+      wrote `localStorage`. This isn't merely "another device doesn't see
+      it" (CLAUDE.md #8's usual framing) — the weights determine every
+      employee's Y score calculation, so if Admin edits them on one
+      device, employees self-evaluating from other devices/phones score
+      against *stale* weights in the same cycle, silently producing
+      non-comparable results. Fixed with `pushFormWeightsToExcel()`
+      (one row per form level `op`/`of`/`ldr`/`mgr`, factors serialized
+      as JSON since their count/content isn't fixed-column like most
+      other tables) called from `saveFormOverrides()` itself, and
+      `ms365SyncFormWeights(silent)` in the usual silent-sync group.
+    - **IDP (`idpData`)** — had *zero* persistence, not even
+      `localStorage` (same shape as `goalKpiData` before #34) — lost on
+      every reload. Also had no dedup-on-save (CLAUDE.md #12): saving
+      the same person's IDP twice appended a second row instead of
+      updating. Fixed with `IDP_LOCAL_KEY` persistence + a dedup filter
+      in `saveIdp()`, plus `pushIdpToExcel()`/`ms365SyncIdp(silent)`
+      (upsert keyed by employee code — one active IDP per person).
+      `deleteIdp()` only removes locally — there's no
+      `graphDeleteTableRow()` anywhere in this codebase yet for any
+      table, so a deleted IDP's Excel row is untouched until manually
+      removed in Excel or overwritten by a later push with the same key;
+      said so in the confirm dialog rather than implying full deletion.
+    - **Approval e-signatures (`APPROVAL_SIGNATURE_KEY`)** — set only on
+      the device that clicked "อนุมัติทั้งหมด," so `printBatchApproved()`
+      run from a different device always showed "—" for the signer.
+      Rather than a new Excel table, `ms365SyncApprovalSignatures()`
+      reads it back out of the `Approvals` table already populated by
+      #34 (`step==='Approved'` rows, signer parsed from the `Comment`
+      field's `"ลงนามโดย {name}"` text, falling back to the `ApprovedBy`
+      column). Changed the signature store's key from the full
+      `draftKey` (`empCode|cycle|level`) to `empCode|cycle`, since the
+      `Approvals` table has no level column to match back against and
+      level doesn't change who legitimately signed. **Real limit that
+      remains, stated plainly rather than implied fixed**: this only
+      fixes the *signer's name*. `printBatchApproved()` still iterates
+      `getDrafts()`, which is local-only by design (#33) — a device
+      with no local `Approved` draft for that person has nothing to
+      print at all, signature sync or not.
+    General lesson: when auditing "does X sync," check not just
+    *visibility* but whether the local-only gap can silently corrupt a
+    cross-device computation (weights feeding into scores) — that's a
+    correctness bug, not just a convenience one, and worth calling out
+    as higher priority than a plain data-visibility gap.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
