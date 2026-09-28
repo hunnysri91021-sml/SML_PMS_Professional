@@ -776,6 +776,35 @@ touches employee/attendance/evaluation data.
     correctness bug, not just a convenience one, and worth calling out
     as higher priority than a plain data-visibility gap.
 
+40. **When someone submits an evaluation, Admin on a different device has
+    no way to know — Draft/Submitted/Calibrated stages are intentionally
+    local-only per device (#33), and even though `saveEvaluationToMs365()`
+    already pushed every save (Draft *and* Submitted) to the `Appraisals`
+    Excel table via `graphAddTableRow()`, nobody was notified it had
+    happened.** Added `notifyAdminOfEvalSubmission(payload)`, sending a
+    real email (via the same Worker `/send-mail` used for PIN delivery,
+    #26) to *every* `admin`/`sysadmin` role in `MASTER_USERS` that has a
+    real email on file — not just the first match, since who's actually
+    handling this cycle isn't knowable — only when `status==='Submitted'`
+    (a Draft save is not a real submission and must never trigger it).
+    Same honesty rules as #26's PIN email: best-effort per recipient (one
+    admin's send failing must not block the others or the submit itself),
+    `isWorkerConfigured()` gates it (silently skipped otherwise, since
+    Draft/Submitted saves must never *feel* blocked by a missing email
+    setup), and the toast only claims "แจ้งเตือน Admin ทางอีเมลแล้ว N คน"
+    when a send actually succeeded. **This is a notification, not a sync
+    mechanism** — it doesn't change the fact that Draft/Submitted/
+    Calibrated are still per-device state; it just tells a human to go
+    look, the same honest scope as #24 draws around "no way around this
+    without a backend." The existing Excel push this rides on
+    (`graphAddTableRow`) is append-only, so repeated Draft saves for the
+    same person/cycle/level pile up rows in Excel rather than updating
+    one — a pre-existing gap (not introduced here, and not fixed here —
+    fixing it needs a composite-key upsert the shared `graphUpsertTableRow`
+    helper doesn't support and the Worker's `/rows/upsert` endpoint would
+    need extending to match, which means another live Worker redeploy;
+    flagged for a future pass, not silently left implying it's fine).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

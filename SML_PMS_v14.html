@@ -6215,6 +6215,31 @@ function saveEvaluationLocal(payload){
   if(typeof renderWorkflowPages==='function') renderWorkflowPages();
 }
 
+/* แจ้งเตือน Admin/Admin ระบบ ทางอีเมลอัตโนมัติเมื่อมีคน "ส่งแบบประเมิน" (ไม่ใช่แค่บันทึกร่าง) —
+   เพราะ Draft/Submitted ยังเป็นข้อมูล local-only ต่อเครื่องอยู่ (ดู CLAUDE.md #33) ถึงจะ push ขึ้น
+   Excel แล้วก็ตาม Admin ที่เปิดเว็บจากเครื่องอื่นจะไม่รู้ตัวว่ามีคนส่งเข้ามาใหม่จนกว่าจะเข้าไปเช็คเอง
+   ฟังก์ชันนี้จึงเป็นแค่ "แจ้งเตือน" ให้ Admin รู้ตัวไปเช็ค/ดำเนินการ ไม่ใช่กลไก sync ข้อมูลจริง
+   (ดู CLAUDE.md #26 — ความสำเร็จของ action อัตโนมัติแบบนี้ห้ามสันนิษฐานเอง ต้อง best-effort และ
+   ไม่บล็อกการส่งแบบประเมินหลักถ้าส่งอีเมลไม่สำเร็จ) ส่งหา Admin/Admin ระบบ "ทุกคน" ที่มีอีเมลจริง
+   ในระบบ ไม่ใช่แค่คนแรก เพราะไม่รู้ว่าใครเป็นคนที่ดูแลรอบนี้อยู่จริง */
+async function notifyAdminOfEvalSubmission(payload){
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return { sent:0, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
+  const admins = MASTER_USERS.filter(u => ['admin','sysadmin'].includes(u[2]) && u[15]);
+  if(!admins.length) return { sent:0, reason:'ไม่มี Admin ที่มีอีเมลบันทึกไว้ในระบบ' };
+  const [empCode, empName, cycle, level] = payload;
+  const subject = `[SML PMS] มีการส่งแบบประเมิน — ${empName} (${empCode})`;
+  const body = `มีการส่งแบบประเมินใหม่เข้าสู่ระบบ SML PMS\n\nพนักงาน: ${empName} (${empCode})\nรอบ: ${cycle}\nระดับแบบฟอร์ม: ${level}\nวันที่ส่ง: ${new Date().toLocaleString('th-TH')}\n\nกรุณาเข้าเว็บ SML PMS เพื่อตรวจสอบและดำเนินการขั้นตอนถัดไป (สอบทาน/Calibration/อนุมัติ)\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
+  let sent = 0;
+  for(const admin of admins){
+    try{
+      await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: admin[15], toName: admin[1], subject, body }) });
+      sent++;
+    }catch(e){ /* best-effort ต่อคน — คนหนึ่งส่งไม่สำเร็จไม่ควรกันไม่ให้ส่งหาคนอื่นต่อ */ }
+  }
+  return { sent, total: admins.length };
+}
+
 async function saveEvaluationToMs365(status='Draft'){
   const payload = collectEvaluationPayload(status);
   saveEvaluationLocal(payload);
@@ -6224,16 +6249,26 @@ async function saveEvaluationToMs365(status='Draft'){
     smlToast(`บันทึก ${status} ใน Browser แล้ว — ยังไม่ได้ตั้งค่า MS365`, 'warn');
     return { localOnly:true, payload };
   }
+  let pushResult;
   try{
     await graphAddTableRow(cfg.evaluationTable, payload);
     updateMs365Status('ok','Connected');
-    smlToast(status==='Submitted' ? 'ส่งแบบประเมินไป Excel แล้ว' : 'บันทึกร่างไป Excel แล้ว','ok');
-    return { ok:true };
+    pushResult = { ok:true };
   }catch(err){
     updateMs365Status('warn','Sync error');
-    smlToast('บันทึกสำรองใน Browser แล้ว แต่ส่ง Excel ไม่สำเร็จ: ' + err.message,'warn');
-    return { error:err.message, payload };
+    pushResult = { error:err.message, payload };
   }
+  if(status==='Submitted'){
+    const notif = await notifyAdminOfEvalSubmission(payload).catch(()=>({sent:0}));
+    const notifNote = notif.sent ? ` · แจ้งเตือน Admin ทางอีเมลแล้ว ${notif.sent} คน` : '';
+    if(pushResult.ok) smlToast('ส่งแบบประเมินไป Excel แล้ว' + notifNote,'ok');
+    else smlToast('บันทึกสำรองใน Browser แล้ว แต่ส่ง Excel ไม่สำเร็จ: ' + pushResult.error + notifNote,'warn');
+    if(typeof appendAuditLog==='function' && notif.sent) appendAuditLog('evaluation','แจ้งเตือน Admin ทางอีเมล (ส่งแบบประเมิน)', payload[0], notif.sent+'/'+notif.total+' คน');
+  } else {
+    if(pushResult.ok) smlToast('บันทึกร่างไป Excel แล้ว','ok');
+    else smlToast('บันทึกสำรองใน Browser แล้ว แต่ส่ง Excel ไม่สำเร็จ: ' + pushResult.error,'warn');
+  }
+  return pushResult;
 }
 
 async function saveDraftEval() {
