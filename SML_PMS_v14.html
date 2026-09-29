@@ -1378,7 +1378,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <h2>🔐 เข้าสู่ระบบ SML PMS</h2>
     <p class="login-note">ยืนยันตัวตนด้วยรหัสพนักงาน + PIN — ใช้สำหรับระบุตัวตนเบื้องต้นในเครื่องนี้เท่านั้น ไม่ใช่ระบบความปลอดภัยระดับสูง สิทธิ์เข้าถึงข้อมูลจริงยังคุมที่ SharePoint permission ของไฟล์ Excel</p>
     <div id="loginErr" class="login-err" style="display:none"></div>
-    <div class="fg"><label>รหัสพนักงาน</label><input id="loginCode" list="empCodeList" placeholder="เช่น SML-001" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()"></div>
+    <div class="fg"><label>รหัสพนักงาน</label><input id="loginCode" list="empCodeListLogin" placeholder="เช่น SML-001" autocomplete="username" oninput="onLoginCodeInput()" onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()"><datalist id="empCodeListLogin"></datalist></div>
     <div class="fg"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 หลัก (เว้นว่างได้ถ้ายังไม่เคยตั้ง)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn btn-p" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
   </div>
@@ -9034,6 +9034,21 @@ function populateEmpCodeDatalist(){
   const list=document.getElementById('empCodeList'); if(!list) return;
   list.innerHTML = MASTER_USERS
     .filter(u=>u[12]!=='resigned')
+    .map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]} — ${u[7]}</option>`).join('');
+}
+/* หน้า Login ใช้ datalist แยกของตัวเอง (empCodeListLogin) แทนตัวรวม empCodeList ด้านบน — เดิมช่อง
+   "รหัสพนักงาน" ที่ Login ชี้ไปที่ empCodeList ตัวเดียวกับทุกช่องในระบบ ซึ่งพอบริษัทมีพนักงานเยอะ
+   (หลักร้อยคน) เบราว์เซอร์บางตัว/บางเครื่อง (โดยเฉพาะมือถือ) จะเปิด dropdown แสดงทุกคนทันทีที่แตะช่อง
+   ทั้งที่ยังไม่ได้พิมพ์อะไรเลย (เห็นได้จากภาพหน้าจอที่ผู้ใช้ส่งมา — dropdown เปิดเต็มทั้งที่ช่องว่างอยู่)
+   ทำให้คีย์บอร์ดหรือการพิมพ์ตัวอักษรแรกดูเหมือน "ไม่ทำงาน" — แก้โดยให้ datalist ของหน้า Login เริ่มต้น
+   ว่างเปล่าเสมอ แล้วค่อยเติมตัวเลือกที่ตรงกับสิ่งที่พิมพ์ (จำกัดไม่เกิน 8 รายการ) ทีละตัวอักษรแทน */
+function onLoginCodeInput(){
+  const list=document.getElementById('empCodeListLogin'); if(!list) return;
+  const q=(document.getElementById('loginCode')?.value||'').trim().toLowerCase();
+  if(!q){ list.innerHTML=''; return; }
+  list.innerHTML = MASTER_USERS
+    .filter(u=>u[12]!=='resigned' && (u[0]||'').toLowerCase().includes(q))
+    .slice(0,8)
     .map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]} — ${u[7]}</option>`).join('');
 }
 /* กรอกข้อมูลวันลารายบุคคลด้วยมือ — ใช้แทน/เสริมการ Import ไฟล์ */

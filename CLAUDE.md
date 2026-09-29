@@ -1307,6 +1307,39 @@ touches employee/attendance/evaluation data.
     screenshot of the single-print form to visually confirm the real
     logo (not a placeholder box) appears correctly sized in the header.
 
+57. **The Login page's "รหัสพนักงาน" field, reported as "พิมพ์ไม่ได้"
+    (can't type), was pointed at the same shared `empCodeList` datalist
+    every other code-entry field in the app uses (#28) — which means the
+    moment the field is focused/tapped with nothing typed yet, the browser
+    shows every non-resigned employee as suggestions at once.** The
+    screenshot the user sent showed exactly this: a fully-open dropdown
+    listing SML-001 through SML-006+ while the input itself was still
+    empty. On a company with a real headcount (dozens to hundreds of
+    people, unlike the small demo dataset), a `<datalist>` that large
+    opened instantly on focus is a known trigger for browsers (especially
+    mobile) to swallow the keyboard/first keystroke while it's busy
+    rendering/filtering the full list — reproducing as "typing does
+    nothing." Every *other* datalist-linked field (#28/#29 — `mu_id`,
+    `evalCodeGate`, supervisor code inputs, manual attendance) is used by
+    HR/Admin on desktop and benefits from seeing the full list immediately,
+    so the shared `empCodeList` itself was left untouched. Fixed by giving
+    the Login field its own dedicated datalist, `empCodeListLogin`
+    (`onLoginCodeInput()`, wired via `oninput`): it starts completely
+    empty on page load/focus (no giant dropdown fires just from tapping
+    an empty field) and only populates — filtered to codes containing what
+    was actually typed so far, capped at 8 matches — once the person has
+    typed at least one character. Verified with a Playwright test
+    confirming the login datalist has zero options before typing, fills
+    with a small filtered set after typing "SML-0", empties again when the
+    field is cleared, and that the original shared `empCodeList` (every
+    other field) is completely unaffected. General lesson: a datalist
+    that's fine at demo-data scale (a dozen people) can become a genuine
+    input-blocking bug at real-company scale — the *first* touchpoint of
+    the app (login) is the one place this is most likely to be hit by
+    every single employee, every single day, so it's worth capping/
+    filtering there even where every other admin-only field can safely
+    stay "show everything."
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
