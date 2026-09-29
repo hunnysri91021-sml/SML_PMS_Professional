@@ -1175,6 +1175,29 @@ touches employee/attendance/evaluation data.
     shipped (the exact CLAUDE.md #34/#49 trap: a doc/UI claim that
     stops matching the code underneath it).
 
+53. **Follow-up to #51/#52: once a real list had dozens of items (36
+    positions in the screenshot HR sent), the chip layout — wrapped
+    pills each with its own × button — became hard to scan, and HR
+    asked for a checkbox layout instead, applied to all 6 categories
+    consistently.** Rewrote `renderOrgMasterLists()`'s per-field body
+    from a flex-wrap chip row into a scrollable grid of real
+    `<input type="checkbox">` rows (`.orgmaster-chk`, `data-field`/
+    `value` on each), replacing the old one-`×`-button-per-chip delete
+    with a single "🗑️ ลบรายการที่เลือก" button per field that acts on
+    every checked box at once. Replaced `removeOrgMasterItem(fieldKey,
+    value)` (single-item delete) with `deleteSelectedOrgMasterItems
+    (fieldKey)` outright — deleted rather than left both around, per
+    this project's standing convention, since the checkbox UI has no
+    remaining caller for the old single-delete path. Kept every rule
+    #51 already established: an in-use value (checked by
+    `MASTER_USERS[spec.empIdx]`) is silently skipped rather than
+    blocking the whole batch — the confirm/toast now reports counts
+    for both halves ("ลบ N รายการแล้ว · ข้าม M รายการที่ใช้งานอยู่")
+    since a bulk action can now mix removable and protected items in
+    one selection, which single-item delete never had to express.
+    Selecting zero items warns instead of silently no-op'ing, same
+    "always give feedback" instinct as the rest of this file's actions.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

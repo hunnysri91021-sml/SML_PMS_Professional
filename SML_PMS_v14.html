@@ -5015,7 +5015,7 @@ function closeUserDetail() {
    Admin จัดการเองได้ล่วงหน้า (ORG_MASTER, เก็บ localStorage เครื่องนี้) ให้ครบทั้ง 6 อย่าง แล้ว union
    กับค่าจริงที่มีอยู่ใน MASTER_USERS เสมอ (getOrgMasterValues()) กันไม่ให้ค่าจริงที่เคย sync มาจาก Excel
    หายไปจาก dropdown แม้ Admin ยังไม่เคยเพิ่มมันเข้ารายการหลัก (บั๊กแบบเดียวกับ Grade ที่เพิ่งแก้ไป —
-   ดู CLAUDE.md #50) รายการที่มีพนักงานใช้งานอยู่จริงจะลบออกจากรายการหลักไม่ได้ (removeOrgMasterItem)
+   ดู CLAUDE.md #50) รายการที่มีพนักงานใช้งานอยู่จริงจะลบออกจากรายการหลักไม่ได้ (deleteSelectedOrgMasterItems)
    กันไม่ให้ dropdown ของพนักงานที่มีอยู่แล้วเสียหาย */
 const ORG_MASTER_KEY = 'smlPmsOrgMaster';
 const ORG_MASTER_FIELDS = [
@@ -5057,17 +5057,26 @@ function addOrgMasterItem(fieldKey, rawValue){
   if(typeof pushOrgMasterFieldToExcel==='function') pushOrgMasterFieldToExcel(fieldKey);
   smlToast('เพิ่ม "'+value+'" เข้ารายการ'+spec.label+' แล้ว','ok');
 }
-function removeOrgMasterItem(fieldKey, value){
+/* เดิมลบทีละรายการด้วยปุ่ม × บน chip แต่ละอัน — พอรายการยาวเป็นสิบๆ ตัว (เช่นตำแหน่งงาน 36 รายการ)
+   chip แบบ wrap เป็นก้อนๆ อ่าน/หาของยาก ผู้ใช้ขอให้เปลี่ยนเป็น checkbox list ให้อ่านง่ายกว่า และใช้
+   รูปแบบเดียวกันทุกหมวด (renderOrgMasterLists() ด้านล่าง) — เลือกได้หลายรายการพร้อมกันแล้วลบทีเดียว
+   ด้วยฟังก์ชันนี้ แทนที่ removeOrgMasterItem() ตัวเดิม (ลบทีละรายการ) แต่ยังใช้กฎเดิมทุกอย่าง: รายการ
+   ที่มีพนักงานใช้งานอยู่จริงจะลบไม่ได้ (ข้ามไปพร้อมแจ้งเตือน ไม่ใช่ปฏิเสธทั้งชุดเงียบๆ) */
+function deleteSelectedOrgMasterItems(fieldKey){
   const spec = ORG_MASTER_FIELDS.find(f=>f.key===fieldKey);
   if(!spec) return;
-  const inUse = MASTER_USERS.some(u=>u[spec.empIdx]===value);
-  if(inUse){ smlToast('ลบไม่ได้ — มีพนักงานใช้ค่านี้อยู่ในระบบจริง','warn'); return; }
-  if(!confirm(`ลบ "${value}" ออกจากรายการ${spec.label}?`)) return;
-  ORG_MASTER[fieldKey] = (ORG_MASTER[fieldKey]||[]).filter(v=>v!==value);
+  const checked = [...document.querySelectorAll(`.orgmaster-chk[data-field="${fieldKey}"]:checked`)].map(c=>c.value);
+  if(!checked.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  const inUse = checked.filter(v=>MASTER_USERS.some(u=>u[spec.empIdx]===v));
+  const removable = checked.filter(v=>!inUse.includes(v));
+  if(!removable.length){ smlToast('ลบไม่ได้ — ทุกรายการที่เลือกมีพนักงานใช้งานอยู่จริง','warn'); return; }
+  if(!confirm(`ลบ ${removable.length} รายการที่เลือกออกจาก${spec.label}?` + (inUse.length ? ` (ข้าม ${inUse.length} รายการที่มีพนักงานใช้งานอยู่)` : ''))) return;
+  ORG_MASTER[fieldKey] = (ORG_MASTER[fieldKey]||[]).filter(v=>!removable.includes(v));
   saveOrgMaster();
   renderOrgMasterLists();
   if(typeof populateOrgSelects==='function') populateOrgSelects();
   if(typeof pushOrgMasterFieldToExcel==='function') pushOrgMasterFieldToExcel(fieldKey);
+  smlToast(`ลบ ${removable.length} รายการแล้ว` + (inUse.length ? ` · ข้าม ${inUse.length} รายการที่ใช้งานอยู่` : ''), inUse.length ? 'warn' : 'ok');
 }
 /* Sync รายการหลักขึ้น Excel — ตาราง "OrgMaster" หนึ่งแถวต่อ 1 field (groups/sections/.../grades)
    เก็บค่าทั้งลิสต์เป็น JSON ในคอลัมน์เดียว (เหมือน SML_FORMS ใน #39a) เพราะจำนวนรายการต่อ field
@@ -5130,11 +5139,15 @@ function renderOrgMasterLists(){
             onkeydown="if(event.key==='Enter'){addOrgMasterItem('${f.key}', document.getElementById('${inputId}').value); document.getElementById('${inputId}').value='';}">
           <button class="btn btn-p btn-sm" onclick="addOrgMasterItem('${f.key}', document.getElementById('${inputId}').value); document.getElementById('${inputId}').value=''">+ เพิ่ม</button>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
-          ${values.length ? values.map(v=>`<span class="bd b-s" data-field="${f.key}" data-value="${String(v).replace(/"/g,'&quot;')}" style="display:inline-flex;align-items:center;gap:6px;padding:5px 9px">${v}
-            <button title="ลบ" onclick="removeOrgMasterItem(this.closest('[data-field]').dataset.field, this.closest('[data-field]').dataset.value)" style="border:none;background:none;cursor:pointer;color:#dc2626;font-weight:800;font-size:13px;line-height:1">×</button></span>`).join('')
-            : '<span style="color:#94a3b8;font-size:12px">ยังไม่มีรายการ</span>'}
+        ${values.length ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 18px;margin-bottom:10px;max-height:320px;overflow:auto;border:1px solid var(--bd);border-radius:7px;padding:8px 10px">
+          ${values.map(v=>`<label style="display:flex;align-items:center;gap:7px;font-size:13px;padding:4px 2px;cursor:pointer">
+            <input type="checkbox" class="orgmaster-chk" data-field="${f.key}" value="${String(v).replace(/"/g,'&quot;')}" style="width:auto;flex-shrink:0">
+            <span>${v}</span>
+          </label>`).join('')}
         </div>
+        <button class="btn btn-sm btn-dg" onclick="deleteSelectedOrgMasterItems('${f.key}')">🗑️ ลบรายการที่เลือก</button>`
+          : '<span style="color:#94a3b8;font-size:12px">ยังไม่มีรายการ</span>'}
       </div>
     </div>`;
   }).join('');
