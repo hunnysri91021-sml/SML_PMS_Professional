@@ -2159,6 +2159,60 @@ touches employee/attendance/evaluation data.
     scoping check built on top of it (however many turns of careful
     per-role fixes) is decoration a curious user can walk straight past.
 
+73. **User's screenshot showed the "ผังองค์กร & พนักงาน" page — while
+    previewing as "ผู้จัดการส่วน" (L2) via the now-locked-down Demo UI
+    switcher (#72, admin/sysadmin only) — listing all 51 company
+    employees and a hierarchy-issue banner counting company-wide
+    problems (25 items, 15 missing-L1, 10 circular refs): "เห็นข้อมูล
+    กำหนดเห็นเฉพาะ ที่เตือนของหน่วยตนเองเท่านั้น" (sees [all] data;
+    should be configured to see only warnings for their own unit).**
+    `renderOrg()`/`checkHierarchyIssues()` were the one real page CLAUDE.md
+    #45's scoping sweep never reached — every other evaluation-workflow
+    page (dashboard, review/calib/approve, report, myresult) already runs
+    through `getMyScopedEmpCodes()`, but the org chart page (nav-gated
+    `data-role="admin"`, so unscoped company-wide access was reasonable
+    when only Admin could ever open it) had zero scoping, and once #72
+    made the Demo UI preview switch actually trustworthy, an admin using
+    it to check "what would an L2 see here" surfaced that this specific
+    page still showed everyone regardless of the previewed role. Fixed
+    by filtering inside `renderOrg(data)` itself — `const scoped =
+    getMyScopedEmpCodes(); if(scoped) data = data.filter(u=>scoped.has(u[0]))`
+    — rather than touching each of its 3 call sites individually
+    (`filterOrg()`, the nav dispatcher, an MS365 sync callback all pass
+    raw `MASTER_USERS` or a locally-filtered subset through `renderOrg()`,
+    so scoping once inside it covers every caller automatically, the same
+    "fix scope at the one base function" lesson #45 already states).
+    Also updated the page's own `#orgTotalCount` header (the "N คน" text
+    directly above the table) to read from the scoped `data.length`
+    instead of the unscoped `MASTER_USERS.length` a dashboard-render
+    function happened to set on the same shared element id — leaving
+    it unscoped would have shown "51 คน" as the header while the table
+    beneath it visibly showed fewer rows, the same "two things claiming
+    the same fact disagree" trap #34/#67 already warn about.
+    `checkHierarchyIssues()` needed the more careful fix: `byName` (used
+    to walk each employee's real supervisor chain) still indexes *all*
+    of `MASTER_USERS`, never filtered — a chain legitimately passes
+    through people outside the viewer's own scope on its way up to the
+    org's top, and cutting `byName` down to the scoped subset would have
+    broken the walk itself, silently reporting false circular-reference
+    negatives. Only the two *output* lists (`noL1`, and which `start`
+    values get walked for `circular`) are filtered by `scoped.has(u[0])`
+    — the walk itself always has the full real org graph to traverse,
+    just the *results* are scoped down to "problems belonging to people
+    I can see." Verified with a test that seeds two synthetic
+    missing-supervisor employees, one inside a real L2's chain and one
+    outside it, and confirms the L2-scoped banner reports exactly 1 issue
+    while the admin (unscoped) banner reports 2 — not just "fewer rows
+    render," the actual counted numbers are provably scope-correct, not
+    coincidentally smaller. General lesson combining #45/#72: a scoping
+    sweep across "every evaluation-workflow page" can still miss a page
+    that was reasonably left unscoped *at the time* because nav access
+    already gated it to admin-only — the moment any other mechanism
+    (here, a newly-trustworthy role-preview switch) can put a
+    lower-privilege viewer's identity in front of that page, its
+    render function needs the same scoping treatment as everything else,
+    even if its nav item's `data-role` alone still looks sufficient.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -4557,6 +4557,16 @@ function filterUsers() {
 function renderOrg(data) {
   const el = document.getElementById('orgRows');
   if(!el) return;
+  /* L1/L2/หัวหน้าหน่วย ต้องเห็นแค่ "หน่วยของตนเอง" ในผังองค์กร ไม่ใช่ทั้งบริษัท — ใช้
+     getMyScopedEmpCodes() ตัวเดียวกับที่ CLAUDE.md #45 ใช้ scope หน้าอื่นทั้งหมดไว้แล้ว
+     (admin/sysadmin/exec ยังเห็นทุกคนเหมือนเดิม เพราะ getMyScopedEmpCodes() คืน null
+     ให้กับ role พวกนี้) กรองตรงนี้จุดเดียวใน renderOrg() เอง แทนที่จะแก้ทุกจุดที่เรียก
+     renderOrg(MASTER_USERS) — filterOrg()/nav dispatcher/sync callback ทุกที่จึงถูก scope
+     ให้อัตโนมัติโดยไม่ต้องแก้แต่ละจุด */
+  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
+  if(scoped) data = data.filter(u => scoped.has(u[0]));
+  const totalCountEl = document.getElementById('orgTotalCount');
+  if(totalCountEl) totalCountEl.textContent = data.length;
   el.innerHTML = data.map(u => `<tr>
     <td><b>${u[0]}</b></td>
     <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>${u[1]}</div></td>
@@ -8179,11 +8189,16 @@ function renderDashboardWorkflowSteps(participants, drafts){
 
 /* ตรวจสายบังคับบัญชาจริง: หา (1) พนักงาน/หัวหน้าที่ไม่มีหัวหน้าระดับ 1 และ (2) วน L1 ย้อนกลับมาซ้ำ (circular) */
 function checkHierarchyIssues(showToast){
-  const noL1 = MASTER_USERS.filter(u => u[12]==='active' && (u[2]==='emp'||u[2]==='l1') && (!u[9] || u[9]==='—'));
+  /* แบนเนอร์เตือนสายบังคับบัญชานี้ต้อง scope ตามคนดู เหมือน renderOrg() ด้านบน — L1/L2/หัวหน้าหน่วย
+     ควรเห็นแค่ปัญหาในหน่วยของตนเอง ไม่ใช่ตัวเลขรวมทั้งบริษัท (byName ยัง lookup จาก MASTER_USERS
+     ทั้งหมดเสมอ เพราะต้องไล่สายจริงแม้สายจะโยงออกนอกขอบเขตที่มองเห็นได้ — กรองแค่ผลลัพธ์ noL1/circular
+     ท้ายสุดตาม scope ไม่ใช่กรอง input ก่อนไล่สาย) */
+  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
+  const noL1 = MASTER_USERS.filter(u => u[12]==='active' && (u[2]==='emp'||u[2]==='l1') && (!u[9] || u[9]==='—') && (!scoped || scoped.has(u[0])));
   const byName = {};
   MASTER_USERS.forEach(u => { byName[u[1]] = u; });
   const circular = [];
-  MASTER_USERS.filter(u=>u[12]==='active').forEach(start => {
+  MASTER_USERS.filter(u=>u[12]==='active' && (!scoped || scoped.has(u[0]))).forEach(start => {
     const seen = new Set([start[1]]);
     let cur = start;
     for(let i=0;i<20;i++){
