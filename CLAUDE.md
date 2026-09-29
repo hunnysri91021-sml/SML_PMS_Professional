@@ -1898,6 +1898,74 @@ touches employee/attendance/evaluation data.
     it — the same honesty rule CLAUDE.md #10/#19/#66 all apply to a
     different failure mode of the same underlying claim.
 
+68. **User reported two things in one message: "ไม่มี sync ข้อมูลใน log"
+    (nothing shows in the sync log at all) and "แก้ไขแฟ้มประวัติพนักงาน
+    ไม่มี upขึ้น excel เลย" (editing an employee profile doesn't push to
+    Excel at all) — then, while I was investigating, sent a screenshot
+    of the real Excel "Master data" header row.** The screenshot was the
+    actual fix: it showed a real "GM" column sitting between "หัวหน้า L2"
+    and "ผู้อนุมัติ" that `EXCEL_EMPLOYEE_COLS` (#30's centralized column
+    map) had never heard of — not a reordering this time, a genuinely
+    *extra* real column the app didn't know existed at all. Every
+    field read after L2 (`approver`/`status`/`potential`/`lastLogin`)
+    was silently reading one column to the left of where it actually
+    lives, and every push wrote one fewer column than the real table
+    has — which is very plausibly why pushes were failing outright
+    (a Graph/Excel table `rows/add`/`PATCH` call whose `values` array
+    doesn't match the table's real column count can reasonably error),
+    landing right on top of the "no sync log entries at all" report.
+    Fixed by adding `'gm'` to `EXCEL_EMPLOYEE_COLS` at its real verified
+    position, and adding `MASTER_USERS[19]` (`gm`) as a genuinely new,
+    append-only field (CLAUDE.md #5 — never insert mid-array, since
+    dozens of places already read `u[17]`/`u[18]` for pinHash/evalLevel
+    directly by literal index and shifting either would silently break
+    every one of them). `normalizeMs365Employee()` now sets `arr[19]`
+    directly from the real Excel column on every sync (same treatment
+    as `l1`/`l2`/`approver` — always read fresh, never merged from the
+    old local record, unlike `pinHash`/`evalLevel` which genuinely are
+    local-only and must be preserved across a sync per #17).
+    `pushSingleEmployeeToExcel()`'s `byKey` now includes `gm: emp[19]||''`
+    — without this, every push from the web app would have silently
+    **blanked out HR's real GM column** in Excel the moment anyone
+    edited any employee from the site, a real data-loss risk on top of
+    the read-side corruption. `supervisorChainLabel()` (just extended in
+    the previous fix to show the approver) now shows GM too, completing
+    the same "show the full real chain" request with the newly-real
+    field. **The separate "no sync log at all" report** was addressed by
+    auditing every one of this file's 16 other `if(!isMs365Configured(cfg))
+    return;` early gates (`ms365SyncKpiGoals`, `ms365SyncIdp`,
+    `pushSingleEmployeeSettings`, `pushSingleEmployeeToExcel`,
+    `pushOrgMasterFieldToExcel`, `ms365SyncOrgMaster`,
+    `pushSystemStatusToMs365`, `pushApprovalRecordToExcel`,
+    `ms365SyncApprovalSignatures`, `pushAuditLogEntryToExcel`,
+    `ms365SyncAuditLog`, `pushFormWeightsToExcel`, `ms365SyncFormWeights`,
+    `pushCycleSetupToExcel`, `ms365SyncCyclesList`, `ms365SyncCycleSetup`)
+    — every one of them returned with zero trace anywhere if MS365
+    wasn't considered configured, exactly the CLAUDE.md #66 shape of bug
+    but one gate earlier than the fix #66 already applied (#66 only
+    covered the *catch* block after the configured-check passed).
+    Deliberately left `getGraphTokenSilent()`'s own gate alone — it's a
+    low-level helper called from many read paths and logging every
+    silent-read attempt would flood the sync log with noise, not signal.
+    All 16 now call `appendSyncLog('<functionName>: ยังไม่ได้ตั้งค่า
+    MS365', false)` before returning, so the *specific* failure reason
+    (not configured, vs. a real network/Graph error, vs. success) is
+    always distinguishable in one place going forward — verified with a
+    test that forces `isMs365Configured` to fail and confirms the log
+    entry appears (note: this could *not* be reproduced by clearing
+    `MS365_CONFIG_KEY` in this test environment, since `loadMs365Config()`'s
+    merge logic — #31 — always falls back to the real baked-in
+    `DEFAULT_MS365_CONFIG` values, which are never empty; if this really
+    is why the user saw an empty log, something in their browser's saved
+    config must hold a genuinely non-empty-but-wrong override, which
+    this fix makes newly diagnosable rather than fixing outright).
+    General lesson combining #30/#66: a screenshot of the real external
+    header row is worth more than any amount of code reasoning about
+    what "should" be there — and once a silent-failure class of bug is
+    found in one function (#66's `AuditLog`), grep for every sibling
+    function sharing the same guard clause rather than assuming the one
+    reported instance was the only one.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

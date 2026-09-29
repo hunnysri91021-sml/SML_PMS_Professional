@@ -2933,7 +2933,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
               <th style="width:90px">บทบาท</th>
               <th style="min-width:150px">สังกัด<br><small style="font-weight:400;color:#bfdbfe">Group › Section › Division › Dept</small></th>
               <th style="width:55px">Grade</th>
-              <th style="min-width:150px">สายบังคับบัญชา<br><small style="font-weight:400;color:#bfdbfe">L1 / L2 / อนุมัติ</small></th>
+              <th style="min-width:150px">สายบังคับบัญชา<br><small style="font-weight:400;color:#bfdbfe">L1 / L2 / GM / อนุมัติ</small></th>
               <th style="width:75px">สถานะ</th>
               <th style="width:100px">วันเริ่มงาน<br><small style="font-weight:400;color:#bfdbfe">Login ล่าสุด</small></th>
               <th style="width:60px;text-align:center">จัดการ</th>
@@ -3844,7 +3844,7 @@ function pushKpiToExcel(kpi){
    ในเครื่องอยู่แล้วให้คงค่า type เดิมไว้ ถ้าไม่เคยมีเลยปล่อยว่าง ห้ามเดาค่าใส่ไปเอง (ดู CLAUDE.md #14) */
 async function ms365SyncKpiGoals(silent=false){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncKpiGoals: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows('KPI_Goals');
     if(!rows.length) return;
@@ -4052,7 +4052,7 @@ function pushIdpToExcel(p){
 }
 async function ms365SyncIdp(silent=false){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncIdp: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows('IDP');
     if(!rows.length) return;
@@ -4083,7 +4083,7 @@ setTimeout(()=>{ goalStatUpdate(); renderGoalKpi(goalKpiData); renderCascadeRows
    status: active / probation / inactive / resigned
    ============================================================ */
 const MASTER_USERS = [
-  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email  [16]potential(ศักยภาพ: high/medium/low หรือว่างถ้ายังไม่ประเมิน)  [17]pinHash(SHA-256 ของ PIN เข้าสู่ระบบ — ยืนยันตัวตนเบื้องต้นเท่านั้น ไม่ใช่รหัสผ่านจริง, ว่างถ้ายังไม่ตั้ง)  [18]evalLevel(แบบฟอร์มประเมินที่ Admin กำหนด: op/of/ldr/mgr — ว่างถ้ายังไม่กำหนด ให้เดาจาก role)
+  // [0]id  [1]name  [2]role  [3]group(กลุ่ม)  [4]section(แผนก)  [5]division(ส่วน)  [6]department(ฝ่าย)  [7]position  [8]grade  [9]l1  [10]l2  [11]approver  [12]status  [13]lastLogin  [14]startDate(วันเริ่มงาน)  [15]email  [16]potential(ศักยภาพ: high/medium/low หรือว่างถ้ายังไม่ประเมิน)  [17]pinHash(SHA-256 ของ PIN เข้าสู่ระบบ — ยืนยันตัวตนเบื้องต้นเท่านั้น ไม่ใช่รหัสผ่านจริง, ว่างถ้ายังไม่ตั้ง)  [18]evalLevel(แบบฟอร์มประเมินที่ Admin กำหนด: op/of/ldr/mgr — ว่างถ้ายังไม่กำหนด ให้เดาจาก role)  [19]gm(หัวหน้า GM — คอลัมน์จริงใน Excel ระหว่าง L2 กับผู้อนุมัติ, เพิ่มท้ายสุดตาม CLAUDE.md #5 ไม่แทรกกลาง)
   ['SML-001','สมชาย วงศ์ดี',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '12/09/68 08:12', '15/03/2563','','','','op'],
   ['SML-002','ประไพ แก้วใส',   'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน PDI', 'ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ PDI', 'G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '11/09/68 07:58', '02/06/2564','','','','op'],
   ['SML-003','นิรันดร์ ทองคำ', 'emp','SML Staff',  'Yard & PDI (SML)',        'ส่วน Yard','ฝ่ายปฏิบัติการ',   'พนักงานปฏิบัติการ Yard','G1','สุดา มีสุข',    'อรุณ ศิริ',  'คุณเชิดชัย','active',   '10/09/68 08:02', '10/01/2565','','','','op'],
@@ -4328,7 +4328,7 @@ async function resetUserPin(code){
    จำไปกดปุ่ม Push เองทุกครั้ง ยังมีปุ่ม Push แบบทั้งหมดไว้ที่หน้า MS365 Sync สำรองไว้ด้วย */
 async function pushSingleEmployeeSettings(code){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushSingleEmployeeSettings: ยังไม่ได้ตั้งค่า MS365', false); return; }
   const emp = MASTER_USERS.find(u=>u[0]===code);
   if(!emp) return;
   try{
@@ -4345,14 +4345,16 @@ async function pushSingleEmployeeSettings(code){
    normalizeMs365Employee() ทุกประการ (ไม่รวม pinHash/evalLevel ซึ่งไม่ใช่คอลัมน์ในตารางนี้) */
 async function pushSingleEmployeeToExcel(code){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushSingleEmployeeToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   const emp = MASTER_USERS.find(u=>u[0]===code);
   if(!emp) return;
   try{
     const byKey = {
       id: emp[0], name: emp[1], role: emp[2], group: emp[3], section: emp[4], division: emp[5],
       department: emp[6], position: emp[7], grade: emp[8], l1: emp[9], l2: emp[10], approver: emp[11],
-      status: emp[12], lastLogin: emp[13], startDate: emp[14], email: emp[15]||'', potential: emp[16]||''
+      status: emp[12], lastLogin: emp[13], startDate: emp[14], email: emp[15]||'', potential: emp[16]||'',
+      gm: emp[19]||'' /* คอลัมน์ GM จริงใน Excel (ดูคอมเมนต์ EXCEL_EMPLOYEE_COLS) — ต้องส่งค่านี้ไปด้วย
+        ไม่งั้น push จากเว็บจะเขียนทับคอลัมน์ GM จริงใน Excel เป็นค่าว่างทุกครั้งที่ HR แก้ไขพนักงานคนนั้น */
     };
     const row = EXCEL_EMPLOYEE_COLS.map(k => byKey[k]);
     await graphUpsertTableRow(cfg.employeeTable, EXCEL_EMPLOYEE_COLS.indexOf('id'), code, row);
@@ -4459,12 +4461,15 @@ function supervisorChainLabel(u){
   const l1 = u[9] && u[9]!=='—' ? u[9] : '';
   const l2 = u[10] && u[10]!=='—' ? u[10] : '';
   const approver = u[11] && u[11]!=='—' ? u[11] : '';
-  if(!l1 && !l2 && !approver) return '<span style="color:#94a3b8">— สูงสุดในองค์กร —</span>';
+  const gm = u[19] && u[19]!=='—' ? u[19] : '';
+  if(!l1 && !l2 && !gm && !approver) return '<span style="color:#94a3b8">— สูงสุดในองค์กร —</span>';
   const lines = [];
   if(l1) lines.push(`<b>L1</b> ${l1}`);
   if(l2) lines.push(`<b>L2</b> ${l2}`);
   /* เดิมแสดงแค่ L1/L2 สองแถว ตัด "ผู้อนุมัติ" (u[11]) ทิ้งไปทั้งที่เป็นสายบังคับบัญชาจริงอีกชั้นหนึ่ง —
-     ผู้ใช้ขอให้แสดงสายบังคับบัญชาให้ครบ จึงเพิ่มบรรทัดนี้เข้าไปด้วย */
+     ผู้ใช้ขอให้แสดงสายบังคับบัญชาให้ครบ จึงเพิ่มบรรทัดนี้เข้าไปด้วย เพิ่ม GM (u[19]) ตามด้วยหลังจากพบว่า
+     Excel จริงมีคอลัมน์นี้อยู่ (ดู EXCEL_EMPLOYEE_COLS) */
+  if(gm) lines.push(`<b>GM</b> ${gm}`);
   if(approver) lines.push(`<b>อนุมัติ</b> ${approver}`);
   return lines.join('<br>');
 }
@@ -5363,7 +5368,7 @@ function deleteSelectedOrgMasterItems(fieldKey){
 const ORG_MASTER_TABLE = 'OrgMaster';
 async function pushOrgMasterFieldToExcel(fieldKey){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushOrgMasterFieldToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     await graphUpsertTableRow(ORG_MASTER_TABLE, 0, fieldKey, [fieldKey, JSON.stringify(ORG_MASTER[fieldKey]||[]), new Date().toISOString()]);
     if(typeof appendSyncLog==='function') appendSyncLog(`Push รายการหลัก (${fieldKey}) เข้า Excel อัตโนมัติ`, true);
@@ -5376,7 +5381,7 @@ async function pushOrgMasterFieldToExcel(fieldKey){
    sync กลับมาซ้อนทับ (เหตุผลเดียวกับ ms365SyncAuditLog() ที่ merge แทนที่จะ replace — ดู CLAUDE.md #49) */
 async function ms365SyncOrgMaster(silent=true){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncOrgMaster: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows(ORG_MASTER_TABLE);
     if(!rows.length) return;
@@ -6507,7 +6512,7 @@ const SML365_STATUS_TABLE = 'SystemStatus';
 
 async function pushSystemStatusToMs365(note, pendingCount){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushSystemStatusToMs365: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     await graphAddTableRow(SML365_STATUS_TABLE, [new Date().toISOString(), note, pendingCount]);
   }catch(e){ /* เงียบไว้ — ไม่ให้กระทบ flow หลัก เผื่อยังไม่มีตาราง SystemStatus ในไฟล์ */ }
@@ -6868,8 +6873,17 @@ async function testMs365Connection(){
    แก้โดยรวมศูนย์ลำดับคอลัมน์จริงไว้ที่ EXCEL_EMPLOYEE_COLS จุดเดียว ทั้งขาอ่าน (normalizeMs365Employee)
    และขาเขียน (pushSingleEmployeeToExcel) ต้อง map ผ่านตัวนี้เท่านั้น ห้าม hardcode ตำแหน่งคอลัมน์ตรงๆ
    อีก — ถ้า Excel มีคนไปสลับคอลัมน์ใหม่อีกในอนาคต แก้ที่ตัวแปรนี้ตัวเดียวพอ (ดู CLAUDE.md #30) */
+/* ลำดับคอลัมน์จริงยืนยันจากภาพหน้าจอ header แถวจริงของ HR (Master data) รอบล่าสุด:
+   Empl · ชื่อ-สกุล · บทบาท · กลุ่ม · แผนก · ส่วน · ฝ่าย · ตำแหน่ง · วันเริ่มงาน · Email · Grade ·
+   หัวหน้า L1 · หัวหน้า L2 · GM · ผู้อนุมัติ · Status · Potent · Login ล่าสุด — มีคอลัมน์ "GM" แทรกอยู่
+   จริงระหว่าง L2 กับผู้อนุมัติ ที่โค้ดเดิมไม่เคยรู้จักมาก่อนเลย (ไม่มีใน EXCEL_EMPLOYEE_COLS ไม่มีใน
+   MASTER_USERS) ทำให้ทุกคอลัมน์ตั้งแต่ผู้อนุมัติเป็นต้นไปอ่าน/เขียนเหลื่อมตำแหน่งผิดทั้งหมด (บั๊กแบบ
+   เดียวกับ CLAUDE.md #30 เป๊ะ — คราวนี้เจอคอลัมน์ที่มีอยู่จริงแต่แอปไม่เคยรู้จัก ไม่ใช่แค่ลำดับสลับกัน)
+   เพิ่ม 'gm' เข้า EXCEL_EMPLOYEE_COLS ตรงตำแหน่งจริง และเพิ่ม MASTER_USERS[19] (gm) ต่อท้ายอาร์เรย์
+   (append-only ตาม CLAUDE.md #5 — ไม่แทรกกลาง เพราะโค้ดหลายจุดอ้าง u[17]/u[18] (pinHash/evalLevel)
+   ตรงๆ อยู่แล้ว ขยับจะพังทันที) */
 const EXCEL_EMPLOYEE_COLS = ['id','name','role','group','section','division','department','position',
-  'startDate','email','grade','l1','l2','approver','status','potential','lastLogin'];
+  'startDate','email','grade','l1','l2','gm','approver','status','potential','lastLogin'];
 
 function normalizeMs365Employee(row){
   const g = key => {
@@ -6881,7 +6895,7 @@ function normalizeMs365Employee(row){
   const role = roleRaw.includes('sysadmin') || roleRaw.includes('super') ? 'sysadmin' : roleRaw.includes('admin') ? 'admin' : roleRaw.includes('exec') ? 'exec' : roleRaw==='gm' || roleRaw.includes('general manager') ? 'gm' : roleRaw.includes('manager') || roleRaw==='l2' ? 'l2' : roleRaw.includes('leader') || roleRaw==='l1' ? 'l1' : roleRaw.includes('unit') ? 'unit' : (roleRaw || 'emp');
   const statusRaw = g('status').toLowerCase();
   const status = statusRaw.includes('inactive') || statusRaw.includes('off') ? 'inactive' : statusRaw.includes('probation') ? 'probation' : statusRaw.includes('resign') ? 'resigned' : 'active';
-  return [
+  const arr = [
     g('id'), g('name'), role, g('group'), g('section'), g('division'), g('department'), g('position'), g('grade'),
     g('l1'), g('l2'), g('approver'), status,
     g('lastLogin') || new Date().toLocaleString('th-TH'),
@@ -6889,6 +6903,11 @@ function normalizeMs365Employee(row){
     g('email'),
     ['high','medium','low'].includes(g('potential').toLowerCase()) ? g('potential').toLowerCase() : ''
   ];
+  /* arr[17]/arr[18] (pinHash/evalLevel) ถูกเติมทีหลังโดยผู้เรียก (loadEmployeesFromMs365's forEach,
+     re-merge จากค่าเดิมในเครื่อง — ฟิลด์เหล่านี้ local-only ไม่ได้มาจาก Excel) ตั้งค่า arr[19]=gm
+     ตรงนี้เลยเพราะเป็นคอลัมน์ Excel จริง อ่านสดทุกครั้งเหมือน l1/l2/approver ไม่ต้อง merge จากของเดิม */
+  arr[19] = g('gm');
+  return arr;
 }
 
 async function loadEmployeesFromMs365(silent=false){
@@ -7327,7 +7346,7 @@ function pushApprovalRecordToExcel(empCode, cycle, step, comment){
      ประเมินนี้ถูกแก้ไข แม้ตอนนี้ยังไม่ได้ตั้งค่า MS365 ก็ควรจำไว้ก่อน เผื่อตั้งค่าทีหลัง */
   if(typeof recordEvalActor==='function') recordEvalActor(empCode, cycle, step, approvedByCode, approvedBy);
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushApprovalRecordToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   graphAddTableRow('Approvals', [empCode, cycle, step, approvedBy, new Date().toISOString(), comment||''])
     .catch(()=>{});
 }
@@ -7480,7 +7499,7 @@ function getApprovalSignature(key){
    อะไรให้พิมพ์ตั้งแต่แรก ไม่ใช่แค่ลายเซ็นหาย */
 async function ms365SyncApprovalSignatures(silent=true){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncApprovalSignatures: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows('Approvals');
     if(!rows.length) return;
@@ -7593,7 +7612,7 @@ function appendAuditLog(type, action, target, detail){
    สำเนาจริงเสมอไม่ว่าผลของการ push จะเป็นอย่างไร */
 function pushAuditLogEntryToExcel(entry){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushAuditLogEntryToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   /* เดิม .catch(()=>{}) กลืน error ทิ้งเงียบๆ — ถ้า push ไม่สำเร็จจริง (เช่น ตาราง AuditLog ไม่มีอยู่จริง
      ใน Excel, Worker ตอบ error, หรือ token หมดอายุ) ไม่มีทางรู้เลยว่าทำไมชีต Excel ไม่อัปเดต ทั้งที่
      ในแอปดูเหมือนทำงานปกติทุกอย่าง (บั๊กแบบเดียวกับที่ CLAUDE.md #10/#19 เตือนไว้ — action ที่ล้มเหลว
@@ -7614,7 +7633,7 @@ function getAuditLog(){ try{ return JSON.parse(localStorage.getItem(AUDIT_LOG_KE
 function auditEntryKey(e){ return [e.at, e.user, e.type, e.action, e.target, e.detail].join('|'); }
 async function ms365SyncAuditLog(silent=true){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncAuditLog: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows('AuditLog');
     if(!rows.length) return;
@@ -8468,7 +8487,7 @@ loadFormOverrides();
 const FORM_WEIGHTS_TABLE = 'FormWeights';
 async function pushFormWeightsToExcel(){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushFormWeightsToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     for(const lv of Object.keys(SML_FORMS)){
       await graphUpsertTableRow(FORM_WEIGHTS_TABLE, 0, lv, [lv, JSON.stringify(SML_FORMS[lv].factors), new Date().toISOString()]);
@@ -8480,7 +8499,7 @@ async function pushFormWeightsToExcel(){
 }
 async function ms365SyncFormWeights(silent=false){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncFormWeights: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows(FORM_WEIGHTS_TABLE);
     if(!rows.length) return;
@@ -8825,7 +8844,7 @@ function getCurrentEvalCycleYear(){
    ลำดับคอลัมน์ [key,name,start,end,status,savedAt] อยู่แล้วในที่อื่น */
 async function pushCycleSetupToExcel(silent=true){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushCycleSetupToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   const data = getCycleSetupData();
   if(!data || !data.name) return;
   try{
@@ -8947,7 +8966,7 @@ function pushCycleToExcel(c){
 }
 async function ms365SyncCyclesList(silent=false){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncCyclesList: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows('Cycles');
     const parsed = rows
@@ -8967,7 +8986,7 @@ async function ms365SyncCyclesList(silent=false){
 
 async function ms365SyncCycleSetup(silent=false){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncCycleSetup: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows('Cycles');
     const row = rows.find(r => String(r[0]??'').trim() === 'CURRENT');
