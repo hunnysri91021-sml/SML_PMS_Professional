@@ -1146,6 +1146,35 @@ touches employee/attendance/evaluation data.
     values are always addable-if-missing before the form tries to
     select them.
 
+52. **Follow-up to #51: HR said "sync" — the new "รายการหลัก" page's own
+    notice admitted it was local-only (localStorage, not yet pushed to
+    Excel), so a group/position added on one device was invisible to
+    Admin on any other device, the same shape of gap CLAUDE.md #8 always
+    flags.** Added a real `OrgMaster` Excel table sync, same pattern as
+    #39a's `FormWeights`: one row per field (`groups`/`sections`/
+    `divisions`/`departments`/`positions`/`grades`), the field's whole
+    array JSON-encoded into one column since the item count isn't
+    fixed-column, upserted (`graphUpsertTableRow`, keyed by field name)
+    rather than appended, since each field is "current state of one
+    list," not a repeatable event (#21's reasoning). `addOrgMasterItem()`/
+    `removeOrgMasterItem()` now call `pushOrgMasterFieldToExcel(fieldKey)`
+    — pushes only the one field that changed, not all six, after every
+    edit. Pull side, `ms365SyncOrgMaster(silent)`, **merges** each
+    field's remote array into the local one (union, never replaces
+    wholesale) — same reasoning as #49's Audit Log merge: a value just
+    added on this device via a fire-and-forget push that hasn't landed
+    in Excel yet must never vanish just because a pull happened to run
+    first. Wired into both silent-sync groups (`doLogin()`/
+    `tryRestoreSession()`), the orgmaster page's own nav dispatch, and a
+    manual "🔄 ดึงจากทุกเครื่อง" button — the exact same three hook points
+    #49 established for Audit Log, since both are "local-only admitted
+    gap → add push + merge-pull sync" fixes of the same shape. Updated
+    the page's own notice text to describe the real synced behavior
+    instead of the "ยังไม่ sync ขึ้น Excel" admission from #51, which
+    would otherwise become a stale, now-false claim the moment this
+    shipped (the exact CLAUDE.md #34/#49 trap: a doc/UI claim that
+    stops matching the code underneath it).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

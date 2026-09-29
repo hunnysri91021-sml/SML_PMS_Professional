@@ -2205,8 +2205,9 @@ tbody tr:hover{background:#f0f6ff!important}
   <section class="page" id="pg-orgmaster">
     <div class="ph"><div><h2>🗂️ รายการหลัก — กลุ่ม/แผนก/ส่วน/ฝ่าย/ตำแหน่ง/เกรด</h2>
       <p>จัดการรายการที่ใช้เป็นตัวเลือก (dropdown) ในฟอร์ม "เพิ่ม/แก้ไขพนักงาน" — เพิ่มรายการใหม่ที่นี่ก่อน
-        แล้วจะเลือกได้ทันทีตอนเพิ่มพนักงาน ไม่ต้องพิมพ์เอง กันสะกดผิด/สังกัดไม่ตรงกับผังองค์กร</p></div></div>
-    <div class="al al-i"><span>ℹ️</span><div>รายการที่มีพนักงานใช้งานอยู่จริง (ซิงก์จาก Excel หรือกรอกในระบบ) จะปรากฏในรายการนี้ให้อัตโนมัติอยู่แล้ว — ใช้หน้านี้เพื่อ "เพิ่มรายการใหม่ล่วงหน้า" ก่อนมีพนักงานคนแรกในกลุ่ม/ตำแหน่งนั้น เท่านั้น รายการที่มีพนักงานใช้อยู่จะลบออกไม่ได้ (ป้องกันข้อมูลพนักงานเสียหาย) — เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น (local, ยังไม่ sync ขึ้น Excel)</div></div>
+        แล้วจะเลือกได้ทันทีตอนเพิ่มพนักงาน ไม่ต้องพิมพ์เอง กันสะกดผิด/สังกัดไม่ตรงกับผังองค์กร</p></div>
+      <div class="ph-act"><button class="btn" onclick="ms365SyncOrgMaster(false)">🔄 ดึงจากทุกเครื่อง</button></div></div>
+    <div class="al al-i"><span>ℹ️</span><div>รายการที่มีพนักงานใช้งานอยู่จริง (ซิงก์จาก Excel หรือกรอกในระบบ) จะปรากฏในรายการนี้ให้อัตโนมัติอยู่แล้ว — ใช้หน้านี้เพื่อ "เพิ่มรายการใหม่ล่วงหน้า" ก่อนมีพนักงานคนแรกในกลุ่ม/ตำแหน่งนั้น เท่านั้น รายการที่มีพนักงานใช้อยู่จะลบออกไม่ได้ (ป้องกันข้อมูลพนักงานเสียหาย) — เพิ่ม/ลบที่นี่จะ push ขึ้น Excel ตาราง "OrgMaster" อัตโนมัติ (ถ้าตั้งค่า MS365 แล้ว) และดึงกลับมารวมทุกครั้งที่ login/เข้าหน้านี้ ทุกเครื่องจึงเห็นรายการเดียวกัน</div></div>
     <div id="orgMasterArea"></div>
   </section>
 
@@ -3264,6 +3265,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
   if(p==='orgmaster' && typeof renderOrgMasterLists==='function') renderOrgMasterLists();
+  if(p==='orgmaster' && typeof ms365SyncOrgMaster==='function') ms365SyncOrgMaster(true);
 });
 
 /* ====== ROLE SWITCH ====== */
@@ -4145,6 +4147,9 @@ async function doLogin(){
   }
   if(typeof ms365SyncAuditLog === 'function'){
     try{ await ms365SyncAuditLog(true); }catch(e){}
+  }
+  if(typeof ms365SyncOrgMaster === 'function'){
+    try{ await ms365SyncOrgMaster(true); }catch(e){}
   }
   if(typeof ms365SyncApprovalSignatures === 'function'){
     try{ await ms365SyncApprovalSignatures(true); }catch(e){}
@@ -5049,6 +5054,7 @@ function addOrgMasterItem(fieldKey, rawValue){
   saveOrgMaster();
   renderOrgMasterLists();
   if(typeof populateOrgSelects==='function') populateOrgSelects();
+  if(typeof pushOrgMasterFieldToExcel==='function') pushOrgMasterFieldToExcel(fieldKey);
   smlToast('เพิ่ม "'+value+'" เข้ารายการ'+spec.label+' แล้ว','ok');
 }
 function removeOrgMasterItem(fieldKey, value){
@@ -5061,6 +5067,54 @@ function removeOrgMasterItem(fieldKey, value){
   saveOrgMaster();
   renderOrgMasterLists();
   if(typeof populateOrgSelects==='function') populateOrgSelects();
+  if(typeof pushOrgMasterFieldToExcel==='function') pushOrgMasterFieldToExcel(fieldKey);
+}
+/* Sync รายการหลักขึ้น Excel — ตาราง "OrgMaster" หนึ่งแถวต่อ 1 field (groups/sections/.../grades)
+   เก็บค่าทั้งลิสต์เป็น JSON ในคอลัมน์เดียว (เหมือน SML_FORMS ใน #39a) เพราะจำนวนรายการต่อ field
+   ไม่คงที่ ไม่ใช่ fixed-column แบบตารางอื่น — ใช้ graphUpsertTableRow() คีย์ที่ FieldKey (ไม่ใช่
+   graphAddTableRow) เพราะแต่ละ field คือ "สถานะปัจจุบันของรายการนั้น" ไม่ใช่เหตุการณ์ที่เกิดซ้ำได้
+   (ตรรกะเดียวกับ CLAUDE.md #21) แก้ที่เครื่องไหนก็ push แค่ field ที่เปลี่ยนพอ ไม่ต้อง push ทั้ง 6 ทุกครั้ง */
+const ORG_MASTER_TABLE = 'OrgMaster';
+async function pushOrgMasterFieldToExcel(fieldKey){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    await graphUpsertTableRow(ORG_MASTER_TABLE, 0, fieldKey, [fieldKey, JSON.stringify(ORG_MASTER[fieldKey]||[]), new Date().toISOString()]);
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push รายการหลัก (${fieldKey}) เข้า Excel อัตโนมัติ`, true);
+  }catch(e){
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push รายการหลัก (${fieldKey}) ไม่สำเร็จ: ${e.message}`, false);
+  }
+}
+/* ดึงรายการหลักกลับจาก Excel แล้ว "รวม" (union) เข้ากับของเครื่องนี้ทีละ field แทนการแทนที่ทั้งก้อน —
+   กันไม่ให้รายการที่เพิ่งเพิ่มบนเครื่องนี้แต่ push ไป Excel ยังไม่ทันสำเร็จ (fire-and-forget) หายไปตอน
+   sync กลับมาซ้อนทับ (เหตุผลเดียวกับ ms365SyncAuditLog() ที่ merge แทนที่จะ replace — ดู CLAUDE.md #49) */
+async function ms365SyncOrgMaster(silent=true){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    const rows = await graphListTableRows(ORG_MASTER_TABLE);
+    if(!rows.length) return;
+    let changed = false;
+    rows.forEach(r=>{
+      const fieldKey = String(r[0]??'').trim();
+      const spec = ORG_MASTER_FIELDS.find(f=>f.key===fieldKey);
+      if(!spec) return;
+      let remoteValues = [];
+      try{ remoteValues = JSON.parse(r[1]||'[]'); }catch(e){ remoteValues = []; }
+      if(!Array.isArray(remoteValues)) return;
+      const before = ORG_MASTER[fieldKey] || [];
+      const merged = [...new Set([...before, ...remoteValues])];
+      if(merged.length !== before.length){ ORG_MASTER[fieldKey] = merged; changed = true; }
+    });
+    if(changed){
+      saveOrgMaster();
+      if(document.getElementById('pg-orgmaster')?.classList.contains('on') && typeof renderOrgMasterLists==='function') renderOrgMasterLists();
+      if(typeof populateOrgSelects==='function') populateOrgSelects();
+    }
+    if(!silent) smlToast(changed ? 'ดึงรายการหลักจาก Excel แล้ว (มีรายการใหม่)' : 'รายการหลักครบถ้วนอยู่แล้ว','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึงรายการหลักจาก Excel ไม่สำเร็จ: '+e.message,'warn');
+  }
 }
 function renderOrgMasterLists(){
   const box = document.getElementById('orgMasterArea');
@@ -8697,6 +8751,7 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncIdp === 'function'){ try{ await ms365SyncIdp(true); }catch(e){} }
       if(typeof ms365SyncApprovalSignatures === 'function'){ try{ await ms365SyncApprovalSignatures(true); }catch(e){} }
       if(typeof ms365SyncAuditLog === 'function'){ try{ await ms365SyncAuditLog(true); }catch(e){} }
+      if(typeof ms365SyncOrgMaster === 'function'){ try{ await ms365SyncOrgMaster(true); }catch(e){} }
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
     }catch(e){}
