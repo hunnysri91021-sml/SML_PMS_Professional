@@ -1966,6 +1966,53 @@ touches employee/attendance/evaluation data.
     function sharing the same guard clause rather than assuming the one
     reported instance was the only one.
 
+69. **Follow-up to #68: user confirmed "ไม่มีบันทึกขึ้น excel เลย ทุก sheet
+    employee หรือ approvels" (literally nothing writes to Excel, on any
+    sheet — Employee or Approvals) even after #68's fix. #68 only fixed
+    the *not-configured* gate on 16 functions — it never checked whether
+    each function's actual push call (the part that runs once MS365 IS
+    considered configured) also logs failures, and four of them still
+    had a bare `.catch(()=>{})` silently swallowing the real error,
+    exactly the CLAUDE.md #66 shape of bug living one line further down
+    in the same functions.** `pushApprovalRecordToExcel()` — the exact
+    function behind the "Approvals" sheet the user named — pushed via
+    `graphAddTableRow(...).catch(()=>{})` with zero success/failure log
+    either way. `pushKpiToExcel()`/`pushIdpToExcel()`/`pushCycleToExcel()`
+    had the same silent catch, *and* their not-configured gates used a
+    combined condition (`if(!isMs365Configured(cfg) || !kpi || !kpi.id)
+    return;`) whose exact text didn't match the literal string #68's
+    fix-pass searched for (`if(!isMs365Configured(cfg)) return;`), so
+    they were missed entirely by that pass — a mechanical find-and-fix
+    is only as complete as the pattern it searches for, and a
+    reasonable-looking extra `|| !kpi` guard was enough to hide these
+    four from it. Fixed all four the same way as #66/#68's other pushes:
+    log both success (`.then()`) and failure (`.catch(err=>...)`) to
+    `appendSyncLog()`, and gave the three combined-condition gates their
+    own explicit "ยังไม่ได้ตั้งค่า MS365" log entry, separated from the
+    `!kpi`/`!p`/`!c` null-guard (which stays a silent early return — that
+    case means "there's nothing to push yet," not a failure worth
+    logging). Verified with a test that forces every one of these four
+    push calls to throw and confirms each one now leaves a distinct,
+    readable entry in the sync log — including `pushApprovalRecordToExcel`,
+    directly addressing the user's named complaint. **What remains
+    genuinely unverifiable from here**: if the real Excel workbook is
+    still not receiving pushes after this, the sync log will now show
+    the *actual* reason (a real HTTP/Graph error message from the
+    Worker, not silence) — the next step is for the user to read that
+    exact message off the Sync Log panel and report it back, since a
+    systemic "nothing at all reaches Excel, on every table" symptom
+    that survives this fix most likely points at the Worker itself
+    (not deployed, deployed stale, or genuinely unreachable/misconfigured
+    on the Cloudflare side) rather than anything left in this file's own
+    push logic. General lesson sharper than #66/#68: when fixing a
+    silent-catch bug via a mechanical multi-site pass, don't just grep
+    for the exact string that reported the bug — grep for the *shape*
+    (any `.catch(()=>{})` or `.catch(()=>...)` immediately following a
+    `graphAddTableRow`/`graphUpsertTableRow` call) and check each one
+    individually, since near-identical guard clauses with one extra
+    condition tacked on are exactly the kind of near-miss an exact-string
+    search silently walks past.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

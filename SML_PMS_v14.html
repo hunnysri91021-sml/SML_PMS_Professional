@@ -3833,11 +3833,13 @@ function confirmKpiActivate(){
    Approvals — คอลัมน์เรียงตามที่ระบุไว้ในหน้า "โครงสร้าง Sheets": KPI_ID·Name·Unit·Target·Weight·
    Scope·Year·Status */
 function pushKpiToExcel(kpi){
+  if(!kpi || !kpi.id) return;
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg) || !kpi || !kpi.id) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushKpiToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   graphUpsertTableRow('KPI_Goals', 0, kpi.id,
     [kpi.id, kpi.name, kpi.unit, kpi.target, kpi.pct, kpi.scope, kpi.year||'', kpi.status])
-    .catch(()=>{});
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) เข้า Excel`, true); })
+    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
 /* ดึง KPI ทั้งหมดจาก Excel มาแทนที่ goalKpiData ในเครื่องนี้ (เหมือน loadEmployeesFromMs365())
    คอลัมน์ "Type" (ปริมาณ/คุณภาพ/...) ไม่ได้อยู่ใน schema จริงของตาราง Excel นี้ — ถ้าเจอ KPI ตัวนี้
@@ -4045,10 +4047,12 @@ function deleteIdp(i){
 }
 
 function pushIdpToExcel(p){
+  if(!p) return;
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg) || !p) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushIdpToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   graphUpsertTableRow('IDP', 0, p.code, [p.code, p.name, p.dept, p.grade, p.plan, p.due||'', p.owner||'', p.metric||'', p.status])
-    .catch(()=>{});
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push IDP (${p.code}) เข้า Excel`, true); })
+    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push IDP (${p.code}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
 async function ms365SyncIdp(silent=false){
   const cfg = loadMs365Config();
@@ -7348,7 +7352,8 @@ function pushApprovalRecordToExcel(empCode, cycle, step, comment){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushApprovalRecordToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   graphAddTableRow('Approvals', [empCode, cycle, step, approvedBy, new Date().toISOString(), comment||''])
-    .catch(()=>{});
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push Approvals (${empCode} · ${step}) เข้า Excel`, true); })
+    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push Approvals (${empCode} · ${step}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
 function approveReviewSelected(){
   const keys=getCheckedKeys('review-chk');
@@ -8959,10 +8964,12 @@ function saveCycleFromModal(){
    ภายหลัง) จึง upsert ด้วยรหัสรอบ (col 0) เหมือน KPI/Employees ไม่ใช่ append — ใช้ตาราง Excel
    "Cycles" ตัวเดียวกับที่หน้าตั้งค่ารอบสั้น (#34) ใช้ แต่คนละแถวกัน (key คนละค่า ไม่ชนกัน) */
 function pushCycleToExcel(c){
+  if(!c) return;
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg) || !c) return;
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushCycleToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   graphUpsertTableRow('Cycles', 0, c.id, [c.id, c.name, c.start||'', c.end||'', c.status||'', new Date().toISOString()])
-    .catch(()=>{});
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) เข้า Excel`, true); })
+    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
 async function ms365SyncCyclesList(silent=false){
   const cfg = loadMs365Config();
