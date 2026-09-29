@@ -3240,6 +3240,14 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='settings' && typeof renderNavPermEditor==='function') renderNavPermEditor();
   if(p==='settings' && typeof renderRoleCards==='function') renderRoleCards();
   if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
+  /* เปิดหน้า workflow/รายงานที่อ่านคิวประเมิน (getDrafts()) ทุกครั้ง ให้ดึงจาก Excel มา merge ก่อนเสมอ
+     (silent) — กันปัญหาที่หัวหน้าประเมินจากเครื่องอื่นแล้วคนที่มีสิทธิเห็นบนเครื่องนี้ไม่เห็นข้อมูล
+     อัปเดตจนกว่าจะ login ใหม่/รีเฟรชหน้าเข้า login gate เท่านั้น (ดู CLAUDE.md #58) — จงใจไม่รวม 'dash':
+     `setRole('admin')` ท้ายไฟล์คลิกเข้าหน้า dash แบบ synchronous ตอน parse สคริปต์ ก่อนที่
+     DEFAULT_MS365_CONFIG (ประกาศทีหลังในไฟล์นี้มาก) จะ initialize เสร็จ เรียก loadMs365Config()
+     ตอนนั้นจะพังด้วย TDZ ทันที — แดชบอร์ดเองก็ได้ข้อมูลอัปเดตอยู่แล้วผ่าน renderWorkflowPages() ที่ถูก
+     เรียกจากการ sync ของหน้าอื่นที่เพิ่งเปิดไปก่อนหน้านี้ในเซสชันเดียวกัน */
+  if((p==='review'||p==='calib'||p==='approve'||p==='team'||p==='report'||p==='cycle'||p==='myresult') && typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true);
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
@@ -4130,6 +4138,9 @@ async function doLogin(){
   }
   if(typeof ms365SyncOrgMaster === 'function'){
     try{ await ms365SyncOrgMaster(true); }catch(e){}
+  }
+  if(typeof ms365SyncAppraisals === 'function'){
+    try{ await ms365SyncAppraisals(true); }catch(e){}
   }
   if(typeof ms365SyncApprovalSignatures === 'function'){
     try{ await ms365SyncApprovalSignatures(true); }catch(e){}
@@ -6524,8 +6535,37 @@ async function notifyAdminOfEvalSubmission(payload){
   return { sent, total: admins.length };
 }
 
+/* แจ้งอีเมลกลับไปหา "ผู้ดำเนินการก่อนหน้า" (คนที่สอบทาน L2/Calibration/อนุมัติ/ตีกลับใบนี้ล่าสุด —
+   เก็บไว้ใน EVAL_LAST_ACTOR_KEY โดย pushApprovalRecordToExcel() ทุกครั้งที่มีการดำเนินการ) เมื่อใบ
+   ประเมินที่เขาดำเนินการไปแล้วถูก "แก้ไข" และบันทึกใหม่ภายหลัง — เคสหลักคือพนักงาน/หัวหน้าแก้ไขแล้ว
+   ส่งใหม่หลังถูกตีกลับ (สถานะรีเซ็ตเป็น Draft แล้ว แต่ EVAL_LAST_ACTOR_KEY ยังจำผู้ตีกลับไว้อยู่ จึง
+   ยังรู้ว่าต้องแจ้งใคร) กันไม่ให้ผู้สอบทาน/อนุมัติคนเดิมไม่รู้ตัวว่ามีการแก้ไขแล้วต้องกลับมาดูซ้ำ — ใช้
+   กลไกความซื่อสัตย์เดียวกับ notifyAdminOfEvalSubmission (#40): best-effort ต่อ 1 คน, ต้องตั้งค่า
+   Worker ไว้แล้วและผู้รับต้องมีอีเมลจริง ไม่งั้น return เหตุผลจริงแทนที่จะเงียบแล้วสันนิษฐานว่าสำเร็จ */
+async function notifyPrevEvaluatorOfEdit(payload, prevActor){
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
+  if(!prevActor || !prevActor.code) return { sent:false, reason:'ไม่พบผู้ดำเนินการก่อนหน้า' };
+  const actorEmp = MASTER_USERS.find(u=>u[0]===prevActor.code);
+  if(!actorEmp || !actorEmp[15]) return { sent:false, reason:'ผู้ดำเนินการก่อนหน้าไม่มีอีเมลบันทึกไว้ในระบบ' };
+  const [empCode, empName, cycle] = payload;
+  const stepLabel = {Submitted:'ส่งแบบประเมิน', L2Reviewed:'สอบทาน L2', RejectedL2Review:'ตีกลับจากสอบทาน L2', Calibrated:'Calibration', Approved:'อนุมัติขั้นสุดท้าย', RejectedFinalApproval:'ตีกลับจากอนุมัติขั้นสุดท้าย'}[prevActor.step] || prevActor.step;
+  const subject = `[SML PMS] ใบประเมินที่ท่านดำเนินการไปถูกแก้ไข — ${empName} (${empCode})`;
+  const body = `ใบประเมินของ ${empName} (${empCode}) รอบ ${cycle} ซึ่งท่านเคยดำเนินการ (${stepLabel}) ไว้ก่อนหน้านี้ ถูกแก้ไขและบันทึกใหม่แล้ว\n\nวันที่แก้ไข: ${new Date().toLocaleString('th-TH')}\n\nกรุณาเข้าเว็บ SML PMS เพื่อตรวจสอบข้อมูลล่าสุดอีกครั้ง\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
+  try{
+    await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: actorEmp[15], toName: actorEmp[1], subject, body }) });
+    return { sent:true, to: actorEmp[1] };
+  }catch(e){ return { sent:false, reason:e.message }; }
+}
+
 async function saveEvaluationToMs365(status='Draft'){
   const payload = collectEvaluationPayload(status);
+  /* ต้องอ่าน draft เดิม + ผู้ดำเนินการก่อนหน้าไว้ "ก่อน" saveEvaluationLocal() ทับข้อมูล — ถ้ามีคนเคย
+     ดำเนินการ (สอบทาน/ปรับเทียบ/อนุมัติ/ตีกลับ) กับใบนี้มาก่อนแล้ว การบันทึกครั้งนี้ถือเป็น "แก้ไข" ที่
+     ต้องแจ้งกลับไปหาเขา ไม่ใช่การส่งครั้งแรก (ซึ่งยังไม่มี prevActor เลย จึงไม่ต้องแจ้งอะไร) */
+  const existingBefore = getDrafts().find(d => draftKey(d) === draftKey(payload));
+  const prevActor = getEvalLastActor(payload[0], payload[2]);
+  const isEditAfterAction = !!existingBefore && !!prevActor;
   saveEvaluationLocal(payload);
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', status==='Submitted'?'ส่งแบบประเมิน':'บันทึกร่างแบบประเมิน', payload[0], payload[1]+' — ระดับ '+payload[3]);
   const cfg = loadMs365Config();
@@ -6555,6 +6595,13 @@ async function saveEvaluationToMs365(status='Draft'){
   } else {
     if(pushResult.ok) smlToast('บันทึกร่างไป Excel แล้ว','ok');
     else smlToast('บันทึกสำรองใน Browser แล้ว แต่ส่ง Excel ไม่สำเร็จ: ' + pushResult.error,'warn');
+  }
+  if(isEditAfterAction){
+    const editNotif = await notifyPrevEvaluatorOfEdit(payload, prevActor).catch(()=>({sent:false}));
+    if(editNotif.sent){
+      smlToast(`แจ้งเตือน ${editNotif.to} ทางอีเมลว่าใบประเมินถูกแก้ไขแล้ว`,'ok');
+      if(typeof appendAuditLog==='function') appendAuditLog('evaluation','แจ้งเตือนผู้ดำเนินการก่อนหน้าทางอีเมล (แก้ไขใบประเมิน)', payload[0], editNotif.to);
+    }
   }
   return pushResult;
 }
@@ -6897,6 +6944,66 @@ function getDrafts(){
 }
 function saveDrafts(drafts){ localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(drafts)); }
 function draftKey(d){ return d[0]+'|'+d[2]+'|'+d[3]; }
+/* ลำดับขั้นจริงที่ระบบติดตามได้ (ดู renderDashboardWorkflowSteps เดิม) — ยกออกมาเป็นค่ากลางจุดเดียว
+   เพราะ ms365SyncAppraisals() ด้านล่างต้องใช้ตัดสิน "remote ไปไกลกว่า local ไหม" ด้วยลำดับเดียวกันนี้
+   เป๊ะๆ ไม่งั้นจะมีจุดนิยาม "ลำดับขั้น" สองที่ที่อาจขยับไม่พร้อมกัน (ดู CLAUDE.md #41 เรื่องรักษา
+   ตรรกะให้ตรงกันทุกจุดที่พึ่งพากัน) */
+const EVAL_STATUS_ORDER = ['Draft','Submitted','L2Reviewed','Calibrated','Approved'];
+function evalStatusRank(status){ const i = EVAL_STATUS_ORDER.indexOf(status); return i<0 ? 0 : i; }
+/* ดึงคิวประเมิน (ตาราง Appraisals) กลับจาก Excel มา merge เข้าคิว local — เดิม Appraisals เป็น
+   push-only (ดู CLAUDE.md #33/#40): หัวหน้าที่ประเมิน/สอบทาน/อนุมัติจากเครื่องอื่นจะ push ข้อมูลจริง
+   ขึ้น Excel ได้ แต่คนอื่นที่มีสิทธิเห็น (เช่น L2/Admin เปิดจากเครื่องของตัวเอง) จะไม่เห็นการอัปเดต
+   นั้นเลยในหน้า สอบทาน/Calibration/อนุมัติ/แดชบอร์ด เพราะหน้าพวกนั้นอ่านจาก MS365_LOCAL_DRAFT_KEY
+   (local ต่อเครื่อง) เท่านั้น — ผู้ใช้ยืนยันแล้วว่าต้องการให้ข้ามเครื่องเห็นข้อมูลอัปเดตจริง จึงเพิ่ม
+   pull-sync นี้ ใช้ merge แบบ "เก็บสถานะที่ไปไกลกว่าเสมอ" ต่อคีย์ (draftKey) — ไม่ replace ทั้งคิวแบบ
+   Employees/Attendance เพราะ local อาจมี draft ที่ยังไม่เคย push (เพิ่งพิมพ์ ยังไม่กด "ส่ง") ซึ่งต้อง
+   ไม่หายไปแค่เพราะยังไม่มีใน Excel และตั้งใจ "ไม่ดึงทับ" เมื่อ rank เท่ากัน (remote rank ==
+   local rank) — ป้องกันการทับข้อมูลที่เพิ่งแก้ในเครื่องนี้เองแต่ push ไปยังไม่สำเร็จ ด้วยสำเนาเก่าจาก
+   Excel ที่ดึงมาพร้อมกัน */
+async function ms365SyncAppraisals(silent=true){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
+    if(!silent){ smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงคิวประเมินจาก Excel ได้','warn'); }
+    return 0;
+  }
+  try{
+    const rows = await graphListTableRows(cfg.evaluationTable);
+    const local = getDrafts();
+    const byKey = new Map(local.map(d => [draftKey(d), d]));
+    rows.forEach(r=>{
+      if(!r || !r[0] || !r[2] || !r[3]) return; // แถวไม่ครบ empCode/cycle/level ไม่ใช่แถวจริง ข้าม
+      const key = r[0]+'|'+r[2]+'|'+r[3];
+      const existing = byKey.get(key);
+      if(!existing || evalStatusRank(r[r.length-1]) > evalStatusRank(existing[existing.length-1])){
+        byKey.set(key, r);
+      }
+    });
+    saveDrafts([...byKey.values()]);
+    if(typeof renderWorkflowPages==='function') renderWorkflowPages();
+    if(typeof appendSyncLog==='function') appendSyncLog(`Sync คิวประเมิน: ดึงข้อมูล ${rows.length} แถวจาก Excel${silent?' (auto)':''}`, true);
+    if(!silent) smlToast('ดึงคิวประเมินจากทุกเครื่องแล้ว','ok');
+    return rows.length;
+  }catch(e){
+    if(typeof appendSyncLog==='function') appendSyncLog('Sync คิวประเมินล้มเหลว: '+e.message, false);
+    if(!silent) smlToast('ดึงคิวประเมินจาก Excel ไม่สำเร็จ: '+e.message,'warn');
+    return 0;
+  }
+}
+/* จำไว้ว่าใคร (รหัสพนักงานจริง ไม่ใช่แค่ชื่อ — ดู CLAUDE.md #1) เป็นคนดำเนินการขั้นล่าสุด (สอบทาน L2 /
+   Calibration / อนุมัติ / ตีกลับ) กับใบประเมินของแต่ละคนแต่ละรอบ — ใช้แจ้งอีเมลกลับไปหาคนนั้นถ้าใบ
+   ประเมินที่เขาเพิ่งดำเนินการไปถูก "แก้ไข" ภายหลัง (ดู notifyPrevEvaluatorOfEdit ท้าย
+   saveEvaluationToMs365()) key = empCode|cycle เหมือน APPROVAL_SIGNATURE_KEY (CLAUDE.md #39)
+   เพราะ level ไม่กระทบว่าใครดำเนินการ */
+const EVAL_LAST_ACTOR_KEY = 'smlPmsEvalLastActor';
+function recordEvalActor(empCode, cycle, step, code, name){
+  let store={};
+  try{ store=JSON.parse(localStorage.getItem(EVAL_LAST_ACTOR_KEY)||'{}'); }catch(e){ store={}; }
+  store[empCode+'|'+cycle] = { code, name, step, at:new Date().toISOString() };
+  localStorage.setItem(EVAL_LAST_ACTOR_KEY, JSON.stringify(store));
+}
+function getEvalLastActor(empCode, cycle){
+  try{ return JSON.parse(localStorage.getItem(EVAL_LAST_ACTOR_KEY)||'{}')[empCode+'|'+cycle] || null; }catch(e){ return null; }
+}
 
 /* เดิม ms365PushAppraisals() เอารายการที่ Approved+push สำเร็จแล้ว "ลบออกจาก" MS365_LOCAL_DRAFT_KEY
    ทันที (กันไม่ให้ re-push ซ้ำ ตาม CLAUDE.md #7) — แต่คิวเดียวกันนี้ยังเป็นแหล่งข้อมูลเดียวที่หน้า
@@ -6951,9 +7058,13 @@ function renderReviewQueue(){
    1 แถวเสมอ เหมือน AuditLog/Appraisals — ไม่ใช่ "สถานะปัจจุบัน" ที่ควร upsert) fire-and-forget
    เช่นเดียวกับ pushAuditLogEntryToExcel() — ไม่บล็อก/ไม่ทำให้ action หลักพังถ้า push ไม่สำเร็จ */
 function pushApprovalRecordToExcel(empCode, cycle, step, comment){
+  const approvedByCode = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[0]) || '';
+  const approvedBy = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[1]) || currentActorLabel();
+  /* จำผู้ดำเนินการไว้เสมอ (local, ไม่ผูกกับ isMs365Configured) เพื่อใช้แจ้งอีเมลย้อนกลับภายหลังถ้าใบ
+     ประเมินนี้ถูกแก้ไข แม้ตอนนี้ยังไม่ได้ตั้งค่า MS365 ก็ควรจำไว้ก่อน เผื่อตั้งค่าทีหลัง */
+  if(typeof recordEvalActor==='function') recordEvalActor(empCode, cycle, step, approvedByCode, approvedBy);
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)) return;
-  const approvedBy = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[1]) || currentActorLabel();
   graphAddTableRow('Approvals', [empCode, cycle, step, approvedBy, new Date().toISOString(), comment||''])
     .catch(()=>{});
 }
@@ -7629,15 +7740,14 @@ function renderDashGradeBars(drafts){
 function renderDashboardWorkflowSteps(participants, drafts){
   const box = document.getElementById('dashWorkflowSteps');
   if(!box) return;
-  const statusOrder = ['Draft','Submitted','L2Reviewed','Calibrated','Approved'];
   const statusOf = (code) => {
     const d = drafts.find(x=>x[0]===code);
     return d ? d[d.length-1] : 'Draft';
   };
   const total = participants.length;
   const countAtLeast = (stage) => {
-    const idx = statusOrder.indexOf(stage);
-    return participants.filter(u => statusOrder.indexOf(statusOf(u[0])) >= idx).length;
+    const idx = EVAL_STATUS_ORDER.indexOf(stage);
+    return participants.filter(u => evalStatusRank(statusOf(u[0])) >= idx).length;
   };
   const attReady = participants.filter(u => !!ATTENDANCE[u[0]]).length;
   const steps = [
@@ -8866,6 +8976,7 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncApprovalSignatures === 'function'){ try{ await ms365SyncApprovalSignatures(true); }catch(e){} }
       if(typeof ms365SyncAuditLog === 'function'){ try{ await ms365SyncAuditLog(true); }catch(e){} }
       if(typeof ms365SyncOrgMaster === 'function'){ try{ await ms365SyncOrgMaster(true); }catch(e){} }
+      if(typeof ms365SyncAppraisals === 'function'){ try{ await ms365SyncAppraisals(true); }catch(e){} }
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
     }catch(e){}

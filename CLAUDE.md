@@ -1340,6 +1340,75 @@ touches employee/attendance/evaluation data.
     filtering there even where every other admin-only field can safely
     stay "show everything."
 
+58. **User asked point-blank whether an evaluation done on one device shows
+    up for everyone with permission — the honest answer, per CLAUDE.md
+    #33/#40, was no: `Appraisals` was push-only, so Review/Calibration/
+    Approve queues (which read `getDrafts()`, local-only per device)
+    never saw a submission made elsewhere until that device's own next
+    login/reload. User said add it, plus: notify whoever acted on an
+    evaluation before if it's later edited.** Added the pull side —
+    `ms365SyncAppraisals(silent)` — completing the round-trip #33
+    deliberately left one-way. It **merges**, never replaces wholesale
+    (same reasoning as #49/#52's Audit Log/OrgMaster merges): for each
+    remote row it only overwrites the local copy at the same `draftKey`
+    when the remote status is **strictly further along** the pipeline
+    (`EVAL_STATUS_ORDER = ['Draft','Submitted','L2Reviewed','Calibrated',
+    'Approved']`, extracted as one shared constant + `evalStatusRank()`
+    so `renderDashboardWorkflowSteps()`'s own local copy of this same
+    order couldn't drift from the sync logic's copy — the CLAUDE.md #41
+    "keep dual implementations of one ordering byte-for-byte in sync"
+    lesson applies to any duplicated ordering array, not just client/
+    Worker code) — never on a tie. A tie is deliberately left alone: two
+    same-rank copies can't be dated against each other (no timestamp
+    column), and always taking Excel's copy on a tie would risk
+    clobbering a same-stage edit that's sitting in this device's local
+    queue but hasn't finished pushing yet. Verified with a test that
+    seeds a local unpushed Draft (must survive a sync), a remote-only
+    Submitted row from "another device" (must appear locally), and a
+    case where local has since advanced past what a stale remote copy
+    still shows (must NOT regress). Wired into both silent-sync groups
+    (`doLogin()`/`tryRestoreSession()`) and the nav dispatch for every
+    page that reads `getDrafts()` (review/calib/approve/team/report/
+    cycle/myresult) — **deliberately excluding `dash`**: `setRole('admin')`
+    at the bottom of the file synchronously `.click()`s into the
+    Dashboard page while the script is still parsing, long before
+    `DEFAULT_MS365_CONFIG` (declared much later in the file) finishes
+    initializing — wiring `dash` into this dispatch was the first thing
+    to ever call `loadMs365Config()` from that synchronous path and blew
+    up with `ReferenceError: Cannot access 'DEFAULT_MS365_CONFIG' before
+    initialization` on every single page load, caught only because the
+    click-sweep test (required by this file's own verification
+    checklist) still runs after every change — a reminder that "add this
+    page to an existing dispatch list" is not risk-free just because the
+    function itself is fine in isolation; the *page* matters too, and
+    `dash` in particular is special-cased here as the one page reachable
+    from top-level synchronous code, not just user clicks.
+    For the second half of the request — notify the previous evaluator
+    on edit — added `EVAL_LAST_ACTOR_KEY` (localStorage map, key
+    `empCode|cycle`, same key shape as `APPROVAL_SIGNATURE_KEY` per #39
+    since level doesn't change who acted): `recordEvalActor()` is called
+    from the one real chokepoint every stage transition already goes
+    through, `pushApprovalRecordToExcel()` (L2 review/reject,
+    Calibration, final approve/reject all call it — see #34), storing
+    the actor's real employee **code** (never just the display name,
+    per CLAUDE.md #1) so the later email lookup resolves a real
+    `MASTER_USERS` row rather than trusting a name string. In
+    `saveEvaluationToMs365()`, the existing local draft and its recorded
+    last actor are read **before** `saveEvaluationLocal()` overwrites
+    them; if both existed, this save counts as "an edit after someone
+    already acted on it" and `notifyPrevEvaluatorOfEdit()` fires — same
+    honesty rules as #26/#40's email sends (best-effort, `isWorkerConfigured()`
+    gates it, recipient must have a real email on file, never assumed
+    sent unless the send actually succeeded). This correctly covers the
+    main real scenario: L2 "ตีกลับ" (reject) resets status back to plain
+    `Draft` (so a naive "status isn't Draft" check would miss it
+    entirely), but `EVAL_LAST_ACTOR_KEY` still remembers the L2 who
+    rejected it, so when the employee/L1 corrects and resubmits, that
+    same L2 gets emailed — not the current status field, the *history*
+    of who touched it. Verified a first-time submission (no prior actor
+    recorded yet) sends no edit-notification, and an edit after an L2
+    review does email that specific L2's real address.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
