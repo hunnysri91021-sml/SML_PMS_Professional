@@ -1530,6 +1530,108 @@ touches employee/attendance/evaluation data.
     email notification fires to the real address on file, and the batch
     print output contains the real leave-summary numbers.
 
+61. **User asked to "review the approval system" against a full real
+    workflow described in 5 numbered steps, ending with "if the system
+    doesn't already work this way, adjust it to fit" — the real order
+    was substantially different from what #58/#60 had just built: a new
+    GM approval step inserted before employee acknowledgment, and
+    Calibration moved from *before* acknowledgment to *after* it, with
+    AMD/MD's final approval now the true last step, tied to a Payroll
+    export.** Given the size of a wrong guess here (a full state-machine
+    rebuild), asked 4 clarifying questions before touching code rather
+    than assuming: (1) whether "L1 evaluates round one" means a second,
+    separate score set or L1 editing/confirming the same self-eval score
+    — confirmed the latter, so no new score-storage shape was needed;
+    (2) whether "GM" is a genuinely new role distinct from L2/AMD-MD —
+    confirmed yes, a real new role to add; (3) whether GM's approval and
+    AMD/MD's final approval are two distinct real rounds — confirmed
+    yes, GM approves first (before the employee ever sees a result),
+    AMD/MD approves last (after Calibration, gating Payroll); (4) whether
+    "enters the Payroll system" needs a real integration — confirmed no,
+    this app has no salary data at all (CLAUDE.md #14), so a CSV export
+    for HR to hand off manually is the honest scope.
+    **The real pipeline is now**: `Draft → Submitted → L2Reviewed →
+    GMApproved → Acknowledged → Calibrated → Approved` — `EVAL_STATUS_ORDER`
+    reordered so `GMApproved`/`Acknowledged` sit *between* `L2Reviewed`
+    and `Calibrated`, not appended after `Approved` the way #58 originally
+    (and reasonably, at the time) placed the single `Acknowledged` stage
+    it was told about. Restoring **`isFinalStatus(status)`** to mean
+    literally `status==='Approved'` again (it briefly meant
+    `Approved||Acknowledged` under #60's now-superseded ordering) was the
+    correct fix, not a regression: with Calibration now happening *after*
+    acknowledgment, only the AMD/MD sign-off is the real "done, ready for
+    Excel/print/Payroll" state — printing or exporting payroll data off an
+    Acknowledged-but-not-yet-Calibrated record would use a provisional
+    number the same way #42 warned about a "final" push containing
+    non-final data. Added a parallel **`hasVisibleResult(status)`**
+    (`evalStatusRank(status) >= evalStatusRank('GMApproved')`) for the
+    genuinely different question "does the employee have anything to see
+    on their result page yet" — conflating these two meanings into one
+    flag (the mistake #60 made, reasonably, before this reordering) is
+    exactly the kind of "don't compare a multi-state status by one
+    literal string for two different purposes" mistake CLAUDE.md #11
+    already warns about, just one layer more subtle: here it was two
+    *different concepts* hiding under one boolean, not one concept
+    checked against the wrong literal.
+    **New role `gm`** added everywhere role enumeration already existed
+    in this file — `avMap`, `ROLE_DEFS`/`ROLE_PERM_LABELS` (new
+    `gmApprove` permission), the `#roleSel` demo-view switcher, the
+    `mu_role` Add/Edit Employee dropdown, `normalizeMs365Employee()`'s
+    role-guess heuristic, `getAssignedEvalLevel()`'s role→form-level
+    guess (`gm`→`mgr`, same tier as `l2`/`exec`/`admin`) — missing any one
+    of these would have made `gm` a role that *exists* in the UI dropdown
+    but silently breaks somewhere else, the same "define a role
+    everywhere role logic branches" lesson #37 already encodes for the 6
+    original roles. **`getMyScopedEmpCodes()` needed zero changes** — a
+    role not explicitly handled there already falls through to
+    `return null` (unrestricted/company-wide), which is the correct
+    default for `gm` given there's no separate "GM chain" field in
+    `MASTER_USERS` yet (only `l1`/`l2`/`approver`) — stated as a real,
+    known limit in the new `renderGmApproveQueue()`'s comment: if the
+    real org ever has multiple GMs who must each see only their own
+    slice, a new hierarchy field (following the `populateSupervisorSelects()`
+    pattern from #18) needs to be added and wired in, not assumed later.
+    **Calibration's owner changed from L2 to HR** (`admin` role) per the
+    user's step 5 — its nav `data-role` updated from `l2,exec` to
+    `admin,exec` accordingly, and `l2` correspondingly lost visibility
+    into that page (verified with a role-switch test: L2 no longer sees
+    Calibration in the nav, Admin now does).
+    **Reject targets were redesigned around "send back exactly one real
+    stage," not the previous ad-hoc jumps**: `rejectGmSelected()` (new)
+    sends `L2Reviewed → Submitted` (L2 must re-review); the existing
+    `rejectApproveAll()` (AMD/MD's reject) changed its target from the
+    old `L2Reviewed` (which used to skip backward across two stages,
+    correct only under the old ordering) to `Acknowledged` — sending it
+    all the way back to L2 under the new ordering would silently discard
+    the employee's already-given acknowledgment for no reason; sending it
+    back to Calibrated-input-stage (Acknowledged) is the minimal correct
+    undo. `rejectReviewSelected()` (L2's reject, `Submitted → Draft`) was
+    untouched — it's still the earliest real reject point.
+    **The employee-notification email moved from `approveAllFinal()` to
+    the new `approveGmSelected()`** — the whole point of GM approval in
+    this workflow is "now it's ready to show the employee," so that's
+    the real trigger point now, not final AMD/MD sign-off (which happens
+    long after the employee has already acknowledged a provisional
+    number). `approveAllFinal()` no longer emails the employee at all;
+    it only signs, pushes, and reports readiness for the Payroll export.
+    **Added `exportPayrollData()`** — a plain CSV of `isFinalStatus()`
+    (i.e. truly `Approved`) records only, explicitly *not* wired to any
+    real Payroll API or Excel table per the user's own answer that this
+    app has no salary data and HR handles that hand-off outside the
+    system; deliberately excludes Calibrated/Acknowledged/GMApproved
+    rows since their X may still change before final sign-off, and using
+    a pre-final number for pay would be a real, serious correctness bug
+    — not just a display inconsistency like earlier fixes in this file.
+    Verified the entire new pipeline end-to-end with one Playwright test
+    that drives a single evaluation through all 7 real states in order
+    (submit → L2 approve → GM approve queue shows it → GM approves →
+    employee emailed → My Result shows the acknowledge button → employee
+    acknowledges → HR Calibration queue shows it → HR calibrates with an
+    adjusted score → AMD/MD approve queue shows it → AMD/MD approves →
+    `isFinalStatus()` finally true → Payroll export fires) plus a
+    separate role-permission test confirming GM/L2/Admin/exec each see
+    exactly the nav pages their new real responsibilities call for.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
