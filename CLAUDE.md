@@ -1198,6 +1198,45 @@ touches employee/attendance/evaluation data.
     Selecting zero items warns instead of silently no-op'ing, same
     "always give feedback" instinct as the rest of this file's actions.
 
+54. **The "6. ผลประเมิน" (My Result) page — the screen a logged-in employee
+    is supposed to see their own real result on — was pure mock HTML
+    the whole time: hardcoded grade "A", score "91.25", a fabricated
+    4-year history table, and 3 invented reviewer comments, identical
+    regardless of who logged in (CLAUDE.md #16).** Screenshotted by the
+    user logged in as "Super Admin" and reported as "ไม่ update ข้อมูล"
+    (doesn't update). Rewrote `pg-myresult` with real ids and added
+    `renderMyResult()`: resolves the logged-in employee's own drafts via
+    `getDrafts().filter(d=>d[0]===CURRENT_SESSION_USER[0])`, takes the
+    most recently Approved one (`d[d.length-1]==='Approved'`, highest
+    cycle) for the headline grade/X/Y/Z, and builds real history from
+    every draft this employee has across cycles — an honest empty state
+    ("ยังไม่มีผลการประเมินที่อนุมัติเสร็จสิ้น") shows instead of any
+    numbers when there's nothing real to show, rather than leaving the
+    old mock values in place as a false "looks populated" state.
+    **"ปรับเงินเดือน/โบนัส" was dropped outright, not wired to anything**
+    — this app has no salary or bonus data stored anywhere at all, so
+    displaying a number there would always have been invented regardless
+    of source (CLAUDE.md #14); replaced with "สถานะอนุมัติ", a field this
+    app can actually answer honestly. **The "ความเห็นจากผู้ประเมิน" text
+    comments were dropped too, for the same reason** — nothing in this
+    codebase stores free-text review comments per evaluation stage, only
+    scores/grades and (per CLAUDE.md #39) a signer's *name* on final
+    approval; kept only the real part (`getApprovalSignature(empCode+
+    '|'+cycle)`, the same key #39 established) as a small "ผู้ลงนามอนุมัติ"
+    card, hidden entirely when no real signature exists on this device
+    rather than showing a placeholder name. "อันดับในฝ่าย" (department
+    rank) is computed live against real peers — `getDrafts()` filtered to
+    the same cycle, `Approved` status, and (critically) run through
+    `getMyScopedEmpCodes()` first, so an L1/L2 viewing their own result
+    only ranks against people within their own real visibility per
+    CLAUDE.md #45, never leaking company-wide comparison data through a
+    "personal" page that was never meant to expose it. Verified with a
+    test that logs in two different employees in sequence and confirms
+    neither carries over the other's grade/score — the exact
+    cross-contamination risk a shared-DOM mock page invites once it's
+    made to read from `CURRENT_SESSION_USER` instead of hardcoded
+    literals.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

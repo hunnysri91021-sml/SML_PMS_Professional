@@ -1726,49 +1726,33 @@ tbody tr:hover{background:#f0f6ff!important}
 
   <!-- ========== MY RESULT ========== -->
   <section class="page" id="pg-myresult">
-    <div class="ph"><div><h2>ผลประเมินของฉัน</h2><p>ประวัติผลการประเมินย้อนหลัง 5 ปี</p></div>
+    <div class="ph"><div><h2>ผลประเมินของฉัน</h2><p>ประวัติผลการประเมินจริงของฉันเท่าที่มีบันทึกในระบบ</p></div>
     <div class="ph-act"><button class="btn print-eval-btn" data-no-delegate onclick="printEvalForm()">🖨️ พิมพ์ใบประเมิน (PDF)</button></div></div>
 
-    <div class="al al-s"><span>🎉</span><div><b>ผลประเมิน FY2025 ได้รับการอนุมัติแล้ว</b> — กรุณากดรับทราบผลภายใน 30 วัน</div></div>
+    <div class="al al-s" id="myResultBanner" style="display:none"><span>🎉</span><div id="myResultBannerText"></div></div>
+    <div class="al al-i" id="myResultEmptyNotice" style="display:none"><span>ℹ️</span><div>ยังไม่มีผลการประเมินที่อนุมัติเสร็จสิ้นของคุณในระบบ — ตัวเลขด้านล่างจะแสดงทันทีที่มีผลประเมินสถานะ "Approved" บันทึกไว้</div></div>
 
     <div class="grid g4" style="margin-bottom:18px">
-      <div class="stat s-ok"><div class="lb">🏆 เกรดสุดท้าย</div><div class="vl" style="color:#16a34a">A</div><div class="sb">ดีมาก · FY2568</div></div>
-      <div class="stat"><div class="lb">📊 คะแนนรวม</div><div class="vl">91.25</div><div class="sb"><span class="trend-up">▲ 4.10</span> จากปีก่อน · (Y+Z)</div></div>
-      <div class="stat s-i"><div class="lb">📈 อันดับในฝ่าย</div><div class="vl">3<small style="font-size:14px">/48</small></div><div class="sb">Top 6%</div></div>
-      <div class="stat s-w"><div class="lb">💰 ปรับเงินเดือน</div><div class="vl">6.0%</div><div class="sb">โบนัส 2.5 เดือน</div></div>
+      <div class="stat s-ok"><div class="lb">🏆 เกรดล่าสุด</div><div class="vl" id="myResultGrade" style="color:#16a34a">—</div><div class="sb" id="myResultGradeSub">—</div></div>
+      <div class="stat"><div class="lb">📊 คะแนนรวม</div><div class="vl" id="myResultX">—</div><div class="sb" id="myResultXSub">(Y+Z)</div></div>
+      <div class="stat s-i"><div class="lb">📈 อันดับในฝ่าย</div><div class="vl" id="myResultRank">—</div><div class="sb" id="myResultRankSub">—</div></div>
+      <div class="stat s-w"><div class="lb">✅ สถานะอนุมัติ</div><div class="vl" id="myResultApproval" style="font-size:16px">—</div><div class="sb" id="myResultApprovalSub">—</div></div>
     </div>
 
     <div class="grid g2">
-      <div class="card"><div class="card-h"><h3>คะแนนแยกตามหมวด</h3></div><div class="card-b">
-        <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>ผลการปฏิบัติงาน Y (70%)</b><span>62.50</span></div><div class="pg"><i class="ok" style="width:92.5%"></i></div></div>
-        <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>ปัจจัยสมรรถนะ (รวมใน Y)</b><span>—</span></div><div class="pg"><i style="width:88%"></i></div></div>
-        <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>เวลาทำงาน Z (30%)</b><span>28.75</span></div><div class="pg"><i class="ok" style="width:96.5%"></i></div></div>
-        <div class="kv" style="border-top:2px solid #0f172a;margin-top:14px;padding-top:12px"><span style="font-weight:700;color:#0f172a">คะแนนรวม X = Y + Z</span><b style="font-size:19px;color:#2563eb">91.25</b></div>
+      <div class="card"><div class="card-h"><h3>คะแนนแยกตามหมวด (รอบล่าสุด)</h3></div><div class="card-b" id="myResultBreakdownArea">
+        <span style="color:#94a3b8;font-size:12px">ยังไม่มีข้อมูล</span>
       </div></div>
 
       <div class="card"><div class="card-h"><h3>ประวัติย้อนหลัง</h3></div>
         <div class="tw"><table>
-          <thead><tr><th>ปี</th><th>คะแนน</th><th>เกรด</th><th>ผู้ประเมิน</th><th>ปรับเงินเดือน</th></tr></thead>
-          <tbody>
-            <tr><td><b>ปี 2568</b></td><td>91.25</td><td><span class="grade gA">A</span></td><td>หัวหน้าแผนก</td><td>—</td></tr>
-            <tr><td>ปี 2567</td><td>87.15</td><td><span class="grade gB">B</span></td><td>หัวหน้าแผนก</td><td>—</td></tr>
-            <tr><td>ปี 2566</td><td>82.40</td><td><span class="grade gB">B</span></td><td>หัวหน้าแผนก</td><td>—</td></tr>
-            <tr><td>ปี 2565</td><td>79.80</td><td><span class="grade gC">C</span></td><td>หัวหน้าแผนก</td><td>—</td></tr>
-          </tbody>
+          <thead><tr><th>รอบ/ปี</th><th>คะแนน</th><th>เกรด</th><th>สถานะ</th></tr></thead>
+          <tbody id="myResultHistoryRows"></tbody>
         </table></div>
       </div>
     </div>
 
-    <div class="card"><div class="card-h"><h3>ความเห็นจากผู้ประเมิน</h3></div><div class="card-b">
-      <div class="tl">
-        <div class="tli g"><b>วิชัย กล้าหาญ · หัวหน้าระดับ 1</b><small> · 18 ก.ย. 2568</small>
-          <p>ผลงานดีเยี่ยม ยอดขายเกินเป้า 12% และมีความคิดริเริ่มในการปรับปรุงกระบวนการทำงาน แนะนำให้พัฒนาทักษะการนำเสนอเพิ่มเติมเพื่อเตรียมพร้อมสู่ระดับหัวหน้า</p></div>
-        <div class="tli g"><b>สุรชัย มั่นคง · ผู้จัดการฝ่าย (ระดับ 2)</b><small> · 25 ก.ย. 2568</small>
-          <p>เห็นด้วยกับการประเมินของหัวหน้าโดยตรง เสนอชื่อเข้าโครงการ Talent Pool ประจำปี</p></div>
-        <div class="tli g"><b>ดร.อนันต์ วรกิจ · ผู้บริหาร</b><small> · 5 ต.ค. 2568</small>
-          <p>อนุมัติผลการประเมิน พร้อมอนุมัติเข้าร่วม Talent Development Program</p></div>
-      </div>
-    </div></div>
+    <div class="card" id="myResultApproverCard" style="display:none"><div class="card-h"><h3>ผู้ลงนามอนุมัติ</h3></div><div class="card-b" id="myResultApproverArea"></div></div>
   </section>
 
   <!-- ========== TEAM (L1) ========== -->
@@ -3264,6 +3248,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
+  if(p==='myresult' && typeof renderMyResult==='function') renderMyResult();
   if(p==='orgmaster' && typeof renderOrgMasterLists==='function') renderOrgMasterLists();
   if(p==='orgmaster' && typeof ms365SyncOrgMaster==='function') ms365SyncOrgMaster(true);
 });
@@ -4676,6 +4661,95 @@ function _levelCells(w, sc, allApproved) {
   }).join('');
 }
 
+/* หน้า "6. ผลประเมิน" (pg-myresult) เดิมเป็น mock HTML ล้วน — เกรด/คะแนน/ประวัติ 4 ปี/ความเห็นผู้ประเมิน
+   ฝังตายตัวทั้งหมด ไม่เคยเปลี่ยนไม่ว่าใครล็อกอิน (CLAUDE.md #16) แก้ให้ดึงจาก getDrafts() ของ
+   CURRENT_SESSION_USER จริง — "ปรับเงินเดือน/โบนัส" เดิมเป็นตัวเลขที่ระบบไม่มีทางรู้ได้จริง (ไม่มีข้อมูล
+   เงินเดือนเก็บอยู่ที่ไหนในระบบเลย) จึงตัดออกแทนที่ด้วย "สถานะอนุมัติ" ซึ่งเป็นข้อมูลจริง (#14) และ
+   "ความเห็นจากผู้ประเมิน" แบบข้อความเดิมก็เป็นข้อความที่ไม่มีอยู่จริงเช่นกัน (ไม่มีที่เก็บ comment ต่อ
+   ขั้นตอนที่นี่) ตัดออก เหลือแค่ชื่อผู้ลงนามอนุมัติจริงจาก getApprovalSignature() (คีย์เดียวกับ #39) */
+function renderMyResult(){
+  const box = document.getElementById('pg-myresult');
+  if(!box) return;
+  const me = CURRENT_SESSION_USER;
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  const bannerEl = document.getElementById('myResultBanner');
+  const emptyEl = document.getElementById('myResultEmptyNotice');
+  const approverCard = document.getElementById('myResultApproverCard');
+  if(!me){
+    bannerEl.style.display='none';
+    emptyEl.style.display='';
+    return;
+  }
+  const myDrafts = getDrafts().filter(d=>d[0]===me[0]);
+  const approvedDrafts = myDrafts.filter(d=>d[d.length-1]==='Approved').sort((a,b)=>Number(b[2])-Number(a[2]));
+  const latest = approvedDrafts[0];
+
+  if(!latest){
+    bannerEl.style.display='none';
+    emptyEl.style.display='';
+    set('myResultGrade','—'); set('myResultGradeSub','—');
+    set('myResultX','—'); set('myResultXSub','(Y+Z)');
+    set('myResultRank','—'); set('myResultRankSub','—');
+    set('myResultApproval','—'); set('myResultApprovalSub','—');
+    document.getElementById('myResultBreakdownArea').innerHTML = '<span style="color:#94a3b8;font-size:12px">ยังไม่มีข้อมูล</span>';
+    document.getElementById('myResultHistoryRows').innerHTML = myDrafts.length
+      ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>`<tr><td><b>รอบ ${d[2]}</b></td><td>—</td><td>—</td><td>${d[d.length-1]}</td></tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีประวัติ</td></tr>';
+    approverCard.style.display='none';
+    return;
+  }
+  emptyEl.style.display='none';
+  bannerEl.style.display='';
+  document.getElementById('myResultBannerText').innerHTML = `<b>ผลประเมินรอบ ${latest[2]} ได้รับการอนุมัติแล้ว</b>`;
+
+  const Y=Number(latest[latest.length-5])||0, Z=Number(latest[latest.length-4])||0, X=Number(latest[latest.length-3])||0, grade=latest[latest.length-2];
+  set('myResultGrade', grade||'—');
+  set('myResultGradeSub', 'รอบ '+latest[2]+' · ระดับ '+(latest[3]||'—'));
+  set('myResultX', X.toFixed(2));
+
+  const prev = approvedDrafts[1];
+  if(prev){
+    const prevX = Number(prev[prev.length-3])||0;
+    const delta = Math.round((X-prevX)*100)/100;
+    set('myResultXSub', (delta>=0?'▲ ':'▼ ')+Math.abs(delta).toFixed(2)+' จากรอบก่อน · (Y+Z)');
+  } else set('myResultXSub', '(Y+Z) · ยังไม่มีรอบก่อนหน้าให้เทียบ');
+
+  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
+  const myDept = me[6]||me[4]||'—';
+  const deptPeers = getDrafts().filter(d=>{
+    if(d[d.length-1]!=='Approved' || d[2]!==latest[2]) return false;
+    if(scoped && !scoped.has(d[0])) return false;
+    const emp = MASTER_USERS.find(u=>u[0]===d[0]);
+    return emp && (emp[6]||emp[4]||'—')===myDept;
+  }).map(d=>Number(d[d.length-3])||0).sort((a,b)=>b-a);
+  const rank = deptPeers.indexOf(X)+1;
+  if(rank>0 && deptPeers.length){ set('myResultRank', rank+'/'+deptPeers.length); set('myResultRankSub', myDept); }
+  else { set('myResultRank','—'); set('myResultRankSub', myDept); }
+
+  const sigKey = me[0]+'|'+latest[2];
+  const sig = (typeof getApprovalSignature==='function') ? getApprovalSignature(sigKey) : null;
+  set('myResultApproval','อนุมัติแล้ว');
+  if(sig){
+    set('myResultApprovalSub', new Date(sig.signedAt).toLocaleDateString('th-TH'));
+    approverCard.style.display='';
+    document.getElementById('myResultApproverArea').innerHTML = `<div class="tli g"><b>${sig.signedBy}</b><small> · ${new Date(sig.signedAt).toLocaleString('th-TH')}</small></div>`;
+  } else {
+    set('myResultApprovalSub','ไม่พบชื่อผู้ลงนามในเครื่องนี้');
+    approverCard.style.display='none';
+  }
+
+  document.getElementById('myResultBreakdownArea').innerHTML = `
+    <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>ผลการปฏิบัติงาน Y</b><span>${Y.toFixed(2)}</span></div><div class="pg"><i class="ok" style="width:${Math.min(100,Y)}%"></i></div></div>
+    <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>เวลาทำงาน Z</b><span>${Z.toFixed(2)}</span></div><div class="pg"><i class="ok" style="width:${Math.min(100,Z)}%"></i></div></div>
+    <div class="kv" style="border-top:2px solid #0f172a;margin-top:14px;padding-top:12px"><span style="font-weight:700;color:#0f172a">คะแนนรวม X = Y + Z</span><b style="font-size:19px;color:#2563eb">${X.toFixed(2)}</b></div>`;
+
+  document.getElementById('myResultHistoryRows').innerHTML = myDrafts.length
+    ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>{
+        const gx = Number(d[d.length-3])||0, gg = d[d.length-2], gs = d[d.length-1];
+        return `<tr><td><b>รอบ ${d[2]}</b></td><td>${gg? gx.toFixed(2) : '—'}</td><td>${gg?`<span class="grade g${gg}">${gg}</span>`:'—'}</td><td>${gs}</td></tr>`;
+      }).join('')
+    : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีประวัติ</td></tr>';
+}
 let _printing = false;
 function printEvalForm() {
   if(_printing) return; _printing = true;
@@ -7027,6 +7101,7 @@ function renderWorkflowPages(){
   if(typeof renderNotifBell==='function') renderNotifBell();
   if(typeof renderNavBadges==='function') renderNavBadges();
   if(typeof renderTeamFromMaster==='function') renderTeamFromMaster();
+  if(typeof renderMyResult==='function') renderMyResult();
 }
 
 /* Badge ตัวเลขสีแดงข้างเมนู "2. ประเมินทีมงาน / 3. สอบทาน L2 / 4. Calibration / 5. อนุมัติ AGM/MD"
