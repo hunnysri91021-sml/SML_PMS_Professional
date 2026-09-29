@@ -2824,6 +2824,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <input type="date" class="btn" id="auditFilterDate" onchange="renderAuditLog()">
       <select class="btn" id="auditFilterType" onchange="renderAuditLog()">
         <option value="">ทุกประเภท</option>
+        <option value="auth">เข้า/ออกระบบ</option>
         <option value="employee">ข้อมูลพนักงาน</option>
         <option value="attendance">ข้อมูลวันลา/เวลา</option>
         <option value="evaluation">ผลประเมิน/Workflow</option>
@@ -2878,14 +2879,6 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="card">
     <div class="card-h"><h3>สิทธิ์เข้าถึงเมนู (รายแถบ)</h3><div class="r"><span class="bd b-r">🛡️ Admin ระบบเท่านั้น</span></div></div>
     <div class="card-b" id="navPermArea"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-h"><h3>ผู้ใช้งานล่าสุด</h3></div>
-    <div class="tw"><table>
-      <thead><tr><th>ผู้ใช้งาน</th><th>รหัส</th><th>หน่วยงาน</th><th>บทบาท</th><th>สถานะ</th><th>เข้าใช้ล่าสุด</th><th></th></tr></thead>
-      <tbody id="recentUsersRows"></tbody>
-    </table></div>
   </div>
 </div>
 
@@ -3255,7 +3248,6 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   }
   if(p==='settings' && typeof renderNavPermEditor==='function') renderNavPermEditor();
   if(p==='settings' && typeof renderRoleCards==='function') renderRoleCards();
-  if(p==='settings' && typeof renderRecentUsers==='function') renderRecentUsers();
   if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
@@ -4402,27 +4394,6 @@ function renderUsers(data) {
   if(cnt) cnt.textContent = 'แสดง ' + data.length + ' รายการ';
 }
 
-/* "ผู้ใช้งานล่าสุด" บนหน้า ผู้ใช้ & สิทธิ์ เดิมเป็น <tr> ตายตัว 3 แถว (ชื่อ/รหัส/บทบาทสมมติ) พร้อมป้าย
-   "ตัวอย่างข้อมูล" และปุ่ม "จัดการ" ที่ไม่มี onclick เลย (CLAUDE.md #10/#16) — จริงๆ มีตารางผู้ใช้ทั้งหมด
-   ที่ทำงานได้จริงอยู่ด้านล่างแล้ว (renderUsers()/openEditUser()) จึงไม่สร้าง path แก้ไขแยกใหม่ แค่ดึง
-   พนักงาน active จริงจาก MASTER_USERS มาแสดง แล้วให้ปุ่ม "จัดการ" เรียก openEditUser() ตัวเดียวกับตาราง
-   หลัก — u[13] (Login ล่าสุด) เป็นข้อความอิสระ (เช่น "วันนี้ 15:42"/"11/09/68 08:10") ไม่ใช่รูปแบบวันที่
-   เดียวกันทุกแถว จึงเรียงลำดับเวลาจริงไม่ได้แม่นยำ (CLAUDE.md #14 — ห้ามเสกลำดับที่พิสูจน์ไม่ได้) เลย
-   แสดงตามลำดับใน MASTER_USERS แทนที่จะอ้างว่า "เรียงตามล่าสุดจริง" ทั้งที่ทำไม่ได้ */
-function renderRecentUsers(){
-  const tbody = document.getElementById('recentUsersRows');
-  if(!tbody) return;
-  const rows = MASTER_USERS.filter(u=>u[12]==='active').slice(0,5);
-  tbody.innerHTML = rows.length ? rows.map(u=>`<tr>
-    <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div><div><b>${u[1]}</b><small>${u[7]||'—'}</small></div></div></td>
-    <td>${u[0]}</td>
-    <td>${u[6]||u[4]||'—'}</td>
-    <td>${U_ROLE_LABEL[u[2]]||u[2]}</td>
-    <td>${U_STATUS_LABEL[u[12]]||''}</td>
-    <td>${u[13]||'—'}</td>
-    <td><button class="btn btn-sm" onclick="openEditUser('${u[0]}')">จัดการ</button></td>
-  </tr>`).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีพนักงาน active</td></tr>';
-}
 function populateUserFilters(){
   const groupSel = document.getElementById('filterGroup');
   const deptSel  = document.getElementById('filterSection');
@@ -4606,7 +4577,6 @@ function renderTeamFromMaster() {
 setTimeout(() => {
   renderUsers(MASTER_USERS);
   populateUserFilters();
-  if(typeof renderRecentUsers==='function') renderRecentUsers();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
   renderTeamFromMaster();
@@ -5172,7 +5142,6 @@ function saveUserFromModal() {
 
   renderUsers(MASTER_USERS);
   populateUserFilters();
-  if(typeof renderRecentUsers==='function') renderRecentUsers();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
   if(typeof populateEmpCodeDatalist==='function') populateEmpCodeDatalist();

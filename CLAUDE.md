@@ -1003,6 +1003,39 @@ touches employee/attendance/evaluation data.
     `pushSingleEmployeeSettings()`) is unchanged — this only changes
     where the raw PIN value comes from before it's hashed.
 
+48. **Follow-up to #46: after wiring "ผู้ใช้งานล่าสุด" up to real data, the user
+    asked point-blank whether it's just a duplicate of the real
+    "รายชื่อผู้ใช้ทั้งหมด" table right below it on the same page — it was.**
+    Once #46 made it pull from real `MASTER_USERS` instead of 3 fake rows,
+    it became a same-columns, same-source, strictly-shorter (top 5) view
+    of the exact table sitting directly underneath it — the only thing it
+    added was an unreliable "recency" framing (#46 already noted `u[13]`
+    can't be sorted honestly). A view that duplicates another view one
+    scroll away and can't even deliver on its own header's promise is
+    worth deleting, not fixing further — removed the card, its
+    `renderRecentUsers()` function, and all three call sites entirely
+    rather than leaving a half-used function around per the project's
+    "delete code you're sure is unused" convention. The user also asked
+    whether this overlapped with Audit Log and whether any of it reaches
+    Excel: Audit Log already logs real `'auth'` (เข้าสู่ระบบ/ออกจากระบบ)
+    events with real ISO timestamps (`appendAuditLog('auth', ...)` in
+    `doLogin()`/logout, since CLAUDE.md #17) and already pushes every
+    entry to the Excel `AuditLog` table via `pushAuditLogEntryToExcel()`
+    (#34) — so "who's been using the system" already has a real,
+    Excel-backed answer, just a *better* one than the removed table ever
+    was, since Audit Log's timestamps are real `Date().toISOString()`
+    values instead of `u[13]`'s inconsistent free text. The one real gap
+    found while checking this: `auditFilterType` had no `auth` option, so
+    login/logout entries existed and were already in Excel but couldn't
+    be filtered to on the Audit Log page itself — added `<option
+    value="auth">เข้า/ออกระบบ</option>` to close that gap. General lesson:
+    when a "recent activity" table turns out to be an unreliable
+    subset of data another page already tracks more accurately (here,
+    Audit Log's real timestamps vs. `MASTER_USERS`'s free-text
+    `lastLogin`), the fix is pointing at — or exposing a filter into —
+    the accurate source, not maintaining two competing views of the same
+    fact where one is provably worse.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
