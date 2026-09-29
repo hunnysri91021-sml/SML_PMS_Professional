@@ -1684,6 +1684,37 @@ touches employee/attendance/evaluation data.
     them all" UI must operate on one shared in-memory object between
     the load and the save, never reload from storage in between.
 
+63. **A filter row on a list page is only real if every write path that
+    re-renders that list re-applies the filter — a save/sync function
+    that calls the bare `render*(MASTER_USERS)` instead of the page's own
+    `filter*()` silently resets the view to "show everyone" the instant
+    it runs, even though the filter `<select>`s still visibly show the
+    values HR picked.** Reported as "เวลาแก้ไขพนักงานแล้วระบบไม่กรองตามที่
+    เลือกไว้" (after editing an employee, the list stops respecting the
+    selected filters) — `saveUserFromModal()` (and, found doing the same
+    audit, `applyEmployeeSettingsRows()`'s MS365 pull and
+    `loadEmployeesFromMs365()`'s wholesale employee-table sync) all
+    called `renderUsers(MASTER_USERS)` directly after writing to
+    `MASTER_USERS`, bypassing `filterUsers()` (the function the filter
+    `<select>`s' own `onchange` already calls) entirely — so the on-screen
+    filter controls kept their selected values, but the table underneath
+    them silently reverted to the full unfiltered list the moment any of
+    these three functions ran. Fixed by having all three call
+    `filterUsers()` instead of `renderUsers(MASTER_USERS)` directly
+    (`filterUsers()` itself calls `renderUsers()` with the filtered
+    subset, so this is a strict superset of the old behavior, never a
+    regression when no filter is set). The one call site left as
+    `renderUsers(MASTER_USERS)` is deliberate: the one-time page-init
+    `setTimeout` at the very top of this file, before any filter
+    `<select>` could possibly have a non-default value yet. General rule
+    this confirms, a sharper case of CLAUDE.md #3/#4 ("a filter needs a
+    real event handler wired to real data"): a working `onchange` handler
+    is not the whole story — grep every place that re-renders the same
+    list after a data write (save, sync-from-Excel, bulk import) and
+    confirm each one re-applies the filter function, not just the
+    unfiltered render function underneath it, or the filter silently
+    stops working the moment any of those other paths fires.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

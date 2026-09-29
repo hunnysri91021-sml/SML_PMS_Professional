@@ -5542,8 +5542,8 @@ function saveUserFromModal() {
     if(typeof appendAuditLog==='function') appendAuditLog('employee','เพิ่มพนักงานใหม่', id, name+' — '+position);
   }
 
-  renderUsers(MASTER_USERS);
   populateUserFilters();
+  if(typeof filterUsers==='function') filterUsers(); else renderUsers(MASTER_USERS);
   if(typeof populateGradeOptions==='function') populateGradeOptions();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
@@ -6591,7 +6591,7 @@ async function ms365SyncEmployeeSettings(){
   try{
     const rows = await graphListTableRows(EMPLOYEE_SETTINGS_TABLE);
     const applied = applyEmployeeSettingsRows(rows);
-    renderUsers(MASTER_USERS);
+    if(typeof filterUsers==='function') filterUsers(); else renderUsers(MASTER_USERS);
     if(typeof renderCycleStats==='function') renderCycleStats();
     updateMs365Status('ok','Connected');
     smlToast(`ดึงการตั้งค่าพนักงาน (PIN/แบบฟอร์ม) จาก Excel แล้ว ${applied} คน`, 'ok');
@@ -6895,8 +6895,8 @@ async function loadEmployeesFromMs365(silent=false){
       r[18] = old?.[18] || '';
     });
     MASTER_USERS.splice(0, MASTER_USERS.length, ...normalized);
-    renderUsers(MASTER_USERS);
     populateUserFilters();
+    if(typeof filterUsers==='function') filterUsers(); else renderUsers(MASTER_USERS);
     if(typeof populateGradeOptions==='function') populateGradeOptions();
     renderOrg(MASTER_USERS);
     populateOrgFilters();
