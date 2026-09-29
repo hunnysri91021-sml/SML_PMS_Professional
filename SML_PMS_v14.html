@@ -2819,7 +2819,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 
   <!-- ========== AUDIT ========== -->
   <section class="page" id="pg-audit">
-    <div class="ph"><div><h2>Audit Log</h2><p>บันทึกการเปลี่ยนแปลงจริงที่เกิดขึ้นในระบบ (เก็บในเบราว์เซอร์เครื่องนี้)</p></div>
+    <div class="ph"><div><h2>Audit Log</h2><p>บันทึกการเปลี่ยนแปลงจริงที่เกิดขึ้นในระบบ — รวมจากทุกเครื่องที่ตั้งค่า MS365 ไว้ (ดึงจาก Excel อัตโนมัติทุกครั้งที่เข้าหน้านี้/login)</p></div>
     <div class="ph-act">
       <input type="date" class="btn" id="auditFilterDate" onchange="renderAuditLog()">
       <select class="btn" id="auditFilterType" onchange="renderAuditLog()">
@@ -2831,6 +2831,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         <option value="ms365">MS365 Sync</option>
         <option value="kpi">KPI/IDP</option>
       </select>
+      <button class="btn" onclick="ms365SyncAuditLog(false)">🔄 ดึงจากทุกเครื่อง</button>
       <button class="btn" onclick="exportAuditLog()">📥 Export</button>
       <button class="btn btn-dg" onclick="clearAuditLog()">🗑️ ล้าง Log</button>
     </div></div>
@@ -3250,6 +3251,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='settings' && typeof renderRoleCards==='function') renderRoleCards();
   if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
+  if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
 });
 
@@ -4129,6 +4131,9 @@ async function doLogin(){
   }
   if(typeof ms365SyncIdp === 'function'){
     try{ await ms365SyncIdp(true); }catch(e){}
+  }
+  if(typeof ms365SyncAuditLog === 'function'){
+    try{ await ms365SyncAuditLog(true); }catch(e){}
   }
   if(typeof ms365SyncApprovalSignatures === 'function'){
     try{ await ms365SyncApprovalSignatures(true); }catch(e){}
@@ -6939,6 +6944,43 @@ function pushAuditLogEntryToExcel(entry){
   graphAddTableRow('AuditLog', [entry.at, entry.user, entry.type, entry.action, entry.target, entry.detail]).catch(()=>{});
 }
 function getAuditLog(){ try{ return JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]'); }catch(e){ return []; } }
+/* renderAuditLog() อ่านจาก localStorage ของเครื่องนี้เท่านั้น (getAuditLog()) — แต่ละ action ที่เกิด
+   ถูก push ขึ้น Excel ตาราง AuditLog จริงอยู่แล้ว (pushAuditLogEntryToExcel(), ทุกเครื่อง) เพียงแต่ไม่มี
+   ทางดึงกลับมารวมแสดง ทำให้เปิดหน้า Audit Log จากเครื่อง A เห็นแค่ประวัติที่เกิดบนเครื่อง A เท่านั้น
+   เครื่อง B login ไปก็จะไม่โผล่ในหน้านี้ของเครื่อง A เลย ทั้งที่ข้อมูลจริงอยู่ใน Excel แล้ว — ฟังก์ชันนี้
+   ดึงทั้งตาราง แล้ว "รวม" (merge) เข้ากับของเครื่องนี้แบบ dedup ด้วยคีย์ธรรมชาติ (เวลา+ผู้ใช้+การกระทำ+
+   รายการ+รายละเอียด รวมกัน เพราะตาราง AuditLog ไม่มีคอลัมน์ id จริง) ไม่ใช่แทนที่ทั้งก้อน เพื่อไม่ให้
+   เหตุการณ์ที่เพิ่งเกิดบนเครื่องนี้แต่ push ไป Excel ยังไม่ทันสำเร็จ (fire-and-forget) หายไปจากหน้าจอ */
+function auditEntryKey(e){ return [e.at, e.user, e.type, e.action, e.target, e.detail].join('|'); }
+async function ms365SyncAuditLog(silent=true){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  try{
+    const rows = await graphListTableRows('AuditLog');
+    if(!rows.length) return;
+    const remote = rows.map(r => ({
+      at: String(r[0]??'').trim(), user: String(r[1]??'').trim(), type: String(r[2]??'').trim(),
+      action: String(r[3]??'').trim(), target: String(r[4]??'').trim(), detail: String(r[5]??'').trim()
+    })).filter(e=>e.at);
+    if(!remote.length) return;
+    const local = getAuditLog();
+    const seen = new Set(local.map(auditEntryKey));
+    const merged = local.slice();
+    let added = 0;
+    remote.forEach(e=>{
+      const k = auditEntryKey(e);
+      if(!seen.has(k)){ seen.add(k); merged.push(e); added++; }
+    });
+    if(added){
+      merged.sort((a,b) => new Date(b.at) - new Date(a.at));
+      localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(merged.slice(0,1000)));
+      if(document.getElementById('pg-audit')?.classList.contains('on') && typeof renderAuditLog==='function') renderAuditLog();
+    }
+    if(!silent) smlToast(added ? `ดึงประวัติจากทุกเครื่องแล้ว (+${added} รายการใหม่)` : 'ประวัติครบถ้วนอยู่แล้ว ไม่มีรายการใหม่','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึง Audit Log จาก Excel ไม่สำเร็จ: '+e.message,'warn');
+  }
+}
 function clearAuditLog(){
   if(!confirm('ล้าง Audit Log ทั้งหมดในเครื่องนี้? การกระทำนี้ย้อนกลับไม่ได้')) return;
   localStorage.removeItem(AUDIT_LOG_KEY);
@@ -8592,6 +8634,7 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncFormWeights === 'function'){ try{ await ms365SyncFormWeights(true); }catch(e){} }
       if(typeof ms365SyncIdp === 'function'){ try{ await ms365SyncIdp(true); }catch(e){} }
       if(typeof ms365SyncApprovalSignatures === 'function'){ try{ await ms365SyncApprovalSignatures(true); }catch(e){} }
+      if(typeof ms365SyncAuditLog === 'function'){ try{ await ms365SyncAuditLog(true); }catch(e){} }
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
     }catch(e){}

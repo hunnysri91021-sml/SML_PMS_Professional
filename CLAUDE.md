@@ -1036,6 +1036,33 @@ touches employee/attendance/evaluation data.
     the accurate source, not maintaining two competing views of the same
     fact where one is provably worse.
 
+49. **Follow-up to #48: confirmed the honest answer to "will another
+    device's login show up here?" was NO — `renderAuditLog()` only ever
+    reads `getAuditLog()`, which is `localStorage` on the one device
+    being looked at, even though every entry is already pushed to the
+    Excel `AuditLog` table (#34).** So opening the Audit Log page on
+    Device A only ever showed Device A's own history; a login on Device
+    B was real, in Excel, and completely invisible in the app on any
+    other device. Added `ms365SyncAuditLog(silent)`: pulls the whole
+    `AuditLog` Excel table and **merges** it into the local list (never
+    replaces it outright) via `auditEntryKey(e)` — a dedup key built from
+    all six fields joined together, since the `AuditLog` table has no
+    real id column to match on — so an entry that exists in both (this
+    device's own action, already pushed) collapses to one row instead of
+    showing twice, while an event from *only* the local side (pushed to
+    Excel too recently for this pull to have caught it, since the push
+    is fire-and-forget) is never dropped just because the remote copy
+    hasn't landed yet. Wired into both silent-sync groups (`doLogin()`
+    and `tryRestoreSession()`, the same group #32/#33 established) and
+    into the Audit page's own nav dispatch (`p==='audit'`) so opening the
+    tab always pulls fresh, plus a manual "🔄 ดึงจากทุกเครื่อง" button for
+    an on-demand refresh. The page's own description text was updated
+    from "เก็บในเบราว์เซอร์เครื่องนี้" (stored in this browser) to say it
+    now aggregates every MS365-configured device — leaving the old
+    wording would have been the exact CLAUDE.md #34 problem (a doc claim
+    the code no longer backs) in the other direction, claiming something
+    *worse* than what the code now actually does.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
