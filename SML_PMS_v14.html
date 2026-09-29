@@ -3325,8 +3325,8 @@ const avMap={sysadmin:['SYS','#dc2626'],admin:['HR','#3b82f6'],exec:['MD','#8b5c
 /* ====== NAV PERMISSIONS — sysadmin กำหนดได้ว่าแต่ละบทบาทเห็นเมนูไหนบ้าง ======
    ค่าตั้งต้นดึงจาก data-role ที่ฝังไว้ในเมนูแต่ละอัน แล้ว sysadmin แก้ไข/บันทึกทับได้
    (บันทึกใน localStorage ของเครื่องนี้ — เป็นการควบคุม UI เท่านั้น สิทธิ์เข้าถึงข้อมูลจริงยังคุมที่ SharePoint) */
-const NAV_ROLES = ['admin','exec','l2','l1','emp'];
-const NAV_ROLE_LABEL = {admin:'👑 Admin',exec:'💼 AGM/MD',l2:'🎯 ผจก.ส่วน',l1:'👔 หัวหน้าแผนก',emp:'🙋 พนักงาน'};
+const NAV_ROLES = ['admin','exec','gm','l2','l1','emp'];
+const NAV_ROLE_LABEL = {admin:'👑 Admin',exec:'💼 AGM/MD',gm:'🏢 GM',l2:'🎯 ผจก.ส่วน',l1:'👔 หัวหน้าแผนก',emp:'🙋 พนักงาน'};
 const NAV_PERMS_KEY = 'smlPmsNavPerms';
 const DEFAULT_NAV_PERMS = {};
 document.querySelectorAll('.nav-item[data-pg][data-role]').forEach(el=>{

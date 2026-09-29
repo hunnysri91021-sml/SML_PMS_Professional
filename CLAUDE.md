@@ -1715,6 +1715,39 @@ touches employee/attendance/evaluation data.
     unfiltered render function underneath it, or the filter silently
     stops working the moment any of those other paths fires.
 
+64. **Adding a new role (#61's `gm`) means grepping every place role logic
+    branches — and the "สิทธิ์เข้าถึงเมนู (รายแถบ)" nav-permission editor
+    on the Settings page turned out to be one more list #61 missed.**
+    User's screenshot showed the editor's column headers as Admin/AGM-MD/
+    ผจก.ส่วน/หัวหน้าแผนก/พนักงาน — no GM column at all, so sysadmin had no
+    way to grant or revoke GM's menu access from this screen even though
+    the `gmapprove` nav item itself already carries `data-role="gm,exec"`
+    (#61) and is correctly gm-visible by default. The bug was
+    `NAV_ROLES = ['admin','exec','l2','l1','emp']` (near the top of the
+    NAV PERMISSIONS block) — a second, separate role-key array from
+    `ROLE_DEFS`/`avMap`/etc. that #61's "add `gm` everywhere role
+    enumeration exists" pass didn't catch, since it's defined much
+    earlier in the file, well before the block '#61 was actively editing.
+    Fixed by adding `gm` to `NAV_ROLES` and `NAV_ROLE_LABEL` (`'🏢 GM'`,
+    matching the label already used in `#roleSel`/`mu_role`/`avMap`) —
+    every other part of the editor (`renderNavPermEditor()`'s column
+    generation, `saveNavPermsFromForm()`'s checkbox read-back) already
+    iterates `NAV_ROLES` generically, so this one array was the only
+    real fix needed. Verified with a test that confirms the GM column
+    now renders, its checkboxes reflect `DEFAULT_NAV_PERMS` (built from
+    each nav item's real `data-role`) correctly, and — the part that
+    actually matters, not just that a checkbox exists — toggling GM's
+    access to a page, saving, and switching the demo view to an actual
+    `gm` user changes what that role can see, matching CLAUDE.md #4's
+    "verify a control actually changes rendered output, not just that
+    it exists in the DOM." General lesson sharper than #37/#61's own
+    role-enumeration list: when a role is genuinely new, a single grep
+    for one obvious constant (`ROLE_DEFS`, `avMap`) is not enough —
+    search the whole file for every *independent* array of the 6-then-7
+    role keys (`NAV_ROLES` here happened to predate and duplicate that
+    same enumeration under a different name for a different subsystem)
+    before considering a new-role rollout complete.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
