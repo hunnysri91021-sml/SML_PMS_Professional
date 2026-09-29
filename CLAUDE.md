@@ -1409,6 +1409,36 @@ touches employee/attendance/evaluation data.
     recorded yet) sends no edit-notification, and an edit after an L2
     review does email that specific L2's real address.
 
+59. **Follow-up to #58: user asked to confirm cross-device visibility was
+    truly "the same" now, and pointed out it only refreshed on page entry
+    — a page left open while someone else saved from another device
+    would show stale data until the person left and came back. Asked for
+    auto-refresh.** Added `startEvalAutoSync()`/`stopEvalAutoSync()`,
+    the exact same pattern `startMs365AutoSync()`/`stopMs365AutoSync()`
+    already established for the MS365 Excel tab (sync immediately on
+    entry, then `setInterval` every N seconds while the page stays open,
+    a single shared timer variable so navigating between pages in the
+    same group never spawns duplicates) — 30 seconds instead of that
+    page's 5 minutes, since evaluation workflow data is something a
+    person is actively waiting on mid-task, not slow-changing master
+    data. Replaced the one-shot `ms365SyncAppraisals(true)` call in the
+    nav dispatcher (added in #58) with start/stop calls wired to the
+    same page list (review/calib/approve/team/report/cycle/myresult),
+    and — critically — `stopEvalAutoSync()` on every *other* page, or
+    the timer would keep firing forever in the background even after
+    navigating away from any page that needs it, burning a Graph/Worker
+    call every 30s for no reason (the same "leaves a timer running after
+    the reason for it ends" mistake `stopMs365AutoSync()` already exists
+    to prevent for the MS365 tab). No new cleanup needed on logout —
+    `doLogout()` already calls `location.reload()`, which clears every
+    JS timer as a side effect. Verified with a test that enters an
+    eval-workflow page (timer starts, sync fires immediately), leaves it
+    (timer stops — confirmed by checking the timer variable is cleared,
+    not just inferring from behavior), and moves between several
+    eval-workflow pages in a row (must reuse one timer, not accumulate
+    a new interval on every nav click, which would have silently
+    multiplied the sync frequency).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

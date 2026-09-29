@@ -3240,14 +3240,21 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='settings' && typeof renderNavPermEditor==='function') renderNavPermEditor();
   if(p==='settings' && typeof renderRoleCards==='function') renderRoleCards();
   if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
-  /* เปิดหน้า workflow/รายงานที่อ่านคิวประเมิน (getDrafts()) ทุกครั้ง ให้ดึงจาก Excel มา merge ก่อนเสมอ
-     (silent) — กันปัญหาที่หัวหน้าประเมินจากเครื่องอื่นแล้วคนที่มีสิทธิเห็นบนเครื่องนี้ไม่เห็นข้อมูล
-     อัปเดตจนกว่าจะ login ใหม่/รีเฟรชหน้าเข้า login gate เท่านั้น (ดู CLAUDE.md #58) — จงใจไม่รวม 'dash':
-     `setRole('admin')` ท้ายไฟล์คลิกเข้าหน้า dash แบบ synchronous ตอน parse สคริปต์ ก่อนที่
-     DEFAULT_MS365_CONFIG (ประกาศทีหลังในไฟล์นี้มาก) จะ initialize เสร็จ เรียก loadMs365Config()
-     ตอนนั้นจะพังด้วย TDZ ทันที — แดชบอร์ดเองก็ได้ข้อมูลอัปเดตอยู่แล้วผ่าน renderWorkflowPages() ที่ถูก
-     เรียกจากการ sync ของหน้าอื่นที่เพิ่งเปิดไปก่อนหน้านี้ในเซสชันเดียวกัน */
-  if((p==='review'||p==='calib'||p==='approve'||p==='team'||p==='report'||p==='cycle'||p==='myresult') && typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true);
+  /* เปิดหน้า workflow/รายงานที่อ่านคิวประเมิน (getDrafts()) ให้ดึงจาก Excel มา merge ก่อนเสมอ (silent)
+     ทันทีที่เข้าหน้า แล้ว auto-refresh ซ้ำทุก 30 วินาทีระหว่างที่ยังเปิดหน้านั้นค้างอยู่ (ผู้ใช้ขอเพิ่ม —
+     เดิมดึงแค่ตอนเข้าหน้าครั้งเดียว ถ้าเปิดค้างไว้ระหว่างที่คนอื่นบันทึกจากเครื่องอื่นจะไม่เห็นจนกว่าจะ
+     ออกแล้วเข้าใหม่) ใช้รูปแบบเดียวกับ startMs365AutoSync()/stopMs365AutoSync() ด้านบน — หยุด timer
+     ทันทีที่ออกจากกลุ่มหน้านี้ กันไม่ให้ยิง sync เปล่าๆ ตอนอยู่หน้าอื่นที่ไม่เกี่ยวกับคิวประเมินเลย
+     (ดู CLAUDE.md #58/#59) — จงใจไม่รวม 'dash': `setRole('admin')` ท้ายไฟล์คลิกเข้าหน้า dash แบบ
+     synchronous ตอน parse สคริปต์ ก่อนที่ DEFAULT_MS365_CONFIG (ประกาศทีหลังในไฟล์นี้มาก) จะ
+     initialize เสร็จ เรียก loadMs365Config() ตอนนั้นจะพังด้วย TDZ ทันที — แดชบอร์ดเองก็ได้ข้อมูล
+     อัปเดตอยู่แล้วผ่าน renderWorkflowPages() ที่ถูกเรียกจากการ sync ของหน้าอื่นที่เพิ่งเปิดไปก่อนหน้านี้
+     ในเซสชันเดียวกัน */
+  if(p==='review'||p==='calib'||p==='approve'||p==='team'||p==='report'||p==='cycle'||p==='myresult'){
+    if(typeof startEvalAutoSync==='function') startEvalAutoSync();
+  } else {
+    if(typeof stopEvalAutoSync==='function') stopEvalAutoSync();
+  }
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
@@ -6988,6 +6995,22 @@ async function ms365SyncAppraisals(silent=true){
     if(!silent) smlToast('ดึงคิวประเมินจาก Excel ไม่สำเร็จ: '+e.message,'warn');
     return 0;
   }
+}
+/* Auto-refresh คิวประเมิน — ผู้ใช้ขอให้หน้าที่เปิดค้างไว้ (สอบทาน L2/Calibration/อนุมัติ/ประเมินทีม/
+   รายงาน/รอบประเมิน/ผลประเมิน) เห็นข้อมูลจากเครื่องอื่นโดยไม่ต้องออกแล้วกลับเข้าหน้าใหม่ หรือรีเฟรช
+   เอง — เดิม ms365SyncAppraisals() (CLAUDE.md #58) ดึงแค่ตอนคลิกเข้าหน้าครั้งเดียว ถ้าเปิดค้างไว้ระหว่าง
+   ที่คนอื่นบันทึกจากเครื่องอื่นจะไม่เห็นจนกว่าจะออกแล้วเข้าใหม่ เพิ่ม setInterval 30 วินาที ตามรูปแบบ
+   เดียวกับ startMs365AutoSync()/stopMs365AutoSync() (หน้า MS365 Excel, ทุก 5 นาที) — ใช้ 30 วินาทีที่
+   สั้นกว่าเพราะข้อมูลประเมินเป็นงาน workflow ที่ผู้ใช้รออยู่ตรงหน้าจริงๆ ต่างจากข้อมูลพนักงานที่เปลี่ยน
+   ไม่บ่อย ใช้ตัวแปร timer แยกกันเพื่อไม่ให้ปิด/เปิดพร้อมกันโดยไม่ตั้งใจ */
+var evalAutoSyncTimer = null;
+function startEvalAutoSync(){
+  if(typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true);
+  if(evalAutoSyncTimer) return;
+  evalAutoSyncTimer = setInterval(()=>{ if(typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true); }, 30*1000);
+}
+function stopEvalAutoSync(){
+  if(evalAutoSyncTimer){ clearInterval(evalAutoSyncTimer); evalAutoSyncTimer=null; }
 }
 /* จำไว้ว่าใคร (รหัสพนักงานจริง ไม่ใช่แค่ชื่อ — ดู CLAUDE.md #1) เป็นคนดำเนินการขั้นล่าสุด (สอบทาน L2 /
    Calibration / อนุมัติ / ตีกลับ) กับใบประเมินของแต่ละคนแต่ละรอบ — ใช้แจ้งอีเมลกลับไปหาคนนั้นถ้าใบ
