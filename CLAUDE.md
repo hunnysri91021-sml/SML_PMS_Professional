@@ -2013,6 +2013,57 @@ touches employee/attendance/evaluation data.
     condition tacked on are exactly the kind of near-miss an exact-string
     search silently walks past.
 
+70. **User's screenshot of the Add/Edit Employee "สายการบังคับบัญชา" section
+    showed only 3 fields labeled "หัวหน้า L1" / "ผจก.ส่วน L2" / "ผู้อนุมัติ"
+    and asked for the real 4-level chain: หัวหน้าหน่วย L1, หัวหน้าแผนก L2,
+    ผู้จัดการส่วน L3, GM L4 — "แก้ส่วนอื่นด้วยที่เกี่ยวข้อง" (fix the other
+    related parts too).** The GM column had already been added to
+    `MASTER_USERS[19]`/`EXCEL_EMPLOYEE_COLS` in #68 for the Excel
+    round-trip, but — flagged as a known gap at the time — never got a
+    real edit UI, so `emp[19]` was always empty in practice; every push
+    to Excel was silently writing a blank GM cell regardless of what
+    HR actually knew. This request is what finally closed that gap.
+    Renamed the 3 existing labels to match the real 4-tier hierarchy
+    (`mu_l1`→"หัวหน้าหน่วย (L1)", `mu_l2`→"หัวหน้าแผนก (L2)",
+    `mu_approver`→"ผู้จัดการส่วน (L3)" — purely cosmetic, the underlying
+    field ids/storage/semantics are untouched, so every consumer that
+    branches on role — `getEvaluationAssignments()`'s #22 logic,
+    `getMyScopedEmpCodes()`, evaluation-chain resolution — keeps working
+    with zero changes) and added a real 4th field, `mu_gm`, following the
+    *exact* same pattern #18/#29 already established for the other
+    three: a code-entry `<input list="empCodeList">` + `<select>` pair,
+    wired into `onSupervisorCodeInput('gm')`/`onSupervisorSelectChange('gm')`
+    (both already generic by field-name suffix — zero changes needed
+    there), `populateSupervisorSelects()`'s id list, `clearUserModalForm()`'s
+    reset list, `fillUserFormFields()`'s `setSupervisor('gm', emp[19])`,
+    and `saveUserFromModal()` reading `mu_gm` and appending it as the
+    newly-real `gm` element of the saved row (never inserted mid-array,
+    per #5 — `evalLevel` stays at 18, `gm` at 19). Also updated the two
+    other places the same 3-field chain was displayed with the old
+    labels and a missing GM column — the employee detail view (`udL1`/
+    `udL2`/`udApprover` + new `udGM`) and the "ผังองค์กร" org chart
+    table (added a `GM (L4)` column reading `u[19]`, relabeled the
+    other three headers to match) — since a relabel in one place and not
+    its siblings would just recreate CLAUDE.md #34's "two views of the
+    same fact that disagree" trap in miniature. Left the CSV bulk-import
+    template (`EMP_TEMPLATE_THAI`) and a few doc-comment/log-string
+    mentions of the old 3-field names untouched for now — they're either
+    plain documentation text with no functional effect, or would need a
+    separate real column-count change to the import parser, which the
+    user didn't ask for and is worth its own pass rather than folding in
+    silently. Verified end-to-end with a test that fills all 4 fields
+    on a synthetic new employee through the real form, saves, confirms
+    all 4 land at their correct `MASTER_USERS` indices (9/10/11/19),
+    reopening the edit form shows the saved GM value back, the detail
+    view and org chart table both display it, and a (mocked) Excel push
+    now actually carries the real GM value instead of the blank string
+    every prior push would have sent. General lesson: when a field is
+    added to a data model "for round-trip correctness" (#68's GM column)
+    without also building its edit UI, treat that as an explicitly known
+    half-finished feature, not a done one — the round-trip logic being
+    correct doesn't help if nothing in the app can ever populate the
+    field with a real value in the first place.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
