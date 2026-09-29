@@ -1270,6 +1270,43 @@ touches employee/attendance/evaluation data.
     type-twice confirmation before committing — there is no "check it
     against the database and fix it" recovery path once it's hashed.
 
+56. **The printed evaluation form's logo (`.F-logo-box`) was never a real
+    logo — just a text box reading "SML" on a blue gradient, with a
+    "SMG Group" caption underneath — and the batch-print path
+    (`printBatchApproved()`, "พิมพ์ทั้งหมดที่อนุมัติแล้ว") didn't share
+    that header at all: it used a completely separate, plainer inline-
+    styled block with no logo and none of the `.F`-class sizing that
+    `printEvalForm()` had already been carefully tuned to fit one A4
+    page (7-9pt fonts, `@page` margins).** HR sent the company's real
+    circular logo image and asked for it on the printed form, "balanced
+    to fit A4," for every record. Embedded the real logo as a base64
+    `data:image/png` constant (`SML_LOGO_DATA_URI`, defined once near
+    the top of the main `<script>` block) — kept as an embedded data URI
+    rather than a separate file, matching this project's single-file,
+    no-build-step convention (an `<img src="assets/logo.png">` would work
+    on `file://` but silently 404 if anyone ever split deployment, and
+    there's no asset pipeline here to catch that). `.F-logo-col`'s
+    background changed from the blue gradient to white with a border
+    (the real logo has its own white background and full brand colors
+    baked in — placing it on a colored box would show an ugly white
+    square) and the redundant `.F-logo-smg` "SMG Group" caption was
+    deleted outright (the real logo already spells out the full Thai +
+    English company name, so the old caption was now duplicate content,
+    not additive). **Never leave a second print path with its own
+    hand-rolled layout when a first one already exists and is correctly
+    tuned** — same shape of drift as CLAUDE.md #34/#48 (two views of the
+    same fact that can silently disagree): rewrote `printBatchApproved()`
+    to build each employee's page from the *same* `.F`/`.F-header`/
+    `.F-logo-col`/`.F-info`/`.F-tbl`/`.F-result` classes `printEvalForm()`
+    uses, with the same real logo, instead of maintaining a second,
+    visually inconsistent template that could drift out of sync with the
+    real one's A4-fit tuning. Verified with a Playwright test that
+    measures each rendered batch page's height against the real content
+    budget (297mm page − 13mm top/bottom `@page` margin ≈ 1073px @96dpi)
+    and confirms every page renders well under it, plus a rendered
+    screenshot of the single-print form to visually confirm the real
+    logo (not a placeholder box) appears correctly sized in the header.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
