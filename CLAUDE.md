@@ -1632,6 +1632,58 @@ touches employee/attendance/evaluation data.
     separate role-permission test confirming GM/L2/Admin/exec each see
     exactly the nav pages their new real responsibilities call for.
 
+62. **User asked point-blank where "which employees/departments are
+    allowed to self-evaluate" is configured — investigated honestly and
+    confirmed no such restriction existed anywhere in the codebase: any
+    active employee code could open "ประเมินตนเอง" and get a form.**
+    User then asked for it to be built: "ให้ admin sysmtem กำหนดว่าใคร
+    หรือแผนกไหนที่ประเมินตนเองได้." Added a new admin-only settings page
+    (`pg-evaleligibility`, nav item "🎯 สิทธิ์ประเมินตนเอง") and store,
+    `EVAL_ELIGIBILITY` (`EVAL_ELIGIBILITY_KEY`, `localStorage`, mode
+    `'all'` default so nothing changes for anyone until Admin explicitly
+    switches to `'restricted'` — same default-safe-until-changed pattern
+    as `NAV_PERMS`/`ROLE_PERMS`, #6). Two allow mechanisms, combined by
+    OR: a checked set of แผนก/Section values (`depts[]`, populated from
+    the same `getOrgMasterValues('sections')` list #51/#52 already
+    established — never a separate hand-typed department list, per #3)
+    and an individual employee-code allowlist (`emps[]`, for a one-off
+    exception outside their department's setting) — `isEligibleForSelfEval(emp)`
+    checks both. `admin`/`sysadmin` always return eligible regardless of
+    mode, since they legitimately need to open any employee's form to
+    check/configure it (the same reasoning `onEvalCodeGateChange()`
+    already carves out for them per #23). Wired the actual enforcement
+    into that same real chokepoint, `onEvalCodeGateChange()` — the one
+    place every self-eval attempt already resolves the target employee
+    by code before assigning a form level (#23) — checking eligibility
+    immediately after resolving `emp` and, if ineligible, disabling
+    every level button and showing a clear red message instead of
+    silently continuing to assign a level; a settings page with no real
+    caller wired in would have been exactly the CLAUDE.md #10 shape of
+    bug (a feature that "looks" complete but has zero actual effect).
+    **Caught and fixed a real latent bug while wiring this up**: the
+    first draft of `addEvalEligibilityEmp()`/`removeEvalEligibilityEmp()`/
+    `renderEvalEligibilityLists()` each called `loadEvalEligibility()`
+    (which re-reads and overwrites the module-level store from
+    `localStorage`) on every call — so adding one employee, then adding
+    a second before clicking "บันทึกการตั้งค่า", silently discarded the
+    first add: the second call's `loadEvalEligibility()` re-read the
+    stale on-disk copy (still missing the first, unsaved add) and
+    clobbered the in-memory object holding it. Fixed by having those
+    three functions read/mutate the module-level `EVAL_ELIGIBILITY`
+    variable directly instead of reloading from storage — only the page
+    entry point (`renderEvalEligibilityPage()`, called once when the
+    page is opened) still calls `loadEvalEligibility()`, which is the
+    one place a fresh read from storage is actually correct. Verified
+    with a test that stages two employee adds in a row before saving
+    and confirms both survive (not just the second one overwriting the
+    first). General lesson, a sharper case of CLAUDE.md #12: a "load
+    from storage" helper is safe to call once when a page opens, but
+    calling it again from every subsequent in-page mutation function
+    silently discards whatever hasn't been explicitly saved yet — any
+    multi-step "stage several changes, then one save button commits
+    them all" UI must operate on one shared in-memory object between
+    the load and the save, never reload from storage in between.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
