@@ -1100,6 +1100,52 @@ touches employee/attendance/evaluation data.
     contains — the fix is the same either way: populate from what the
     data actually has, union'd with any real fixed scale, never assume.
 
+51. **HR asked for a settings page to add/edit the master lists behind
+    กลุ่มงาน/แผนก/ส่วน/ฝ่าย/เกรด/ตำแหน่งงาน, and for Add/Edit Employee to use
+    dropdowns for all of them instead of free typing, "จะได้ไม่ผิดพลาด."**
+    Group/Section/Division/Department already were `<select>`s, but
+    `getOrgStructure()` built their options purely from *existing*
+    `MASTER_USERS` rows — a real chicken-and-egg gap: there was no way to
+    create a brand-new group/department ahead of hiring its first person
+    into it, since nothing could offer it as an option until someone
+    already had it. ตำแหน่งงาน (`mu_position`) wasn't even a dropdown —
+    still a free-text `<input>`, so typos/inconsistent spellings were
+    always possible there regardless. Added a real master-data layer:
+    `ORG_MASTER` (`ORG_MASTER_KEY`, `localStorage`, explicitly labeled
+    in the UI as local-only for now, not yet pushed to Excel — same
+    "be explicit rather than imply cross-device" rule as CLAUDE.md #8b)
+    holding a plain array per field (`groups`/`sections`/`divisions`/
+    `departments`/`positions`/`grades`), with grades seeded from the
+    same 6-value scale #50 already established. New page "รายการหลัก"
+    (`pg-orgmaster`, admin-only nav) lets Admin add a new item to any of
+    the 6 lists, or delete one — but `removeOrgMasterItem()` **refuses**
+    to delete a value any real employee currently has (checks
+    `MASTER_USERS` by the field's `empIdx`), so the master-list page
+    can't be used to accidentally break an existing employee's dropdown
+    out from under them. `getOrgMasterValues(fieldKey)` is the one real
+    source every consumer reads: the *union* of the admin-managed list
+    and whatever real values already exist in `MASTER_USERS` for that
+    field — never just one or the other, for the same reason #50 fixed
+    Grade this way: a real value that's never been formally added to the
+    master list (e.g. synced fresh from Excel) must still show up as
+    selectable, or editing that employee silently reverts their real
+    field to the browser's default `<select>` fallback. `populateOrgSelects()`
+    now builds all 6 fields' options from `getOrgMasterValues()`
+    directly (position included) instead of the old group→section→
+    division/department cascade — flattened deliberately, since forcing
+    a cascade back onto admin-managed lists would reintroduce the same
+    chicken-and-egg problem this fix exists to remove (a new section
+    couldn't be added without first picking one of the — possibly
+    nonexistent yet — groups it's supposed to cascade from).
+    `getOrgStructure()`/`onOrgGroupChange()`/`onOrgSectionChange()` were
+    deleted outright rather than left dead, per this project's
+    delete-unused-code convention; `fillUserFormFields()` now calls
+    `populateOrgSelects()` once up front (mirroring the exact
+    `populateGradeOptions()`-before-`set()` pattern #50 introduced)
+    before setting any of the 6 fields, so an existing employee's real
+    values are always addable-if-missing before the form tries to
+    select them.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

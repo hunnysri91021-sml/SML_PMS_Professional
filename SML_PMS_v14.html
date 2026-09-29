@@ -1421,6 +1421,7 @@ tbody tr:hover{background:#f0f6ff!important}
   <div class="nav-item" data-pg="rules" data-role="admin"><span class="ic">⏱️</span> เกณฑ์คะแนน Z</div>
   <div class="nav-item" data-pg="import" data-role="admin"><span class="ic">📥</span> นำเข้าเวลา HRGO</div>
   <div class="nav-item" data-pg="org" data-role="admin"><span class="ic">🏢</span> ผังองค์กร</div>
+  <div class="nav-item" data-pg="orgmaster" data-role="admin"><span class="ic">🗂️</span> รายการหลัก (กลุ่ม/แผนก/ตำแหน่ง/เกรด)</div>
   <div class="nav-item" data-pg="ms365" data-role="admin"><span class="ic">☁️</span> MS365 Excel</div>
   <div class="nav-item" data-pg="settings" data-role="admin"><span class="ic">👤</span> ผู้ใช้ & สิทธิ์</div>
 
@@ -2198,6 +2199,15 @@ tbody tr:hover{background:#f0f6ff!important}
         <tbody id="orgRows"></tbody>
       </table></div>
     </div>
+  </section>
+
+  <!-- ========== รายการหลัก: กลุ่ม/แผนก/ส่วน/ฝ่าย/ตำแหน่ง/เกรด ========== -->
+  <section class="page" id="pg-orgmaster">
+    <div class="ph"><div><h2>🗂️ รายการหลัก — กลุ่ม/แผนก/ส่วน/ฝ่าย/ตำแหน่ง/เกรด</h2>
+      <p>จัดการรายการที่ใช้เป็นตัวเลือก (dropdown) ในฟอร์ม "เพิ่ม/แก้ไขพนักงาน" — เพิ่มรายการใหม่ที่นี่ก่อน
+        แล้วจะเลือกได้ทันทีตอนเพิ่มพนักงาน ไม่ต้องพิมพ์เอง กันสะกดผิด/สังกัดไม่ตรงกับผังองค์กร</p></div></div>
+    <div class="al al-i"><span>ℹ️</span><div>รายการที่มีพนักงานใช้งานอยู่จริง (ซิงก์จาก Excel หรือกรอกในระบบ) จะปรากฏในรายการนี้ให้อัตโนมัติอยู่แล้ว — ใช้หน้านี้เพื่อ "เพิ่มรายการใหม่ล่วงหน้า" ก่อนมีพนักงานคนแรกในกลุ่ม/ตำแหน่งนั้น เท่านั้น รายการที่มีพนักงานใช้อยู่จะลบออกไม่ได้ (ป้องกันข้อมูลพนักงานเสียหาย) — เก็บในเบราว์เซอร์เครื่องนี้เท่านั้น (local, ยังไม่ sync ขึ้น Excel)</div></div>
+    <div id="orgMasterArea"></div>
   </section>
 
 
@@ -3227,7 +3237,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 
 <script>
 /* ====== NAVIGATION ====== */
-const titles={dash:'แดชบอร์ด SML — ภาพรวมระบบ',myeval:'ขั้นตอนที่ 1 — ประเมินตนเอง',team:'ขั้นตอนที่ 2 — ประเมินทีมงาน',review:'ขั้นตอนที่ 3 — สอบทาน L2',calib:'ขั้นตอนที่ 4 — Calibration',approve:'ขั้นตอนที่ 5 — อนุมัติ AGM/MD',myresult:'ขั้นตอนที่ 6 — ผลการประเมิน',cyclesetup:'ตั้งค่า — รอบประเมิน',tpl:'ตั้งค่า — แบบฟอร์ม 4 ระดับ',goal:'ตั้งค่า — เป้าหมาย & KPI (Admin)',rules:'ตั้งค่า — เกณฑ์คะแนนเวลาทำงาน Z',import:'ตั้งค่า — นำเข้าข้อมูลเวลา HRGO',org:'ตั้งค่า — ผังองค์กร & พนักงาน',ms365:'ตั้งค่า — MS365 Excel Basic',settings:'ตั้งค่า — ผู้ใช้ & สิทธิ์',cycle:'รายงาน — ประวัติรอบประเมิน',report:'รายงาน & Export',audit:'Audit Log'};
+const titles={dash:'แดชบอร์ด SML — ภาพรวมระบบ',myeval:'ขั้นตอนที่ 1 — ประเมินตนเอง',team:'ขั้นตอนที่ 2 — ประเมินทีมงาน',review:'ขั้นตอนที่ 3 — สอบทาน L2',calib:'ขั้นตอนที่ 4 — Calibration',approve:'ขั้นตอนที่ 5 — อนุมัติ AGM/MD',myresult:'ขั้นตอนที่ 6 — ผลการประเมิน',cyclesetup:'ตั้งค่า — รอบประเมิน',tpl:'ตั้งค่า — แบบฟอร์ม 4 ระดับ',goal:'ตั้งค่า — เป้าหมาย & KPI (Admin)',rules:'ตั้งค่า — เกณฑ์คะแนนเวลาทำงาน Z',import:'ตั้งค่า — นำเข้าข้อมูลเวลา HRGO',org:'ตั้งค่า — ผังองค์กร & พนักงาน',orgmaster:'ตั้งค่า — รายการหลัก (กลุ่ม/แผนก/ตำแหน่ง/เกรด)',ms365:'ตั้งค่า — MS365 Excel Basic',settings:'ตั้งค่า — ผู้ใช้ & สิทธิ์',cycle:'รายงาน — ประวัติรอบประเมิน',report:'รายงาน & Export',audit:'Audit Log'};
 document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   const p=n.dataset.pg;
   if(!p) return;
@@ -3253,6 +3263,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
+  if(p==='orgmaster' && typeof renderOrgMasterLists==='function') renderOrgMasterLists();
 });
 
 /* ====== ROLE SWITCH ====== */
@@ -4415,26 +4426,10 @@ function populateUserFilters(){
   rebuild(deptSel, depts, 'ทุกฝ่าย (Dept)');
 }
 
-/* `<select id="mu_grade">` เดิมมี <option> ฝังตายตัวแค่ 6 ค่า (G1/G2/G3/M1/M2/E1) — ถ้า Grade จริงของ
-   พนักงานที่ sync มาจาก Excel ไม่ตรงกับ 6 ค่านี้เป๊ะ (เช่น มีเกรดอื่นที่ HR ใช้จริงแต่ไม่อยู่ในลิสต์ หรือ
-   ช่องว่าง/ตัวพิมพ์เล็กใหญ่ต่างกันเล็กน้อย) `el.value = emp[8]` ใน fillUserFormFields() จะเซ็ตไม่ติด
-   (ไม่มี <option> ให้ match) เบราว์เซอร์จะ fallback ไปโชว์ตัวเลือกแรกในลิสต์แทนแบบเงียบๆ — MASTER_USERS
-   ยังเก็บค่าจริงถูกต้องอยู่ในหน่วยความจำ แต่หน้าจอฟอร์มแก้ไขจะดูเหมือน "Grade ไม่ได้ดึงจากฐานข้อมูล"
-   ทั้งที่ดึงมาแล้วจริงๆ แค่แสดงผลไม่ได้ (บั๊กแบบเดียวกับ CLAUDE.md #3 — dropdown ต้อง populate จาก
-   ข้อมูลจริง ไม่ใช่ hardcode ทับ) แก้โดยรวมค่าฐาน 6 ค่ากับค่า Grade จริงทุกค่าที่มีอยู่ใน MASTER_USERS
-   เข้าด้วยกัน (union) เป็นตัวเลือกเสมอ — เรียกทั้งตอน init/หลัง sync/หลังบันทึก (เหมือน
-   populateUserFilters()) และเรียกซ้ำใน fillUserFormFields() ก่อนเซ็ตค่า เพื่อการันตีว่าค่าจริงของคนที่
-   กำลังแก้ไขมีตัวเลือกให้เลือกเสมอ ไม่ว่าจะ sync ล่าสุดเมื่อไหร่ */
-const GRADE_BASE_OPTIONS = ['G1','G2','G3','M1','M2','E1'];
-function populateGradeOptions(){
-  const sel = document.getElementById('mu_grade');
-  if(!sel) return;
-  const cur = sel.value;
-  const realGrades = MASTER_USERS.map(u=>u[8]).filter(Boolean);
-  const values = [...new Set([...GRADE_BASE_OPTIONS, ...realGrades])];
-  sel.innerHTML = values.map(v=>`<option value="${v}">${v}</option>`).join('');
-  if(values.includes(cur)) sel.value = cur;
-}
+/* populateGradeOptions() ตอนนี้ถูกนิยามที่จุดเดียวใน "รายการหลัก" (ORG_MASTER — ดู
+   getOrgMasterValues()/populateOrgSelects() ด้านล่าง) ซึ่งครอบคลุมทั้งปัญหาเดิม (CLAUDE.md #50 —
+   union ค่าฐานกับค่าจริงกันไม่ให้ dropdown เซ็ตไม่ติด) และเพิ่มให้ Admin เพิ่ม/แก้รายการเองล่วงหน้าได้
+   ด้วย (CLAUDE.md #51) จึงลบนิยามซ้ำที่เคยอยู่ตรงนี้ออก ไม่ต้องมีสองจุดที่นิยามฟังก์ชันชื่อเดียวกัน */
 
 function filterUsers() {
   const role       = document.getElementById('filterRole')?.value    || '';
@@ -5008,43 +5003,104 @@ function closeUserDetail() {
 }
 
 
-/* ====== ORG STRUCTURE — ดึงจากผังองค์กรจริง (MASTER_USERS) สำหรับ dropdown สังกัดองค์กรในฟอร์มเพิ่ม/แก้ไขพนักงาน
-   ป้องกันการพิมพ์ กลุ่ม/แผนก/ส่วน/ฝ่าย เอง ที่อาจไม่ตรงกับผังองค์กรจริง ====== */
-function getOrgStructure(){
-  const groups = [];
-  const sectionsByGroup = {};
-  const divisionsBySection = {};
-  const departmentsBySection = {};
-  MASTER_USERS.forEach(u=>{
-    const [ ,, , group, section, division, department ] = u;
-    if(group && !groups.includes(group)) groups.push(group);
-    if(group && section){
-      (sectionsByGroup[group] = sectionsByGroup[group]||[]);
-      if(!sectionsByGroup[group].includes(section)) sectionsByGroup[group].push(section);
-    }
-    if(section && division && division!=='—'){
-      (divisionsBySection[section] = divisionsBySection[section]||[]);
-      if(!divisionsBySection[section].includes(division)) divisionsBySection[section].push(division);
-    }
-    if(section && department && department!=='—'){
-      (departmentsBySection[section] = departmentsBySection[section]||[]);
-      if(!departmentsBySection[section].includes(department)) departmentsBySection[section].push(department);
-    }
-  });
-  return { groups, sectionsByGroup, divisionsBySection, departmentsBySection };
+/* ====== รายการหลัก (Master Data) — กลุ่มงาน/แผนก/ส่วน/ฝ่าย/ตำแหน่ง/เกรด ======
+   เดิม dropdown สังกัดในฟอร์มเพิ่ม/แก้ไขพนักงาน (getOrgStructure()) ดึงตัวเลือกจาก "ข้อมูลพนักงานที่มี
+   อยู่แล้วเท่านั้น" ทำให้สร้างกลุ่ม/แผนก/ตำแหน่งใหม่ที่ยังไม่มีใครสังกัดเลยไม่ได้ (ปัญหาไก่กับไข่) และ
+   ตำแหน่งงาน (mu_position) เดิมเป็นช่องพิมพ์อิสระ พิมพ์ผิด/สะกดต่างกันได้ตามใจ — เพิ่มรายการหลักที่
+   Admin จัดการเองได้ล่วงหน้า (ORG_MASTER, เก็บ localStorage เครื่องนี้) ให้ครบทั้ง 6 อย่าง แล้ว union
+   กับค่าจริงที่มีอยู่ใน MASTER_USERS เสมอ (getOrgMasterValues()) กันไม่ให้ค่าจริงที่เคย sync มาจาก Excel
+   หายไปจาก dropdown แม้ Admin ยังไม่เคยเพิ่มมันเข้ารายการหลัก (บั๊กแบบเดียวกับ Grade ที่เพิ่งแก้ไป —
+   ดู CLAUDE.md #50) รายการที่มีพนักงานใช้งานอยู่จริงจะลบออกจากรายการหลักไม่ได้ (removeOrgMasterItem)
+   กันไม่ให้ dropdown ของพนักงานที่มีอยู่แล้วเสียหาย */
+const ORG_MASTER_KEY = 'smlPmsOrgMaster';
+const ORG_MASTER_FIELDS = [
+  { key:'groups',      label:'กลุ่มงาน (Group)',      empIdx:3 },
+  { key:'sections',    label:'แผนก (Section)',        empIdx:4 },
+  { key:'divisions',   label:'ส่วน (Division)',       empIdx:5 },
+  { key:'departments', label:'ฝ่าย (Department)',     empIdx:6 },
+  { key:'positions',   label:'ตำแหน่งงาน (Position)', empIdx:7 },
+  { key:'grades',      label:'เกรด (Grade)',          empIdx:8 },
+];
+let ORG_MASTER = {};
+function loadOrgMaster(){
+  let stored = {};
+  try{ stored = JSON.parse(localStorage.getItem(ORG_MASTER_KEY)||'{}'); }catch(e){ stored = {}; }
+  ORG_MASTER = {};
+  ORG_MASTER_FIELDS.forEach(f=>{ ORG_MASTER[f.key] = Array.isArray(stored[f.key]) ? stored[f.key] : []; });
+  /* เกรดตำแหน่งงานมีมาตรฐาน 6 ระดับที่ใช้จริงในองค์กรอยู่แล้ว (G1-G3/M1-M2/E1) เซ็ตให้เป็นค่าเริ่มต้น
+     ของรายการหลักตั้งแต่ครั้งแรกที่ยังไม่เคยบันทึกอะไรเลย ไม่ต้องให้ Admin พิมพ์เพิ่มเองทั้ง 6 ตัว */
+  if(!stored.grades) ORG_MASTER.grades = ['G1','G2','G3','M1','M2','E1'];
+}
+loadOrgMaster();
+function saveOrgMaster(){ localStorage.setItem(ORG_MASTER_KEY, JSON.stringify(ORG_MASTER)); }
+function getOrgMasterValues(fieldKey){
+  const spec = ORG_MASTER_FIELDS.find(f=>f.key===fieldKey);
+  const real = spec ? MASTER_USERS.map(u=>u[spec.empIdx]).filter(v=>v && v!=='—') : [];
+  const master = ORG_MASTER[fieldKey] || [];
+  return [...new Set([...master, ...real])].sort((a,b)=>String(a).localeCompare(String(b),'th'));
+}
+function addOrgMasterItem(fieldKey, rawValue){
+  const value = (rawValue||'').trim();
+  const spec = ORG_MASTER_FIELDS.find(f=>f.key===fieldKey);
+  if(!spec) return;
+  if(!value){ smlToast('กรุณากรอกชื่อ'+spec.label,'warn'); return; }
+  if(getOrgMasterValues(fieldKey).includes(value)){ smlToast('มีรายการนี้อยู่แล้ว','warn'); return; }
+  ORG_MASTER[fieldKey] = [...(ORG_MASTER[fieldKey]||[]), value];
+  saveOrgMaster();
+  renderOrgMasterLists();
+  if(typeof populateOrgSelects==='function') populateOrgSelects();
+  smlToast('เพิ่ม "'+value+'" เข้ารายการ'+spec.label+' แล้ว','ok');
+}
+function removeOrgMasterItem(fieldKey, value){
+  const spec = ORG_MASTER_FIELDS.find(f=>f.key===fieldKey);
+  if(!spec) return;
+  const inUse = MASTER_USERS.some(u=>u[spec.empIdx]===value);
+  if(inUse){ smlToast('ลบไม่ได้ — มีพนักงานใช้ค่านี้อยู่ในระบบจริง','warn'); return; }
+  if(!confirm(`ลบ "${value}" ออกจากรายการ${spec.label}?`)) return;
+  ORG_MASTER[fieldKey] = (ORG_MASTER[fieldKey]||[]).filter(v=>v!==value);
+  saveOrgMaster();
+  renderOrgMasterLists();
+  if(typeof populateOrgSelects==='function') populateOrgSelects();
+}
+function renderOrgMasterLists(){
+  const box = document.getElementById('orgMasterArea');
+  if(!box) return;
+  box.innerHTML = ORG_MASTER_FIELDS.map(f=>{
+    const values = getOrgMasterValues(f.key);
+    const inputId = 'orgMasterInput_'+f.key;
+    return `<div class="card" style="margin-bottom:14px">
+      <div class="card-h"><h3>${f.label}</h3><span class="bd b-b">${values.length} รายการ</span></div>
+      <div class="card-b">
+        <div style="display:flex;gap:7px;margin-bottom:12px">
+          <input id="${inputId}" placeholder="เพิ่ม${f.label}ใหม่" style="flex:1;padding:7px 10px;border:1px solid var(--bd);border-radius:7px;font-size:13px"
+            onkeydown="if(event.key==='Enter'){addOrgMasterItem('${f.key}', document.getElementById('${inputId}').value); document.getElementById('${inputId}').value='';}">
+          <button class="btn btn-p btn-sm" onclick="addOrgMasterItem('${f.key}', document.getElementById('${inputId}').value); document.getElementById('${inputId}').value=''">+ เพิ่ม</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${values.length ? values.map(v=>`<span class="bd b-s" data-field="${f.key}" data-value="${String(v).replace(/"/g,'&quot;')}" style="display:inline-flex;align-items:center;gap:6px;padding:5px 9px">${v}
+            <button title="ลบ" onclick="removeOrgMasterItem(this.closest('[data-field]').dataset.field, this.closest('[data-field]').dataset.value)" style="border:none;background:none;cursor:pointer;color:#dc2626;font-weight:800;font-size:13px;line-height:1">×</button></span>`).join('')
+            : '<span style="color:#94a3b8;font-size:12px">ยังไม่มีรายการ</span>'}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 function fillSelect(id, options, keepValue){
   const sel = document.getElementById(id); if(!sel) return;
   const prev = keepValue!==undefined ? keepValue : sel.value;
   sel.innerHTML = options.length
     ? options.map(o=>`<option value="${o}">${o}</option>`).join('')
-    : '<option value="—">— ไม่มีข้อมูลในผังองค์กร —</option>';
+    : '<option value="—">— ไม่มีรายการ — เพิ่มได้ที่หน้า "รายการหลัก" —</option>';
   if(options.includes(prev)) sel.value = prev;
 }
+function populateGradeOptions(){ fillSelect('mu_grade', getOrgMasterValues('grades')); }
 function populateOrgSelects(){
-  const org = getOrgStructure();
-  fillSelect('mu_group', org.groups);
-  onOrgGroupChange(org);
+  fillSelect('mu_group', getOrgMasterValues('groups'));
+  fillSelect('mu_section', getOrgMasterValues('sections'));
+  fillSelect('mu_division', getOrgMasterValues('divisions'));
+  fillSelect('mu_department', getOrgMasterValues('departments'));
+  fillSelect('mu_position', getOrgMasterValues('positions'));
+  populateGradeOptions();
   populateSupervisorSelects();
 }
 /* สายบังคับบัญชา (หัวหน้า L1 / ผจก.ส่วน L2 / ผู้อนุมัติ) ต้องเลือกจากพนักงานจริงเท่านั้น
@@ -5107,19 +5163,6 @@ function onSupervisorSelectChange(which){
     note.style.color = '#16a34a';
   }
 }
-function onOrgGroupChange(org){
-  org = org || getOrgStructure();
-  const group = document.getElementById('mu_group')?.value;
-  fillSelect('mu_section', org.sectionsByGroup[group]||[]);
-  onOrgSectionChange(org);
-}
-function onOrgSectionChange(org){
-  org = org || getOrgStructure();
-  const section = document.getElementById('mu_section')?.value;
-  fillSelect('mu_division', org.divisionsBySection[section]||[]);
-  fillSelect('mu_department', org.departmentsBySection[section]||[]);
-}
-
 function saveUserFromModal() {
   const id       = document.getElementById('mu_id')?.value.trim();
   const name     = document.getElementById('mu_name')?.value.trim();
@@ -5234,14 +5277,15 @@ function fillUserFormFields(emp){
   set('mu_id', emp[0]);
   set('mu_name', emp[1]);
   set('mu_role', emp[2]);
+  /* เรียก populateOrgSelects() ก่อนเซ็ตค่าทุกครั้ง เพื่อการันตีว่าค่าจริงของคนที่กำลังแก้ไข (กลุ่ม/แผนก/
+     ส่วน/ฝ่าย/ตำแหน่ง/เกรด) มีตัวเลือกให้เลือกเสมอ แม้จะยังไม่เคยเพิ่มเข้ารายการหลักหรือ sync ล่าสุด
+     เมื่อไหร่ก็ตาม — บั๊กแบบเดียวกับ Grade ที่เพิ่งแก้ไป (CLAUDE.md #50/#51) */
+  if(typeof populateOrgSelects==='function') populateOrgSelects();
   set('mu_group', emp[3]);
-  onOrgGroupChange();
   set('mu_section', emp[4]);
-  onOrgSectionChange();
   set('mu_division', emp[5]);
   set('mu_department', emp[6]);
   set('mu_position', emp[7]);
-  if(typeof populateGradeOptions==='function') populateGradeOptions();
   set('mu_grade', emp[8]);
   if(typeof populateSupervisorSelects==='function') populateSupervisorSelects(emp[0]);
   const setSupervisor=(which,val)=>{
@@ -8337,11 +8381,11 @@ document.addEventListener('input',e=>{
       <div class="fr">
         <div class="fg">
           <label>กลุ่ม (Group) <i>*</i></label>
-          <select id="mu_group" onchange="onOrgGroupChange()"></select>
+          <select id="mu_group"></select>
         </div>
         <div class="fg">
           <label>แผนก (Section) <i>*</i></label>
-          <select id="mu_section" onchange="onOrgSectionChange()"></select>
+          <select id="mu_section"></select>
         </div>
       </div>
       <div class="fr">
@@ -8354,25 +8398,18 @@ document.addEventListener('input',e=>{
           <select id="mu_department"></select>
         </div>
       </div>
-      <div style="font-size:10.5px;color:#64748b;margin-top:2px">รายการดึงจากผังองค์กรจริง (ข้อมูลพนักงานปัจจุบันในระบบ) — เลือกได้เท่านั้น ไม่สามารถพิมพ์เองได้ เพื่อให้สังกัดตรงกับผังองค์กรเสมอ</div>
+      <div style="font-size:10.5px;color:#64748b;margin-top:2px">รายการดึงจากรายการหลัก + ผังองค์กรจริง — เลือกได้เท่านั้น ไม่สามารถพิมพ์เองได้ (เพิ่มรายการใหม่ได้ที่หน้า "รายการหลัก")</div>
     </div>
 
     <!-- แถว 3: ตำแหน่ง + Grade -->
     <div class="fr">
       <div class="fg">
         <label>ตำแหน่ง (Position) <i>*</i></label>
-        <input id="mu_position" placeholder="เช่น พนักงานปฏิบัติการ PDI, หัวหน้าแผนก HR&GA">
+        <select id="mu_position"></select>
       </div>
       <div class="fg" style="max-width:100px">
         <label>Grade <i>*</i></label>
-        <select id="mu_grade">
-          <option value="G1">G1</option>
-          <option value="G2">G2</option>
-          <option value="G3">G3</option>
-          <option value="M1">M1</option>
-          <option value="M2">M2</option>
-          <option value="E1">E1</option>
-        </select>
+        <select id="mu_grade"></select>
       </div>
     </div>
 
