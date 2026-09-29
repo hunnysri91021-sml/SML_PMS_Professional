@@ -1439,6 +1439,97 @@ touches employee/attendance/evaluation data.
     a new interval on every nav click, which would have silently
     multiplied the sync frequency).
 
+60. **Three requests in one message: add an employee-acknowledgment step
+    after final approval (with Excel push), add the employee's leave
+    summary to every printed/exported evaluation report, and answer
+    honestly whether starting a new annual cycle would mix up with the
+    old one's data.** Investigating the third question surfaced a real,
+    previously-undiscovered bug that made the honest answer "yes, badly"
+    with the code as it stood: `collectEvaluationPayload()` — the
+    function every single evaluation save goes through — had `'2569'`
+    **hardcoded as a string literal** for the `cycle` field, never
+    reading the "ตั้งค่ารอบประเมิน" settings page's cycle info at all.
+    Since `draftKey()`/the Excel composite key are `empCode|cycle|level`,
+    every evaluation ever saved — no matter what Admin typed into the
+    cycle-name field or how many real years passed — was silently keyed
+    to the same literal `'2569'`. Starting a real new cycle next year
+    would not create new records; it would **overwrite the previous
+    year's Approved/Acknowledged evaluations in place**, both locally
+    and in the Excel `Appraisals` table (upsert on that same composite
+    key), since nothing about "starting a new cycle" ever changed what
+    got written. Fixed by adding a real `รหัสรอบ` (`cycleYearSetup`)
+    field to the cycle settings page — a short code (e.g. `2569`) kept
+    separate from the long display name (`cycleNameSetup`, e.g. "FY2026
+    – ประจำปี 2569 …") — and `getCurrentEvalCycleYear()`, which
+    `collectEvaluationPayload()` and `printEvalForm()`'s year badge
+    (previously *also* hardcoded `"FY 2569"` — same bug, different
+    spot) now read instead of the literal. Falls back to `'2569'` only
+    when nothing has ever been configured (a fresh deployment), matching
+    the old demo behavior rather than breaking it. Extended
+    `pushCycleSetupToExcel()`/`ms365SyncCycleSetup()` to round-trip this
+    new field too, appending it as a new trailing column (never inserted
+    mid-row, per CLAUDE.md #5) so it doesn't shift any existing consumer
+    of that Excel row's layout. **The honest answer to the literal
+    question, once fixed**: no, cycles won't mix up *as long as Admin
+    actually changes "รหัสรอบ" to the new year/code when a new cycle
+    starts* — this is now a real configuration step, not automatic
+    (there's no calendar-based auto-rollover), so it's worth stating
+    that requirement plainly rather than implying "just works."
+    For the acknowledgment step: extended `EVAL_STATUS_ORDER` (#58) with
+    a final `'Acknowledged'` stage appended after `'Approved'` (append at
+    the end, never insert mid-array, per #5) and centralized every place
+    that used to check `status==='Approved'` by exact string match — five
+    separate spots (`renderMyResult`'s latest/department-peer filters,
+    `getPendingAppraisals()`, `ms365PushAppraisals()`'s push filter and
+    its own pending-count re-check, the notification-bell's pending-push
+    count) — into one `isFinalStatus(status)` helper, the same
+    "don't compare a multi-state status by one literal string" lesson
+    CLAUDE.md #11 already teaches, just newly relevant now that a second
+    real final state exists. `approveAllFinal()` now emails every
+    approved employee (`notifyEmployeeOfApproval()`, same best-effort/
+    `isWorkerConfigured()`-gated honesty rules as #26/#40/#58's other
+    emails) inviting them to the "6. ผลประเมิน" page, where a real
+    `acknowledgeMyResult(empCode, cycle)` button appears only while their
+    latest result is exactly `'Approved'` (not yet acknowledged) and
+    flips to a plain "✓ รับทราบแล้ว" badge once clicked — advancing the
+    status pushes to *both* Excel tables for the right reason each:
+    `Approvals` (append-only event log, via the existing
+    `pushApprovalRecordToExcel()` chokepoint, which also now correctly
+    tracks the employee themselves as the "last actor" for #58's
+    edit-notification feature) and `Appraisals` (upsert, so the row's
+    own `status` column doesn't stay stuck on `"Approved"` forever after
+    a real acknowledgment happened). `printBatchApproved()`'s filter was
+    widened from literal `'Approved'` to `isFinalStatus()` too — without
+    this, an acknowledged employee's evaluation would have silently
+    vanished from batch printing the moment they acknowledged it, the
+    exact shape of regression #42 already warns about when a status
+    check doesn't account for every "still counts as done" state.
+    For the leave-summary request: `printEvalForm()`'s printed form
+    already showed a leave/lateness breakdown box (late count, early-
+    leave count, sick days, personal days) computed from real
+    `ATTENDANCE` data via `computeZScore()` — added ขาดงาน (absent days)
+    to it for completeness, since it's part of the same Z-day formula
+    but wasn't previously displayed. `printBatchApproved()` had **no**
+    such box at all (dropped entirely during #56's rewrite, which only
+    ported the score summary, not the attendance breakdown) — added the
+    identical box there, computed the same way, so a batch-printed and a
+    single-printed form for the same person now show consistent leave
+    data instead of one having it and the other not. `exportIndividualSummary()`'s
+    CSV (`สรุปผลประเมินรายบุคคล`) also had zero attendance columns —
+    added late/early/sick/personal/absent columns sourced from the same
+    `getAttendanceFor()` helper everything else in the file already uses,
+    so the report reflects one real number per person, not a second,
+    possibly-drifting computation of the same thing. Verified with tests
+    covering all three: a fresh deployment falls back to `'2569'`
+    honestly, saving after setting a real new cycle year uses that real
+    value (not the old literal), two different cycles for the same
+    employee/level coexist as separate records rather than overwriting
+    each other, the acknowledge button appears/disappears/pushes
+    correctly at each stage, `isFinalStatus()` correctly includes
+    `Acknowledged`+`Approved` and excludes earlier stages, the employee
+    email notification fires to the real address on file, and the batch
+    print output contains the real leave-summary numbers.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

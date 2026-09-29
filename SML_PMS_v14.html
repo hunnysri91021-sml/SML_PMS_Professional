@@ -2962,6 +2962,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         <div class="cycle-card-body">
           <div class="cycle-field-grid">
             <div class="cycle-field"><label>ชื่อรอบประเมิน <b style="color:#c73535">*</b></label><input id="cycleNameSetup" value="FY2026 – ประจำปี 2569 (รอบประเมิน พ.ย.–ธ.ค.)"></div>
+            <div class="cycle-field"><label>รหัสรอบ (ใช้อ้างอิงในข้อมูลจริง เช่น 2569) <b style="color:#c73535">*</b></label><input id="cycleYearSetup" value="2569" placeholder="เช่น 2569"></div>
             <div class="cycle-field"><label>สถานะรอบ</label><select id="cycleStatusSetup"><option>กำลังดำเนินการ</option><option>แบบร่าง</option><option>ปิดรอบ</option></select></div>
             <div class="cycle-field"><label>วันที่เริ่มรอบ <b style="color:#c73535">*</b></label><input id="cycleStartSetup" type="date" value="2026-11-01"></div>
             <div class="cycle-field"><label>วันที่สิ้นสุดรอบ <b style="color:#c73535">*</b></label><input id="cycleEndSetup" type="date" value="2026-12-31"></div>
@@ -4709,7 +4710,7 @@ function renderMyResult(){
     return;
   }
   const myDrafts = getDrafts().filter(d=>d[0]===me[0]);
-  const approvedDrafts = myDrafts.filter(d=>d[d.length-1]==='Approved').sort((a,b)=>Number(b[2])-Number(a[2]));
+  const approvedDrafts = myDrafts.filter(d=>(typeof isFinalStatus==='function'?isFinalStatus(d[d.length-1]):d[d.length-1]==='Approved')).sort((a,b)=>Number(b[2])-Number(a[2]));
   const latest = approvedDrafts[0];
 
   if(!latest){
@@ -4728,7 +4729,12 @@ function renderMyResult(){
   }
   emptyEl.style.display='none';
   bannerEl.style.display='';
-  document.getElementById('myResultBannerText').innerHTML = `<b>ผลประเมินรอบ ${latest[2]} ได้รับการอนุมัติแล้ว</b>`;
+  /* สถานะ 'Approved' = อนุมัติแล้วแต่พนักงานยังไม่ได้กดรับทราบ → โชว์ปุ่มให้กด
+     'Acknowledged' = รับทราบแล้ว → โชว์แค่ข้อความยืนยัน ไม่มีปุ่มซ้ำ (กดซ้ำไม่ได้ ไม่มีประโยชน์ที่จะกดซ้ำ) */
+  const ackBtn = latest[latest.length-1]==='Approved'
+    ? ` <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="acknowledgeMyResult('${latest[0]}','${latest[2]}')">✅ รับทราบผลการประเมิน</button>`
+    : (latest[latest.length-1]==='Acknowledged' ? ` <span class="bd b-g" style="margin-left:8px">✓ รับทราบแล้ว</span>` : '');
+  document.getElementById('myResultBannerText').innerHTML = `<b>ผลประเมินรอบ ${latest[2]} ได้รับการอนุมัติแล้ว</b>${ackBtn}`;
 
   const Y=Number(latest[latest.length-5])||0, Z=Number(latest[latest.length-4])||0, X=Number(latest[latest.length-3])||0, grade=latest[latest.length-2];
   set('myResultGrade', grade||'—');
@@ -4745,7 +4751,7 @@ function renderMyResult(){
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
   const myDept = me[6]||me[4]||'—';
   const deptPeers = getDrafts().filter(d=>{
-    if(d[d.length-1]!=='Approved' || d[2]!==latest[2]) return false;
+    if(!isFinalStatus(d[d.length-1]) || d[2]!==latest[2]) return false;
     if(scoped && !scoped.has(d[0])) return false;
     const emp = MASTER_USERS.find(u=>u[0]===d[0]);
     return emp && (emp[6]||emp[4]||'—')===myDept;
@@ -4867,7 +4873,7 @@ function printEvalForm() {
       <div class="F-doc-title">แบบประเมินผลการปฏิบัติงานประจำปี ............</div>
     </div>
     <div class="F-right-col">
-      <span class="F-year-badge">FY 2569</span>
+      <span class="F-year-badge">FY ${(typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569'}</span>
       <span class="F-form-badge ${formBadge}">${cfg.short} · ${cfg.factors.length} ปัจจัย</span>
       <span class="F-status-badge ${allApproved?'ok':'wait'}">${allApproved?'✓ อนุมัติแล้ว':'⏳ กำลังประเมิน'}</span>
     </div>
@@ -4961,6 +4967,7 @@ function printEvalForm() {
     <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">${zResult.att.earlyCount||0} ครั้ง</span></div>
     <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">${zResult.att.sickDay||0} วัน</span></div>
     <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">${zResult.att.personalDay||0} วัน</span></div>
+    <div class="zc"><span class="zl">ขาดงาน:</span><span class="zv">${zResult.att.absentDay||0} วัน</span></div>
     <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zDays} วัน</span></div>
     <div class="ztotal">Z = ${zScore.toFixed(2)}</div>
   </div>
@@ -6501,7 +6508,10 @@ function collectEvaluationPayload(status='Draft'){
   const empName = (document.getElementById('evalName')?.value || MASTER_USERS[0]?.[1] || '').trim();
   const m = []; for(let fi=0; fi<10; fi++) m.push(evalScores['m'+fi] || 0);
   const l = []; for(let fi=0; fi<4; fi++) l.push(cfg.leaderShow ? (evalScores['l'+fi] || 0) : null);
-  return [ empCode, empName, '2569', currentLevel, ...m, ...l, summary.Y, summary.Z, summary.X, gradeFromX(summary.X), status ];
+  /* เดิมฝัง '2569' ตายตัว — ทุกรอบใหม่ที่ขึ้นจริงก็ยังถูกบันทึกเป็นรอบเดิมซ้ำ ชนกับข้อมูลรอบก่อนหน้า
+     ทันที ต้องอ่านจากรหัสรอบจริงที่ Admin ตั้งไว้เสมอ (ดู getCurrentEvalCycleYear()) */
+  const cycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
+  return [ empCode, empName, cycle, currentLevel, ...m, ...l, summary.Y, summary.Z, summary.X, gradeFromX(summary.X), status ];
 }
 
 function saveEvaluationLocal(payload){
@@ -6556,13 +6566,52 @@ async function notifyPrevEvaluatorOfEdit(payload, prevActor){
   const actorEmp = MASTER_USERS.find(u=>u[0]===prevActor.code);
   if(!actorEmp || !actorEmp[15]) return { sent:false, reason:'ผู้ดำเนินการก่อนหน้าไม่มีอีเมลบันทึกไว้ในระบบ' };
   const [empCode, empName, cycle] = payload;
-  const stepLabel = {Submitted:'ส่งแบบประเมิน', L2Reviewed:'สอบทาน L2', RejectedL2Review:'ตีกลับจากสอบทาน L2', Calibrated:'Calibration', Approved:'อนุมัติขั้นสุดท้าย', RejectedFinalApproval:'ตีกลับจากอนุมัติขั้นสุดท้าย'}[prevActor.step] || prevActor.step;
+  const stepLabel = {Submitted:'ส่งแบบประเมิน', L2Reviewed:'สอบทาน L2', RejectedL2Review:'ตีกลับจากสอบทาน L2', Calibrated:'Calibration', Approved:'อนุมัติขั้นสุดท้าย', RejectedFinalApproval:'ตีกลับจากอนุมัติขั้นสุดท้าย', Acknowledged:'รับทราบผลการประเมิน'}[prevActor.step] || prevActor.step;
   const subject = `[SML PMS] ใบประเมินที่ท่านดำเนินการไปถูกแก้ไข — ${empName} (${empCode})`;
   const body = `ใบประเมินของ ${empName} (${empCode}) รอบ ${cycle} ซึ่งท่านเคยดำเนินการ (${stepLabel}) ไว้ก่อนหน้านี้ ถูกแก้ไขและบันทึกใหม่แล้ว\n\nวันที่แก้ไข: ${new Date().toLocaleString('th-TH')}\n\nกรุณาเข้าเว็บ SML PMS เพื่อตรวจสอบข้อมูลล่าสุดอีกครั้ง\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
   try{
     await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: actorEmp[15], toName: actorEmp[1], subject, body }) });
     return { sent:true, to: actorEmp[1] };
   }catch(e){ return { sent:false, reason:e.message }; }
+}
+
+/* แจ้งอีเมลให้พนักงานเจ้าของผลประเมินรู้ตัวว่าอนุมัติขั้นสุดท้ายเสร็จแล้ว พร้อมชวนเข้าระบบไปกด
+   "รับทราบผลการประเมิน" ที่หน้า "6. ผลประเมิน" (ดู acknowledgeMyResult()) — ผู้ใช้ขอให้ผลส่งถึงพนักงาน
+   แล้วให้พนักงานเป็นคนกดรับทราบเองในระบบ ไม่ใช่ถือว่า "อนุมัติแล้ว = จบ" ทันที ใช้กลไกความซื่อสัตย์
+   เดียวกับอีเมลอื่นๆ ในไฟล์นี้ (#26/#40/#58): best-effort ต่อคน, ต้องตั้งค่า Worker ไว้และพนักงานต้องมี
+   อีเมลจริง ไม่งั้น return เหตุผลจริงแทนที่จะเงียบแล้วสันนิษฐานว่าส่งสำเร็จ */
+async function notifyEmployeeOfApproval(empCode, empName, cycle){
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
+  const emp = MASTER_USERS.find(u=>u[0]===empCode);
+  if(!emp || !emp[15]) return { sent:false, reason:'พนักงานไม่มีอีเมลบันทึกไว้ในระบบ' };
+  const subject = `[SML PMS] ผลการประเมินของท่านได้รับการอนุมัติแล้ว — รอบ ${cycle}`;
+  const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติขั้นสุดท้ายเรียบร้อยแล้ว\n\nกรุณาเข้าสู่ระบบ SML PMS ที่หน้า "6. ผลประเมิน" เพื่อดูผลและกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
+  try{
+    await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: emp[15], toName: emp[1], subject, body }) });
+    return { sent:true };
+  }catch(e){ return { sent:false, reason:e.message }; }
+}
+/* พนักงานกด "รับทราบผลการประเมิน" เองที่หน้าผลประเมิน — ขยับสถานะจาก Approved ไปเป็น Acknowledged
+   (ปลายสุดของ EVAL_STATUS_ORDER) แล้ว push ทั้งประวัติ (ตาราง Approvals, ผ่าน
+   pushApprovalRecordToExcel ซึ่งบันทึก EVAL_LAST_ACTOR_KEY ให้อัตโนมัติด้วย — ดู #58) และสถานะปัจจุบัน
+   ของใบนั้นเอง (ตาราง Appraisals ที่คอลัมน์ status จะได้ไม่ค้างเป็น "Approved" ตลอดไปทั้งที่รับทราบ
+   แล้วจริง) — ทั้งสองตารางต้องอัปเดตคนละเหตุผลกัน: Approvals คือ log เหตุการณ์ (append-only),
+   Appraisals คือ "สถานะปัจจุบัน" (upsert) ตามที่ทั้งไฟล์นี้แยกไว้ตลอด (ดู CLAUDE.md #34) */
+async function acknowledgeMyResult(empCode, cycle){
+  const drafts = getDrafts();
+  const d = drafts.find(x=>x[0]===empCode && x[2]===cycle);
+  if(!d || d[d.length-1]!=='Approved'){ smlToast('ไม่พบผลประเมินที่อนุมัติแล้วให้รับทราบ','warn'); return; }
+  d[d.length-1] = 'Acknowledged';
+  saveDrafts(drafts);
+  if(typeof renderMyResult==='function') renderMyResult();
+  if(typeof pushApprovalRecordToExcel==='function') pushApprovalRecordToExcel(empCode, cycle, 'Acknowledged', 'รับทราบผลการประเมินโดยพนักงานเอง');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','รับทราบผลการประเมิน', empCode, (CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||d[1]);
+  const cfg = loadMs365Config();
+  if(isMs365Configured(cfg)){
+    try{ await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d); }catch(e){}
+  }
+  smlToast('รับทราบผลการประเมินเรียบร้อย','ok');
 }
 
 async function saveEvaluationToMs365(status='Draft'){
@@ -6924,7 +6973,7 @@ async function importMergedDataFile(input){
    เงื่อนไขเดิมของ ms365PushAppraisals() ที่ push เฉพาะ Approved) ส่วนรายการที่ push สำเร็จแล้วก็ไม่
    นับซ้ำ แม้จะยังอยู่ใน getDrafts() ตลอดไปก็ตาม (ดู PUSHED_APPRAISALS_KEY ด้านบน) */
 function getPendingAppraisals(){
-  return getDrafts().filter(d => d[d.length-1]==='Approved' && !isAppraisalPushed(draftKey(d)));
+  return getDrafts().filter(d => isFinalStatus(d[d.length-1]) && !isAppraisalPushed(draftKey(d)));
 }
 function renderPendingList(){
   const box = document.getElementById('pendingListArea');
@@ -6955,8 +7004,17 @@ function draftKey(d){ return d[0]+'|'+d[2]+'|'+d[3]; }
    เพราะ ms365SyncAppraisals() ด้านล่างต้องใช้ตัดสิน "remote ไปไกลกว่า local ไหม" ด้วยลำดับเดียวกันนี้
    เป๊ะๆ ไม่งั้นจะมีจุดนิยาม "ลำดับขั้น" สองที่ที่อาจขยับไม่พร้อมกัน (ดู CLAUDE.md #41 เรื่องรักษา
    ตรรกะให้ตรงกันทุกจุดที่พึ่งพากัน) */
-const EVAL_STATUS_ORDER = ['Draft','Submitted','L2Reviewed','Calibrated','Approved'];
+/* 'Acknowledged' ต่อท้าย 'Approved' (append ที่ปลาย ไม่แทรกกลาง ตาม CLAUDE.md #5) — ขั้นใหม่ที่
+   พนักงานกด "รับทราบผลการประเมิน" เองหลังอนุมัติเสร็จ (#60) ทุกจุดที่เคยกรอง/นับด้วย
+   evalStatusRank()/EVAL_STATUS_ORDER อยู่แล้วจะรับรู้ขั้นนี้เป็น "ไปไกลกว่า Approved" โดยอัตโนมัติ
+   โดยไม่ต้องแก้ที่อื่นเพิ่ม แต่จุดที่เทียบด้วยข้อความ '===Approved' เป๊ะๆ (ไม่ผ่าน evalStatusRank)
+   ยังต้องแก้แยกทีละจุดให้รวม 'Acknowledged' ด้วย — ดู isFinalStatus() ด้านล่าง */
+const EVAL_STATUS_ORDER = ['Draft','Submitted','L2Reviewed','Calibrated','Approved','Acknowledged'];
 function evalStatusRank(status){ const i = EVAL_STATUS_ORDER.indexOf(status); return i<0 ? 0 : i; }
+/* "จบขั้นตอนอนุมัติแล้ว" จริงๆ (พร้อมพิมพ์/นับเป็นค้าง Push/แสดงในผลประเมิน) — ต้องนับทั้ง Approved
+   และ Acknowledged เสมอ (เหมือน CLAUDE.md #11 — ห้ามเทียบสถานะด้วยคำเป๊ะๆ คำเดียวถ้ามีมากกว่า 1
+   สถานะที่ถือว่า "เสร็จแล้ว" ได้) รวมไว้จุดเดียวกันการันตีทุกจุดที่ใช้ไม่ตกหล่น */
+function isFinalStatus(status){ return status==='Approved' || status==='Acknowledged'; }
 /* ดึงคิวประเมิน (ตาราง Appraisals) กลับจาก Excel มา merge เข้าคิว local — เดิม Appraisals เป็น
    push-only (ดู CLAUDE.md #33/#40): หัวหน้าที่ประเมิน/สอบทาน/อนุมัติจากเครื่องอื่นจะ push ข้อมูลจริง
    ขึ้น Excel ได้ แต่คนอื่นที่มีสิทธิเห็น (เช่น L2/Admin เปิดจากเครื่องของตัวเอง) จะไม่เห็นการอัปเดต
@@ -7212,7 +7270,7 @@ async function ms365SyncApprovalSignatures(silent=true){
     if(!silent) smlToast('ดึงลายเซ็นอนุมัติไม่สำเร็จ: '+e.message,'warn');
   }
 }
-function approveAllFinal(){
+async function approveAllFinal(){
   const sign=(document.getElementById('mApproveSign')?.value||'').trim();
   if(!sign){ smlToast('กรุณาพิมพ์ชื่อ-สกุลเพื่อยืนยันลายเซ็นอิเล็กทรอนิกส์','warn'); return; }
   const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
@@ -7222,7 +7280,15 @@ function approveAllFinal(){
   closeM();
   rows.forEach(d=>pushApprovalRecordToExcel(d[0], d[2], 'Approved', 'ลงนามโดย '+sign));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติขั้นสุดท้าย', rows.length+' รายการ', 'ลงนามโดย '+sign+' — '+rows.map(d=>d[0]).join(', '));
-  smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+')','ok');
+  /* แจ้งอีเมลพนักงานเจ้าของผลแต่ละคน ให้เข้าไปกด "รับทราบผลการประเมิน" — best-effort ต่อคน คนหนึ่ง
+     ส่งไม่สำเร็จต้องไม่กันคนอื่น/ไม่กันการอนุมัติหลัก (เหมือน notifyAdminOfEvalSubmission #40) */
+  let notifSent = 0;
+  for(const d of rows){
+    const r = await notifyEmployeeOfApproval(d[0], d[1], d[2]).catch(()=>({sent:false}));
+    if(r.sent) notifSent++;
+  }
+  const notifNote = notifSent ? ` · แจ้งอีเมลพนักงานแล้ว ${notifSent}/${rows.length} คน` : '';
+  smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+')'+notifNote,'ok');
 }
 function rejectApproveAll(){
   const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
@@ -7406,12 +7472,17 @@ function getReportData(){
     };
   });
 }
+/* ผู้ใช้ขอให้ใส่วันลาสรุปของพนักงานในทุกรายงานแบบประเมิน ไม่ใช่แค่ใบพิมพ์เดี่ยว/Batch —
+   ใช้ getAttendanceFor() ตัวเดียวกับที่คำนวณคะแนน Z จริง กันตัวเลขสองที่ไม่ตรงกัน */
 function exportIndividualSummary(){
   const rows = getReportData();
   if(!rows.some(r=>r.X!==null)){ smlToast('ยังไม่มีผลประเมินในระบบให้ Export','warn'); return; }
   downloadCsv('สรุปผลประเมินรายบุคคล_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนรวม (X)','เกรด','สถานะ'],
-    rows.map(r=>[r.code,r.name,r.group,r.dept, r.X??'', r.grade??'', r.status]));
+    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนรวม (X)','เกรด','สถานะ','มาสาย(ครั้ง)','กลับก่อน(ครั้ง)','ลาป่วย(วัน)','ลากิจ(วัน)','ขาดงาน(วัน)'],
+    rows.map(r=>{
+      const att = (typeof getAttendanceFor==='function') ? getAttendanceFor(r.code) : {};
+      return [r.code,r.name,r.group,r.dept, r.X??'', r.grade??'', r.status, att.lateCount||0, att.earlyCount||0, att.sickDay||0, att.personalDay||0, att.absentDay||0];
+    }));
   smlToast('Export สรุปผลรายบุคคลแล้ว ('+rows.length+' คน)','ok');
 }
 function departmentSummary(){
@@ -7450,7 +7521,11 @@ let _batchPrinting = false;
 function printBatchApproved(){
   if(_batchPrinting) return; _batchPrinting = true;
   setTimeout(()=>{ _batchPrinting = false; }, 3000);
-  const rows = getDrafts().filter(d=>d[d.length-1]==='Approved');
+  /* รวม 'Acknowledged' ด้วย ไม่ใช่แค่ 'Approved' — เดิมกรองแค่ 'Approved' แต่พอเพิ่มขั้น "พนักงาน
+     รับทราบผล" (#60) แล้ว สถานะจะขยับต่อจาก Approved ไปเป็น Acknowledged ถ้ายังกรองแค่ 'Approved'
+     เฉยๆ ใบของคนที่รับทราบผลแล้วจะหายไปจากการพิมพ์ Batch ทันที (บั๊กแบบเดียวกับ CLAUDE.md #11 —
+     ต้องนับทุกสถานะที่ "ผ่านขั้นนี้ไปแล้ว" ไม่ใช่ตรงคำเป๊ะๆ คำเดียว) */
+  const rows = getDrafts().filter(d=>isFinalStatus(d[d.length-1]));
   if(!rows.length){ smlToast('ยังไม่มีใบประเมินที่อนุมัติแล้วในรอบนี้ให้พิมพ์','warn'); _batchPrinting=false; return; }
 
   const printDate = new Date().toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
@@ -7461,6 +7536,9 @@ function printBatchApproved(){
     const empPos = emp?.[7] || '—', empDept = emp?.[6] || '—', empGroup = emp?.[3] || '—';
     const Y = d[d.length-5], Z = d[d.length-4], X = d[d.length-3], grade = d[d.length-2];
     const sig = getApprovalSignature(d[0]+'|'+d[2]);
+    /* วันลาสรุปของพนักงาน — ผู้ใช้ขอให้ใส่ในทุกรายงานแบบประเมิน ใช้ helper จริงตัวเดียวกับที่คำนวณ
+       คะแนน Z (computeZScore) แทนการเขียนสูตรซ้ำ กันไม่ให้ตัวเลขสองที่ไม่ตรงกัน */
+    const zr = (typeof computeZScore==='function') ? computeZScore(level, code) : null;
     const factorRows = (cfg?.factors||[]).map((f,fi)=>{
       const key = fi<10 ? 4+fi : 4+10+(fi-10); // m0..m9 at d[4..13], l0..l3 at d[14..17]
       const score = d[key];
@@ -7500,6 +7578,14 @@ function printBatchApproved(){
           <div class="F-score-sub">เกรด <b>${grade}</b></div>
         </div>
       </div>
+      ${zr ? `<div class="F-zbox" style="margin-top:4px">
+        <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zr.att.lateCount||0} ครั้ง</span></div>
+        <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">${zr.att.earlyCount||0} ครั้ง</span></div>
+        <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">${zr.att.sickDay||0} วัน</span></div>
+        <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">${zr.att.personalDay||0} วัน</span></div>
+        <div class="zc"><span class="zl">ขาดงาน:</span><span class="zv">${zr.att.absentDay||0} วัน</span></div>
+        <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zr.zDaysExact} วัน</span></div>
+      </div>` : ''}
       <div class="F-footer" style="border-top:1px solid #cbd5e1;padding-top:8px;font-size:8pt;margin-top:6px">
         <div><b>ลงนามอนุมัติโดย:</b> ${sig ? sig.signedBy : '—'}</div>
         <div><b>วันที่อนุมัติ:</b> ${sig ? new Date(sig.signedAt).toLocaleDateString('th-TH') : '—'}</div>
@@ -7845,7 +7931,7 @@ function getNotifications(){
   if(hierCount) items.push({ icon:'⚠️', text:`พบปัญหาสายบังคับบัญชา ${hierCount} รายการ`, page:'org' });
 
   let pendingPush = 0;
-  try{ pendingPush = JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY)||'[]').filter(d=>d[d.length-1]==='Approved').length; }catch(e){}
+  try{ pendingPush = JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY)||'[]').filter(d=>isFinalStatus(d[d.length-1])).length; }catch(e){}
   if(pendingPush) items.push({ icon:'📤', text:`มีผลประเมิน ${pendingPush} รายการ อนุมัติแล้ว รอ Push เข้า Excel`, page:'ms365' });
 
   return items;
@@ -7885,12 +7971,12 @@ function renderNotifBell(){
 async function ms365PushAppraisals(){
   const drafts = getDrafts();
   const setPending=(v)=>{const el=document.getElementById('appraisalPending'); if(el) el.textContent=v+' รายการ';};
-  /* Push ขึ้น Excel เฉพาะรายการที่ผ่านอนุมัติขั้นสุดท้ายแล้ว (สถานะ Approved) และยังไม่เคย push
-     สำเร็จมาก่อน (เช็คจาก PUSHED_APPRAISALS_KEY) — รายการที่ยังอยู่ระหว่าง Draft/Submitted/
-     L2Reviewed/Calibrated ต้องไม่หลุดเข้า Excel ก่อนเวลา */
-  const toPush = drafts.filter(d=>d[d.length-1]==='Approved' && !isAppraisalPushed(draftKey(d)));
+  /* Push ขึ้น Excel เฉพาะรายการที่ผ่านอนุมัติขั้นสุดท้ายแล้ว (Approved หรือ Acknowledged — ดู
+     isFinalStatus()) และยังไม่เคย push สำเร็จมาก่อน (เช็คจาก PUSHED_APPRAISALS_KEY) — รายการที่ยัง
+     อยู่ระหว่าง Draft/Submitted/L2Reviewed/Calibrated ต้องไม่หลุดเข้า Excel ก่อนเวลา */
+  const toPush = drafts.filter(d=>isFinalStatus(d[d.length-1]) && !isAppraisalPushed(draftKey(d)));
   if(!toPush.length){
-    const pendingApproved = drafts.filter(d=>d[d.length-1]==='Approved' && !isAppraisalPushed(draftKey(d))).length;
+    const pendingApproved = drafts.filter(d=>isFinalStatus(d[d.length-1]) && !isAppraisalPushed(draftKey(d))).length;
     smlToast(pendingApproved ? 'มีผลประเมินค้างอยู่ '+pendingApproved+' รายการ' : 'ไม่มีผลประเมินค้าง Push (Approved ทุกรายการ push แล้ว)','warn');
     setPending(pendingApproved);
     return;
@@ -8445,12 +8531,18 @@ function actionByText(text, el){
   return false;
 }
 function resetCycleSetup(){
-  const n=document.getElementById('cycleNameSetup'), s=document.getElementById('cycleStatusSetup'), a=document.getElementById('cycleStartSetup'), b=document.getElementById('cycleEndSetup');
-  if(n)n.value='FY2026 – ประจำปี 2569'; if(s)s.value='กำลังดำเนินการ'; if(a)a.value='2026-11-01'; if(b)b.value='2026-12-31';
+  const n=document.getElementById('cycleNameSetup'), y=document.getElementById('cycleYearSetup'), s=document.getElementById('cycleStatusSetup'), a=document.getElementById('cycleStartSetup'), b=document.getElementById('cycleEndSetup');
+  if(n)n.value='FY2026 – ประจำปี 2569'; if(y)y.value='2569'; if(s)s.value='กำลังดำเนินการ'; if(a)a.value='2026-11-01'; if(b)b.value='2026-12-31';
   smlToast('คืนค่าการตั้งค่ารอบเป็นค่าเริ่มต้นแล้ว','info');
 }
+/* เดิม collectEvaluationPayload() (ดูด้านล่าง) ฝัง '2569' เป็นค่ารอบตายตัวในโค้ด ไม่เคยอ่านจากหน้า
+   ตั้งค่ารอบนี้เลย — พอครบรอบปีแล้ว Admin มาเปลี่ยนชื่อ/วันที่รอบใหม่ในหน้านี้ ข้อมูลการประเมินใหม่
+   ทุกใบก็ยังถูกบันทึกเป็นรอบ '2569' เดิมอยู่ดี ชนกับข้อมูลรอบก่อนหน้าทันที (draftKey เดียวกัน =
+   empCode|cycle|level ถ้า cycle ไม่เปลี่ยนจริงก็คือคีย์เดียวกัน) — เพิ่มฟิลด์ "รหัสรอบ" (cycleYearSetup)
+   เป็นค่าสั้นๆ ที่ใช้เป็นค่า cycle จริงในข้อมูล แยกจาก "ชื่อรอบ" (cycleNameSetup) ที่เป็นแค่ข้อความยาว
+   แสดงผล — ต้องกรอกให้ตรงกับปี/รหัสรอบจริงทุกครั้งที่ขึ้นรอบใหม่ ดู getCurrentEvalCycleYear() */
 function saveCycleSetup(){
-  const data={name:document.getElementById('cycleNameSetup')?.value||'',status:document.getElementById('cycleStatusSetup')?.value||'',start:document.getElementById('cycleStartSetup')?.value||'',end:document.getElementById('cycleEndSetup')?.value||'',savedAt:new Date().toISOString()};
+  const data={name:document.getElementById('cycleNameSetup')?.value||'',year:document.getElementById('cycleYearSetup')?.value||'',status:document.getElementById('cycleStatusSetup')?.value||'',start:document.getElementById('cycleStartSetup')?.value||'',end:document.getElementById('cycleEndSetup')?.value||'',savedAt:new Date().toISOString()};
   localStorage.setItem('smlPmsCycleSetup',JSON.stringify(data));
   const title=document.querySelector('#pg-cycle .ph h2');
   if(title && data.name) title.dataset.cycleName=data.name;
@@ -8458,18 +8550,24 @@ function saveCycleSetup(){
   if(typeof pushCycleSetupToExcel==='function') pushCycleSetupToExcel();
   smlToast('บันทึกการตั้งค่ารอบประเมินเรียบร้อย','ok');
 }
+/* ค่า "รอบ" จริงที่ทุกการบันทึกผลประเมินใหม่ต้องใช้ — อ่านจากรหัสรอบที่ Admin ตั้งไว้ในหน้า "ตั้งค่ารอบ
+   ประเมิน" เสมอ (ไม่ใช่ค่าคงที่ในโค้ดอีกต่อไป) เผื่อยังไม่เคยตั้งค่าอะไรเลย (เช่น deployment ใหม่ที่ยัง
+   ไม่มีใครเข้าไปตั้งหน้านี้) fallback เป็น '2569' ให้พฤติกรรม demo เดิมยังใช้งานได้ */
+function getCurrentEvalCycleYear(){
+  const data = (typeof getCycleSetupData==='function') ? getCycleSetupData() : null;
+  return (data && data.year && String(data.year).trim()) || '2569';
+}
 /* การตั้งค่ารอบประเมินในเครื่องนี้มีแค่ "รอบปัจจุบัน" ชุดเดียว (ไม่ใช่ประวัติหลายรอบ) จึง upsert
    ด้วย key คงที่ 'CURRENT' เสมอ (ไม่ใช้ชื่อรอบเป็น key เพราะชื่อแก้ได้ จะได้แถวใหม่ซ้อนทุกครั้งที่
-   เปลี่ยนชื่อ) คอลัมน์จริงตรงนี้ต่างจาก schema ที่หน้า "โครงสร้าง Sheets" เคยอธิบายไว้ (Cycle_ID·
-   Year·Start·End·YZMode·Status) เพราะข้อมูลจริงที่มีในระบบคือ "ชื่อรอบ+สถานะ+ช่วงวันที่" ไม่มี
-   Year/YZMode แยกเป็นฟิลด์จริง — ใช้ตามข้อมูลจริงที่มี ไม่ยัดค่าที่ไม่มีทางรู้ (ดู CLAUDE.md #14) */
+   เปลี่ยนชื่อ) เพิ่มคอลัมน์ year ต่อท้าย (ไม่แทรกกลางแถวเดิม ตาม CLAUDE.md #5) เพราะ #58/#59 เดิมพึ่ง
+   ลำดับคอลัมน์ [key,name,start,end,status,savedAt] อยู่แล้วในที่อื่น */
 async function pushCycleSetupToExcel(silent=true){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)) return;
   const data = getCycleSetupData();
   if(!data || !data.name) return;
   try{
-    await graphUpsertTableRow('Cycles', 0, 'CURRENT', ['CURRENT', data.name, data.start||'', data.end||'', data.status||'', data.savedAt||'']);
+    await graphUpsertTableRow('Cycles', 0, 'CURRENT', ['CURRENT', data.name, data.start||'', data.end||'', data.status||'', data.savedAt||'', data.year||'']);
     appendSyncLog(`Push การตั้งค่ารอบประเมิน "${data.name}" เข้า Excel`, true);
   }catch(e){
     appendSyncLog(`Push การตั้งค่ารอบประเมินไม่สำเร็จ: ${e.message}`, false);
@@ -8612,10 +8710,10 @@ async function ms365SyncCycleSetup(silent=false){
     const rows = await graphListTableRows('Cycles');
     const row = rows.find(r => String(r[0]??'').trim() === 'CURRENT');
     if(!row || !row[1]) return;
-    const data = { name: row[1]||'', start: row[2]||'', end: row[3]||'', status: row[4]||'', savedAt: row[5]||new Date().toISOString() };
+    const data = { name: row[1]||'', start: row[2]||'', end: row[3]||'', status: row[4]||'', savedAt: row[5]||new Date().toISOString(), year: row[6]||'' };
     localStorage.setItem('smlPmsCycleSetup', JSON.stringify(data));
-    const n=document.getElementById('cycleNameSetup'), s=document.getElementById('cycleStatusSetup'), a=document.getElementById('cycleStartSetup'), b=document.getElementById('cycleEndSetup');
-    if(n) n.value=data.name; if(s) s.value=data.status; if(a) a.value=data.start; if(b) b.value=data.end;
+    const n=document.getElementById('cycleNameSetup'), y=document.getElementById('cycleYearSetup'), s=document.getElementById('cycleStatusSetup'), a=document.getElementById('cycleStartSetup'), b=document.getElementById('cycleEndSetup');
+    if(n) n.value=data.name; if(y && data.year) y.value=data.year; if(s) s.value=data.status; if(a) a.value=data.start; if(b) b.value=data.end;
     const title=document.querySelector('#pg-cycle .ph h2');
     if(title && data.name) title.dataset.cycleName=data.name;
     if(typeof renderCycleStats==='function') renderCycleStats();
