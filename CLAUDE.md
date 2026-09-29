@@ -2064,6 +2064,52 @@ touches employee/attendance/evaluation data.
     correct doesn't help if nothing in the app can ever populate the
     field with a real value in the first place.
 
+71. **User asked to flip #62's self-evaluation eligibility default: "default
+    ทุกคนไม่มีสิทธิ์ประเมินตนเอง" — nobody can self-evaluate by default,
+    the opposite of what #62 shipped ("ทุกคนประเมินได้" until Admin
+    explicitly restricts).** This is a genuine exception to CLAUDE.md #6's
+    usual rule that a `localStorage`-backed default must never change
+    existing behavior — here the user explicitly asked for the default
+    itself to change behavior immediately, opt-in instead of opt-out, so
+    following #6 literally would have meant refusing the actual request.
+    Flipped `EVAL_ELIGIBILITY`'s default from `{mode:'all',...}` to
+    `{mode:'restricted', depts:[], emps:[]}` in all three places it's
+    constructed (`let EVAL_ELIGIBILITY` module-level default,
+    `loadEvalEligibility()`'s two fallback branches — no-stored-value and
+    JSON-parse-failure) and swapped the `stored.mode==='restricted'?
+    'restricted':'all'` merge check to `stored.mode==='all'?'all':
+    'restricted'`, so an old saved config that explicitly chose `'all'`
+    is still honored (never silently flipped out from under an Admin who
+    deliberately opted back in), while anything else — no config, a
+    corrupted value, a fresh deployment — now lands on `'restricted'`.
+    `isEligibleForSelfEval()` itself needed zero changes: its
+    `cfg.mode !== 'restricted'` early-return-true branch already only
+    fires for the non-default `'all'` case, so the moment the default
+    became `'restricted'`, the function correctly started requiring a
+    real department/employee match (or `admin`/`sysadmin`, which still
+    always bypasses) with no logic change at all — a case of #62's
+    original design already being agnostic to which mode was "default,"
+    it just happened to default the safer way this time. Relabeled the
+    `<select>`'s two `<option>`s (moved "(ค่าเริ่มต้น)" from ทุกคนประเมิน
+    ได้ to จำกัดเฉพาะแผนก/รายบุคคล) and the page's own description text
+    so the UI's own claim about what the default is matches the code
+    (the CLAUDE.md #34/#49/#67 trap in miniature — this is exactly the
+    kind of label the earlier fixes taught to keep in sync). Verified
+    with a test simulating a completely fresh deployment (no
+    `localStorage` key at all): a regular employee is now blocked at the
+    real `onEvalCodeGateChange()` chokepoint with a clear message,
+    admin/sysadmin still bypass, the settings page's mode selector and
+    visible options area both default to "restricted" on open, and after
+    Admin explicitly checks a department and saves, that department's
+    employees become eligible — the full opt-in flow working end to end,
+    not just the default flag itself. **Real operational consequence
+    worth stating plainly, not silently**: shipping this means every
+    employee at every company using this deployment loses self-eval
+    access the moment it goes live, until Admin visits "🎯 สิทธิ์ประเมิน
+    ตนเอง" and grants departments/people — there is no migration step
+    that "keeps everyone who could self-eval yesterday able to today,"
+    because the entire point of the request was to stop assuming that.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

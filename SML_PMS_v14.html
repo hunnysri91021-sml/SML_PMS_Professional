@@ -3087,15 +3087,15 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 
   <!-- ========== สิทธิ์ประเมินตนเอง (Admin กำหนดกลุ่ม/แผนกที่ประเมินตนเองได้) ========== -->
   <section class="page" id="pg-evaleligibility">
-    <div class="ph"><div><h2>สิทธิ์ประเมินตนเอง</h2><p>กำหนดว่าพนักงานคนไหน/แผนกไหน สามารถเข้าประเมินตนเองได้ในรอบนี้ — ค่าเริ่มต้นคือ "ทุกคนประเมินได้" (ไม่กระทบพฤติกรรมเดิม) จนกว่า Admin จะเปลี่ยนเป็น "จำกัดเฉพาะที่กำหนด"</p></div></div>
+    <div class="ph"><div><h2>สิทธิ์ประเมินตนเอง</h2><p>กำหนดว่าพนักงานคนไหน/แผนกไหน สามารถเข้าประเมินตนเองได้ในรอบนี้ — ค่าเริ่มต้นคือ "ไม่มีใครมีสิทธิ์" จนกว่า Admin จะเพิ่มแผนก/รายบุคคลที่อนุญาตด้านล่าง (Admin/Admin ระบบ ยกเว้นเสมอ เข้าดูฟอร์มของทุกคนได้เพื่อตรวจสอบ)</p></div></div>
 
     <div class="card" style="margin-bottom:14px">
       <div class="card-b">
         <div class="fg">
           <label>โหมดสิทธิ์</label>
           <select id="evalElig_mode" onchange="onEvalEligibilityModeChange()">
-            <option value="all">ทุกคนประเมินตนเองได้ (ค่าเริ่มต้น)</option>
-            <option value="restricted">จำกัดเฉพาะแผนก/รายบุคคลที่กำหนดด้านล่าง</option>
+            <option value="restricted">จำกัดเฉพาะแผนก/รายบุคคลที่กำหนดด้านล่าง (ค่าเริ่มต้น)</option>
+            <option value="all">ทุกคนประเมินตนเองได้</option>
           </select>
         </div>
       </div>
@@ -5239,21 +5239,22 @@ function getOrgMasterValues(fieldKey){
   return [...new Set([...master, ...real])].sort((a,b)=>String(a).localeCompare(String(b),'th'));
 }
 
-/* Admin กำหนดว่าใคร/แผนกไหนเข้าหน้า "ประเมินตนเอง" ได้ — เดิมไม่มีการจำกัดเลย (ดู CLAUDE.md #62
-   ที่อธิบายว่าตอนนั้นระบบเปิดให้ทุก role เข้าหน้านี้ได้หมด) โครงสร้าง store แยกจาก ORG_MASTER/
-   NAV_PERMS เพราะเป็นคนละความหมาย: นี่คือ "ใครมีสิทธิ์ทำรายการนี้ในรอบนี้" ไม่ใช่ "role นี้เห็นเมนูนี้
-   ไหม" หรือ "แผนกนี้มีอยู่จริงไหม" — ค่าเริ่มต้น mode:'all' การันตีว่าไม่กระทบพฤติกรรมเดิมของใครเลย
-   จนกว่า Admin จะมาเปลี่ยนเอง (ตามแพทเทิร์น localStorage-override ที่ต้องมี reset path ชัดเจน —
-   ดู CLAUDE.md #6, แม้กรณีนี้ "reset" คือกลับไปเลือก mode:'all' เองในหน้าตั้งค่า ไม่ต้องมีปุ่มแยก) */
+/* Admin กำหนดว่าใคร/แผนกไหนเข้าหน้า "ประเมินตนเอง" ได้ — เดิม default เป็น mode:'all' (ไม่จำกัดใคร
+   เลยจนกว่า Admin จะมาเปลี่ยน) แต่ผู้ใช้ขอให้กลับด้าน: default ต้องเป็น "ไม่มีใครมีสิทธิ์ประเมินตนเอง
+   เลย" จนกว่า Admin จะมาเพิ่มแผนก/รายบุคคลเข้า allowlist เอง (opt-in แทน opt-out) — เปลี่ยน default
+   เป็น mode:'restricted' ที่ depts/emps ว่างเปล่า ผลคือทุกคน (ยกเว้น admin/sysadmin ที่ bypass เสมอ
+   ตาม isEligibleForSelfEval()) จะประเมินตนเองไม่ได้ทันทีจนกว่า Admin จะกำหนดสิทธิ์จริง — ต่างจาก
+   ค่า default เดิมของ localStorage-override ทั่วไปตาม CLAUDE.md #6 (ปกติ default ต้อง "ไม่กระทบ
+   พฤติกรรมเดิม") ตรงนี้จงใจเปลี่ยนพฤติกรรมทันทีตามที่ผู้ใช้ขอชัดเจน ไม่ใช่เผลอทำ */
 const EVAL_ELIGIBILITY_KEY = 'smlPmsEvalEligibility';
-let EVAL_ELIGIBILITY = { mode:'all', depts:[], emps:[] };
+let EVAL_ELIGIBILITY = { mode:'restricted', depts:[], emps:[] };
 function loadEvalEligibility(){
   try{
     const stored = JSON.parse(localStorage.getItem(EVAL_ELIGIBILITY_KEY)||'null');
     EVAL_ELIGIBILITY = stored && typeof stored==='object'
-      ? { mode: stored.mode==='restricted'?'restricted':'all', depts: Array.isArray(stored.depts)?stored.depts:[], emps: Array.isArray(stored.emps)?stored.emps:[] }
-      : { mode:'all', depts:[], emps:[] };
-  }catch(e){ EVAL_ELIGIBILITY = { mode:'all', depts:[], emps:[] }; }
+      ? { mode: stored.mode==='all'?'all':'restricted', depts: Array.isArray(stored.depts)?stored.depts:[], emps: Array.isArray(stored.emps)?stored.emps:[] }
+      : { mode:'restricted', depts:[], emps:[] };
+  }catch(e){ EVAL_ELIGIBILITY = { mode:'restricted', depts:[], emps:[] }; }
   return EVAL_ELIGIBILITY;
 }
 function saveEvalEligibilityStore(){ localStorage.setItem(EVAL_ELIGIBILITY_KEY, JSON.stringify(EVAL_ELIGIBILITY)); }
