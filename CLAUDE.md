@@ -1857,6 +1857,47 @@ touches employee/attendance/evaluation data.
     real, fixable problem (a missing Excel table, an expired token) looks
     indistinguishable from "the code has a bug" to whoever reports it.
 
+67. **"สายบังคับบัญชาแสดงให้ครบ" (show the full supervisor chain) —
+    `supervisorChainLabel()`, the function behind the employee list's
+    "สายบังคับบัญชา" column, only ever rendered `u[9]`/`u[10]` (L1/L2)
+    and silently dropped `u[11]` (ผู้อนุมัติ) even though the column
+    header only ever promised "L1 / L2" — every employee whose real
+    chain includes a separate final approver (common for `l1`/`l2`-role
+    rows per CLAUDE.md #22's own "l1 needs l2 OR approver" rule) showed
+    an incomplete chain in this one list view, even though `MASTER_USERS[11]`
+    held the real value the whole time and every other page in the app
+    (Add/Edit Employee's `mu_approver` select, `getEvaluationAssignments()`)
+    already used it correctly.** Fixed by adding the approver line to
+    `supervisorChainLabel()` and updating the column header from
+    "L1 / L2" to "L1 / L2 / อนุมัติ" so the header's own promise matches
+    what's now actually shown (leaving the header stale here would have
+    been the same CLAUDE.md #34/#49 trap — a UI label that no longer
+    describes the code under it). Same shape of gap as #1/#18: a real
+    field that exists and is correctly stored, just not surfaced
+    everywhere it's displayed as "the chain."
+    **Second half of the request — verify web-added data actually
+    reaches Excel** — traced the real path (`saveUserFromModal()` →
+    `pushSingleEmployeeToExcel(code)` → `EXCEL_EMPLOYEE_COLS`-mapped
+    upsert, #27/#30) end-to-end with a test that intercepts the actual
+    Excel-bound row: confirmed `l1`/`l2`/`approver` are read from the
+    real `MASTER_USERS` values by field name (never a bare index, per
+    #30) and land correctly in the pushed row, that a successful push
+    is logged to the Sync Log, and — since #66 just fixed this exact
+    class of silent failure for `AuditLog` — that a *failed* push here
+    was already correctly visible in the Sync Log too (this function's
+    `appendSyncLog()` calls on both branches predate #66 and were never
+    swallowing errors to begin with, unlike `pushAuditLogEntryToExcel()`
+    was). **What I could verify from code and what I could not**: the
+    push mechanism itself is correct and every field (including the full
+    supervisor chain) is included — but I have no access to the user's
+    actual Excel workbook, so I cannot confirm a specific real employee's
+    row is present there right now. Told the user plainly to check the
+    Sync Log panel on the "ตั้งค่า → MS365 Excel Basic" page for any
+    red/failed entries as the next real diagnostic step, rather than
+    claiming "yes, it's definitely in Excel" without being able to see
+    it — the same honesty rule CLAUDE.md #10/#19/#66 all apply to a
+    different failure mode of the same underlying claim.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
