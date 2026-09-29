@@ -2110,6 +2110,55 @@ touches employee/attendance/evaluation data.
     that "keeps everyone who could self-eval yesterday able to today,"
     because the entire point of the request was to stop assuming that.
 
+72. **"ไม่ตรง กำหนดบทบาทแล้วยังเข้าได้หมด" (doesn't match — even after
+    setting a role, they can still access everything) — the user's
+    screenshot showed a real logged-in `l2` employee's "มุมมอง (Demo UI)"
+    dropdown wide open, listing every role from Admin ระบบ down to
+    พนักงานปฏิบัติการ, freely selectable.** This was a real, serious gap
+    in every scoping fix this file has ever shipped (#45's
+    `getMyScopedEmpCodes()`, #61/#64/#65's per-role nav visibility,
+    #62/#71's eligibility gate) — all of them branch on
+    `CURRENT_SESSION_USER`'s role or on whatever `setRole()` was last
+    called with, and `#roleSel`'s `onchange="setRole(this.value)"` had
+    **zero restriction on who could change it or to what** — so any
+    real employee, L1, L2, or GM who happened to notice the dropdown
+    could self-select "Admin ระบบ (Super Admin)" and instantly see every
+    admin-only nav page and queue, completely defeating every scoping
+    rule those other fixes built. The dropdown's own label already says
+    "สาธิต UI เท่านั้น — สิทธิ์จริงคุมที่ SharePoint permission" (UI demo
+    only, real permission is at SharePoint) and #17/#45 already
+    documented the *intent* — "admin/sysadmin can use it to preview other
+    roles' screens without losing their own access" — but the intent was
+    never actually enforced in code; the `<select>` was simply always
+    interactive for whoever was logged in. Fixed in `applySession()`
+    (the one real chokepoint both `doLogin()` and `tryRestoreSession()`
+    already funnel through — #32): right after setting `roleSel.value`
+    to the real logged-in role, set `roleSel.disabled = !['admin',
+    'sysadmin'].includes(u[2])` — every other role's dropdown is now
+    genuinely `disabled` (browser blocks direct interaction with it, not
+    just cosmetically greyed), while admin/sysadmin keep the free
+    preview switch #45 always intended for them. **Same client-side
+    caveat as PINs (#17): this is a UI convenience lock, not real
+    security** — nothing stops someone from calling `setRole('admin')`
+    directly from DevTools regardless of `roleSel.disabled`, exactly the
+    same limit #17 already states plainly for the PIN gate; real data
+    access is still and only ever controlled by SharePoint/Graph
+    permissions on the Worker side, never by this dropdown. What this
+    fix actually closes is the *casual* path — a real employee simply
+    clicking through the dropdown's own visible options and landing on
+    a page they were never supposed to reach through the normal UI, no
+    developer tools required, which is exactly what the user's
+    screenshot showed happening. Verified with a test logging in as a
+    real `l2`/`emp` (dropdown ends up disabled, locked to their own
+    role, an admin-only nav page like "รายการหลัก" stays hidden) and as
+    `admin`/`sysadmin` (dropdown stays enabled, preserving the
+    legitimate preview use case). General lesson: a role-based scoping
+    system is only as strong as the one place that sets "which role is
+    currently active" — if that control point (here, one `<select>`)
+    isn't itself gated by the real logged-in identity, every downstream
+    scoping check built on top of it (however many turns of careful
+    per-role fixes) is decoration a curious user can walk straight past.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

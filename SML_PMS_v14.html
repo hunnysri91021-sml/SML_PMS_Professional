@@ -4156,6 +4156,12 @@ function applySession(u){
   document.getElementById('loginGate').style.display = 'none';
   const roleSel = document.getElementById('roleSel');
   if(roleSel) roleSel.value = u[2];
+  /* "มุมมอง (Demo UI)" ต้องล็อกไว้ที่บทบาทจริงของคนที่ล็อกอินเสมอ ยกเว้น admin/sysadmin ที่ตั้งใจ
+     ให้สลับดูมุมมองบทบาทอื่นได้ (ดู CLAUDE.md #45) — เดิม dropdown นี้เปิดให้ทุกคนที่ล็อกอินแล้วสลับ
+     ไปเป็นบทบาทไหนก็ได้ตามใจ ทำให้พนักงาน/L1/L2 ทั่วไปสลับมุมมองเป็น Admin/GM/AMD-MD แล้วเห็นเมนู
+     และหน้าที่ตัวเองไม่ควรเข้าถึงได้จริง (setRole() ใช้ค่าที่เลือกใน dropdown นี้ตรงๆ ไม่ใช่บทบาทจริง
+     จาก CURRENT_SESSION_USER) ล็อก disabled ไว้สำหรับทุก role อื่นนอกจาก admin/sysadmin */
+  if(roleSel) roleSel.disabled = !['admin','sysadmin'].includes(u[2]);
   if(typeof setRole === 'function') setRole(u[2]);
   const badge = document.getElementById('sessionBadge');
   const nameEl = document.getElementById('sessionName');
