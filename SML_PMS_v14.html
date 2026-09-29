@@ -4213,6 +4213,17 @@ async function resetUserPin(code){
       if(typeof smlToast === 'function') smlToast('PIN ต้องเป็นตัวเลข 4 หลักเท่านั้น — ยกเลิกการตั้งค่า PIN', 'warn');
       return;
     }
+    /* พิมพ์ผิดแค่หลักเดียวตอนตั้ง PIN เองจะล็อกพนักงานออกจากระบบทันที เพราะ PIN ถูกเก็บเป็น hash
+       ทางเดียว ไม่มีทางรู้ภายหลังว่าที่พิมพ์ไปคืออะไร — ให้พิมพ์ยืนยันซ้ำก่อนบันทึกจริงเสมอ */
+    const confirmPin = prompt(`พิมพ์ PIN ${trimmed} อีกครั้งเพื่อยืนยัน (กันพิมพ์ผิดแล้วพนักงานเข้าระบบไม่ได้)`, '');
+    if(confirmPin === null){
+      if(typeof smlToast === 'function') smlToast('ยกเลิกการตั้งค่า PIN', 'warn');
+      return;
+    }
+    if(confirmPin.trim() !== trimmed){
+      if(typeof smlToast === 'function') smlToast('PIN ที่พิมพ์ยืนยันไม่ตรงกัน — ยกเลิกการตั้งค่า PIN กรุณาลองใหม่', 'warn');
+      return;
+    }
     pin = trimmed;
   } else {
     pin = String(Math.floor(1000 + Math.random()*9000));
@@ -4226,7 +4237,11 @@ async function resetUserPin(code){
   alert(`ตั้ง PIN ใหม่ให้ ${emp[1]} (${emp[0]}) เรียบร้อย\n\nPIN: ${pin}${emailNote}\n\nระบบจะไม่แสดง PIN นี้ซ้ำอีก`);
   if(emailResult.sent && typeof appendAuditLog === 'function') appendAuditLog('employee', 'ส่งอีเมล PIN อัตโนมัติ', emp[0], emp[15]);
   if(typeof renderPinStatus === 'function') renderPinStatus(code);
-  if(typeof pushSingleEmployeeSettings === 'function') pushSingleEmployeeSettings(code);
+  /* ต้อง await ให้ push ขึ้น Excel เสร็จจริงก่อนจบฟังก์ชัน — ถ้าปล่อยเป็น fire-and-forget
+     (เดิม) แล้ว Admin ปิดแท็บ/รีโหลดหน้าทันทีหลังเห็น alert PIN ใหม่ การ push อาจถูกตัดตอน
+     กลางทาง ทำให้เครื่อง/อุปกรณ์อื่นไม่เคยได้รับ PIN hash ใหม่เลย (พนักงานเข้าระบบที่เครื่องอื่น
+     ไม่ได้ทั้งที่ Admin "เปลี่ยนรหัสแล้ว" จริง) */
+  if(typeof pushSingleEmployeeSettings === 'function') await pushSingleEmployeeSettings(code);
 }
 
 /* Push PIN hash + แบบฟอร์มประเมินของพนักงานคนเดียว ขึ้น Excel ทันทีแบบเงียบๆ (ไม่มี toast กวนใจ

@@ -1237,6 +1237,39 @@ touches employee/attendance/evaluation data.
     made to read from `CURRENT_SESSION_USER` instead of hardcoded
     literals.
 
+55. **`resetUserPin()`'s custom-PIN path (#47) had no way to catch a typo —
+    a single wrong digit in the one `prompt()` became the real login PIN
+    immediately, and since PINs are stored only as a one-way SHA-256 hash
+    (#17), there was no way to ever recover or even detect what was
+    actually typed versus intended.** Reported in production as "เปลี่ยน
+    รหัสแล้วเข้าไม่ได้" (changed the PIN, now can't log in) for one
+    employee — traced the whole push/pull round-trip
+    (`resetUserPin→pushSingleEmployeeSettings→EmployeeSettings` Excel
+    table `→ms365SyncEmployeeSettingsSilent`/`applyEmployeeSettingsRows`
+    in `doLogin()`'s silent-sync group) and confirmed it was already
+    correct end-to-end (composite re-merge in `loadEmployeesFromMs365()`
+    per #17 also checked out) — the real bug was one step earlier, at
+    the moment of typing the new PIN itself, the same class of mistake as
+    any "no confirm step for an unrecoverable action" gap. Fixed by adding
+    a second `prompt()` asking Admin to retype the same 4 digits before
+    `sha256Hex()` ever runs; a mismatch (or Cancel on either prompt)
+    aborts with a toast and leaves `emp[17]` completely untouched — the
+    employee's old PIN keeps working rather than silently becoming an
+    unknown, unrecoverable one. Also changed
+    `pushSingleEmployeeSettings(code)`'s call at the end of
+    `resetUserPin()` from fire-and-forget to `await`ed: the previous
+    version returned as soon as the confirmation `alert()` closed, so an
+    Admin closing the tab or reloading right after seeing the new PIN
+    could cut the Excel push off mid-flight, leaving every other
+    device's copy of `EmployeeSettings` never updated — the exact
+    "looks like it worked, quietly didn't reach Excel" shape CLAUDE.md
+    #10/#19 already warn about, just triggered by page-lifecycle timing
+    instead of a missing call. General lesson: any place that turns a
+    single unconfirmed keystroke into a one-way hash with no visible
+    record of the original value (a PIN, a password, an API key) needs a
+    type-twice confirmation before committing — there is no "check it
+    against the database and fix it" recovery path once it's hashed.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
