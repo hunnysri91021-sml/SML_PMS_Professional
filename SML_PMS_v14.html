@@ -4415,6 +4415,27 @@ function populateUserFilters(){
   rebuild(deptSel, depts, 'ทุกฝ่าย (Dept)');
 }
 
+/* `<select id="mu_grade">` เดิมมี <option> ฝังตายตัวแค่ 6 ค่า (G1/G2/G3/M1/M2/E1) — ถ้า Grade จริงของ
+   พนักงานที่ sync มาจาก Excel ไม่ตรงกับ 6 ค่านี้เป๊ะ (เช่น มีเกรดอื่นที่ HR ใช้จริงแต่ไม่อยู่ในลิสต์ หรือ
+   ช่องว่าง/ตัวพิมพ์เล็กใหญ่ต่างกันเล็กน้อย) `el.value = emp[8]` ใน fillUserFormFields() จะเซ็ตไม่ติด
+   (ไม่มี <option> ให้ match) เบราว์เซอร์จะ fallback ไปโชว์ตัวเลือกแรกในลิสต์แทนแบบเงียบๆ — MASTER_USERS
+   ยังเก็บค่าจริงถูกต้องอยู่ในหน่วยความจำ แต่หน้าจอฟอร์มแก้ไขจะดูเหมือน "Grade ไม่ได้ดึงจากฐานข้อมูล"
+   ทั้งที่ดึงมาแล้วจริงๆ แค่แสดงผลไม่ได้ (บั๊กแบบเดียวกับ CLAUDE.md #3 — dropdown ต้อง populate จาก
+   ข้อมูลจริง ไม่ใช่ hardcode ทับ) แก้โดยรวมค่าฐาน 6 ค่ากับค่า Grade จริงทุกค่าที่มีอยู่ใน MASTER_USERS
+   เข้าด้วยกัน (union) เป็นตัวเลือกเสมอ — เรียกทั้งตอน init/หลัง sync/หลังบันทึก (เหมือน
+   populateUserFilters()) และเรียกซ้ำใน fillUserFormFields() ก่อนเซ็ตค่า เพื่อการันตีว่าค่าจริงของคนที่
+   กำลังแก้ไขมีตัวเลือกให้เลือกเสมอ ไม่ว่าจะ sync ล่าสุดเมื่อไหร่ */
+const GRADE_BASE_OPTIONS = ['G1','G2','G3','M1','M2','E1'];
+function populateGradeOptions(){
+  const sel = document.getElementById('mu_grade');
+  if(!sel) return;
+  const cur = sel.value;
+  const realGrades = MASTER_USERS.map(u=>u[8]).filter(Boolean);
+  const values = [...new Set([...GRADE_BASE_OPTIONS, ...realGrades])];
+  sel.innerHTML = values.map(v=>`<option value="${v}">${v}</option>`).join('');
+  if(values.includes(cur)) sel.value = cur;
+}
+
 function filterUsers() {
   const role       = document.getElementById('filterRole')?.value    || '';
   const status     = document.getElementById('filterStatus')?.value  || '';
@@ -4582,6 +4603,7 @@ function renderTeamFromMaster() {
 setTimeout(() => {
   renderUsers(MASTER_USERS);
   populateUserFilters();
+  if(typeof populateGradeOptions==='function') populateGradeOptions();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
   renderTeamFromMaster();
@@ -5147,6 +5169,7 @@ function saveUserFromModal() {
 
   renderUsers(MASTER_USERS);
   populateUserFilters();
+  if(typeof populateGradeOptions==='function') populateGradeOptions();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
   if(typeof populateEmpCodeDatalist==='function') populateEmpCodeDatalist();
@@ -5218,6 +5241,7 @@ function fillUserFormFields(emp){
   set('mu_division', emp[5]);
   set('mu_department', emp[6]);
   set('mu_position', emp[7]);
+  if(typeof populateGradeOptions==='function') populateGradeOptions();
   set('mu_grade', emp[8]);
   if(typeof populateSupervisorSelects==='function') populateSupervisorSelects(emp[0]);
   const setSupervisor=(which,val)=>{
@@ -6412,6 +6436,7 @@ async function loadEmployeesFromMs365(silent=false){
     MASTER_USERS.splice(0, MASTER_USERS.length, ...normalized);
     renderUsers(MASTER_USERS);
     populateUserFilters();
+    if(typeof populateGradeOptions==='function') populateGradeOptions();
     renderOrg(MASTER_USERS);
     populateOrgFilters();
     renderTeamFromMaster();

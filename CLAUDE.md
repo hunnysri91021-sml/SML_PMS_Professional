@@ -1063,6 +1063,43 @@ touches employee/attendance/evaluation data.
     the code no longer backs) in the other direction, claiming something
     *worse* than what the code now actually does.
 
+50. **HR reported "Grade ไม่ได้ดึงจากฐานข้อมูล" (Grade isn't pulled from the
+    database) on the employee list/edit page. The read/write plumbing
+    between `MASTER_USERS` and Excel checked out correctly (verified with
+    a diagnostic test against the real header order HR re-confirmed —
+    unchanged from #30) — the actual bug was one layer further down, in
+    how the value gets displayed.** `mu_grade` was a `<select>` with only
+    6 hardcoded `<option>`s (`G1`/`G2`/`G3`/`M1`/`M2`/`E1`) — the same
+    shape of bug CLAUDE.md #3 already warns about, just easy to miss here
+    because Grade *looks* like a fixed enum, not free-form data like a
+    department name. `fillUserFormFields()` sets `mu_grade.value = emp[8]`
+    when opening the edit form (correctly, from the real synced record),
+    but if that real Grade value from Excel wasn't an exact match for one
+    of the 6 hardcoded options (any other real HR grade code, a stray
+    space, different casing), `<select>.value = X` for an X with no
+    matching `<option>` silently fails and the browser falls back to
+    showing the first option — `MASTER_USERS` still held the correct
+    value in memory the whole time, but the edit form visibly showed the
+    wrong grade, which is exactly what would read as "not pulled from
+    the database" even though it was. Fixed with `populateGradeOptions()`
+    (same `populate*Filters()` pattern as #3): rebuilds `mu_grade`'s
+    options as the union of the 6 base grades and every distinct real
+    `u[8]` value already in `MASTER_USERS`, so a stored value always has
+    a matching option. Called at the same points `populateUserFilters()`
+    already is (init, after `saveUserFromModal()`, after
+    `loadEmployeesFromMs365()`) and — critically — again inside
+    `fillUserFormFields()` itself right before setting the value, so even
+    an employee record that predates the last populate call still gets
+    its own real grade added as an option before the form tries to
+    select it. Verified with a test that gives a synthetic employee a
+    grade outside the base 6 (`'P7'`) and confirms the edit form now
+    shows `P7`, not a silent fallback to `G1`. General lesson: a
+    dropdown that *looks* like a closed, safe-to-hardcode enum (job
+    grade, unlike a department name) can still silently drop real data
+    if the app's assumed value set doesn't match what HR's actual sheet
+    contains — the fix is the same either way: populate from what the
+    data actually has, union'd with any real fixed scale, never assume.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
