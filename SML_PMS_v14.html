@@ -7590,7 +7590,14 @@ function appendAuditLog(type, action, target, detail){
 function pushAuditLogEntryToExcel(entry){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)) return;
-  graphAddTableRow('AuditLog', [entry.at, entry.user, entry.type, entry.action, entry.target, entry.detail]).catch(()=>{});
+  /* เดิม .catch(()=>{}) กลืน error ทิ้งเงียบๆ — ถ้า push ไม่สำเร็จจริง (เช่น ตาราง AuditLog ไม่มีอยู่จริง
+     ใน Excel, Worker ตอบ error, หรือ token หมดอายุ) ไม่มีทางรู้เลยว่าทำไมชีต Excel ไม่อัปเดต ทั้งที่
+     ในแอปดูเหมือนทำงานปกติทุกอย่าง (บั๊กแบบเดียวกับที่ CLAUDE.md #10/#19 เตือนไว้ — action ที่ล้มเหลว
+     แบบไม่มีใครเห็น) เปลี่ยนเป็นบันทึกความล้มเหลวลง sync log จริง (เหมือน sync อื่นๆ ในระบบ) เพื่อให้ HR/
+     Admin เห็นสาเหตุจริงที่หน้า MS365 ได้ แทนที่จะเดาว่า "ไม่รู้ทำไมไม่อัปเดต" — ยังคง fire-and-forget
+     เหมือนเดิม ไม่ await ไม่บล็อก action หลัก */
+  graphAddTableRow('AuditLog', [entry.at, entry.user, entry.type, entry.action, entry.target, entry.detail])
+    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog('Push AuditLog เข้า Excel ไม่สำเร็จ: '+(err?.message||err), false); });
 }
 function getAuditLog(){ try{ return JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]'); }catch(e){ return []; } }
 /* renderAuditLog() อ่านจาก localStorage ของเครื่องนี้เท่านั้น (getAuditLog()) — แต่ละ action ที่เกิด
@@ -7625,8 +7632,13 @@ async function ms365SyncAuditLog(silent=true){
       localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(merged.slice(0,1000)));
       if(document.getElementById('pg-audit')?.classList.contains('on') && typeof renderAuditLog==='function') renderAuditLog();
     }
+    if(typeof appendSyncLog==='function') appendSyncLog(`Sync Audit Log: ดึง ${remote.length} แถวจาก Excel${added?' (+'+added+' รายการใหม่)':''}${silent?' (auto)':''}`, true);
     if(!silent) smlToast(added ? `ดึงประวัติจากทุกเครื่องแล้ว (+${added} รายการใหม่)` : 'ประวัติครบถ้วนอยู่แล้ว ไม่มีรายการใหม่','ok');
   }catch(e){
+    /* เดิม silent sync (ตอนเข้าหน้า/login) ที่ล้มเหลวจะเงียบไปเลย ไม่มีร่องรอยว่าทำไม Excel ไม่ถูกดึงมา
+       รวม — บันทึกลง sync log เสมอ (เหมือน sync อื่นๆ ในระบบ) ไม่ว่า silent หรือไม่ ส่วน toast ยังโชว์
+       เฉพาะตอนกดปุ่มเองเหมือนเดิม ไม่ให้ auto-sync ที่พังโผล่ toast รบกวนระหว่างใช้งานปกติ */
+    if(typeof appendSyncLog==='function') appendSyncLog('Sync Audit Log ล้มเหลว: '+e.message, false);
     if(!silent) smlToast('ดึง Audit Log จาก Excel ไม่สำเร็จ: '+e.message,'warn');
   }
 }

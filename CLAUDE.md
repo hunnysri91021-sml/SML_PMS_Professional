@@ -1816,6 +1816,47 @@ touches employee/attendance/evaluation data.
     was complete (it wasn't, per the `gm`-in-`getEvalParticipants()` find
     here).
 
+66. **"ใน Excel sheet AuditLog ไม่ update" (the AuditLog sheet in Excel
+    isn't updating) traced to a `.catch(()=>{})` that swallowed the real
+    reason completely — the same shape of silent failure CLAUDE.md
+    #10/#19 already warn about, just harder to spot here because the
+    call really does fire and really does hit the network; it just
+    throws and nobody records it.** `pushAuditLogEntryToExcel()` (fired
+    from `appendAuditLog()` on nearly every action, per #34) called
+    `graphAddTableRow('AuditLog', ...).catch(()=>{})` — if the push ever
+    failed for any real reason (the `AuditLog` table not actually
+    existing in that Excel workbook, a Worker error, an expired token),
+    the failure vanished with zero trace anywhere: no toast, no log
+    entry, nothing — while every *other* action in the app (login, save,
+    approve) still looked and felt completely normal, so there was no
+    way for HR to even suspect something was wrong short of manually
+    opening the Excel file and comparing row counts. `ms365SyncAuditLog()`
+    (the pull side, #49) had the same gap one layer up: its `catch`
+    block only toasted `if(!silent)`, but every *automatic* pull (login,
+    page reload, opening the Audit Log tab — see #32/#33's silent-sync
+    group) calls it with `silent=true`, so a broken pull failed exactly
+    as invisibly as the broken push. Fixed both to call `appendSyncLog()`
+    (the same sync-log panel every other MS365 push/pull function
+    already writes to, on the MS365 settings page) on failure — success
+    is logged too on the pull side, so a working sync and a failing one
+    are now both visible in the same place instead of only the failure
+    case being newly loud. Toasts are deliberately left unchanged (still
+    only shown for a user-triggered, non-silent action) — the fix is
+    giving the *silent* background path somewhere real to report to, not
+    making every automatic sync interrupt the user with a popup.
+    Verified with a test that fakes the exact real-world cause (the
+    Worker throwing `"Table not found: AuditLog"`, which is what happens
+    when the `AuditLog` table genuinely doesn't exist in the target
+    Excel workbook) and confirms both the push failure and a *silent*
+    pull failure now leave a real entry in the sync log. General lesson,
+    a sharper case of #10/#19: `.catch(()=>{})` on a fire-and-forget push
+    is correct for "don't let this block the main action," but it must
+    never also mean "don't let this be knowable" — route every swallowed
+    error to whatever diagnostic channel already exists (this file's
+    sync log, in this case) rather than discarding it outright, or a
+    real, fixable problem (a missing Excel table, an expired token) looks
+    indistinguishable from "the code has a bug" to whoever reports it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
