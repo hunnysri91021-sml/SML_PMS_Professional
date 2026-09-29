@@ -2881,14 +2881,10 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   </div>
 
   <div class="card">
-    <div class="card-h"><h3>ผู้ใช้งานล่าสุด</h3><div class="r"><span class="bd b-s">ตัวอย่างข้อมูล</span></div></div>
+    <div class="card-h"><h3>ผู้ใช้งานล่าสุด</h3></div>
     <div class="tw"><table>
       <thead><tr><th>ผู้ใช้งาน</th><th>รหัส</th><th>หน่วยงาน</th><th>บทบาท</th><th>สถานะ</th><th>เข้าใช้ล่าสุด</th><th></th></tr></thead>
-      <tbody>
-        <tr><td><div class="u-cell"><div class="u-av">AD</div><div><b>Admin HR&GA</b><small>System Owner</small></div></div></td><td>ADM-001</td><td>HR & GA</td><td><span class="bd b-p">System Admin</span></td><td><span class="bd b-g">ใช้งาน</span></td><td>วันนี้ 15:42</td><td><button class="btn btn-sm">จัดการ</button></td></tr>
-        <tr><td><div class="u-cell"><div class="u-av">ช</div><div><b>คุณเชิดชัย</b><small>AGM / MD</small></div></div></td><td>EXE-001</td><td>Management</td><td><span class="bd b-b">Executive</span></td><td><span class="bd b-g">ใช้งาน</span></td><td>วันนี้ 14:18</td><td><button class="btn btn-sm">จัดการ</button></td></tr>
-        <tr><td><div class="u-cell"><div class="u-av">ว</div><div><b>วิชัย กล้าหาญ</b><small>Leader</small></div></div></td><td>SML-0124</td><td>ปฏิบัติการ</td><td><span class="bd b-g">Leader L1</span></td><td><span class="bd b-g">ใช้งาน</span></td><td>เมื่อวาน 17:03</td><td><button class="btn btn-sm">จัดการ</button></td></tr>
-      </tbody>
+      <tbody id="recentUsersRows"></tbody>
     </table></div>
   </div>
 </div>
@@ -3259,6 +3255,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   }
   if(p==='settings' && typeof renderNavPermEditor==='function') renderNavPermEditor();
   if(p==='settings' && typeof renderRoleCards==='function') renderRoleCards();
+  if(p==='settings' && typeof renderRecentUsers==='function') renderRecentUsers();
   if((p==='review'||p==='calib'||p==='approve') && typeof renderWorkflowPages==='function') renderWorkflowPages();
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
@@ -4198,13 +4195,30 @@ async function tryEmailPin(emp, pin){
 /* ตั้ง/รีเซ็ต PIN ให้พนักงาน — แสดง PIN ที่สุ่มได้ครั้งเดียวตอนนั้นให้ HR เห็นเสมอ (เผื่อส่งอีเมล
    ไม่สำเร็จ) พร้อมพยายามส่งอีเมลแจ้งพนักงานอัตโนมัติถ้าตั้งค่า Proxy + มีอีเมลไว้แล้ว
    ไม่เคยเก็บ PIN ดิบไว้ที่ไหนอีก มีแต่ SHA-256 hash ใน MASTER_USERS[17] */
+/* เดิมสุ่ม PIN 4 หลักให้เสมอ ไม่มีทางให้ Admin กำหนดรหัสเองได้เลย — บางครั้ง Admin อยากตั้งรหัสที่จำง่าย
+   ให้พนักงานเอง (เช่น ตั้งตามที่แจ้งพนักงานไปแล้วทางอื่น) ถามด้วย prompt() ก่อนว่าจะกำหนดเองหรือให้สุ่ม:
+   เว้นว่างแล้วกด OK = สุ่มให้เหมือนเดิม, กด Cancel = ยกเลิกทั้งหมดไม่แตะ PIN เดิม, พิมพ์ค่าที่ไม่ใช่เลข
+   4 หลักตรงๆ = ปฏิเสธและไม่ตั้งอะไรเลย (ไม่เดาว่าตั้งใจจะพิมพ์อะไร ตาม CLAUDE.md #14) กันไม่ให้ PIN ที่
+   ตั้งจริงในระบบเพี้ยนไปจากที่ Admin คิดว่าพิมพ์ */
 async function resetUserPin(code){
   const emp = MASTER_USERS.find(u => u[0] === code);
   if(!emp){
     if(typeof smlToast === 'function') smlToast('กรุณาบันทึกข้อมูลพนักงานให้เสร็จก่อน จึงจะตั้ง PIN ได้', 'warn');
     return;
   }
-  const pin = String(Math.floor(1000 + Math.random()*9000));
+  const custom = prompt(`กำหนดรหัส PIN ให้ ${emp[1]} (${emp[0]}) เอง — พิมพ์ตัวเลข 4 หลัก\nหรือเว้นว่างไว้แล้วกด OK เพื่อให้ระบบสุ่ม PIN ให้อัตโนมัติ`, '');
+  if(custom === null) return;
+  const trimmed = custom.trim();
+  let pin;
+  if(trimmed){
+    if(!/^\d{4}$/.test(trimmed)){
+      if(typeof smlToast === 'function') smlToast('PIN ต้องเป็นตัวเลข 4 หลักเท่านั้น — ยกเลิกการตั้งค่า PIN', 'warn');
+      return;
+    }
+    pin = trimmed;
+  } else {
+    pin = String(Math.floor(1000 + Math.random()*9000));
+  }
   emp[17] = await sha256Hex(pin);
   if(typeof appendAuditLog === 'function') appendAuditLog('employee', 'ตั้ง/รีเซ็ต PIN', emp[0], emp[1]);
   const emailResult = await tryEmailPin(emp, pin);
@@ -4388,6 +4402,27 @@ function renderUsers(data) {
   if(cnt) cnt.textContent = 'แสดง ' + data.length + ' รายการ';
 }
 
+/* "ผู้ใช้งานล่าสุด" บนหน้า ผู้ใช้ & สิทธิ์ เดิมเป็น <tr> ตายตัว 3 แถว (ชื่อ/รหัส/บทบาทสมมติ) พร้อมป้าย
+   "ตัวอย่างข้อมูล" และปุ่ม "จัดการ" ที่ไม่มี onclick เลย (CLAUDE.md #10/#16) — จริงๆ มีตารางผู้ใช้ทั้งหมด
+   ที่ทำงานได้จริงอยู่ด้านล่างแล้ว (renderUsers()/openEditUser()) จึงไม่สร้าง path แก้ไขแยกใหม่ แค่ดึง
+   พนักงาน active จริงจาก MASTER_USERS มาแสดง แล้วให้ปุ่ม "จัดการ" เรียก openEditUser() ตัวเดียวกับตาราง
+   หลัก — u[13] (Login ล่าสุด) เป็นข้อความอิสระ (เช่น "วันนี้ 15:42"/"11/09/68 08:10") ไม่ใช่รูปแบบวันที่
+   เดียวกันทุกแถว จึงเรียงลำดับเวลาจริงไม่ได้แม่นยำ (CLAUDE.md #14 — ห้ามเสกลำดับที่พิสูจน์ไม่ได้) เลย
+   แสดงตามลำดับใน MASTER_USERS แทนที่จะอ้างว่า "เรียงตามล่าสุดจริง" ทั้งที่ทำไม่ได้ */
+function renderRecentUsers(){
+  const tbody = document.getElementById('recentUsersRows');
+  if(!tbody) return;
+  const rows = MASTER_USERS.filter(u=>u[12]==='active').slice(0,5);
+  tbody.innerHTML = rows.length ? rows.map(u=>`<tr>
+    <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div><div><b>${u[1]}</b><small>${u[7]||'—'}</small></div></div></td>
+    <td>${u[0]}</td>
+    <td>${u[6]||u[4]||'—'}</td>
+    <td>${U_ROLE_LABEL[u[2]]||u[2]}</td>
+    <td>${U_STATUS_LABEL[u[12]]||''}</td>
+    <td>${u[13]||'—'}</td>
+    <td><button class="btn btn-sm" onclick="openEditUser('${u[0]}')">จัดการ</button></td>
+  </tr>`).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีพนักงาน active</td></tr>';
+}
 function populateUserFilters(){
   const groupSel = document.getElementById('filterGroup');
   const deptSel  = document.getElementById('filterSection');
@@ -4571,6 +4606,7 @@ function renderTeamFromMaster() {
 setTimeout(() => {
   renderUsers(MASTER_USERS);
   populateUserFilters();
+  if(typeof renderRecentUsers==='function') renderRecentUsers();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
   renderTeamFromMaster();
@@ -5136,6 +5172,7 @@ function saveUserFromModal() {
 
   renderUsers(MASTER_USERS);
   populateUserFilters();
+  if(typeof renderRecentUsers==='function') renderRecentUsers();
   renderOrg(MASTER_USERS);
   populateOrgFilters();
   if(typeof populateEmpCodeDatalist==='function') populateEmpCodeDatalist();

@@ -965,6 +965,44 @@ touches employee/attendance/evaluation data.
     still grep for consumers that bypass the base function and read the
     raw store directly (as `renderDashGradeBars()` did here).
 
+46. **The "ผู้ใช้งานล่าสุด" (Recent Users) table on the ผู้ใช้ & สิทธิ์ page was
+    the exact combination CLAUDE.md #16 + #10 warn about: 3 hardcoded
+    `<tr>`s of fake people, an explicit "ตัวอย่างข้อมูล" (sample data)
+    badge admitting it, and a "จัดการ" button with no `onclick` at all —
+    while a fully working "รายชื่อผู้ใช้ทั้งหมด" table already existed
+    right below it on the same page (`renderUsers()`/`openEditUser()`).**
+    Fixed with `renderRecentUsers()`: pulls the first 5 real active
+    `MASTER_USERS` rows and points "จัดการ" at the *same* `openEditUser()`
+    the real table already uses — no second edit path to keep in sync
+    (same reasoning as #43/#44). Deliberately did **not** claim this list
+    is sorted by actual recency: `u[13]` (Login ล่าสุด) is free-text
+    (`"วันนี้ 15:42"`, `"11/09/68 08:10"`, mixed formats depending on how
+    the row was created), not a consistent parseable timestamp, so a
+    real chronological sort can't be computed honestly from it — showing
+    it in `MASTER_USERS` array order and dropping the "ตัวอย่างข้อมูล"
+    badge (since the rows are now real) was the honest fix; inventing a
+    plausible-looking "most recent first" order the code can't actually
+    verify would have been the same shape of dishonesty CLAUDE.md #14
+    warns against for the Audit Log's old fake IP column.
+
+47. **`resetUserPin()` always generated a random 4-digit PIN — there was
+    no way for Admin to set a PIN of their own choosing (e.g. one
+    they'd already told an employee some other way).** Added a
+    `prompt()` step before the existing random-generation path: typing
+    4 digits sets that as the real PIN, leaving it blank keeps the old
+    random-generate behavior, and clicking Cancel now aborts the whole
+    operation with the employee's PIN left completely untouched (not
+    silently regenerated anyway) rather than assuming Cancel means
+    "generate a random one." A non-4-digit, non-blank entry is rejected
+    outright with a toast and nothing is written — CLAUDE.md #14's "don't
+    invent a value you can't be sure of" applies here too: guessing what
+    the Admin "probably meant" to type would risk setting a real login
+    PIN to something they didn't intend. Every other part of the
+    function (SHA-256 hash storage, one-time `alert()` display, email
+    delivery via `tryEmailPin()`, Excel push via
+    `pushSingleEmployeeSettings()`) is unchanged — this only changes
+    where the raw PIN value comes from before it's hashed.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
