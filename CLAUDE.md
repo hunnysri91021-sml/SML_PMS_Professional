@@ -1748,6 +1748,74 @@ touches employee/attendance/evaluation data.
     same enumeration under a different name for a different subsystem)
     before considering a new-role rollout complete.
 
+65. **User asked to add "หัวหน้าหน่วย" (Unit Leader) as a new role option
+    in the Add/Edit Employee "บทบาท" dropdown. Asked two clarifying
+    questions before touching code, since a wrong guess here means
+    re-doing a role rollout twice (see #64's cost of missing even one
+    array): confirmed it sits below หัวหน้าแผนก (L1), supervising a
+    sub-team within the same department, and that it evaluates its own
+    unit's members in round 1 the same way L1 evaluates its department.**
+    That second answer is the key design fact: a unit head does exactly
+    what an L1 does for round-1 team evaluation, just for a smaller
+    group — so rather than inventing a new hierarchy column, the
+    existing `MASTER_USERS[9]` field (documented as "หัวหน้า L1") is
+    reused generically as "this person's real round-1 evaluator's name,"
+    which every consumer of it (`renderTeamFromMaster()`'s
+    `u[9]===managerName` filter, `getMyScopedEmpCodes()`'s `l1` branch)
+    already matches purely by name, not by checking the supervisor's own
+    role — so an employee whose `u[9]` holds a unit head's name, and a
+    unit head whose own `u[9]` holds their real L1's name, both flow
+    through the exact same code paths with zero changes to either
+    function's filtering logic. Only the *lock/branch* conditions that
+    explicitly checked `role==='l1'` needed a matching `role==='unit'`
+    arm added alongside it: `getMyScopedEmpCodes()`, `getEvaluationAssignments()`'s
+    missing-supervisor check (a unit head needs a real L1 above them,
+    same requirement as a plain employee — `u[2]==='emp'` branch widened
+    to `u[2]==='emp' || u[2]==='unit'`), `populateTeamManagerSelect()`'s
+    lock-to-own-name branch, and `renderTeamFromMaster()`'s manager-name
+    override guard. `getAssignedEvalLevel()` assigns `unit` the same
+    `'ldr'` form tier as `l1` (CLAUDE.md #23), since a unit head fills
+    out the same leader-level self-evaluation form.
+    **Added `unit` everywhere role enumeration exists, learning directly
+    from #64's miss**: `avMap`, `ROLE_DEFS`/`ROLE_PERM_LABELS` (same
+    permission set as `l1`, since the responsibilities are identical at
+    a smaller scope), `#roleSel` demo-view switcher, `mu_role` Add/Edit
+    Employee dropdown, `U_ROLE_LABEL` (employee-list badge),
+    `currentActorLabel()` (Audit Log actor display), `NAV_ROLES`/
+    `NAV_ROLE_LABEL` (the nav-permission editor #64 just fixed — verified
+    this time with a test that the new role's column and its real
+    per-page checkboxes actually exist, not just assumed), the `team`
+    nav item's `data-role` (added `unit` so a logged-in unit head can
+    reach "2. ประเมินทีมงาน" at all — `myeval`/`myresult` need no change
+    since those nav items carry no `data-role` attribute and are visible
+    to everyone by default), and `normalizeMs365Employee()`'s role-guess
+    heuristic (`roleRaw.includes('unit')`). **Also fixed a separate,
+    pre-existing gap surfaced while auditing role enumeration for this
+    change**: `getEvalParticipants()`'s role filter — the shared base
+    for dashboard stats/9-Box/assignment counts — was still
+    `['emp','l1','l2','exec','admin']`, missing `gm` entirely ever since
+    #61 added that role (so GM users were invisible in every
+    participant-derived count, a real gap #61's own rollout should have
+    caught but didn't); widened to include both `gm` and the new `unit`
+    in the same edit rather than leaving `gm`'s gap to be found as a
+    seventh separate bug report later. Verified with a test that creates
+    a synthetic unit head + one team member hung off a real L1, confirms
+    the unit head gets the ldr-tier form, is correctly NOT flagged as
+    missing a supervisor (their real L1 resolves correctly), their scope
+    includes exactly their own unit member plus themselves and excludes
+    unrelated employees, the team page locks their manager-select to
+    their own name and shows their real report, the nav-permission
+    editor's new column has a working checkbox, and the role-permission
+    cards page renders the new role. General lesson combining #61/#64: a
+    role added below an *existing* level rather than beside it can often
+    reuse that level's existing hierarchy field and filtering logic
+    entirely (no new `MASTER_USERS` column, no new Excel column) — the
+    real work is finding every `role===` equality check for the level
+    it's inserted next to and widening each one, plus grepping fresh for
+    role-enumeration arrays rather than trusting the last rollout's list
+    was complete (it wasn't, per the `gm`-in-`getEvalParticipants()` find
+    here).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
