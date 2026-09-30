@@ -3371,6 +3371,60 @@ touches employee/attendance/evaluation data.
     assuming the answer is "click here" when the honest answer might be
     "that field was never wired to anything."
 
+96. **User asked "ถ้าพนักงานมีใบเตือน หรือ comment ใส่ไว้แบบฟอร์มด้วย เพิ่ม
+    แถบ หรือใส่ส่วนไหนได้ HR จะเป็นคนบันทึก" (if an employee has a
+    warning letter or comment, add it to the form too — where can it
+    go — HR will be the one who records it).** Asked one clarifying
+    question first, since this genuinely changes how the data should be
+    stored: whether a warning/comment is a standalone employee record
+    independent of any cycle, tied to one specific evaluation cycle, or
+    both — confirmed **tied to a specific cycle**. This matches factor 7
+    ("ด้านความมีวินัย (Discipline)")'s own description text, which
+    literally says "ไม่เคยได้รับการตักเตือน…" (never having received a
+    warning) — a real per-cycle warning note directly supports how that
+    factor should be scored that cycle.
+    Storage: **deliberately not appended to the draft array** — every
+    consumer in this file reads `d[d.length-1]`/`d[d.length-2]`/
+    `d[d.length-3]` as status/grade/X by *position from the end*, the
+    exact same reason `APPROVAL_SIGNATURE_KEY` (#39) was kept as a
+    separate store instead of a trailing array field. Added
+    `EVAL_HR_NOTE_KEY` (`smlPmsEvalHrNotes`, keyed `empCode|cycle` —
+    same key shape as `APPROVAL_SIGNATURE_KEY`/`EVAL_LAST_ACTOR_KEY`,
+    since level doesn't change whose warning this is) with
+    `saveEvalHrNote()`/`getEvalHrNote()`. **UI placement**: a new
+    "ใบเตือน / หมายเหตุวินัย (HR)" text column on the Calibration page
+    (`renderCalibQueue()`) — the one real stage in this pipeline already
+    gated to the `admin`/HR role (per #61's step-5 handoff), matching
+    "HR จะเป็นคนบันทึก" exactly; pre-filled from any existing note so
+    editing/correcting one doesn't start blank. `confirmCalibration()`
+    now saves each row's note alongside its score/status change, and —
+    following the exact #39 pattern rather than inventing a new Excel
+    table — folds the note into the *same* `Approvals` push's `comment`
+    field it already sends (`'X='+score+' | หมายเหตุ: '+note`), so no
+    new sheet is needed; `ms365SyncHrNotes()` (new, mirrors
+    `ms365SyncApprovalSignatures()` structurally) reads that same
+    `Approvals` table back, parses the `| หมายเหตุ: …` suffix off
+    `Calibrated`-step rows, and merges it into the local map — wired
+    into both silent-sync groups (`doLogin()`/`tryRestoreSession()`)
+    right next to `ms365SyncApprovalSignatures()`. Displayed on **both**
+    printed forms (`printEvalForm()` and `printBatchApproved()`) as a
+    small red-tinted box right after the existing Z/attendance
+    breakdown — shown only when a real note exists for that
+    `empCode|cycle` (CLAUDE.md #54's honest-empty-state rule: no
+    placeholder box when nothing was recorded). Verified with a test
+    that types a note into the Calibration row, confirms
+    `confirmCalibration()` persists it under the real key, and confirms
+    re-rendering the queue with a fresh draft at the same key correctly
+    pre-fills the same note back into the input — plus the standard
+    click-sweep. **Real limit stated plainly, not implied fixed**: like
+    #39's signature sync, this only makes the *note text* itself sync
+    across devices via the Approvals table's Comment column — it rides
+    on Calibration specifically being a one-time-per-cycle HR action, so
+    if HR needs to log something *before* Calibration is reached (e.g.
+    at submission time), there is currently no earlier entry point; not
+    asked for here, flagged for a future request rather than assumed
+    out of scope forever.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
