@@ -4149,17 +4149,23 @@ let CURRENT_SESSION_USER = null;
 function getMyScopedEmpCodes(){
   const me = CURRENT_SESSION_USER;
   if(!me) return null;
-  const role = me[2], myName = me[1], myCode = me[0];
+  const role = me[2], myName = (me[1]||'').trim(), myCode = me[0];
+  /* trim() ทั้งสองฝั่งก่อนเทียบชื่อ — บั๊กเดียวกับที่เพิ่งแก้ใน populateTeamManagerSelect()/
+     renderTeamFromMaster() (CLAUDE.md #84) แต่ตรงนี้คือจุดสำคัญกว่ามาก เพราะเป็น scoping จริง
+     ที่คุมทั้ง Dashboard/Review/Calibration/Approve/รายงาน — ถ้าชื่อหัวหน้าเองหรือชื่อที่ลูกน้อง
+     เก็บไว้ใน u[9]/u[10] มีช่องว่างเกินติดมา (ข้อมูลเก่าก่อน trim ที่จุดบันทึกอื่น หรือแก้ตรงจาก
+     Excel มือ) การเทียบแบบ exact string เดิมจะได้ Set ว่างเปล่า — คนอนุมัติจริงกลับเห็น "ไม่มี
+     ลูกน้อง" ทั้งที่ Excel มีข้อมูลจริงอยู่ */
   if(role==='l1' || role==='unit'){
     /* หัวหน้าหน่วย (unit) อยู่ต่ำกว่าหัวหน้าแผนก (l1) ในลำดับชั้น — ลูกน้องในหน่วยของตนเองก็เก็บชื่อ
        หัวหน้าหน่วยไว้ที่ u[9] เหมือนกับที่ลูกน้องของ l1 เก็บชื่อ l1 ไว้ (ดู CLAUDE.md #65) จึงใช้กฎ
        scoping เดียวกันกับ l1 ได้ทันทีโดยไม่ต้องเพิ่ม field ใหม่ */
-    const codes = MASTER_USERS.filter(u=>u[9]===myName).map(u=>u[0]);
+    const codes = MASTER_USERS.filter(u=>(u[9]||'').trim()===myName).map(u=>u[0]);
     codes.push(myCode);
     return new Set(codes);
   }
   if(role==='l2'){
-    const codes = MASTER_USERS.filter(u=>u[10]===myName).map(u=>u[0]);
+    const codes = MASTER_USERS.filter(u=>(u[10]||'').trim()===myName).map(u=>u[0]);
     codes.push(myCode);
     return new Set(codes);
   }

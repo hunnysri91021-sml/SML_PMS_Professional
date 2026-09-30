@@ -2791,6 +2791,53 @@ touches employee/attendance/evaluation data.
     checked, since it's very often computed by its own separate function
     that a page-by-page review can walk right past.
 
+86. **User's screenshot of "3. สอบทาน L2" showed a real logged-in L2
+    (นางสาวโชสิญา ดานเรื่อง) with zero rows and "ไม่มีใบประเมินรอสอบทาน" —
+    "ทำไมไม่มีลูกน้องเลย ไม่ตรงกับ excel" (why is there no team at all, it
+    doesn't match Excel).** #84's own investigation (found the same day,
+    same dataset) already surfaced a whitespace data-quality issue on a
+    name field one function over (`populateTeamManagerSelect()`'s manager
+    dropdown) — the same shape of bug turned out to live in the far more
+    consequential place: `getMyScopedEmpCodes()` itself, the one real
+    access-control chokepoint feeding the Dashboard, Review, GM-Approve,
+    Calibration, Approve queues, and the Report/Export page (#45's own
+    base function). Its `l1`/`l2` branches compared `u[9]===myName`/
+    `u[10]===myName` as **exact, untrimmed strings** — if the logged-in
+    L2's own stored name (`CURRENT_SESSION_USER[1]`) carries a stray
+    trailing space (very plausible on this exact dataset, given #84 just
+    found the identical shape of stale/manually-edited name data), or if
+    an L1's `u[10]` field pointing up to her has one, the comparison
+    silently fails and `getMyScopedEmpCodes()` returns an **empty** Set
+    instead of `null` (unrestricted) — every scoped page then correctly,
+    faithfully renders "no one," which reads exactly like "the data isn't
+    there" when the real employees are sitting right there in Excel, just
+    matched against a name string that doesn't quite equal what's stored
+    locally. Fixed by trimming both sides of both comparisons
+    (`(u[9]||'').trim()===myName`, `(u[10]||'').trim()===myName`, and
+    `myName` itself now computed as `(me[1]||'').trim()`) — the exact
+    same defensive-trim treatment #84 just applied to
+    `populateTeamManagerSelect()`, just at the one place that actually
+    controls who can see what, not just a dropdown's display. Verified
+    with a test that seeds an L2 whose own name has a trailing space and
+    an L1 whose `u[10]` points to the clean (trimmed) spelling of that
+    same name — confirming `getMyScopedEmpCodes()` now correctly includes
+    that L1 instead of returning an empty scope — plus the standard
+    click-sweep. **Left as a real, stated limit**: this fix only closes
+    the *whitespace* variant of the mismatch; if the L2's real name in
+    `MASTER_USERS` and her reports' stored supervisor name disagree on
+    more than whitespace (a typo, a nickname vs. legal name, a stale
+    value from before she was renamed in Excel), the scope will still
+    come back wrong — that's a data-correction problem at the source
+    (Add/Edit Employee or the Excel sheet itself), the same honest
+    boundary #75 already drew for a similar-looking symptom, not
+    something a client-side trim can paper over. General lesson sharper
+    than #84's own conclusion: when one name-matching bug is found and
+    fixed in one function, immediately check `getMyScopedEmpCodes()`
+    itself for the identical assumption — it is the single highest-
+    leverage place in this file for this exact class of bug, since an
+    empty Set there doesn't just mislabel one dropdown, it makes an
+    entire approval chain look like it has no data at all.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
