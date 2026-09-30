@@ -3327,6 +3327,50 @@ touches employee/attendance/evaluation data.
     push to only one of the two tables will look completely fine until
     a background sync later reads the other, still-stale one back down.
 
+95. **User asked "วินัย ให้กรอกตรงไหน" (where do I fill in "วินัย"/
+    Discipline) about the "2. ประเมินทีมงาน" page's team table, which has
+    a "วินัย" column next to "ตนเอง"/"คะแนน L1" — investigated and
+    confirmed both `renderTeamFromMaster()`'s "ตนเอง" and "วินัย" cells
+    were `<td style="color:#cbd5e1">—</td>` **hardcoded, every row,
+    always**, exactly the CLAUDE.md #16 shape (a column that promises
+    real per-person data but never computes it) — which directly
+    explains the user's confusion: there was never a real cell to type
+    into, so naturally no fill-in point could be found.** Answered the
+    real question first: "วินัย" isn't its own quick-entry field at
+    all — it's scored as factor **7** ("ด้านความมีวินัย (Discipline)")
+    inside the same per-employee scoring form opened via the row's
+    "ประเมิน"/"ดูแบบฟอร์ม" button (`openReviewerForm()`, #93) — the
+    same table every other factor (1. ปริมาณงาน, 2. คุณภาพ, ... 10.
+    ฯลฯ) is scored in, not a separate control on the list page.
+    Verified this factor sits at the same array position (index 6 of
+    the 10-slot `m[]` array, i.e. payload index `4+6=10`) across **all
+    four** form levels (`op`/`of`/`ldr`/`mgr` — each one's `factors[]`
+    literally lists "7. ด้านความมีวินัย (Discipline)" as its 7th item)
+    before relying on that fixed position, so reading `d[10]` off any
+    draft regardless of level is safe. Fixed the "วินัย" cell to show
+    that real stored value (`0`/unset still renders `—`, since 0 isn't
+    a real score yet — CLAUDE.md #14's "don't fabricate a value"
+    extended to "don't treat an unset slot as a real zero" too) instead
+    of a permanent placeholder — so once an L1 scores that factor and
+    saves, the team list itself now honestly reflects it, answering
+    "where did the value I entered go" the next time this comes up.
+    **Left "ตนเอง" as `—`, deliberately, not silently** — this app has
+    no separate self-score preserved once L1 edits/confirms the same
+    record (#61's own Q1 answer: "L1 round one" edits the *same* draft
+    in place, it never creates a second parallel score set), so there
+    is genuinely no real self-only value this column could show without
+    a real data-model change nobody asked for here; noted this limit in
+    a code comment rather than quietly leaving the column looking like
+    a smaller version of the same #16 bug the "วินัย" fix just closed.
+    Verified with a test that seeds a real draft with a real factor-7
+    score and confirms the team list row renders that exact number,
+    not a dash — plus the standard click-sweep. General lesson: a
+    one-line "where do I enter X" question is often the most direct
+    signal that a *displayed* field for X either doesn't exist or is
+    dead — check the actual render function for that exact label before
+    assuming the answer is "click here" when the honest answer might be
+    "that field was never wired to anything."
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

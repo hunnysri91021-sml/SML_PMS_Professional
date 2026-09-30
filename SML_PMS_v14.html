@@ -4757,7 +4757,16 @@ function renderTeamFromMaster() {
     const status = d ? d[d.length-1] : 'Draft';
     const wf = status==='Draft' ? 'pending' : 'done';
     const X = d ? Number(d[d.length-3]) : null;
-    return { u, wf, X };
+    /* คอลัมน์ "วินัย" เดิมเป็น "—" ตายตัวเสมอ ไม่เคยดึงคะแนนจริง — ปัจจัยที่ 7 "ด้านความมีวินัย
+       (Discipline)" อยู่ตำแหน่งเดียวกัน (index 6 ใน m[]) ในทั้ง 4 แบบฟอร์ม (op/of/ldr/mgr, ดูรายการ
+       factors ของแต่ละระดับ) จึงอ่านจาก payload index 4+6=10 ของ draft ได้ตรงๆ (payload =
+       [empCode,empName,cycle,level, ...m(10 ข้อหลัก), ...l(4 ข้อหัวหน้า), Y,Z,X,grade,status]) —
+       0/ไม่มีค่า แปลว่ายังไม่ได้ให้คะแนนข้อนี้ ไม่ใช่คะแนน 0 จริง จึงแสดง "—" เหมือนเดิมในกรณีนั้น
+       ส่วน "ตนเอง" ยังคงเป็น "—" ต่อไปจริงๆ — แอปนี้ไม่มีค่าคะแนนแยกของพนักงาน/L1 สองชุด (ดู #61 ข้อ 1:
+       L1 "รอบแรก" คือแก้ไข/ยืนยันคะแนนเดิมทับ ไม่ใช่คะแนนชุดที่สอง) จึงไม่มีข้อมูลจริงให้แสดงตรงนี้ */
+    const disciplineRaw = d ? Number(d[10]) : 0;
+    const discipline = disciplineRaw > 0 ? disciplineRaw : null;
+    return { u, wf, X, discipline };
   });
 
   const filtered = withStatus.filter(r =>
@@ -4765,14 +4774,14 @@ function renderTeamFromMaster() {
     (!q || r.u[0].toLowerCase().includes(q) || r.u[1].toLowerCase().includes(q))
   );
 
-  el.innerHTML = filtered.length ? filtered.map(({u,wf,X}) => {
+  el.innerHTML = filtered.length ? filtered.map(({u,wf,X,discipline}) => {
     const st = stMap[wf];
     return `<tr>
       <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>
         <div><b>${u[1]}</b><small>${u[0]}</small></div></div></td>
       <td style="font-size:12px">${u[7]}</td>
       <td style="color:#cbd5e1">—</td>
-      <td style="color:#cbd5e1">—</td>
+      <td>${discipline==null?'<span style="color:#cbd5e1">—</span>':'<b>'+discipline+'</b>'}</td>
       <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
       <td><span class="bd ${st[0]}">${st[1]}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
