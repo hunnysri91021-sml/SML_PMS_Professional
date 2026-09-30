@@ -3507,6 +3507,63 @@ touches employee/attendance/evaluation data.
       column rather than continuing to reason from code or from a partial
       screenshot.
 
+98. **User's screenshot of the Settings page's "เกณฑ์ที่ใช้งานอยู่" table
+    (8 rows of tiered late-arrival/absence point deductions, each with a
+    "แก้ไข" button) reported "แก้หลักเกณฑ์ไม่ได้ มาสายหลักการผิด ต้อง
+    คำนวนมาสาย 8 ครั้ง นับเป็น 1 วันลา ทุกๆ 8 ครั้ง" (can't edit the
+    criteria, the late-arrival rule is wrong — 8 late arrivals must count
+    as 1 leave day, every 8 times).** Grepped for any function reference
+    to this table (`criteria-box`, the card's own class names) before
+    touching anything — found **zero**: the whole table (all 8 rows —
+    tiered "1–3 ครั้ง = 0.5 คะแนน/ครั้ง", "≥4 ครั้ง = 1.0 คะแนน/ครั้ง",
+    "300 นาทีสะสม = 3.0 คะแนน", plus separate thresholded rows for
+    ขาดงาน/ลาป่วย/ลากิจ/กลับก่อนเวลา/ลาไม่รับค่าจ้าง) was pure static
+    mock HTML, and every "แก้ไข" button had no `onclick` at all — the
+    exact CLAUDE.md #16 + #10 combination (fabricated tiered numbers,
+    unwired edit buttons) already seen elsewhere in this file. The real
+    scoring formula, `computeZDays()` (used by every actual Z score in
+    the app — self-eval, reviewer forms per #93, printed forms, the
+    "🧪 ทดสอบสูตร" simulator right below this same fake table) has, per
+    its own existing code comment, **already implemented exactly the
+    rule the user asked for since before this report**: "สาย/กลับก่อน 8
+    ครั้ง = 1 วันลา" — `lateEarly/8` with no tiers, no separate minute-
+    based threshold, continuous accumulation. So there was no real
+    scoring bug to fix — every actual evaluation in this app has always
+    used the correct 8-per-day rule — the user's confusion (and their
+    literal "can't edit" complaint) came entirely from this second,
+    completely disconnected fake table sitting on the same page showing
+    a different, wrong, three-tier model that was never real and could
+    never be edited because nothing read or wrote it. Fixed by replacing
+    the fake table with one that honestly describes the real formula
+    driving every score in the app — 4 real rows (late+early combined
+    ÷8, absent ×3, sick 1:1, personal 1:1, matching `computeZDays()`
+    line-for-line) instead of 8 fabricated tiered ones, dropped the
+    dead "แก้ไข" buttons and the "สถานะ ใช้งาน/ปิดใช้งาน" column they sat
+    in (nothing toggles), and added an explicit note that this table is
+    a read-only description of a formula fixed in code, not a separate
+    editable setting — so a future "still can't edit" report is
+    forestalled by the table itself saying so, rather than silently
+    implying editability the same way the old "แก้ไข" buttons did.
+    Deliberately did **not** build a real editable-criteria engine that
+    would actually drive `computeZDays()` — that's a materially bigger
+    feature (a new settings store, wiring every score consumer to read
+    from it instead of the hardcoded formula) that was never asked for
+    here; the user's complaint was specifically that the *displayed*
+    rule was wrong and unfixable, and the real rule turned out to
+    already be correct everywhere it's actually used, so describing it
+    truthfully was the right-sized fix. Verified with a Playwright test
+    confirming the new table's real formula text renders correctly and
+    the old fake title/rows are gone, plus the standard click-sweep.
+    General lesson combining #16/#10: a static, never-referenced table
+    sitting on the *same settings page* as a working simulator/formula
+    for the *same metric* is easy to mistake for "the thing driving the
+    real numbers" from a screenshot alone — before assuming a user-
+    reported wrong number is a real scoring bug, grep whether the
+    screenshotted element has any JS behind it at all, and check whether
+    a sibling function on the same page already computes the metric
+    correctly; the fix may be deleting/relabeling the fake display, not
+    changing the real formula.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
