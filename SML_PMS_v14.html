@@ -2172,7 +2172,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="tw"><table>
         <thead><tr><th>#</th><th>ตัวชี้วัด</th><th>สูตรแปลงเป็น "วันลา"</th><th>หมายเหตุ</th></tr></thead>
         <tbody>
-          <tr><td>1</td><td><b>มาสาย + กลับก่อนเวลา (ครั้ง รวมกัน)</b></td><td><b style="color:#2563eb">ทุกๆ 8 ครั้ง = 1 วันลา</b></td><td>สะสมต่อเนื่อง ไม่มีขั้นบันได (เช่น 20 ครั้ง = 2.5 วัน)</td></tr>
+          <tr><td>1</td><td><b>มาสาย + กลับก่อนเวลา (ครั้ง รวมกัน)</b></td><td><b style="color:#2563eb">ทุกๆ 8 ครั้ง = 1 วันลา</b></td><td>ไม่ถึง 8 ครั้งไม่นับ เศษตัดทิ้ง (ปัดลง) — เช่น 7 ครั้ง = 0 วัน, 15 ครั้ง = 1 วัน, 16 ครั้ง = 2 วัน</td></tr>
           <tr style="background:#fef2f2"><td>2</td><td><b>ขาดงาน (วัน)</b></td><td><b style="color:#dc2626">ขาด 1 วัน = 3 วันลา</b></td><td>คูณ 3 ทุกวันที่ขาด ไม่มีเพดาน</td></tr>
           <tr><td>3</td><td><b>ลาป่วย (วัน)</b></td><td>นับตรง 1 วัน = 1 วันลา</td><td>ไม่มีเกณฑ์ขั้นต่ำ นับทุกวันที่ลา</td></tr>
           <tr><td>4</td><td><b>ลากิจ (วัน)</b></td><td>นับตรง 1 วัน = 1 วันลา</td><td>ไม่มีเกณฑ์ขั้นต่ำ นับทุกวันที่ลา</td></tr>
@@ -4489,11 +4489,13 @@ const DEFAULT_ATTENDANCE = { lateCount:6, earlyCount:1, absentDay:0, sickDay:3, 
 function getAttendanceFor(empCode){
   return ATTENDANCE[empCode] || DEFAULT_ATTENDANCE;
 }
-/* สูตรตามเกณฑ์ SML (หน้า "เกณฑ์คะแนน Z"): ขาด 1 วัน = ลากิจ 3 วัน · สาย/กลับก่อน 8 ครั้ง = 1 วันลา
-   วันลารวม = ลาป่วย + ลากิจ + (ขาด × 3) + ((สาย+กลับก่อน) ÷ 8) */
+/* สูตรตามเกณฑ์ SML (หน้า "เกณฑ์คะแนน Z"): ขาด 1 วัน = ลากิจ 3 วัน · สาย/กลับก่อน ทุกๆ 8 ครั้ง = 1 วันลา
+   ไม่ถึง 8 ครั้งไม่นับ และเศษถูกตัดทิ้ง (ปัดลง) — 7 ครั้ง = 0 วัน, 8 ครั้ง = 1 วัน, 15 ครั้ง = 1 วัน, 16 ครั้ง = 2 วัน
+   วันลารวม = ลาป่วย + ลากิจ + (ขาด × 3) + floor((สาย+กลับก่อน) ÷ 8) */
 function computeZDays(att){
   const lateEarly = (att.lateCount||0) + (att.earlyCount||0);
-  const raw = (att.sickDay||0) + (att.personalDay||0) + (att.absentDay||0)*3 + lateEarly/8;
+  const lateDays = Math.floor(lateEarly/8);
+  const raw = (att.sickDay||0) + (att.personalDay||0) + (att.absentDay||0)*3 + lateDays;
   return Math.min(30, Math.round(raw*1000)/1000);
 }
 function zKeyForLevel(lv){ return lv==='mgr' ? 'mgr' : (lv==='ldr'||lv==='super') ? 'ldr' : 'emp'; }
@@ -4512,7 +4514,7 @@ function renderZStats(lv){
   const el = (id,val) => { const e=document.getElementById(id); if(e) e.textContent = val; };
   el('zsLate', (att.lateCount||0) + ' ครั้ง');
   el('zsEarly', (att.earlyCount||0) + ' ครั้ง');
-  el('zsLateEarly', lateEarly + ' ครั้ง ÷ 8 = ' + (lateEarly/8).toFixed(3) + ' วัน');
+  el('zsLateEarly', lateEarly + ' ครั้ง ÷ 8 (ปัดลง) = ' + Math.floor(lateEarly/8) + ' วัน');
   el('zsAbsent', (att.absentDay||0) + ' วัน');
   el('zsSick', (att.sickDay||0) + ' วัน');
   el('zsPersonal', (att.personalDay||0) + ' วัน');
@@ -5913,9 +5915,9 @@ function calcSim(){
   const sick=+document.getElementById('s3').value||0;
   const per=+document.getElementById('s4').value||0;
   let rows=[],totalDays=0;
-  // สาย+กลับก่อน 8 ครั้ง = 1 วัน
-  const lateDays=late/8;
-  if(late>0){rows.push(['มาสาย '+late+' ครั้ง (÷8 = '+lateDays.toFixed(3)+' วัน)',lateDays]);totalDays+=lateDays;}
+  // สาย+กลับก่อน ทุกๆ 8 ครั้ง = 1 วัน — ไม่ถึง 8 ไม่นับ เศษตัดทิ้ง (ปัดลง)
+  const lateDays=Math.floor(late/8);
+  if(late>0){rows.push(['มาสาย '+late+' ครั้ง (÷8 ปัดลง = '+lateDays+' วัน)',lateDays]);totalDays+=lateDays;}
   // ขาด 1 วัน = 3 วันลากิจ
   const absDays=abs*3;
   if(abs>0){rows.push(['ขาดงาน '+abs+' วัน (×3 = '+absDays+' วันลากิจ)',absDays]);totalDays+=absDays;}
@@ -9064,7 +9066,7 @@ function openReviewerForm(lv,name,code,position){
     <div class="review-score-summary" style="margin-bottom:14px">
       <div><span>มาสาย</span><b>${att.lateCount||0} ครั้ง</b></div>
       <div><span>กลับก่อนเวลา</span><b>${att.earlyCount||0} ครั้ง</b></div>
-      <div><span>สาย+กลับก่อน ÷ 8</span><b>${lateEarly} ครั้ง = ${(lateEarly/8).toFixed(3)} วัน</b></div>
+      <div><span>สาย+กลับก่อน ÷ 8 (ปัดลง)</span><b>${lateEarly} ครั้ง = ${Math.floor(lateEarly/8)} วัน</b></div>
       <div><span>ขาดงาน</span><b>${att.absentDay||0} วัน</b></div>
       <div><span>ลาป่วย</span><b>${att.sickDay||0} วัน</b></div>
       <div><span>ลากิจ</span><b>${att.personalDay||0} วัน</b></div>

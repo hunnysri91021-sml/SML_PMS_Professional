@@ -3564,6 +3564,43 @@ touches employee/attendance/evaluation data.
     correctly; the fix may be deleting/relabeling the fake display, not
     changing the real formula.
 
+99. **Follow-up to #98: user clarified the real late-arrival rule further —
+    "มาสาย ถ้าไม่ถึง 8 ครั้งไม่นับ และ เศษก็ตัดทิ้ง" (if late count doesn't
+    reach 8, don't count it at all, and any remainder is truncated —
+    not fractional/accumulated).** `computeZDays()` (the real formula
+    #98 confirmed is already correctly wired everywhere) still computed
+    `lateEarly/8` as a plain fraction — 7 ครั้ง gave 0.875 วัน (a nonzero
+    partial-day penalty even though it hadn't reached a full 8), and 20
+    ครั้ง gave 2.5 วัน (a fractional remainder instead of being dropped).
+    Both are wrong under the real rule: below 8 must be exactly 0, and
+    the remainder above the last full multiple of 8 must be discarded,
+    not kept as a fraction. Fixed by wrapping the division in
+    `Math.floor()` — `const lateDays = Math.floor(lateEarly/8)` — so 7
+    ครั้ง → 0 วัน, 8 → 1, 15 → 1 (7 leftover dropped), 16 → 2, exactly
+    matching the user's stated rule. Propagated the identical
+    `Math.floor()` to every other place in the file that independently
+    computed this same `lateEarly/8` figure for *display* (not just the
+    one that feeds the real score) — `renderZStats()`'s `zsLateEarly`
+    line, the "🧪 ทดสอบสูตร" simulator's `calcSim()`, and
+    `openReviewerForm()`'s per-employee Z detail box (#93) — plus fixed
+    the brand-new #98 criteria-description table's own example text
+    (which still said "20 ครั้ง = 2.5 วัน," now correctly "15 ครั้ง = 1
+    วัน, 16 ครั้ง = 2 วัน"), since #98's whole point was that table must
+    stay an accurate mirror of the real formula and would have gone
+    stale again within the same conversation otherwise. Verified with a
+    Playwright test calling the real `computeZDays()` directly across
+    late counts 0/1/7/8/9/15/16/20/23/24 and confirming the exact
+    floor-at-every-8 sequence (0,0,0,1,1,1,2,2,2,3), plus the standard
+    click-sweep. General lesson: a "divide by N for a rate" formula and
+    a "floor divide by N for a threshold/bucket" formula look almost
+    identical in code (`x/8` vs `Math.floor(x/8)`) but produce very
+    different real-world behavior at the boundaries — when a user states
+    the rule in bucket language ("ถ้าไม่ถึง...ไม่นับ", "เศษตัดทิ้ง"), that
+    is a direct signal the operation is `Math.floor`, not plain division,
+    and every parallel display of the same figure elsewhere in the file
+    needs the identical fix, not just the one function whose output the
+    user could see.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
