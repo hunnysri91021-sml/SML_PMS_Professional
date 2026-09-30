@@ -7448,12 +7448,32 @@ function markAppraisalPushed(key){
 function isAppraisalPushed(key){
   try{ return !!JSON.parse(localStorage.getItem(PUSHED_APPRAISALS_KEY)||'{}')[key]; }catch(e){ return false; }
 }
+/* #94: ทุกขั้นตอนอนุมัติ/ตีกลับ (updateDraftStatus()/confirmCalibration()) เดิม push แค่ตาราง
+   Approvals (log เหตุการณ์, append-only) ผ่าน pushApprovalRecordToExcel() แต่ไม่เคย push สถานะ
+   ปัจจุบันของใบนั้นเข้าตาราง Appraisals (upsert คีย์ผสม [empId,cycle,level]) เลย — ตรงกันข้ามกับ
+   acknowledgeMyResult() ที่ทำถูกทั้งสองขา (ดูคอมเมนต์บนฟังก์ชันนั้น) ผลคือ: กด "ตีกลับที่เลือก" แล้ว
+   local เปลี่ยนเป็น Draft/Submitted/ฯลฯ ทันที แต่แถวใน Appraisals ยังคงสถานะเดิม (เช่น "Submitted")
+   ค้างอยู่ — พอ startEvalAutoSync() (#59) sync ทุก 30 วิ/ตอนเข้าหน้าใหม่ ms365SyncAppraisals() จะเห็น
+   remote (สถานะเดิม อันดับสูงกว่า) "ไปไกลกว่า" local (สถานะที่เพิ่งตีกลับ อันดับต่ำกว่า) แล้ว overwrite
+   local กลับไปเป็นสถานะเดิมตามกฎ "merge เฉพาะเมื่อ remote ไปไกลกว่า" (#58) — ข้อมูลที่ตีกลับไปจึง
+   "กลับมาอีก" เอง ทั้งที่ไม่มีใครกดอะไรซ้ำ ตรงกับรายงานของผู้ใช้เป๊ะ ("เลือกตีกลับแต่ข้อมูลกลับมาอีก")
+   แก้โดยให้ทุกจุดที่เปลี่ยนสถานะ push แถวปัจจุบันเข้า Appraisals ทันทีเหมือนกัน (best-effort,
+   fire-and-forget, log ผลลง Sync Log ตามแบบแผนเดียวกับ pushApprovalRecordToExcel()) */
+function pushDraftRowToExcel(d, label){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog(`pushDraftRowToExcel (${label||d[d.length-1]}): ยังไม่ได้ตั้งค่า MS365`, false); return; }
+  graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d)
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) เข้า Appraisals`, true); })
+    .catch(err=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) ไม่สำเร็จ: `+(err?.message||err), false); });
+}
 function updateDraftStatus(keys, newStatus){
   const keySet = new Set(keys);
   const drafts = getDrafts();
-  drafts.forEach(d=>{ if(keySet.has(draftKey(d))) d[d.length-1] = newStatus; });
+  const changed = drafts.filter(d=>keySet.has(draftKey(d)));
+  changed.forEach(d=>{ d[d.length-1] = newStatus; });
   saveDrafts(drafts);
   renderWorkflowPages();
+  changed.forEach(d=>pushDraftRowToExcel(d));
 }
 function getCheckedKeys(cls){ return [...document.querySelectorAll('.'+cls+':checked')].map(el=>el.value); }
 function empDeptLabel(code, fallbackName){
@@ -7649,13 +7669,15 @@ function confirmCalibration(){
   const inputs=[...document.querySelectorAll('.calib-adj')];
   if(!inputs.length){ smlToast('ไม่มีรายการรอ Calibration','warn'); return; }
   const drafts=getDrafts();
+  const changed=[];
   inputs.forEach(inp=>{
     const key=inp.dataset.key, newX=Number(inp.value)||0;
     const d=drafts.find(x=>draftKey(x)===key);
-    if(d){ d[d.length-3]=newX; d[d.length-2]=gradeFromX(newX); d[d.length-1]='Calibrated'; }
+    if(d){ d[d.length-3]=newX; d[d.length-2]=gradeFromX(newX); d[d.length-1]='Calibrated'; changed.push(d); }
   });
   saveDrafts(drafts);
   renderWorkflowPages();
+  changed.forEach(d=>pushDraftRowToExcel(d));
   inputs.forEach(inp=>{ const [empCode,cycle]=inp.dataset.key.split('|'); pushApprovalRecordToExcel(empCode,cycle,'Calibrated','X='+inp.value); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration', inputs.length+' รายการ', inputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
   smlToast('ยืนยันผล Calibration แล้ว '+inputs.length+' รายการ','ok');

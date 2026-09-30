@@ -3264,6 +3264,69 @@ touches employee/attendance/evaluation data.
     (a form's max, a class default, a placeholder) before assuming "we
     already compute this for real" means every screen shows it.
 
+94. **User's screenshot of the new "สอบทานขั้นที่ 3 (หัวหน้าแผนก L2)" page
+    (#92) reported "เลือกตีกลับแต่ข้อมูลกลับมาอีก" (selected reject, but
+    the data comes back again) — the row visibly disappeared from the
+    queue right after clicking ตีกลับ, then reappeared on its own some
+    time later.** Root cause: every approve/reject/calibrate action in
+    the whole review→GM→calibration→approve chain (`updateDraftStatus()`,
+    called by `approveReviewL1Selected()`/`rejectReviewL1Selected()`/
+    `approveReviewSelected()`/`rejectReviewSelected()`/
+    `approveGmSelected()`/`rejectGmSelected()`/`approveAllFinal()`/
+    `rejectApproveAll()`, plus `confirmCalibration()`'s own direct
+    mutation) only ever pushed the *event* to the `Approvals` Excel
+    table via `pushApprovalRecordToExcel()` (append-only log, #34) —
+    none of them pushed the draft's new *current status* to the
+    `Appraisals` Excel table (the composite-key upsert table #41
+    established). `acknowledgeMyResult()` was the one function in this
+    whole chain that already did both halves correctly (its own comment
+    explains why — Approvals for the log, Appraisals so the row's
+    `status` column doesn't stay stuck), which made it the reference
+    point for fixing the other eight call sites, not the pattern that
+    needed fixing itself. Because the `Appraisals` row never got the new
+    status, `startEvalAutoSync()`'s 30-second `ms365SyncAppraisals()`
+    pull (#59) — which merges by taking whichever copy's status is
+    *further along* `EVAL_STATUS_ORDER` (#58) — kept seeing the stale,
+    still-`Submitted` remote row as "ahead of" the freshly-rejected
+    local `Draft`/`Submitted` copy, and dutifully overwrote local back
+    to the old status on the very next sync tick (immediate on page
+    entry, or within 30 seconds of staying on the page) — exactly the
+    "data comes back" the user watched happen with nothing else
+    clicked. This is a different failure mode from #91's checkbox bug
+    (which was about *selecting* rows before clicking) — here the click
+    worked, the status genuinely changed for a moment, and a background
+    sync silently un-did it minutes later, which reads even more like
+    "the button doesn't work" since there's a real delay between the
+    action and its apparent failure. Fixed by extracting one shared
+    helper, `pushDraftRowToExcel(d, label)` (best-effort, fire-and-forget,
+    logs both success and failure to the Sync Log per #66/#68/#69's
+    established convention — never a silent `.catch(()=>{})`), and
+    calling it from the one real chokepoint, `updateDraftStatus()`
+    itself (covering 8 of the 9 call sites with one change), plus
+    separately from `confirmCalibration()` (the one function that
+    mutates status *and* X/grade directly rather than going through
+    `updateDraftStatus()`). Verified with a test that mocks a fake
+    "remote Excel" store behind `graphUpsertTableRow()`/
+    `graphListTableRows()`: rejects a real submission through the L1
+    review queue, confirms the mock remote is updated to the new status
+    immediately (not just local `localStorage`), then runs
+    `ms365SyncAppraisals(true)` again (simulating the next 30-second
+    auto-sync tick) and confirms the status stays `Draft` instead of
+    reverting — the exact scenario the user reported — plus a second
+    test confirming `confirmCalibration()`'s own X/grade/status change
+    now pushes too, plus the standard click-sweep. General lesson,
+    sharper than #34's original statement: when a workflow has *two*
+    Excel tables serving two different purposes (an append-only event
+    log and a current-state upsert table), **every** function that
+    changes that current state must push to *both* — finding one
+    correct reference implementation elsewhere in the file
+    (`acknowledgeMyResult()` here) is not the same as every other status-
+    changing function actually following it; grep for every caller of
+    the *event-log* push function (`pushApprovalRecordToExcel()`) and
+    check each one also pushes to the *current-state* table, since a
+    push to only one of the two tables will look completely fine until
+    a background sync later reads the other, still-stale one back down.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
