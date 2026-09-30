@@ -4538,7 +4538,7 @@ function renderUsers(data) {
     <td style="font-size:12px;color:#374151">${orgChainLabel(u)}</td>
     <td style="text-align:center"><span class="bd b-s" style="font-size:11px">${u[8]}</span></td>
     <td style="font-size:12px;color:#374151;line-height:1.5">${supervisorChainLabel(u)}</td>
-    <td style="text-align:center">${U_STATUS_LABEL[u[12]]||''}</td>
+    <td style="text-align:center">${U_STATUS_LABEL[u[12]]||''}${u[20]==='1' ? '<br><span class="bd" style="font-size:10px;background:#f1f5f9;color:#64748b">🚫 ยกเว้นประเมิน</span>' : ''}</td>
     <td style="font-size:11px;color:#374151">${u[14]||'—'}<br><small style="color:#94a3b8">${u[13]||'—'}</small></td>
     <td>
       <div style="display:flex;gap:3px;justify-content:center">
@@ -5592,13 +5592,14 @@ function saveUserFromModal() {
   const email    = (document.getElementById('mu_email')?.value || '').trim();
   const potential= document.getElementById('mu_potential')?.value || '';
   const evalLevel= document.getElementById('mu_evallevel')?.value || '';
+  const evalExempt= document.getElementById('mu_evalexempt')?.checked ? '1' : '';
 
   if (!id || !name || !role || !group || !section || !position || !grade || !status) {
     smlToast('กรุณากรอกข้อมูลที่มี * ให้ครบถ้วน', 'warn');
     return;
   }
 
-  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential,pinHash,evalLevel,gm] */
+  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential,pinHash,evalLevel,gm,evalExempt] */
   const existingRow = MASTER_USERS.find(u => u[0] === id);
   const newUser = [id, name, role, group, section, division||'—', dept||'—',
                    position, grade, l1||'—', l2||'—', approver||'—', status,
@@ -5608,7 +5609,8 @@ function saveUserFromModal() {
                    potential || existingRow?.[16] || '',
                    existingRow?.[17] || '',
                    evalLevel,
-                   gm||'—'];
+                   gm||'—',
+                   evalExempt];
 
   const existing = MASTER_USERS.findIndex(u => u[0] === id);
   if (existing >= 0) {
@@ -5676,6 +5678,7 @@ function clearUserModalForm(){
   const sd=document.getElementById('mu_startdate'); if(sd) sd.value='';
   const pot=document.getElementById('mu_potential'); if(pot) pot.value='';
   const evl=document.getElementById('mu_evallevel'); if(evl) evl.value='';
+  const evx=document.getElementById('mu_evalexempt'); if(evx) evx.checked=false;
   const pinEl=document.getElementById('mu_pinStatus');
   if(pinEl){ pinEl.textContent='บันทึกพนักงานใหม่ก่อน จึงตั้ง PIN ได้'; pinEl.style.color='#94a3b8'; }
   const hint=document.getElementById('mu_idHint'); if(hint) hint.textContent='';
@@ -5713,6 +5716,7 @@ function fillUserFormFields(emp){
   set('mu_email', emp[15]);
   set('mu_potential', emp[16]);
   const evlEl=document.getElementById('mu_evallevel'); if(evlEl) evlEl.value = emp[18] || '';
+  const evxEl=document.getElementById('mu_evalexempt'); if(evxEl) evxEl.checked = emp[20]==='1';
   if(typeof renderPinStatus==='function') renderPinStatus(emp[0]);
 }
 
@@ -7003,6 +7007,9 @@ async function loadEmployeesFromMs365(silent=false){
       const old = MASTER_USERS.find(u => u[0] === r[0]);
       r[17] = old?.[17] || '';
       r[18] = old?.[18] || '';
+      /* evalExempt (ยกเว้นไม่ต้องรับการประเมิน) ก็เป็นค่า local-only เหมือน pinHash/evalLevel
+         ไม่ใช่คอลัมน์จริงใน Excel Employee Master — ต้อง re-merge ไม่ให้ sync ล้างทิ้ง (CLAUDE.md #17) */
+      r[20] = old?.[20] || '';
     });
     MASTER_USERS.splice(0, MASTER_USERS.length, ...normalized);
     populateUserFilters();
@@ -7806,7 +7813,7 @@ function downloadCsv(filename, headers, rows){
 function getReportData(){
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  return MASTER_USERS.filter(u=>u[12]==='active').filter(u=>!scoped || scoped.has(u[0])).map(u=>{
+  return MASTER_USERS.filter(u=>u[12]==='active' && u[20]!=='1').filter(u=>!scoped || scoped.has(u[0])).map(u=>{
     const d = drafts.find(x=>x[0]===u[0]);
     return {
       code:u[0], name:u[1], group:u[3], dept:u[6]||u[4]||'—',
@@ -7984,7 +7991,7 @@ function getCycleSetupData(){
    ตาม L1/L2 ที่ล็อกอินจริงโดยอัตโนมัติ ไม่ต้องแก้ทีละหน้า */
 function getEvalParticipants(){
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  return MASTER_USERS.filter(u => u[12]==='active' && ['emp','unit','l1','l2','gm','exec','admin'].includes(u[2]))
+  return MASTER_USERS.filter(u => u[12]==='active' && ['emp','unit','l1','l2','gm','exec','admin'].includes(u[2]) && u[20]!=='1')
     .filter(u => !scoped || scoped.has(u[0]));
 }
 function renderCycleStats(){
@@ -9283,6 +9290,16 @@ document.addEventListener('input',e=>{
           <option value="mgr">🟡 ผู้จัดการส่วน</option>
         </select>
         <div style="font-size:10.5px;color:#64748b;margin-top:2px">กำหนดโดย Admin ระบบ/Admin HR เท่านั้น — ระบบจะล็อกแบบฟอร์มนี้ให้พนักงานคนนี้อัตโนมัติตอนเข้าประเมินตนเอง กันเลือกแบบฟอร์มผิดระดับ</div>
+      </div>
+    </div>
+
+    <div class="fr">
+      <div class="fg">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="mu_evalexempt" style="width:auto">
+          <span>ยกเว้นไม่ต้องรับการประเมิน (ผู้บริหาร / กรณีพิเศษ / ไม่นับเป็นผู้เข้าร่วมรอบประเมิน)</span>
+        </label>
+        <div style="font-size:10.5px;color:#64748b;margin-top:2px">ใช้กับผู้บริหารระดับสูง หรือบุคคลที่ HR กำหนดเป็นกรณีพิเศษว่าไม่ต้องถูกประเมินในรอบนี้ — คนที่ติ๊กจะไม่ถูกนับในจำนวนผู้เข้าร่วม ไม่ปรากฏในคิว Review/Calibration/Approve และไม่นับใน Dashboard/9-Box (พนักงานที่สถานะ "ลาออกแล้ว" ถูกยกเว้นให้อัตโนมัติอยู่แล้วโดยไม่ต้องติ๊กนี้)</div>
       </div>
     </div>
 

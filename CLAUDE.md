@@ -2630,6 +2630,66 @@ touches employee/attendance/evaluation data.
     can easily hit a different, coincidentally similar-looking element
     while the real offender sits one CSS specificity layer away.
 
+83. **User asked "จะแยกยังไงถ้ามีกลุ่มบางคนไม่ต้องประเมิน" (how to separate a
+    group who don't need to be evaluated) — my first answer explained the
+    wrong feature entirely: `EVAL_ELIGIBILITY` (#62/#71) governs whether
+    someone is *allowed to self-evaluate* (fill out their own round-1
+    form), not whether they should ever *receive* an evaluation at all.
+    User corrected: "หมายถึง ไม่ต้องได้รับการประเมินจากใคร เพราะเป็น
+    ผู้บริหาร หรือกำหนดพิเศษ หรือบุคคลที่ลาออกไปแล้ว" — three real
+    categories: executives, an individually-designated special case, and
+    already-resigned staff.** Investigated `getEvalParticipants()` (the
+    one real chokepoint feeding the dashboard, 9-Box,
+    `getEvaluationAssignments()`, and — after adding it here —
+    `getReportData()`) before writing any code: resigned staff were
+    already fully excluded (`u[12]==='active'` only), but `exec`/`admin`
+    roles were unconditionally counted as needing evaluation, and there
+    was no mechanism anywhere for an individual "special case" exemption
+    — building one from scratch was required, not a config toggle that
+    already existed. Rather than hardcode "exec role is always exempt"
+    (too broad — some companies do want their execs evaluated, and
+    `admin`/`sysadmin` accounts are often just system/IT logins that
+    were already borderline), added a single **per-employee** exemption
+    flag instead, which covers all three of the user's named categories
+    with one mechanism: `MASTER_USERS[20]` (`evalExempt`, `'1'`/`''`,
+    append-only per CLAUDE.md #5 — the newest field after `gm` at [19]),
+    a real checkbox "ยกเว้นไม่ต้องรับการประเมิน (ผู้บริหาร / กรณีพิเศษ /
+    ไม่นับเป็นผู้เข้าร่วมรอบประเมิน)" in the Add/Edit Employee modal
+    (wired into `saveUserFromModal()`/`clearUserModalForm()`/
+    `fillUserFormFields()` the same way `mu_evallevel` already is), and
+    `getEvalParticipants()`/`getReportData()` both now also filter out
+    `u[20]==='1'`. HR ticks it per person (an executive, or literally
+    anyone HR designates a one-off exception for) rather than the app
+    guessing from role — resigned employees keep being excluded
+    automatically via the pre-existing status check, so this checkbox
+    only needed to cover the two categories that had no existing
+    mechanism. Treated as **local-only, like `pinHash`/`evalLevel`**
+    (#17) rather than a real Excel column — there's no confirmed real
+    "evalExempt" column in HR's actual sheet (unlike `gm`, which #68
+    only added after a real header-row screenshot, per #30's "verify
+    against the field, never assume" rule) — so `loadEmployeesFromMs365()`
+    re-merges `r[20] = old?.[20] || ''` from the existing local record on
+    every sync, the same re-merge CLAUDE.md #17/#6 already require for
+    every local-only override field, or the next Excel sync would
+    silently un-exempt everyone. Added a small "🚫 ยกเว้นประเมิน" badge
+    under the Status column in the employee list so an exempted person
+    is visible at a glance, not just discoverable by opening their edit
+    form one at a time. Verified with a test that seeds a fresh active
+    `exec` employee (confirmed counted before), ticks the new checkbox
+    through the real Add/Edit form and saves (confirmed no longer
+    counted in `getEvalParticipants()`), reopens the edit form to confirm
+    the checkbox state round-trips correctly, un-ticks it to confirm the
+    person is counted again, and confirms a resigned employee is excluded
+    regardless of the flag — plus the standard click-sweep. General
+    lesson: when a user's own wording ("ไม่ต้องประเมิน") is genuinely
+    ambiguous between two real, differently-scoped features already
+    documented in this file (self-eval permission vs. being an
+    evaluation subject), don't assume the first plausible match — a
+    one-line follow-up from the user ("หมายถึง...") can reveal the
+    intended concept has no existing mechanism at all, meaning the real
+    work is designing a new field, not pointing at a settings page that
+    already exists.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
