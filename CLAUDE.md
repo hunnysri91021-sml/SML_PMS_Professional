@@ -2260,6 +2260,53 @@ touches employee/attendance/evaluation data.
     real code path that can end the operation, success or failure alike,
     or it becomes a new "looks frozen" bug in its own right.
 
+75. **User screenshotted the Dashboard while genuinely logged in (own PIN,
+    not Demo UI preview) as a real `l2` employee showing all 50 company
+    participants and full company-wide workflow-step counts — "เข้าแล้ว
+    เห็นข้อมูลทั้ง ต้องเห็นแค่ที่ตนเองดูเท่านั้น" (logs in and sees
+    everything, should see only their own).** This looked exactly like
+    #73's gap (a page CLAUDE.md #45's scoping sweep missed) — but tracing
+    it found the opposite: `renderCycleStats()` (the Dashboard's real
+    render function) already calls `getEvalParticipants()`, which already
+    runs every row through `getMyScopedEmpCodes()` (#45), and `l2`'s
+    branch there (`MASTER_USERS.filter(u=>u[10]===myName)`) is exactly
+    correct code — verified again with a fresh Playwright test seeding a
+    synthetic second L2 with their own smaller team and confirming the
+    scoping helper alone returns only that L2's own people, not the whole
+    file. Before touching any code, asked the user two clarifying
+    questions rather than guessing: (1) is this account truly a real L2
+    login or an admin previewing via the now-locked Demo UI switcher
+    (#72)? — confirmed real L2 login, ruling out the #72 preview-vs-real
+    distinction entirely; (2) if the scoping code is provably correct,
+    does the company genuinely have only one L2 overseeing everyone (in
+    which case 50/50 would be the *correct* real answer, not a bug), or
+    are there multiple real L2s who should each see only their own slice?
+    — confirmed multiple real L2s exist, so 50 people all showing this
+    one L2's name in their `MASTER_USERS[10]` ("หัวหน้าแผนก (L2)") field
+    is itself wrong *data*, not wrong *code*. **No code change was made
+    for this report** — the scoping logic (#45, re-verified here) is
+    correct and already shipped; the real defect is that every employee's
+    real L2-supervisor value, wherever it currently lives (manually
+    entered via Add/Edit Employee's `mu_l2` field, or synced in from the
+    real Excel `Employees` table's L2 column per #30/#68), needs
+    correcting at the source so each employee's `u[10]` actually names
+    their own real department's L2, not this one person's name company-
+    wide. Told the user plainly: check the "หัวหน้าแผนก (L2)" value on a
+    handful of employees who should NOT report to her (via an Admin
+    account's employee list "สายบังคับบัญชา" column, #67) to confirm
+    which employees are mis-tagged, and correct those either directly in
+    Add/Edit Employee or in the source Excel sheet before the next sync.
+    General lesson sharper than #67/#69's own "I can't see your live
+    Excel" honesty rule: when a report looks identical in shape to a
+    known class of bug (unscoped data leaking, #45/#73's exact symptom),
+    re-verify the specific code path with a fresh test *before* assuming
+    history repeats — a scoping helper that is definitely correct, fed
+    genuinely wrong upstream data, produces the exact same visible symptom
+    as a scoping helper that never ran; only checking both halves (code
+    AND the specific data feeding it) tells you which one actually needs
+    fixing, and shipping a code "fix" for a data problem would have done
+    nothing while looking like it addressed the report.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
