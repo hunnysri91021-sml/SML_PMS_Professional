@@ -2534,6 +2534,50 @@ touches employee/attendance/evaluation data.
     don't resurrect this placeholder's wording as if the groundwork for
     it already exists, since none of it currently does.
 
+81. **User's screenshot of the 🔔 notification dropdown showed a warning
+    item overlapping the "การแจ้งเตือน" header with the panel's body
+    barely visible — "แถบแจ้งเพื่อแสดงไม่ครบมองไม่เห็น" (the notification
+    bar shows incompletely, can't see it).** Traced this by reproducing
+    at a narrower viewport (the original screenshot's cropped, partial
+    topbar was the tell that it was a narrower window, not the full
+    desktop width every other test in this file uses) — confirmed
+    `#notifPanel`'s fixed `right:-10px; width:320px` CSS, anchored to the
+    🔔 bell which sits near the far-right edge of the topbar, pushed the
+    panel's **left edge past the left edge of the browser viewport**
+    (measured `rect.left` as negative) whenever the window wasn't wide
+    enough — the panel wasn't broken or empty, roughly a third of its
+    real width was simply rendered off-screen and unreachable, matching
+    the user's own description exactly. A pure-CSS `max-width` fix alone
+    doesn't solve this shape of problem — the panel already fits *within*
+    the viewport's total width, the issue is *where* it's anchored
+    relative to a bell that itself sits close to the screen's edge — so
+    fixed `toggleNotifPanel()` to clamp the panel's position at open time
+    instead: reset to `right:0` first, then (once actually rendered, via
+    `requestAnimationFrame` so `getBoundingClientRect()` reads the real
+    laid-out position) check whether `rect.left` is less than an 8px
+    safety margin and, if so, shift the panel rightward by exactly enough
+    (`right: -(8 - rect.left)px`) to bring its left edge back on-screen.
+    Verified with a test across four real viewport widths (480px/375px
+    mobile-ish, 1024px/1400px desktop) confirming the panel's full
+    bounding box stays within `[0, viewportWidth]` at every one of them,
+    not just the widths this file's other tests happen to already use.
+    Also fixed a smaller, related issue noticed while investigating:
+    `.notif-item`'s text `<span>` had no `min-width:0`/`word-break`, so a
+    long notification (the exact kind this panel exists to show — "พบ
+    ปัญหาสายบังคับบัญชา N รายการ") could refuse to wrap inside a flex
+    row and push the item wider than the panel itself; added
+    `min-width:0;word-break:break-word;white-space:normal` to the text
+    span so long messages wrap inside the panel's fixed width instead of
+    overflowing it. General lesson: this file's whole test suite (click-
+    sweep, every per-fix Playwright test) runs at a single comfortable
+    desktop viewport width by convention — that's fine for confirming
+    logic and data correctness, but a screenshot report of "something
+    doesn't display right" is itself a signal to try reproducing at the
+    viewport size the screenshot actually implies (narrow window, mobile,
+    a collapsed sidebar) before assuming the bug must be in render logic
+    rather than layout/positioning that only breaks at a size nobody
+    tests at by default.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

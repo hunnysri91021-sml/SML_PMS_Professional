@@ -43,9 +43,10 @@ body{font-family:'Segoe UI',Tahoma,'Sarabun',sans-serif;background:var(--bg);col
 .role-box select{border:none;background:none;font-size:12.5px;font-weight:700;color:var(--p-dark);cursor:pointer;outline:none;font-family:inherit}
 .bell{position:relative;font-size:17px;cursor:pointer}
 .bell span{position:absolute;top:-3px;right:-5px;background:var(--err);color:#fff;font-size:9px;padding:1px 4px;border-radius:8px}
-.notif-panel{position:absolute;top:32px;right:-10px;width:320px;max-height:380px;overflow-y:auto;background:#fff;border:1px solid var(--bd);border-radius:10px;box-shadow:0 8px 28px rgba(15,35,65,.16);z-index:200;text-align:left;cursor:default}
+.notif-panel{position:absolute;top:32px;right:0;width:320px;max-width:calc(100vw - 24px);max-height:380px;overflow-y:auto;background:#fff;border:1px solid var(--bd);border-radius:10px;box-shadow:0 8px 28px rgba(15,35,65,.16);z-index:200;text-align:left;cursor:default}
 .notif-panel-head{padding:12px 14px;font-weight:700;font-size:13px;border-bottom:1px solid var(--bd);color:var(--t1)}
 .notif-item{display:flex;gap:9px;padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:12.5px;cursor:pointer}
+.notif-item span:last-child{flex:1;min-width:0;word-break:break-word;white-space:normal}
 .notif-item:hover{background:#f8fafc}
 .notif-item:last-child{border-bottom:none}
 .notif-empty{padding:22px 14px;text-align:center;color:#94a3b8;font-size:12.5px}
@@ -8307,7 +8308,22 @@ function toggleNotifPanel(e){
   if(!panel) return;
   const willOpen = panel.style.display==='none';
   panel.style.display = willOpen ? '' : 'none';
-  if(willOpen) renderNotifBell();
+  panel.style.right = '0';
+  panel.style.left = 'auto';
+  if(willOpen){
+    renderNotifBell();
+    /* บนหน้าจอแคบ (มือถือ/แท็บเล็ต) กระดิ่งอยู่ใกล้ขอบขวาสุด การกาง panel กว้าง 320px ชิดขวา
+       (right:0 นับจากตัวกระดิ่งเอง) จะดันขอบซ้ายของ panel ทะลุออกนอกจอไปทางซ้าย มองไม่เห็นเนื้อหา
+       ครึ่งหนึ่ง — เช็คขอบซ้ายจริงหลัง render แล้วเลื่อนกลับเข้ามาให้พอดีจอถ้าจำเป็น (แทนที่จะพึ่ง CSS
+       right คงที่ค่าเดียวซึ่งใช้ไม่ได้กับทุกความกว้างหน้าจอ) */
+    requestAnimationFrame(() => {
+      const rect = panel.getBoundingClientRect();
+      if(rect.left < 8){
+        const shift = 8 - rect.left; // ต้องเลื่อน panel ไปทางขวาเท่านี้ (px) ถึงจะพ้นขอบจอ
+        panel.style.right = `${-shift}px`; // right ยิ่งติดลบ = ขอบขวาของ panel ยิ่งเลื่อนออกไปทางขวา (ทั้งกล่องขยับขวาตาม)
+      }
+    });
+  }
 }
 document.addEventListener('click', ()=>{
   const panel = document.getElementById('notifPanel');
