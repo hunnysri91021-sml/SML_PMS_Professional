@@ -56,6 +56,12 @@ body{font-family:'Segoe UI',Tahoma,'Sarabun',sans-serif;background:var(--bg);col
 .login-box h2{margin:0 0 6px;font-size:19px;color:var(--t1)}
 .login-note{font-size:11.5px;color:#64748b;margin:0 0 18px;line-height:1.5}
 .login-err{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:7px;padding:8px 10px;font-size:12px;margin-bottom:10px}
+.login-loading{position:fixed;inset:0;background:linear-gradient(135deg,#0f2341,#1e3a5f);display:flex;align-items:center;justify-content:center;z-index:10000}
+.login-loading-box{background:#fff;border-radius:14px;padding:36px 40px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center}
+.login-loading-spinner{width:38px;height:38px;border:4px solid #e2e8f0;border-top-color:#1e3a5f;border-radius:50%;margin:0 auto 16px;animation:loginSpin 0.8s linear infinite}
+@keyframes loginSpin{to{transform:rotate(360deg)}}
+#loginLoadingMsg{font-size:14.5px;font-weight:700;color:var(--t1);margin-bottom:6px}
+.login-loading-sub{font-size:11.5px;color:#64748b;line-height:1.5}
 .session-badge{font-size:11.5px;color:#64748b;display:flex;align-items:center;gap:6px}
 
 /* ===== COMPONENTS ===== */
@@ -1380,7 +1386,15 @@ tbody tr:hover{background:#f0f6ff!important}
     <div id="loginErr" class="login-err" style="display:none"></div>
     <div class="fg"><label>รหัสพนักงาน</label><input id="loginCode" list="empCodeListLogin" placeholder="เช่น SML-001" autocomplete="username" oninput="onLoginCodeInput()" onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()"><datalist id="empCodeListLogin"></datalist></div>
     <div class="fg"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 หลัก (เว้นว่างได้ถ้ายังไม่เคยตั้ง)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <button class="btn btn-p" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <button class="btn btn-p" id="loginBtn" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<div class="login-loading" id="loginLoadingOverlay" style="display:none">
+  <div class="login-loading-box">
+    <div class="login-loading-spinner"></div>
+    <div id="loginLoadingMsg">🔄 ระบบกำลังโหลดข้อมูล...</div>
+    <div class="login-loading-sub">กำลังซิงก์ข้อมูลล่าสุดจาก Excel กรุณารอสักครู่</div>
   </div>
 </div>
 
@@ -4176,6 +4190,18 @@ function applySession(u){
   }
 }
 
+/* แสดง/ซ่อนหน้าจอ "ระบบกำลังโหลด" ระหว่างที่ doLogin()/tryRestoreSession() กำลังรอ sync
+   จาก Excel หลายรายการต่อเนื่องกัน (8-12 ครั้ง, ใช้เวลาหลายวินาที) — ก่อนหน้านี้ผู้ใช้กดปุ่ม
+   "เข้าสู่ระบบ" แล้วหน้าจอไม่มีอะไรตอบสนองเลยจนกว่า sync ทั้งหมดจะเสร็จ ดูเหมือนระบบค้าง/ปุ่มไม่ทำงาน */
+function setLoginLoading(show, msg){
+  const el = document.getElementById('loginLoadingOverlay');
+  if(!el) return;
+  el.style.display = show ? 'flex' : 'none';
+  if(show){
+    const msgEl = document.getElementById('loginLoadingMsg');
+    if(msgEl) msgEl.textContent = msg || '🔄 ระบบกำลังโหลดข้อมูล...';
+  }
+}
 async function doLogin(){
   const codeEl = document.getElementById('loginCode');
   const pinEl = document.getElementById('loginPin');
@@ -4183,6 +4209,8 @@ async function doLogin(){
   const code = (codeEl?.value || '').trim();
   const pin = (pinEl?.value || '').trim();
   errEl.style.display = 'none';
+  if(!code){ errEl.textContent = 'กรุณากรอกรหัสพนักงาน'; errEl.style.display = 'block'; return; }
+  setLoginLoading(true, '🔄 ระบบกำลังโหลดข้อมูล...');
   /* ดึงข้อมูลพนักงาน (ชื่อ/เกรด/สังกัด ฯลฯ) + PIN/แบบฟอร์มประเมินล่าสุดจาก Excel แบบเงียบก่อน
      ตรวจสอบทุกครั้งที่ล็อกอิน — เพราะ MASTER_USERS เริ่มต้นจากข้อมูลตัวอย่างที่ฝังในไฟล์เสมอตอน
      โหลดหน้าเว็บใหม่ (ไม่ได้จำข้อมูลจริงข้ามการรีโหลด) เดิมมีแค่ ms365SyncEmployeeSettingsSilent()
@@ -4230,15 +4258,17 @@ async function doLogin(){
   }
   const u = MASTER_USERS.find(x => x[0] === code);
   if(!u || u[12] === 'resigned'){
+    setLoginLoading(false);
     errEl.textContent = 'ไม่พบรหัสพนักงานนี้ในระบบ (หรือพนักงานลาออกแล้ว)';
     errEl.style.display = 'block';
     return;
   }
   const storedHash = u[17] || '';
   if(storedHash){
-    if(!pin){ errEl.textContent = 'กรุณากรอก PIN'; errEl.style.display = 'block'; return; }
+    if(!pin){ setLoginLoading(false); errEl.textContent = 'กรุณากรอก PIN'; errEl.style.display = 'block'; return; }
     const hash = await sha256Hex(pin);
     if(hash !== storedHash){
+      setLoginLoading(false);
       errEl.textContent = 'PIN ไม่ถูกต้อง';
       errEl.style.display = 'block';
       return;
@@ -4248,6 +4278,7 @@ async function doLogin(){
   }
   sessionStorage.setItem(SML_SESSION_KEY, JSON.stringify({code: u[0]}));
   applySession(u);
+  setLoginLoading(false);
   if(typeof appendAuditLog === 'function') appendAuditLog('auth', 'เข้าสู่ระบบ', u[0], u[1]);
 }
 
@@ -9406,6 +9437,7 @@ document.addEventListener('input',e=>{
       const u = MASTER_USERS.find(x => x[0] === s.code);
       if(!u){ sessionStorage.removeItem(SML_SESSION_KEY); return; }
       applySession(u); // แสดงข้อมูลที่มีอยู่ก่อนทันที กันจอว่าง ระหว่างรอ sync จาก Excel
+      if(typeof setLoginLoading === 'function') setLoginLoading(true, '🔄 ระบบกำลังโหลดข้อมูลล่าสุด...');
       /* เพจนี้รีโหลดแล้ว MASTER_USERS กลับไปเป็นข้อมูลตัวอย่างที่ฝังในไฟล์เสมอ (เหมือน doLogin())
          ต้อง sync ซ้ำแบบเงียบทุกครั้งที่มี session ค้างอยู่แล้วโหลดหน้าใหม่ ไม่ใช่แค่ตอน login ครั้งแรก
          มิฉะนั้น Grade/evalLevel ที่เพิ่งบันทึกไปจะดูเหมือน "หาย" ทุกครั้งที่รีเฟรชหน้า */
@@ -9423,7 +9455,10 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncAppraisals === 'function'){ try{ await ms365SyncAppraisals(true); }catch(e){} }
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
-    }catch(e){}
+    }catch(e){
+    } finally {
+      if(typeof setLoginLoading === 'function') setLoginLoading(false);
+    }
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', tryRestoreSession);

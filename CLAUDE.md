@@ -2213,6 +2213,53 @@ touches employee/attendance/evaluation data.
     render function needs the same scoping treatment as everything else,
     even if its nav item's `data-role` alone still looks sufficient.
 
+74. **`doLogin()`/`tryRestoreSession()` each `await` a chain of 8-12 sequential
+    silent MS365 syncs (Employees, EmployeeSettings, Attendance, KpiGoals,
+    CycleSetup, CyclesList, FormWeights, Idp, AuditLog, OrgMaster,
+    Appraisals, ApprovalSignatures — the same chain #32/#33/#58 built up
+    piece by piece) before the dashboard is usable — with zero visible
+    feedback the whole time, so clicking "เข้าสู่ระบบ" (or simply reloading
+    a page with an active session) looked exactly like the app had frozen
+    for several real seconds.** User asked directly: "ปรับหน้า login แล้ว
+    จะเข้าระบบให้แจ้งเตือน ระบบกำลังโหลด ก่อนเข้าหน้าใช้งาน" (adjust the
+    login page so entering the system shows a "system is loading"
+    notice before reaching the usage page). Added a real full-screen
+    loading overlay, `#loginLoadingOverlay` (siblings `.login-loading`/
+    `.login-loading-box` CSS matching the existing `.login-gate` look,
+    a CSS-only spinner, no extra library), toggled by one new helper,
+    `setLoginLoading(show, msg)`. `doLogin()` now shows it immediately on
+    click (guarded behind a real "รหัสพนักงานว่างเปล่า" check first, so an
+    accidental empty-field click doesn't spin the whole overlay for
+    nothing) and hides it on every real exit path — a rejected code, a
+    missing/wrong PIN, and the success path after `applySession()` — so a
+    login that fails partway through never leaves the overlay stuck up
+    forever, the same "every exit path must undo what a happy-path
+    assumes" instinct as CLAUDE.md #55's PIN double-confirm. `tryRestoreSession()`
+    (the page-reload path, which already shows the dashboard immediately
+    with stale data per #32 before quietly re-syncing) shows the same
+    overlay right after that first `applySession()` call — so a page
+    reload with an active session briefly shows the real dashboard behind
+    a "กำลังโหลดข้อมูลล่าสุด..." overlay while the fresh sync completes,
+    rather than either a frozen blank screen or a dashboard that silently
+    updates numbers out from under the viewer mid-glance — and hides it in
+    a `finally` block so a thrown error partway through the sync chain
+    (already swallowed by the outer `try/catch` per the function's
+    existing design) can never leave the overlay stuck on screen. Verified
+    with a Playwright test that stubs out all real Graph/Worker network
+    calls (none are reachable in a test environment) so each sync's own
+    `catch` fires fast instead of hanging on a real network timeout, adds
+    an artificial delay to the first sync call to catch the overlay
+    genuinely mid-flight (not just flashing for one frame), and confirms
+    it is hidden before any login attempt, visible while the sync chain is
+    still running, and hidden again once login completes with the
+    dashboard visible. General lesson: any user-triggered action that
+    `await`s a long, invisible chain of background work before the UI
+    changes needs a loading state shown for the actual duration of that
+    chain, not just a spinner on the button itself (this button doesn't
+    even show one) — and that loading state must be torn down on every
+    real code path that can end the operation, success or failure alike,
+    or it becomes a new "looks frozen" bug in its own right.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
