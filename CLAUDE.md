@@ -3079,6 +3079,130 @@ touches employee/attendance/evaluation data.
     breakage isn't a frozen screen but a UI element quietly resetting
     itself while the header control right next to it visibly doesn't.
 
+92. **User's screenshot of the left nav (viewed as a non-admin role) asked
+    "ต้องมีแถบเพิ่มไหม เพราะมีสายบังคับบัญชาเพิ่ม" (should there be an
+    extra menu tab, since there's an added level in the chain of command)
+    — pointing at the gap between "2. ประเมินทีมงาน (L1 รอบแรก)" (where
+    หัวหน้าหน่วย/unit AND หัวหน้าแผนก/l1 both submit their own team's
+    round-1 self-eval) and "3. สอบทาน L2" (which is actually role `l2`,
+    "ผจก.ส่วน"/Section Manager, reviewing straight off `Submitted`).**
+    Asked one clarifying question before touching code, since this was a
+    real workflow-shape decision, not a display tweak: confirmed the
+    department head (role `l1`) needs a genuine new REVIEW step over
+    their whole department (including every unit head's team under
+    them) before the section manager reviews — not just a menu label.
+    **New real pipeline**: `Draft → Submitted → L1Reviewed → L2Reviewed →
+    GMApproved → Acknowledged → Calibrated → Approved` — `L1Reviewed`
+    inserted into `EVAL_STATUS_ORDER` between `Submitted`/`L2Reviewed`
+    (append-*between*, not append-at-end, since this is a real new
+    pipeline stage, not a new trailing field — CLAUDE.md #5's rule is
+    about array *index* stability for data rows, not the status-order
+    *list* itself, which #58/#61 have already reordered before when the
+    real workflow order changed).
+    **The harder problem, investigated before writing any code**: role
+    `l1` (department head) had been scoped by `getMyScopedEmpCodes()`
+    identically to role `unit` — `u[9]===myName` (direct reports only) —
+    ever since #65 shared that branch between the two roles. That was
+    correct back when `l1` had no distinct review responsibility of its
+    own (both roles just did round-1 self-eval for their own direct
+    team at step 2), but it meant a department head reviewing their
+    *whole* department needed to also see every unit head's team below
+    them, which `u[9]===myName` alone never could. Rather than adding a
+    brand-new `MASTER_USERS` field (which would need HR to go re-fill a
+    "department head" name on every single employee — real extra data
+    entry never asked for, and risks becoming a second, driftable copy
+    of the same fact `u[9]` already encodes), reused the *existing*
+    chain fact #65 already established: a unit head's own record has
+    `u[9]` pointing to *their* department head. So role `l1`'s new scope
+    is a 2-hop walk entirely over the already-populated `u[9]` field —
+    direct reports (`u[9]===myName`) plus, for every direct report who
+    is themselves a `unit`-role employee, that unit head's own team
+    (`u[9]===unitHead'sName`) — zero new data entry required from HR,
+    since it only depends on the same `u[9]` values step 2 already needs
+    filled for round-1 self-eval to work at all. `role==='unit'` keeps
+    its original 1-hop-only branch unchanged (a unit head's own review
+    step is still just their own direct team).
+    **Reject targets, one stage back each, per #61's own established
+    principle**: `rejectReviewL1Selected()` (new, dept head's reject) →
+    `Draft` (first real review stage, nothing earlier to bounce to but
+    the employee). `rejectReviewSelected()` (L2/section-manager's
+    reject) → changed from `Draft` to `Submitted` (undoes the dept
+    head's approval specifically, so the dept head must re-review — it
+    used to jump the employee all the way back before this step
+    existed, which would now incorrectly skip the dept head).
+    `rejectGmSelected()` → changed from `Submitted` to `L1Reviewed`
+    (undoes the section manager's approval specifically, landing back in
+    *their* queue for re-review — not back at the dept head, who did
+    nothing wrong, and not all the way to the employee).
+    **Grepped every consumer of the old `'Submitted'`/`'L2Reviewed'`
+    literal statuses** (the same discipline CLAUDE.md #58's `dash`-page
+    special-case and #85/#87's badge/notification sweeps already
+    established) rather than trusting the pipeline functions alone:
+    `renderNavBadges()` gained `navBadgeReviewL1` (counts `Submitted`,
+    scoped) and `navBadgeReview` now counts `L1Reviewed` instead of
+    `Submitted`; `renderDashboardWorkflowSteps()` gained a "ผ่านสอบทาน
+    หัวหน้าแผนก" step at `L1Reviewed`; `getNotifications()` gained an
+    `L1Reviewed`-counting line pointing at the `review` page and its
+    `Submitted`-counting line now points at the new `reviewl1` page
+    instead. **Found and fixed one pre-existing, unrelated stale bug
+    while auditing this same block** (the CLAUDE.md #34/#67 "a doc/UI
+    claim that stops matching the code underneath it" shape, just inside
+    a notification message rather than a doc table): the `l2reviewed`
+    notification line had read "รอ Calibration" / pointed at page
+    `'calib'` since before #61 moved Calibration to sit *after*
+    Acknowledged — the real next step for an `L2Reviewed` item has been
+    GM approval for several fixes now, not Calibration; corrected the
+    text and target page to `'gmapprove'` while already touching this
+    exact block, rather than leaving a second, independently-wrong
+    notification message next to the one this request actually needed
+    fixed.
+    **UI**: new nav item "3. สอบทานหัวหน้าแผนก (L2)" (`data-pg="reviewl1"`,
+    `data-role="l1,exec"`) inserted before the renumbered "4. สอบทานผู้
+    จัดการส่วน (L3)" (was "3. สอบทาน L2" — relabeled to spell out the
+    real tier per #70's own labeling convention, not just "L2" which
+    reads ambiguously against the new step's own "(L2)" department-head
+    label); every step number after it shifted down by one (Calibration
+    5→6, AMD/MD 6→7, ผลประเมิน 7→8) across the nav list, `titles{}`
+    object, and each page's own `<h2>` heading — grepped `ขั้นที่ [0-9]`
+    across the whole file to catch every hardcoded step number, not just
+    the ones in the nav list. New page `pg-reviewl1` mirrors `pg-review`'s
+    existing markup/checkbox-selection pattern exactly (including #91's
+    just-shipped `restoreCheckedKeys()` fix — the new page gets the
+    persisted-selection behavior for free since it's the same function,
+    not a copy). Wired into every existing per-page mechanism a new
+    workflow page needs (`renderWorkflowPages()`, the nav-entry
+    `renderWorkflowPages()`/`startEvalAutoSync()` conditionals, `titles{}`)
+    — grepped for every one of these by name rather than assuming a
+    single "add new workflow page" checklist already existed anywhere to
+    copy from. Also extended `ROLE_DEFS`/`ROLE_PERM_LABELS` (#37) with a
+    new `reviewL1` permission (true for `sysadmin`/`l1`, false elsewhere,
+    mirroring the existing `reviewL2` pattern exactly including `exec`'s
+    pre-existing `false` value, which was deliberately left unchanged
+    rather than "corrected" to match `exec`'s real nav access — that
+    inconsistency predates this fix and wasn't part of this request).
+    Verified end-to-end with a Playwright test driving one evaluation
+    through the real UI at every stage (a synthetic unit head → dept
+    head → section manager → GM chain, all wired via real `u[9]`/`u[10]`/
+    `u[19]` values, no field mutated directly outside the actual
+    approve/reject button functions): confirms the dept head's 2-hop
+    scope correctly includes an employee under a unit head reporting to
+    them, drives Submitted→L1Reviewed→L2Reviewed, confirms a GM reject
+    lands the record back in the section manager's queue specifically
+    (not the dept head's), and confirms re-approval through L2 a second
+    time reaches L2Reviewed again cleanly — plus a UI-level test
+    confirming the new nav item and its red badge render and count
+    correctly for a real logged-in `l1` session, plus the standard
+    click-sweep. General lesson combining #61/#65/#70: when a chain-field
+    (`u[9]`/`u[10]`/etc.) is described in this file's own history as
+    "shared generically" between two roles for one purpose (#65's round-1
+    self-eval), that sharing does not automatically extend to a *second*,
+    later-added purpose (a review-scope query) for the same two roles —
+    check what the shared field can and can't answer for the new use
+    case before reusing it, and prefer deriving a wider scope by walking
+    the *existing* data one hop further (here: through unit heads' own
+    `u[9]`) over asking HR to fill a brand-new field that would just be
+    a second, driftable copy of a fact already on file.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
