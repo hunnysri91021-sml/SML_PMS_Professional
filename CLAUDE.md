@@ -2704,6 +2704,55 @@ touches employee/attendance/evaluation data.
     checking against every render function showing that same data, not
     just the first/most obvious one.
 
+84. **User's screenshot of "เลือกหัวหน้า" on the "2. ประเมินทีมงาน" page
+    showed "นายอาทิตย์ ภูแล่นคู่" appearing as two separate, visually
+    identical options — "ทำไมมี 2 อาทิตย์" (why are there 2 Atid).**
+    First hypothesis (two genuinely different real employees sharing the
+    same real name) was ruled out with a test: `populateTeamManagerSelect()`
+    builds its option list through `new Set(...)`, which already collapses
+    two *identical* name strings into one option — confirmed with a
+    seeded test (two different employee codes, same exact name, each
+    with their own team) that the dropdown correctly shows only 1 option
+    for that name (though it does then silently merge both people's
+    teams under that one option, a separate and much rarer edge case,
+    not what this report was — noted here, not fixed, since a genuine
+    same-name collision needs a structural fix per #18's supervisor-by-
+    code limitation, out of scope for a two-extra-options report).
+    The real mechanism, confirmed with a second seeded test: `Set`
+    dedup only collapses **exactly identical strings** — a manager's
+    name stored with a trailing space on one employee's L1 field
+    (`u[9]`, e.g. `"นายอาทิตย์ ภูแล่นคู่ "`) and without on another's is,
+    character-for-character, a *different* string, so `Set` treats them
+    as two distinct managers even though they render pixel-identical in
+    a `<select>`. Every other place that writes this field already
+    `.trim()`s (`saveUserFromModal()`'s `name` field,
+    `normalizeMs365Employee()`'s `g()` helper, the bulk-import parser's
+    `parseEmployeeImportRow()`), so this is very likely stale data from
+    before one of those trim fixes existed, or a one-off manual Excel
+    edit — not a currently-active write path. Rather than chase the
+    exact historical write that produced it (unfixable without seeing
+    the live sheet, per CLAUDE.md #67/#75's honesty limits), added a
+    defensive `.trim()` at the one place that's cheap and permanent to
+    fix regardless of root cause: `populateTeamManagerSelect()` now
+    trims every name (both the `l2` branch's `u[1]` and the default
+    branch's `u[9]`) before building the `Set`, and `renderTeamFromMaster()`'s
+    `u[9]===managerName` filter now compares `.trim()`ed values on both
+    sides — so a stray space on either the option-building side or the
+    stored-report side can no longer produce a duplicate-looking option
+    or, worse, silently exclude a real direct report whose `u[9]` has a
+    whitespace variant of the selected name. Verified with a test that
+    seeds two managers of the same name differing only by a trailing
+    space and confirms the dropdown now shows exactly one option, then
+    a second test selecting that option and confirming direct reports
+    stored under *either* the trimmed or untrimmed spelling both appear
+    in the resulting team list (not just whichever spelling happened to
+    be selected). General lesson: `Set`-based dedup on user/Excel-sourced
+    text is only as good as the normalization applied *before* the Set
+    — even when every current write path trims, a UI list built from
+    that data should defensively trim again at read time, since older
+    rows written before a trim fix existed (or a manual edit outside the
+    app) can still carry the untrimmed variant indefinitely.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
