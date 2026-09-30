@@ -4169,6 +4169,15 @@ function getMyScopedEmpCodes(){
     codes.push(myCode);
     return new Set(codes);
   }
+  if(role==='gm'){
+    /* ตอน #61 เพิ่ม role 'gm' ยังไม่มีฟิลด์ "สายบังคับบัญชา GM" แยกใน MASTER_USERS เลยปล่อยให้
+       ตกไปที่ return null (ไม่จำกัดขอบเขต) — #68/#70 เพิ่ม u[19] (ฟิลด์ GM จริง) และ UI สำหรับกรอกแล้ว
+       จึงมีข้อมูลจริงให้ scope ตามนี้ได้แล้ว ไม่ใช่ "known limit" ที่ยังทำไม่ได้อีกต่อไป (ดู
+       renderGmApproveQueue()'s คอมเมนต์เดิม ซึ่งอ้างอิงสถานะก่อนหน้านี้) */
+    const codes = MASTER_USERS.filter(u=>(u[19]||'').trim()===myName).map(u=>u[0]);
+    codes.push(myCode);
+    return new Set(codes);
+  }
   return null;
 }
 
@@ -7465,9 +7474,8 @@ function rejectReviewSelected(){
 
 /* ขั้นใหม่ "อนุมัติ GM" (#61) — คั่นระหว่างสอบทาน L2 กับการแจ้งพนักงานรับทราบ อ่านคิวจาก
    L2Reviewed เช่นเดียวกับที่ renderCalibQueue เคยอ่าน (ก่อนขยับ Calibration ไปอยู่หลังพนักงาน
-   รับทราบ) getMyScopedEmpCodes() คืน null (ไม่จำกัดขอบเขต) ให้ role 'gm' โดยอัตโนมัติอยู่แล้ว เพราะ
-   ยังไม่มีฟิลด์ "สายบังคับบัญชา GM" แยกใน MASTER_USERS — ถ้าองค์กรมี GM มากกว่า 1 คนที่ต้องเห็นคนละ
-   กลุ่มจริง ต้องเพิ่มฟิลด์ใหม่ (แบบเดียวกับ l1/l2/approver) แล้วขยาย getMyScopedEmpCodes() ต่อ */
+   รับทราบ) getMyScopedEmpCodes() ตอนนี้ scope role 'gm' ด้วย u[19] แล้ว (ดู CLAUDE.md #88 —
+   #68/#70 เพิ่มฟิลด์ GM จริงเข้ามาหลังจากคอมเมนต์นี้เขียนไว้ตอน #61 ว่ายังทำไม่ได้) */
 function renderGmApproveQueue(){
   const tbody=document.getElementById('gmApproveRows'); const cnt=document.getElementById('gmApproveCount');
   if(!tbody) return;

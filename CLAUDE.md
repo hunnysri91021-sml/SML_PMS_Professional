@@ -2872,6 +2872,57 @@ touches employee/attendance/evaluation data.
     that doesn't match a table right next to it, check all three of
     these by name before assuming the fix from #85/#86 already covered it.
 
+88. **User asked point-blank whether `getMyScopedEmpCodes()` had been
+    updated to match the real 4-tier hierarchy relabeling from #70
+    (หัวหน้าหน่วย L1 / หัวหน้าแผนก L2 / ผู้จัดการส่วน L3 / GM L4) — "ส่วนนี้
+    ปรับหรือยัง" (has this part been updated yet).** Checked carefully
+    before answering, since #70 explicitly documented its relabeling as
+    *cosmetic only* — "the underlying field ids/storage/semantics are
+    untouched" — meaning the real stored meaning of `u[9]`/`u[10]`/`u[11]`
+    hadn't changed just because #70 renamed their Add/Edit Employee form
+    labels: `u[9]` (round-1 evaluator, shared by `unit`+`l1` roles per
+    #65), `u[10]` (the `l2`-role supervisor, correctly scoped already),
+    `u[11]` (the flexible "approver" chain field, not tied to one
+    specific role) were all already correctly wired into
+    `getMyScopedEmpCodes()`'s `l1`/`unit`/`l2` branches with no gap.
+    **The real, confirmed gap was `role==='gm'`**: #61 (when the `gm`
+    role was first added) deliberately left it falling through to
+    `return null` (unrestricted/company-wide) with an explicit comment
+    stating *why* — "no separate GM chain field in `MASTER_USERS` yet…
+    if the real org ever has multiple GMs who must each see only their
+    own slice, a new hierarchy field needs to be added and wired in, not
+    assumed later." That was true when #61 wrote it — but #68 added the
+    real `u[19]` GM field for the Excel round-trip, and #70 gave it a
+    real Add/Edit Employee edit UI, so the exact missing piece #61
+    flagged has existed since #70 and nobody circled back to actually
+    wire the scoping. Added a `role==='gm'` branch to
+    `getMyScopedEmpCodes()` — same pattern as `l1`/`unit`/`l2`, filters
+    `MASTER_USERS` by `(u[19]||'').trim()===myName` (trimmed per #86's
+    lesson, applied from the start this time rather than needing a
+    follow-up fix) — so a GM logged in now sees only their own division
+    across every scoped page/badge/notification this file has (#45's
+    `getEvalParticipants()`, #85's nav badges, #87's notification bell,
+    the review/GM-approve/calibration/approve queues, report/export).
+    Also updated `renderGmApproveQueue()`'s own comment, which still
+    literally said "getMyScopedEmpCodes() คืน null ให้ role 'gm' โดย
+    อัตโนมัติ" — the exact CLAUDE.md #34/#49/#67 trap of a comment
+    describing code that no longer matches, left stale right next to the
+    fix that made it stale. Verified with a test that seeds two real GMs
+    each with their own section-manager report (`u[19]` pointing to a
+    different GM's name) and confirms `getMyScopedEmpCodes()` for GM 1
+    includes only GM 1's own report and GM 1 themselves, excluding GM
+    2's report entirely — plus the standard click-sweep. **What did NOT
+    need changing, stated explicitly since the user's question covered
+    the whole hierarchy**: `l1`(→L2 label)/`unit`(→L1 label)/`l2`(→L3
+    label)'s scoping branches were already correct before this fix —
+    only `gm` had a real, dormant gap. General lesson: when a comment in
+    the code explicitly names *what would need to exist* for a limit to
+    be lifted ("if X field is ever added"), that's a standing TODO — the
+    moment a later fix (#68/#70) actually adds that named field for an
+    unrelated reason (Excel round-trip, an edit form), grep back for the
+    comment that named it and close the loop, rather than leaving the
+    dependent fix to be found as a separate bug report later.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
