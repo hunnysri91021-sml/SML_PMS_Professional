@@ -2977,6 +2977,54 @@ touches employee/attendance/evaluation data.
     order" entirely, since its job is to match what already exists
     outside this app, not to be intuitive to a human skimming it.
 
+90. **User's screenshot of the Dashboard while logged in as a real non-admin
+    "ผู้จัดการส่วน" (L2) showed a "📢 ส่ง Reminder" button sitting right next
+    to the cycle selector — "หน้าแรกที่ไม่ใช่ admin ไม่ควรมี remider หรือ
+    เปล่า" (shouldn't the non-admin homepage not have this Reminder
+    [button]).** Investigated and confirmed: the button
+    (`onclick="openM('mReminder')"`) had **zero role gating of any kind** —
+    no `data-role`, no visibility check, nothing — unlike nav items which
+    already use `data-role` and unlike `#roleSel`'s Demo UI switcher which
+    #72 already locked to admin/sysadmin. Every logged-in role saw and
+    could click it. Worse than a plain display bug: the modal's own
+    `getReminderTargets()` (which powers both the preview counts and the
+    actual send) reads straight from `MASTER_USERS`/the local draft
+    queue with **no `getMyScopedEmpCodes()` call at all** — the exact
+    unscoped-summary shape #45/#73/#85/#87 already found in four other
+    places in this file — so a non-admin who opened it could see, and
+    mass-email via the real `mailto:` bcc send (#10's honest email
+    channel), the *entire company's* pending-evaluation list, not just
+    their own team. This is a real HR/Admin action (bulk-notifying people
+    to submit evaluations), not something an individual L1/L2/GM manager
+    should trigger for the whole org. Fixed at the one real chokepoint,
+    `applySession()` (same pattern as #72's `roleSel.disabled` line
+    immediately above it): added `id="reminderBtn"` to the button and
+    `reminderBtnEl.style.display = ['admin','sysadmin'].includes(u[2]) ?
+    '' : 'none'` right after the `roleSel` lock, so the button is now
+    genuinely hidden (not just cosmetically disabled) for every role
+    except admin/sysadmin — the same two roles `getReminderTargets()`'s
+    unscoped, company-wide read is actually appropriate for. Verified
+    with a test logging in as a real L2, an admin, and a plain employee
+    in sequence and confirming the button's computed `display` is `none`
+    for L2/employee and `flex` for admin — plus the standard click-sweep.
+    **Left `getReminderTargets()`'s own unscoped read unchanged** rather
+    than also adding `getMyScopedEmpCodes()` scoping inside it: once the
+    button itself is admin/sysadmin-only, and both those roles are
+    deliberately unrestricted in `getMyScopedEmpCodes()` already (#45),
+    scoping the function itself would be a no-op for its only remaining
+    caller — worth stating plainly rather than leaving as an implied
+    "also fixed," since a future new role gaining access to this button
+    would need that scoping added at that point, not assumed already
+    present. General lesson combining #72/#87: a page-header action
+    button (not a nav item, so it never had a `data-role` attribute to
+    check) is just as easy to leave completely unrestricted as a nav
+    page or a summary badge — when a bug of this exact shape (unrestricted
+    company-wide access/data) is found once in a nav item (#72) and twice
+    more in summary widgets (#85/#87), the next place to check is any
+    other clickable control sitting outside the nav system entirely, since
+    "not a nav page" was never itself a reason it was ever safe to leave
+    ungated.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -1482,7 +1482,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <div><h2>แดชบอร์ดภาพรวม</h2><p>รอบประเมิน <b>ประจำปี 2569 (FY2026)</b> · ผลงาน 1 ม.ค. 69 – วันที่ประเมิน · เวลา 1 ธ.ค. 68 – 30 พ.ย. 69</p></div>
       <div class="ph-act">
         <select class="btn"><option>FY2026 – ประจำปี 2569</option><option>FY2025 – ประจำปี 2568</option></select>
-        <button class="btn btn-p" onclick="openM('mReminder')">📢 ส่ง Reminder</button>
+        <button class="btn btn-p" id="reminderBtn" onclick="openM('mReminder')">📢 ส่ง Reminder</button>
       </div>
     </div>
 
@@ -4197,6 +4197,11 @@ function applySession(u){
      และหน้าที่ตัวเองไม่ควรเข้าถึงได้จริง (setRole() ใช้ค่าที่เลือกใน dropdown นี้ตรงๆ ไม่ใช่บทบาทจริง
      จาก CURRENT_SESSION_USER) ล็อก disabled ไว้สำหรับทุก role อื่นนอกจาก admin/sysadmin */
   if(roleSel) roleSel.disabled = !['admin','sysadmin'].includes(u[2]);
+  /* "ส่ง Reminder" เป็นการกระทำระดับ HR/Admin (ส่งอีเมลแจ้งเตือนเป็นชุดให้คนในกลุ่มเป้าหมาย) เดิมปุ่มนี้
+     ไม่มีการจำกัดสิทธิ์เลย ทุก role ที่ล็อกอินเข้ามาเห็นเหมือนกันหมด (ดู CLAUDE.md #90) ซ่อนไว้สำหรับ
+     ทุก role อื่นนอกจาก admin/sysadmin เช่นเดียวกับ roleSel ด้านบน */
+  const reminderBtnEl = document.getElementById('reminderBtn');
+  if(reminderBtnEl) reminderBtnEl.style.display = ['admin','sysadmin'].includes(u[2]) ? '' : 'none';
   if(typeof setRole === 'function') setRole(u[2]);
   const badge = document.getElementById('sessionBadge');
   const nameEl = document.getElementById('sessionName');
