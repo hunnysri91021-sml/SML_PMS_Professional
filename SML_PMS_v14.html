@@ -4617,7 +4617,7 @@ function renderOrg(data) {
     <td style="font-size:12px">${u[10]||'—'}</td>
     <td style="font-size:12px">${u[11]||'—'}</td>
     <td style="font-size:12px">${u[19]||'—'}</td>
-    <td>${U_STATUS_LABEL[u[12]]||''}</td>
+    <td>${U_STATUS_LABEL[u[12]]||''}${u[20]==='1' ? '<br><span class="bd" style="font-size:10px;background:#f1f5f9;color:#64748b">🚫 ยกเว้นประเมิน</span>' : ''}</td>
   </tr>`).join('');
 }
 

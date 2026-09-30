@@ -2689,6 +2689,20 @@ touches employee/attendance/evaluation data.
     intended concept has no existing mechanism at all, meaning the real
     work is designing a new field, not pointing at a settings page that
     already exists.
+    **Follow-up in the same request**: user's screenshot was actually of
+    the "ผังองค์กร & พนักงาน" (org chart) page, not the plain employee
+    list — pointed out "คนที่ติ๊กแล้วหน้านี้ต้อง update ด้วย" (the page
+    with the people I ticked needs updating too). `renderOrg()` (a
+    separate render function from `renderUsers()`, #73's own scoping
+    fix) hadn't gotten the same "🚫 ยกเว้นประเมิน" badge under its Status
+    column — added it there too, verified with a test that seeds an
+    exempted employee and confirms the badge renders in this specific
+    table. General reminder from #34/#67/#73: this file has more than
+    one table that displays "the employee list" (the Settings-page user
+    list and the org-chart page are two separate render functions over
+    the same data) — a UI change requested against a screenshot needs
+    checking against every render function showing that same data, not
+    just the first/most obvious one.
 
 ## Verification checklist for any change to this file
 
