@@ -3025,6 +3025,60 @@ touches employee/attendance/evaluation data.
     "not a nav page" was never itself a reason it was ever safe to leave
     ungated.
 
+91. **User's screenshot of "สอบทานขั้นที่ 3 (ผู้จัดการส่วน L2)" showed the
+    header "เลือกทั้งหมด" checkbox ticked but every individual row checkbox
+    below it unticked — "เลือกตีกลับแล้วไม่เกิดอะไรขึ้น เช็คปุ่มการทำงาน
+    ด้วยและแถบอื่นที่เกี่ยวข้อง" (selected and clicked reject, nothing
+    happened — check the button and related tabs too).** Root cause:
+    `renderReviewQueue()`/`renderGmApproveQueue()` rebuild their `<tbody>`'s
+    entire `innerHTML` on every call — and both pages are wired into
+    `startEvalAutoSync()` (#59), which calls `ms365SyncAppraisals(true)` →
+    `renderWorkflowPages()` **immediately on page entry and again every 30
+    seconds** for as long as the page stays open. Rebuilding `innerHTML`
+    replaces every `<input class="review-chk">`/`<input class="gm-chk">`
+    with a brand-new, unchecked element — while the header "select all"
+    checkbox (in `<thead>`, never touched by the rebuild) keeps whatever
+    state the user last clicked it to. So the real sequence was: user
+    clicks the header checkbox → every row ticks → the 30-second auto-sync
+    (or, worse, the very first sync fired the instant the page was
+    entered) fires and silently wipes every row checkbox back to unticked
+    while the header stays visibly ticked → user clicks "ตีกลับที่เลือก"
+    → `getCheckedKeys('review-chk')` correctly finds zero checked rows and
+    does nothing (a small `smlToast` warning does fire, but it's easy to
+    miss and reads exactly like "nothing happened"). This is a genuinely
+    new failure mode, not a repeat of #85/#87's unscoped-summary shape —
+    those were *missing* scope filters; this is a *live re-render*
+    silently discarding in-progress user input that #59's own auto-sync
+    feature introduced as a side effect nobody checked for at the time.
+    Fixed with `restoreCheckedKeys(cls, checkedKeys)`: both render
+    functions now capture `getCheckedKeys(cls)` into a `Set` **before**
+    rebuilding `innerHTML`, then re-tick every surviving row whose
+    `draftKey()` is still in that set immediately after — a row that
+    disappeared from the queue entirely (already acted on from another
+    device) simply isn't re-ticked, which is correct, not a bug. Checked
+    every other queue page (`renderCalibQueue()`/`renderApproveQueue()`)
+    for the same shape — they don't use a per-row checkbox selection
+    model at all (Calibration uses a per-row number `<input>` read
+    directly by `data-key` at click time, not a persisted "selected"
+    boolean; Approve has no selection UI, it's "อนุมัติทั้งหมด" acting on
+    the whole visible queue) so neither one was ever exposed to this
+    exact failure mode — confirmed by reading both functions rather than
+    assuming from the shared `startEvalAutoSync()` wiring alone. Verified
+    with a test that ticks a row, force-calls the render function again
+    (simulating the 30s auto-sync tick) to confirm the checkbox survives,
+    then clicks the real reject button and confirms the draft's status
+    actually changes — for both `review-chk` and `gm-chk` — plus the
+    standard click-sweep. General lesson: any live-refreshing page
+    (auto-sync interval, or any other timer/event that re-renders a table
+    a user is actively interacting with) that offers row selection via
+    checkboxes must explicitly preserve checked state across its own
+    re-renders, or the selection silently evaporates out from under a
+    user who takes even a few seconds to read the table before acting —
+    this is a different, subtler case of CLAUDE.md #74's "any invisible
+    background operation must not make the UI feel broken," here the
+    breakage isn't a frozen screen but a UI element quietly resetting
+    itself while the header control right next to it visibly doesn't.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

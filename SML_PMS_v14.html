@@ -7430,9 +7430,21 @@ function empDeptLabel(code, fallbackName){
   return { name: emp?.[1] || fallbackName || code, dept: emp ? (emp[6]||emp[4]||'—') : '—' };
 }
 
+/* เก็บ key ของแถวที่ติ๊กไว้ก่อน rebuild tbody แล้วติ๊กคืนให้ตรง key เดิมหลัง render — เดิมทุกครั้งที่
+   auto-sync (ทุก 30 วิ, startEvalAutoSync()) หรือเปิดหน้าใหม่เรียก renderReviewQueue()/
+   renderGmApproveQueue() ซ้ำ, tbody.innerHTML ถูกสร้างใหม่ทั้งหมดทำให้ checkbox ทุกแถวหลุดกลับเป็นไม่
+   ติ๊กทันที (ถึงแม้ checkbox "เลือกทั้งหมด" ที่หัวตาราง ซึ่งอยู่นอก tbody ไม่ถูก rebuild จะยังติ๊กค้าง
+   อยู่ — ตรงกับภาพหน้าจอที่ผู้ใช้ส่งมา: หัวตารางติ๊ก แต่ทุกแถวไม่ติ๊กเลย) กดปุ่ม "ตีกลับที่เลือก"/
+   "อนุมัติที่เลือก" หลังจากนั้นจึงเจอ keys=[] แล้วเงียบ (แค่ toast เตือนเล็กๆ ที่มองข้ามได้ง่าย) ดู
+   CLAUDE.md #91 */
+function restoreCheckedKeys(cls, checkedKeys){
+  if(!checkedKeys.size) return;
+  document.querySelectorAll('.'+cls).forEach(el=>{ if(checkedKeys.has(el.value)) el.checked = true; });
+}
 function renderReviewQueue(){
   const tbody=document.getElementById('reviewRows'); const cnt=document.getElementById('reviewCount');
   if(!tbody) return;
+  const checkedKeys = new Set(getCheckedKeys('review-chk'));
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
   const rows = getDrafts().filter(d=>d[d.length-1]==='Submitted').filter(d=>!scoped || scoped.has(d[0]));
   if(cnt) cnt.textContent = rows.length+' รายการ';
@@ -7446,6 +7458,7 @@ function renderReviewQueue(){
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','')">สอบทานแบบฟอร์ม</button></td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
+  restoreCheckedKeys('review-chk', checkedKeys);
 }
 /* Push ประวัติการอนุมัติ/ตีกลับแต่ละขั้นขึ้น Excel ตาราง Approvals แบบ append (เหตุการณ์ 1 ครั้ง =
    1 แถวเสมอ เหมือน AuditLog/Appraisals — ไม่ใช่ "สถานะปัจจุบัน" ที่ควร upsert) fire-and-forget
@@ -7486,6 +7499,7 @@ function rejectReviewSelected(){
 function renderGmApproveQueue(){
   const tbody=document.getElementById('gmApproveRows'); const cnt=document.getElementById('gmApproveCount');
   if(!tbody) return;
+  const checkedKeys = new Set(getCheckedKeys('gm-chk'));
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
   const rows = getDrafts().filter(d=>d[d.length-1]==='L2Reviewed').filter(d=>!scoped || scoped.has(d[0]));
   if(cnt) cnt.textContent = rows.length+' รายการ';
@@ -7498,6 +7512,7 @@ function renderGmApproveQueue(){
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td></tr>`;
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรออนุมัติ GM</td></tr>';
+  restoreCheckedKeys('gm-chk', checkedKeys);
 }
 /* อนุมัติ GM แล้ว = พร้อมส่งผลให้พนักงานรับทราบ — จึงส่งอีเมลแจ้งพนักงานตรงนี้เลย (ย้ายมาจาก
    approveAllFinal() เดิมที่เคยแจ้งตอนอนุมัติขั้นสุดท้าย เพราะตอนนี้พนักงานต้องรับทราบ *ก่อน*
