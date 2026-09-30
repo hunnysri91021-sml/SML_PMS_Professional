@@ -2923,6 +2923,60 @@ touches employee/attendance/evaluation data.
     comment that named it and close the loop, rather than leaving the
     dependent fix to be found as a separate bug report later.
 
+89. **User's screenshot of the employee list's "สายบังคับบัญชา" column
+    showed the header promising "L1 / L2 / GM / อนุมัติ" but every row's
+    actual lines appeared as GM *first*, then อนุมัติ — "สายบังคับบัญชา
+    เรียงไม่ถูกต้อง กลับไปเช็ทุกจุด" (the chain is ordered wrong, go check
+    every spot).** Root cause: `supervisorChainLabel()` pushed `gm`
+    (`u[19]`, the real L4 field) into its output *before* `approver`
+    (`u[11]`, the real L3/"ผู้จัดการส่วน" field) — backwards, since GM is
+    the *top* of the 4-tier hierarchy #70 established (L1 หัวหน้าหน่วย →
+    L2 หัวหน้าแผนก → L3 ผู้จัดการส่วน → L4 GM), not a mid-chain step
+    before the section manager. This happened because `gm` was added to
+    the function in #67/#68 as a straight append to the existing
+    `l1`/`l2`/`approver` line-building code — correct per CLAUDE.md #5
+    for the *array index* (`u[19]` appended after `u[11]`, never
+    inserted mid-array), but that rule governs storage position, not
+    display order, and nobody separately checked whether appending the
+    new `lines.push()` call in the same relative spot also produced the
+    right *reading* order. Fixed by reordering the `lines.push()` calls
+    to L1 → L2 → L3(`approver`) → L4(`gm`), relabeling the approver line
+    from bare "อนุมัติ" to "L3" and the GM line to "L4 (GM)" so every
+    line now carries its real tier number, and fixing the column header
+    from "L1 / L2 / GM / อนุมัติ" to "L1 / L2 / L3 / GM (L4)" to match.
+    **Checked every other spot showing this same chain, per the user's
+    "ทุกจุด" ask, before assuming this was the only one**: the employee
+    detail view (`udL1`/`udL2`/`udApprover`/`udGM`, #70) and the org
+    chart page's table header (`หัวหน้าหน่วย (L1)` → `หัวหน้าแผนก (L2)` →
+    `ผู้จัดการส่วน (L3)` → `GM (L4)`, line 2206) were both **already
+    correct** — only `supervisorChainLabel()`'s combined-line rendering
+    had the bug. The bulk-import template (`EMP_TEMPLATE_HEADERS`/
+    `EMP_TEMPLATE_THAI`, #76) also lists `gm` before `approver_division_
+    mgr` — checked this deliberately rather than assuming it needed the
+    same fix, and confirmed it's *correct as-is*: that column order
+    mirrors `EXCEL_EMPLOYEE_COLS` (`...,'l1','l2','gm','approver',...`),
+    the real screenshot-verified order of HR's actual Excel sheet per
+    #68/#30 — a raw data-import template's column order must match the
+    real external system it imports from, not an idealized hierarchy
+    reading order, so reordering it to "look right" would have broken
+    the real file format HR already has. `parseEmployeeImportRow()`
+    (#77) reads `g(13)`=gm/`g(14)`=approver consistent with that same
+    real order, so no data was ever mis-parsed — this was purely a
+    *human-facing display* ordering bug, never a storage or import
+    correctness one. Verified with a test that builds a synthetic
+    employee with distinct L1/L2/L3/L4 names and confirms
+    `supervisorChainLabel()`'s output places them in the correct
+    L1→L2→L3→L4 reading order — plus the standard click-sweep. General
+    lesson sharper than #5's own statement: "append-only" is a rule
+    about *array index stability* (never insert mid-array, so existing
+    index-based reads don't break) — it says nothing about *display
+    order*, which is a separate, independent thing to get right every
+    time a new tier is added to an existing chain-rendering function,
+    and a raw data-interchange format (an import template mirroring a
+    real external spreadsheet) is exempt from "should read in hierarchy
+    order" entirely, since its job is to match what already exists
+    outside this app, not to be intuitive to a human skimming it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
