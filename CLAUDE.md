@@ -2307,6 +2307,69 @@ touches employee/attendance/evaluation data.
     fixing, and shipping a code "fix" for a data problem would have done
     nothing while looking like it addressed the report.
 
+76. **"แก้ไข template พนักงาน upload ด้วย ข้อมูลไม่ครบ" (fix the employee
+    upload template too, data is incomplete) — `EMP_TEMPLATE_HEADERS`/
+    `EMP_TEMPLATE_THAI` (the downloadable Import template, and the doc
+    table inside the "📄 Template โหลดข้อมูลพนักงาน" modal) still had only
+    the original 14 columns from before #68/#70 ever existed: no
+    `start_date`/`email`/`potential` at all, and the supervisor chain was
+    still the old 3-level `l1`/`l2`/`approver` with zero GM column —
+    exactly the real, verified 17-column order `EXCEL_EMPLOYEE_COLS`
+    (#30/#68) already establishes for the live Excel sheet, just never
+    propagated to this template.** Concretely this meant anyone filling
+    in the template had **no column to type a new hire's start date,
+    email, potential rating, or GM into at all** — not a display gap,
+    a genuine missing input field, so a bulk-prepared employee sheet
+    could never carry that data into the app even if HR wanted it to.
+    Fixed by rebuilding both arrays to the real 17-field order (`emp_code,
+    full_name, role, group, section, division, department, position,
+    start_date, email, grade, l1_unit_head, l2_dept_head, gm,
+    approver_division_mgr, status, potential`) with the #70 hierarchy
+    labels (หัวหน้าหน่วย L1 / หัวหน้าแผนก L2 / GM L4 / ผู้จัดการส่วน L3),
+    the modal's own inline column-reference table (`mEmployeeTemplate`),
+    and the "Import พนักงานจาก Excel" modal's short inline hint text —
+    three separate places that would otherwise have drifted out of sync
+    with each other and with the code the same way CLAUDE.md #34/#49/#67
+    already warn a stale doc claim eventually does. Deliberately did
+    **not** add `pinHash`/`evalLevel`/`lastLogin` as import columns — per
+    #17/#23/#30 these are local/settings values, never real columns in
+    the Employees sheet, and adding them here would just recreate the
+    exact "template implies a column that doesn't really exist" trap in
+    the opposite direction; added an explicit warning box saying so.
+    **Also removed a dead placeholder found while fixing this**: the
+    modal's "กำหนดรหัสผ่านเริ่มต้น" (set default password) dropdown
+    (`employeePasswordMode`) was never read by any function at all — a
+    leftover from before this app had a real PIN-based login (#17), the
+    same shape of dead control `mu_pass` was in before #17 replaced it.
+    Replaced it with an honest note that this app has no password
+    concept, and a freshly-imported employee has no PIN until Admin
+    explicitly sets one via "ตั้ง/รีเซ็ต PIN" (#47).
+    **A bigger, separate gap surfaced while checking "ส่วนอื่นที่เกี่ยวข้อง"
+    (other related parts) — flagged plainly here rather than silently
+    fixed or silently ignored**: the "Import พนักงานจาก Excel" button's
+    whole flow is itself a CLAUDE.md #10 placeholder end-to-end.
+    `previewEmployeeImport()` only echoes the picked filename back with a
+    generic "จะตรวจ Header, รหัสซ้ำ, ..." message — it never actually
+    reads the file's contents. `validateEmployeeImport()` unconditionally
+    toasts "ตรวจสอบเบื้องต้นผ่าน — พร้อม Preview / Confirm Import" the
+    moment *any* file is selected, whether it's a real employee CSV, an
+    unrelated PDF, or an empty file — and **there is no "Confirm Import"
+    function anywhere in this file at all**: no code path ever parses an
+    uploaded employee file and writes rows into `MASTER_USERS`. This is
+    architecturally the same "looks like a real action, isn't" shape as
+    #19's old `ms365SyncAttendance()` bug, just never fixed for this
+    feature at all — fixing the *template's columns* (this request) does
+    not make the *upload button* functional, since nothing downstream of
+    it ever reads those columns back out of a real file. Left unbuilt
+    deliberately rather than guessed at: a real bulk-import parser needs
+    its own scoped pass (duplicate-code rejection per #2, org/role/grade
+    validation against `getOrgMasterValues()`/`ROLE_DEFS` per #3/#51, a
+    real preview table before commit per #9's "never silently overwrite"
+    instinct, and a push to Excel per #27 for every imported row) — told
+    the user this plainly and asked whether they want it built as a
+    follow-up, rather than shipping a half-working parser under a
+    "template fix" request that never asked for one.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -3154,23 +3154,27 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <tbody>
         <tr><td>1</td><td><b>emp_code</b></td><td>รหัสพนักงาน</td><td>SML-0001</td></tr>
         <tr><td>2</td><td><b>full_name</b></td><td>ชื่อ-สกุล</td><td>สมชาย ใจดี</td></tr>
-        <tr><td>3</td><td><b>role</b></td><td>บทบาทใน PMS</td><td>emp / l1 / l2 / exec / admin / sysadmin</td></tr>
+        <tr><td>3</td><td><b>role</b></td><td>บทบาทใน PMS</td><td>emp / unit / l1 / l2 / gm / exec / admin / sysadmin</td></tr>
         <tr><td>4</td><td><b>group</b></td><td>กลุ่ม</td><td>SML Staff</td></tr>
         <tr><td>5</td><td><b>section</b></td><td>แผนก</td><td>Yard & PDI (SML)</td></tr>
         <tr><td>6</td><td><b>division</b></td><td>ส่วน</td><td>ส่วน Yard</td></tr>
         <tr><td>7</td><td><b>department</b></td><td>ฝ่าย</td><td>ฝ่ายปฏิบัติการ</td></tr>
         <tr><td>8</td><td><b>position</b></td><td>ตำแหน่ง</td><td>พนักงานปฏิบัติการ PDI</td></tr>
-        <tr><td>9</td><td><b>grade</b></td><td>เกรด</td><td>G1</td></tr>
-        <tr><td>10</td><td><b>l1</b></td><td>หัวหน้า L1</td><td>สุดา มีสุข</td></tr>
-        <tr><td>11</td><td><b>l2</b></td><td>ผจก.ส่วน L2</td><td>อรุณ ศิริ</td></tr>
-        <tr><td>12</td><td><b>approver</b></td><td>ผู้อนุมัติ</td><td>คุณเชิดชัย</td></tr>
-        <tr><td>13</td><td><b>status</b></td><td>สถานะ</td><td>active</td></tr>
-        <tr><td>14</td><td><b>start_date</b></td><td>วันเริ่มงาน</td><td>01/06/2564</td></tr>
+        <tr><td>9</td><td><b>start_date</b></td><td>วันเริ่มงาน</td><td>01/06/2564</td></tr>
+        <tr><td>10</td><td><b>email</b></td><td>อีเมล</td><td>somchai@example.com</td></tr>
+        <tr><td>11</td><td><b>grade</b></td><td>เกรด</td><td>G1</td></tr>
+        <tr><td>12</td><td><b>l1_unit_head</b></td><td>หัวหน้าหน่วย (L1)</td><td>สุดา มีสุข</td></tr>
+        <tr><td>13</td><td><b>l2_dept_head</b></td><td>หัวหน้าแผนก (L2)</td><td>อรุณ ศิริ</td></tr>
+        <tr><td>14</td><td><b>gm</b></td><td>GM (L4)</td><td>คุณสมศักดิ์</td></tr>
+        <tr><td>15</td><td><b>approver_division_mgr</b></td><td>ผู้จัดการส่วน (L3 / ผู้อนุมัติ)</td><td>คุณเชิดชัย</td></tr>
+        <tr><td>16</td><td><b>status</b></td><td>สถานะ</td><td>active / probation / inactive / resigned</td></tr>
+        <tr><td>17</td><td><b>potential</b></td><td>ศักยภาพ (9-Box)</td><td>High / Medium / Low</td></tr>
       </tbody></table>
     </div>
     <div class="template-rule-note">
-      <span>✓</span> ระดับ + บทบาท + สายบังคับบัญชา จะถูกใช้เชื่อมกับแบบฟอร์มประเมิน 4 ระดับและ Workflow ของ PMS
+      <span>✓</span> ระดับ + บทบาท + สายบังคับบัญชาทั้ง 4 ชั้น (L1/L2/GM/L3-ผู้อนุมัติ) จะถูกใช้เชื่อมกับแบบฟอร์มประเมิน 4 ระดับและ Workflow ของ PMS
     </div>
+    <div class="al al-w" style="margin-top:10px"><span>⚠️</span><div><b>คอลัมน์นี้ไม่มีในไฟล์ Import</b> — PIN, ระดับแบบฟอร์มที่กำหนด (evalLevel), และเวลาล็อกอินล่าสุด ไม่ใช่ข้อมูลที่มาจาก Excel/ไฟล์ Import แต่เป็นค่าที่ตั้งแยกในระบบ (หน้า "ผู้ใช้ & สิทธิ์" หรือ Add/Edit Employee) เท่านั้น</div></div>
   </div>
   <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-p" onclick="downloadEmployeeTemplate(true)">📥 ดาวน์โหลด Template + ตัวอย่าง</button></div>
 </div></div>
@@ -9299,19 +9303,13 @@ document.addEventListener('input',e=>{
 <div class="ov" id="mImportUsers"><div class="md" style="max-width:620px">
   <div class="md-h"><h3>⬆️ Import พนักงานจาก Excel</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="al al-i"><span>📋</span><div><b>Template พนักงานมาตรฐาน</b><br>คอลัมน์บังคับ: รหัสพนักงาน, ชื่อ-สกุล, บทบาท, กลุ่ม, แผนก, ส่วน, ฝ่าย, ตำแหน่ง, เกรด, หัวหน้า L1, ผจก.ส่วน L2, ผู้อนุมัติ, สถานะ</div></div>
+    <div class="al al-i"><span>📋</span><div><b>Template พนักงานมาตรฐาน</b><br>คอลัมน์บังคับ: รหัสพนักงาน, ชื่อ-สกุล, บทบาท, กลุ่ม, แผนก, ส่วน, ฝ่าย, ตำแหน่ง, วันเริ่มงาน, อีเมล, เกรด, หัวหน้าหน่วย (L1), หัวหน้าแผนก (L2), GM (L4), ผู้จัดการส่วน (L3/ผู้อนุมัติ), สถานะ, ศักยภาพ</div></div>
     <div class="up" style="margin:14px 0" onclick="document.getElementById('employeeFileIn').click()">
       <div class="ic">📁</div><b id="employeeFileLabel">เลือกไฟล์ Excel / CSV</b><span>รองรับ .xlsx, .xls, .csv · สูงสุด 500 แถว / 20 MB</span>
     </div>
     <input type="file" id="employeeFileIn" class="hide" accept=".xlsx,.xls,.csv" onchange="previewEmployeeImport(this)">
     <div id="employeeImportPreview" class="hide"></div>
-    <div class="fg"><label>กำหนดรหัสผ่านเริ่มต้น</label>
-      <select id="employeePasswordMode">
-        <option>ใช้รหัสพนักงาน (แนะนำ)</option>
-        <option>กำหนดเอง</option>
-        <option>ส่งลิงก์ตั้งรหัสทาง Email</option>
-      </select>
-    </div>
+    <div class="al al-w"><span>⚠️</span><div>ระบบนี้ใช้ PIN (ไม่ใช่รหัสผ่าน) สำหรับยืนยันตัวตนเบื้องต้น — พนักงานที่ Import เข้ามาใหม่ยังไม่มี PIN จนกว่า Admin จะไปตั้งให้ทีละคนที่หน้า "ผู้ใช้ & สิทธิ์" (ปุ่ม "ตั้ง/รีเซ็ต PIN")</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="downloadEmployeeTemplate()">📥 ดาวน์โหลด Template</button>
       <button class="btn btn-sm" onclick="downloadEmployeeTemplate(true)">📥 Template พร้อมตัวอย่าง</button>
@@ -9471,14 +9469,21 @@ document.addEventListener('input',e=>{
 
 <script>
 /* v9 — Employee Master Template / Import */
-const EMP_TEMPLATE_HEADERS = ['emp_code','full_name','role','group','section','division','department','position','grade','l1','l2','approver','status','start_date'];
-const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/unit/l1/l2/gm/exec/admin/sysadmin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','เกรด','หัวหน้า L1','ผจก.ส่วน L2','ผู้อนุมัติ','สถานะ','วันเริ่มงาน (DD/MM/YYYY)'];
+/* คอลัมน์ต้องตรงกับ MASTER_USERS/EXCEL_EMPLOYEE_COLS ชุดล่าสุดทั้งหมด (CLAUDE.md #70/#76) —
+   Template เดิมมีแค่ 14 คอลัมน์ ขาด startDate/email/potential และสายบังคับบัญชายังเป็น 3 ระดับ
+   เก่า (หัวหน้า L1/ผจก.ส่วน L2/ผู้อนุมัติ) ไม่มี GM (L4) เลย ตกหล่นตรงกับ field จริงที่แอปใช้งาน
+   อยู่ทุกวันนี้ (Add/Edit Employee มี 4 ช่องสายบังคับบัญชาแล้วตั้งแต่ #70) — ผู้ที่กรอกไฟล์ตาม
+   Template เก่าจะไม่มีทางกรอก GM/Email/StartDate ได้เลยเพราะไม่มีช่องให้กรอก ไม่ใช่แค่ "ข้อมูล
+   ไม่ครบ" แต่เป็นการล็อกไม่ให้กรอกข้อมูลจริงที่ระบบต้องการ จงใจไม่รวม pinHash/evalLevel/lastLogin
+   (ไม่ใช่คอลัมน์จริงในชีต Employees ตาม #17/#23/#30 — เป็นข้อมูล local/ตั้งค่าแยกต่างหาก) */
+const EMP_TEMPLATE_HEADERS = ['emp_code','full_name','role','group','section','division','department','position','start_date','email','grade','l1_unit_head','l2_dept_head','gm','approver_division_mgr','status','potential'];
+const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/unit/l1/l2/gm/exec/admin/sysadmin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','วันเริ่มงาน (DD/MM/YYYY)','อีเมล','เกรด','หัวหน้าหน่วย (L1)','หัวหน้าแผนก (L2)','GM (L4)','ผู้จัดการส่วน (L3 / ผู้อนุมัติ)','สถานะ (active/probation/inactive/resigned)','ศักยภาพ (High/Medium/Low)'];
 function downloadEmployeeTemplate(withExample=true){
   const rows=[EMP_TEMPLATE_HEADERS];
   if(withExample){
     rows.push(
-      ['SML-0001','สมชาย ใจดี','l1','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','หัวหน้าแผนก PDI','M1','สุดา มีสุข','อรุณ ศิริ','คุณเชิดชัย','active','01/06/2564'],
-      ['SML-0002','นภา สุขสันต์','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','G1','สมชาย ใจดี','อรุณ ศิริ','คุณเชิดชัย','active','15/02/2566']
+      ['SML-0001','สมชาย ใจดี','l1','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','หัวหน้าแผนก PDI','01/06/2564','somchai@example.com','M1','สุดา มีสุข','อรุณ ศิริ','คุณสมศักดิ์','คุณเชิดชัย','active','High'],
+      ['SML-0002','นภา สุขสันต์','emp','SML Staff','Yard & PDI (SML)','ส่วน Yard','ฝ่ายปฏิบัติการ','พนักงานปฏิบัติการ PDI','15/02/2566','napa@example.com','G1','สมชาย ใจดี','อรุณ ศิริ','คุณสมศักดิ์','คุณเชิดชัย','active','Medium']
     );
   }
   const csv='﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
