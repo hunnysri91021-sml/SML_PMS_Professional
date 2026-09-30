@@ -2370,6 +2370,59 @@ touches employee/attendance/evaluation data.
     follow-up, rather than shipping a half-working parser under a
     "template fix" request that never asked for one.
 
+77. **Follow-up to #76: user said "ทำได้" (go ahead) to the flagged gap —
+    built the real bulk-import parser that `previewEmployeeImport()`/
+    `validateEmployeeImport()` never had.** `previewEmployeeImport()` now
+    actually reads the uploaded file (reusing the same encoding-detection/
+    delimiter-detection helpers `importHrgoFile()` already established —
+    UTF-8 with a Windows-874 fallback for Thai Excel mojibake, comma/
+    semicolon/tab auto-detect, machine-header + optional Thai-label-row
+    skip), parses every row against the real `EMP_TEMPLATE_HEADERS` order
+    (#76), and validates each one — missing code/name, a duplicate code
+    *within the same file* (CLAUDE.md #2's "reject/report, never silently
+    accept" rule extended from `importHrgoFile()` to this importer too),
+    an unrecognized `role`/`status` value — flagging each bad row with
+    its specific reason rather than a generic failure. Renders a real
+    preview table (`renderEmployeeImportPreview()`) marking every row
+    ➕ เพิ่มใหม่ / 🔄 จะอัปเดต / ❌ ข้าม *before* anything is written, per
+    CLAUDE.md #9's "never silently overwrite" instinct — an existing
+    employee code is treated as an update-in-place (matching how
+    `saveUserFromModal()`'s own edit path works), never a silent
+    duplicate or a blind overwrite with no visibility into what changed.
+    The "ตรวจสอบข้อมูล →" button (previously `validateEmployeeImport()`'s
+    fake-success toast) is now `confirmImportEmployees()`: writes each
+    non-skipped row into `MASTER_USERS` at the correct field indices
+    (matching `EXCEL_EMPLOYEE_COLS`'s verified order, #30/#68 — a new
+    employee's `pinHash`/`evalLevel`/`lastLogin` are left honestly empty
+    rather than fabricated, since nothing about a bulk-imported row can
+    know those per CLAUDE.md #14), `await`s `pushSingleEmployeeToExcel()`
+    per row (#27) so every imported employee round-trips to Excel the
+    same way a manual Add/Edit save already does, then refreshes every
+    downstream consumer that #3/#50/#63 already established needs a
+    refresh after `MASTER_USERS` changes — `populateUserFilters()`,
+    `populateGradeOptions()`, `populateEmpCodeDatalist()`, and (per #63's
+    own lesson) `filterUsers()` rather than a bare `renderUsers()` call,
+    so the employee list's on-screen filters don't silently reset the
+    moment a bulk import runs. Deliberately did **not** validate
+    supervisor names (`l1`/`l2`/`gm`/`approver`) against existing
+    `MASTER_USERS` rows — this matches how `normalizeMs365Employee()`
+    already treats the same fields on an Excel sync (#18's real
+    `<select>` validation only applies to the manual Add/Edit form, not
+    a bulk data feed) and avoids rejecting a legitimate same-batch import
+    where a person and their new supervisor both arrive in the same
+    file. Verified with a Playwright test importing 3 rows in one file —
+    an existing employee (update, confirms name/email actually change in
+    place), a brand-new code (add, confirms it lands with the correct
+    role and an honestly-empty PIN, not a guessed one), and a row with an
+    invalid role string (confirms it's flagged in the preview with the
+    specific reason and never written to `MASTER_USERS` or pushed to
+    Excel) — plus the standard click-sweep. General lesson: when a #10
+    "does nothing real" finding is flagged for the user rather than
+    fixed outright, and they say yes, build it — the finding note itself
+    (validation list, "never trust a positional guess," "must round-trip
+    to Excel") is the scope specification; implement exactly that list,
+    not a smaller or differently-shaped feature.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -9317,7 +9317,7 @@ document.addEventListener('input',e=>{
   </div>
   <div class="md-f">
     <button class="btn" onclick="closeM()">ยกเลิก</button>
-    <button class="btn btn-p" onclick="validateEmployeeImport()">ตรวจสอบข้อมูล →</button>
+    <button class="btn btn-p" onclick="confirmImportEmployees()">✅ ยืนยัน Import</button>
   </div>
 </div></div>
 
@@ -9825,19 +9825,132 @@ function pushAttendanceToEvaluation(){
   smlToast(`ส่งข้อมูลเวลาเข้าแบบประเมินผลแล้ว ${withData.length}/${participants.length} คน — ระบบคำนวณคะแนน Z ตามสัดส่วนของแต่ละระดับทันที (${zPctList})${missingMsg}`, withoutData.length ? 'warn' : 'ok');
 }
 
+/* เดิม previewEmployeeImport()/validateEmployeeImport() เป็น placeholder ตาม CLAUDE.md #10/#76
+   เต็มรูปแบบ — เลือกไฟล์แล้วขึ้น "ตรวจสอบผ่านแล้ว" ทันทีไม่ว่าไฟล์จะเป็นอะไร และไม่มีฟังก์ชัน
+   Confirm Import ที่เขียนข้อมูลจริงเลยแม้แต่ฟังก์ชันเดียว ตอนนี้แก้เป็นของจริง: parse ไฟล์ตามลำดับ
+   คอลัมน์ EMP_TEMPLATE_HEADERS (17 คอลัมน์ล่าสุด, #76), ตรวจรหัสซ้ำในไฟล์/บทบาท/สถานะ (CLAUDE.md #2),
+   แสดง Preview จริงว่าแต่ละแถวจะ "เพิ่มใหม่"/"อัปเดต"/"ข้าม" ก่อนกด Confirm (CLAUDE.md #9 — ห้าม
+   เขียนทับเงียบๆ) แล้ว Confirm ค่อยเขียนเข้า MASTER_USERS จริง + push ขึ้น Excel ทีละคน (#27) */
+let PENDING_EMPLOYEE_IMPORT_ROWS = [];
+const EMPLOYEE_IMPORT_VALID_ROLES = ['emp','unit','l1','l2','gm','exec','admin','sysadmin'];
+const EMPLOYEE_IMPORT_VALID_STATUS = ['active','probation','inactive','resigned'];
+function parseEmployeeImportRow(cells){
+  const g = i => (cells[i]||'').trim();
+  const roleRaw = g(2).toLowerCase();
+  const role = EMPLOYEE_IMPORT_VALID_ROLES.includes(roleRaw) ? roleRaw : '';
+  const statusRaw = g(15).toLowerCase() || 'active';
+  const status = EMPLOYEE_IMPORT_VALID_STATUS.includes(statusRaw) ? statusRaw : '';
+  return {
+    code:g(0), name:g(1), roleRaw, role, group:g(3), section:g(4), division:g(5), department:g(6),
+    position:g(7), startDate:g(8), email:g(9), grade:g(10), l1:g(11), l2:g(12), gm:g(13),
+    approver:g(14), statusRaw, status, potential:g(16)
+  };
+}
 function previewEmployeeImport(input){
   const f=input.files?.[0]; if(!f)return;
   const label=document.getElementById('employeeFileLabel'); if(label)label.textContent=f.name;
   const box=document.getElementById('employeeImportPreview');
-  if(box){
-    box.classList.remove('hide');
-    box.innerHTML=`<div class="al al-w"><span>🔍</span><div><b>${f.name}</b> · ${(f.size/1024/1024).toFixed(2)} MB<br>ตรวจ Header, รหัสพนักงานซ้ำ, กลุ่ม/แผนก/ส่วน/ฝ่าย/ตำแหน่ง, บทบาท, สายบังคับบัญชา และ Status ก่อน Import</div></div>`;
-  }
+  PENDING_EMPLOYEE_IMPORT_ROWS = [];
+  if(box){ box.classList.remove('hide'); box.innerHTML='<div class="al al-i"><span>⏳</span><div>กำลังอ่านไฟล์...</div></div>'; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const buf = reader.result;
+      let text = new TextDecoder('utf-8').decode(buf).replace(/^﻿/,'');
+      if(typeof looksMojibake==='function' && looksMojibake(text)){
+        try{ text = new TextDecoder('windows-874').decode(buf); }catch(e){}
+      }
+      const lines = text.split(/\r\n|\n/).filter(l=>l.trim()!=='');
+      if(!lines.length){ if(box) box.innerHTML='<div class="al al-e"><span>❌</span><div>ไฟล์ว่างเปล่าหรือไม่มีข้อมูล</div></div>'; return; }
+      const delim = detectDelimiter(lines[0]);
+      const firstCells = parseDelimitedLine(lines[0], delim).map(c=>c.toLowerCase());
+      let startIdx = 0;
+      if(firstCells[0] === 'emp_code'){
+        startIdx = 1;
+        if(lines[1] && parseDelimitedLine(lines[1], delim)[0] === EMP_TEMPLATE_THAI[0]) startIdx = 2;
+      } else if(firstCells[0] === EMP_TEMPLATE_THAI[0].toLowerCase()){
+        startIdx = 1;
+      }
+      const seenInFile = new Set();
+      const rows = [];
+      for(let i=startIdx;i<lines.length;i++){
+        const cells = parseDelimitedLine(lines[i], delim);
+        const parsed = parseEmployeeImportRow(cells);
+        if(!parsed.code && !parsed.name) continue;
+        let action = 'add', reason = '';
+        if(!parsed.code){ action='skip'; reason='ไม่มีรหัสพนักงาน'; }
+        else if(!parsed.name){ action='skip'; reason='ไม่มีชื่อ-สกุล'; }
+        else if(seenInFile.has(parsed.code)){ action='skip'; reason='รหัสซ้ำในไฟล์นี้เอง'; }
+        else if(!parsed.roleRaw){ action='skip'; reason='ไม่ได้ระบุบทบาท'; }
+        else if(!parsed.role){ action='skip'; reason=`บทบาท "${parsed.roleRaw}" ไม่ใช่บทบาทที่ระบบรองรับ (${EMPLOYEE_IMPORT_VALID_ROLES.join('/')})`; }
+        else if(!parsed.status){ action='skip'; reason=`สถานะ "${parsed.statusRaw}" ไม่ใช่ค่าที่ระบบรองรับ (${EMPLOYEE_IMPORT_VALID_STATUS.join('/')})`; }
+        else if(MASTER_USERS.some(u=>u[0]===parsed.code)){ action='update'; }
+        if(parsed.code) seenInFile.add(parsed.code);
+        rows.push({...parsed, action, reason});
+      }
+      PENDING_EMPLOYEE_IMPORT_ROWS = rows;
+      renderEmployeeImportPreview();
+    }catch(e){
+      if(box) box.innerHTML = `<div class="al al-e"><span>❌</span><div>อ่านไฟล์ไม่สำเร็จ: ${e.message}</div></div>`;
+    }
+  };
+  reader.readAsArrayBuffer(f);
 }
-function validateEmployeeImport(){
-  const f=document.getElementById('employeeFileIn')?.files?.[0];
-  if(!f){if(typeof smlToast==='function')smlToast('กรุณาเลือกไฟล์พนักงานก่อน','warn');return;}
-  if(typeof smlToast==='function')smlToast('ตรวจสอบเบื้องต้นผ่าน — พร้อม Preview / Confirm Import','ok');
+function renderEmployeeImportPreview(){
+  const box = document.getElementById('employeeImportPreview');
+  if(!box) return;
+  const rows = PENDING_EMPLOYEE_IMPORT_ROWS;
+  if(!rows.length){ box.innerHTML = '<div class="al al-e"><span>❌</span><div>ไม่พบข้อมูลพนักงานในไฟล์นี้ (ตรวจว่าใช้ Header ตาม Template หรือไม่)</div></div>'; return; }
+  const addCount = rows.filter(r=>r.action==='add').length;
+  const updateCount = rows.filter(r=>r.action==='update').length;
+  const skipCount = rows.filter(r=>r.action==='skip').length;
+  const actionLabel = { add:'<span class="bd b-g">➕ เพิ่มใหม่</span>', update:'<span class="bd b-b">🔄 จะอัปเดต</span>', skip:'<span class="bd b-r">❌ ข้าม</span>' };
+  box.innerHTML = `
+    <div class="al al-i"><span>🔍</span><div><b>พบ ${rows.length} แถว</b> — เพิ่มใหม่ ${addCount} · อัปเดต ${updateCount} · ข้าม ${skipCount}
+    ${skipCount ? '<br><small style="color:#dc2626">แถวที่ข้ามจะไม่ถูกนำเข้า กรุณาแก้ไฟล์แล้วอัปโหลดใหม่ถ้าต้องการนำเข้าด้วย</small>' : ''}</div></div>
+    <div style="max-height:260px;overflow:auto;margin-top:8px">
+      <table class="criteria-table"><thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>บทบาท</th><th>สถานะ</th><th>ผล</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td>${r.code||'—'}</td><td>${r.name||'—'}</td><td>${r.role||r.roleRaw||'—'}</td><td>${r.status||r.statusRaw||'—'}</td>
+        <td>${actionLabel[r.action]}${r.reason?`<br><small style="color:#94a3b8">${r.reason}</small>`:''}</td>
+      </tr>`).join('')}</tbody></table>
+    </div>`;
+}
+async function confirmImportEmployees(){
+  const rows = PENDING_EMPLOYEE_IMPORT_ROWS.filter(r=>r.action!=='skip');
+  if(!rows.length){ if(typeof smlToast==='function') smlToast('ไม่มีแถวที่พร้อม Import — กรุณาเลือกไฟล์และตรวจ Preview ก่อน','warn'); return; }
+  let added=0, updated=0;
+  for(const r of rows){
+    const existingIdx = MASTER_USERS.findIndex(u=>u[0]===r.code);
+    if(existingIdx>=0){
+      const u = MASTER_USERS[existingIdx];
+      u[1]=r.name; u[2]=r.role; u[3]=r.group; u[4]=r.section; u[5]=r.division; u[6]=r.department;
+      u[7]=r.position; u[8]=r.grade; u[9]=r.l1; u[10]=r.l2; u[11]=r.approver; u[12]=r.status;
+      u[14]=r.startDate; u[15]=r.email; u[16]=r.potential; u[19]=r.gm;
+      updated++;
+    } else {
+      /* แถวใหม่: ยังไม่เคยเข้าสู่ระบบ (lastLogin ว่าง) และยังไม่มี PIN/evalLevel จนกว่า Admin จะตั้งให้ทีหลัง
+         (#17/#23/#47) — ไม่เดาค่าที่ไม่มีทางรู้จริง ตาม CLAUDE.md #14 */
+      MASTER_USERS.push([
+        r.code, r.name, r.role, r.group, r.section, r.division, r.department, r.position, r.grade,
+        r.l1, r.l2, r.approver, r.status, '', r.startDate, r.email, r.potential, '', '', r.gm
+      ]);
+      added++;
+    }
+    if(typeof appendAuditLog==='function') appendAuditLog('employee', existingIdx>=0 ? 'นำเข้า/อัปเดตพนักงาน (Bulk Import)' : 'นำเข้าพนักงานใหม่ (Bulk Import)', r.code, r.name);
+    if(typeof pushSingleEmployeeToExcel==='function'){ try{ await pushSingleEmployeeToExcel(r.code); }catch(e){} }
+  }
+  if(typeof populateUserFilters==='function') populateUserFilters();
+  if(typeof populateGradeOptions==='function') populateGradeOptions();
+  if(typeof populateEmpCodeDatalist==='function') populateEmpCodeDatalist();
+  if(typeof filterUsers==='function') filterUsers(); // #63 — ต้องเรียก filterUsers() ไม่ใช่ renderUsers(MASTER_USERS) ตรงๆ
+  const skipCount = PENDING_EMPLOYEE_IMPORT_ROWS.filter(r=>r.action==='skip').length;
+  PENDING_EMPLOYEE_IMPORT_ROWS = [];
+  const fileInput = document.getElementById('employeeFileIn'); if(fileInput) fileInput.value='';
+  const box = document.getElementById('employeeImportPreview'); if(box) box.classList.add('hide');
+  const label = document.getElementById('employeeFileLabel'); if(label) label.textContent='เลือกไฟล์ Excel / CSV';
+  if(typeof closeM==='function') closeM();
+  if(typeof smlToast==='function') smlToast(`Import พนักงานสำเร็จ — เพิ่มใหม่ ${added} คน · อัปเดต ${updated} คน${skipCount?` · ข้าม ${skipCount} รายการ`:''}`, 'ok');
 }
 
 </script>
