@@ -8307,10 +8307,16 @@ function checkHierarchyIssues(showToast){
 /* ====== การแจ้งเตือน (กระดิ่ง) — สรุปรายการที่ต้องติดตามจริง คำนวณจากข้อมูลจริงเท่านั้น ====== */
 function getNotifications(){
   const items = [];
+  /* ต้องกรองด้วย getMyScopedEmpCodes() เหมือน renderNavBadges() (CLAUDE.md #85) — เจอเป็นบั๊กที่ 3
+     ของฟังก์ชันชุดเดียวกันในวันเดียวกัน (queue เดิม, badge, แล้วก็กระดิ่งแจ้งเตือนนี้) ที่ต่างคนต่างนับ
+     จาก MASTER_USERS/getDrafts() ทั้งบริษัทตรงๆ โดยไม่ผ่าน scope เลย ทำให้ L1/L2 เห็นข้อความแจ้งเตือน
+     "มีใบประเมิน N รายการ" ของทั้งบริษัท ทั้งที่คิวจริงในหน้านั้นกรองเหลือ 0 สำหรับทีมตัวเอง */
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
-  const submitted = drafts.filter(d=>d[d.length-1]==='Submitted').length;
-  const l2reviewed = drafts.filter(d=>d[d.length-1]==='L2Reviewed').length;
-  const calibrated = drafts.filter(d=>d[d.length-1]==='Calibrated').length;
+  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
+  const scopedDrafts = scoped ? drafts.filter(d=>scoped.has(d[0])) : drafts;
+  const submitted = scopedDrafts.filter(d=>d[d.length-1]==='Submitted').length;
+  const l2reviewed = scopedDrafts.filter(d=>d[d.length-1]==='L2Reviewed').length;
+  const calibrated = scopedDrafts.filter(d=>d[d.length-1]==='Calibrated').length;
   if(submitted) items.push({ icon:'📝', text:`มีใบประเมิน ${submitted} รายการ รอสอบทานขั้นที่ 2`, page:'review' });
   if(l2reviewed) items.push({ icon:'⚖️', text:`มีใบประเมิน ${l2reviewed} รายการ รอ Calibration`, page:'calib' });
   if(calibrated) items.push({ icon:'✅', text:`มีใบประเมิน ${calibrated} รายการ รออนุมัติขั้นสุดท้าย`, page:'approve' });

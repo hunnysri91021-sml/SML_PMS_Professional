@@ -2838,6 +2838,40 @@ touches employee/attendance/evaluation data.
     empty Set there doesn't just mislabel one dropdown, it makes an
     entire approval chain look like it has no data at all.
 
+87. **Follow-up screenshot on the same "3. สอบทาน L2" report (#86): the
+    page's own table now correctly showed 0 rows, but the 🔔 notification
+    bell — opened in the screenshot — still said "มีใบประเมิน 4 รายการ
+    รอสอบทานขั้นที่ 2," the exact company-wide number the page itself no
+    longer shows.** This is the *third* independent function in one day
+    found with the identical unscoped-summary shape #85 first named:
+    `getNotifications()` counted straight from `getDrafts()` with zero
+    call to `getMyScopedEmpCodes()`, even though `renderReviewQueue()`
+    (the page under it) and `renderNavBadges()` (the sidebar badge next
+    to it, #85) were both already scoped. Fixed the same way: filter
+    `drafts` through `getMyScopedEmpCodes()` before counting `Submitted`/
+    `L2Reviewed`/`Calibrated` for the three real notification lines.
+    Left two other lines in the same function deliberately unscoped —
+    the hierarchy-issues count already calls `checkHierarchyIssues(false)`,
+    which scopes itself internally (#73), so re-filtering it here would
+    double-apply scope incorrectly; and the "รอ Push เข้า Excel" count is
+    an admin/system concern about the local→Excel sync queue, not a
+    team-visibility question, so it stays company-wide (consistent with
+    the `ms365` nav page itself being admin-gated). Verified with a test
+    that seeds a real L2 with zero reports and a `Submitted` draft
+    belonging to an employee *outside* her scope, confirming
+    `getNotifications()` now returns zero items instead of surfacing that
+    outsider's submission — plus the standard click-sweep. **General
+    lesson, now stated three times over (#73/#85/#87): a single scoping
+    sweep never actually reaches every consumer of `getDrafts()`/
+    `MASTER_USERS` — this file has at minimum three independent "count
+    the same drafts" implementations (the page's own render function, the
+    nav badge, the notification bell), and grep for every bare
+    `getDrafts()`/`MASTER_USERS.filter` call site whenever a scoping bug
+    is found in one of them, since the other two are reliably still
+    there** — the next time a scoping report comes in about a number
+    that doesn't match a table right next to it, check all three of
+    these by name before assuming the fix from #85/#86 already covered it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
