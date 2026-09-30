@@ -3203,6 +3203,67 @@ touches employee/attendance/evaluation data.
     `u[9]`) over asking HR to fill a brand-new field that would just be
     a second, driftable copy of a fact already on file.
 
+93. **User's screenshot of the reviewer's evaluation modal (opened from
+    "สอบทานแบบฟอร์ม" on the review queues) showed "Z (20%) · HRGO: 20.00"
+    with no detail behind it — "แบบประเมินให้แสดงรายละเอียดเวลาด้วย
+    เท่าไรในทุกประเมิน" (the evaluation form should also show the time/
+    attendance detail — how much, in every evaluation).** Traced
+    `openReviewerForm()` (the function behind that modal, shared by both
+    the new L1 review queue and the existing L2/section-manager queue
+    per #92) and confirmed the Z value shown was **always** `cfg.zmax` —
+    the form's fixed maximum (e.g. `20.00` for a leader-tier form) —
+    never the specific employee's real, attendance-computed score, even
+    though `computeZScore(lv, empCode)` (the real function, already used
+    correctly by the self-eval page's `renderZStats()` and by
+    `printEvalForm()`'s leave-summary box per CLAUDE.md #60) has existed
+    in this file for many fixes already. So every reviewer, at every
+    stage of the approval chain, was reviewing a score that silently
+    assumed perfect attendance for everyone, regardless of their real
+    late/absent/leave record — the exact CLAUDE.md #14 shape of bug
+    (never fabricate a value the app can compute honestly) just
+    surfacing here as "shows the max instead of the real number" rather
+    than a wholly invented one. Fixed by calling the real
+    `computeZScore(lv, code)` at the top of `openReviewerForm()` (the
+    same call `renderZStats()` already makes) and using its real `score`
+    everywhere the modal previously hardcoded `cfg.zmax` — the locked "Z"
+    tile, the initial "X = Y + Z" total, and (via `currentReviewerZ`, a
+    new module-level variable mirroring the existing `currentReviewerLevel`
+    pattern) `clearReviewerForm()`'s reset value too, so "ล้างคะแนน"
+    doesn't quietly revert to the fake max either. Added a genuinely new
+    detail box — "รายละเอียดเวลาทำงาน (Z) — จาก Attendance จริงของ
+    พนักงานคนนี้" — right above the factor-scoring table, showing the
+    same real breakdown `renderZStats()`/`printEvalForm()` already
+    display elsewhere (late count, early-leave count, their combined
+    ÷8-day conversion, absent/sick/personal days, the resulting total
+    leave-days-equivalent, and the real Z score itself) rather than just
+    fixing the one locked number in isolation — this directly answers
+    "เท่าไร" (how much) for every one of the underlying attendance
+    figures feeding that score, not only the final Z total.
+    `selectReviewScore()` needed **zero changes**: it already reads
+    whatever number is sitting in the `.locked b` element via
+    `parseFloat()` to compute `X = Y + Z` as the reviewer picks factor
+    scores, so putting the real `zr.score` there instead of `cfg.zmax`
+    was the entire fix for live recalculation too. Left `openTplPreview()`/
+    `showTplDetail()` (the "ตั้งค่าแบบฟอร์ม" template-preview pages,
+    which also print `cfg.zmax` next to "Z — คะแนนเวลาการมาปฏิบัติงาน")
+    deliberately unchanged — those describe the abstract *form itself*
+    (no specific employee is being reviewed there), so "สูงสุด ${cfg.zmax}
+    คะแนน" is the correct, honest thing to show; only the per-employee
+    reviewer modal was ever showing a specific person's card with a
+    fake number. Verified with a test that seeds a synthetic employee
+    with a real attendance record (4 late, 4 early-leave, 1 absent, 2
+    sick, 1 personal day), confirms `computeZScore()`'s real score
+    (`21.95`, not the level's `30.00` max) appears both in the detail
+    box and as the modal's initial `X` total, and that the late/absent
+    figures render as real text in the DOM — plus the standard
+    click-sweep. General lesson, a sharper case of #14: a function that
+    computes a real number correctly elsewhere in the file (here,
+    `computeZScore()`, already trusted by three other consumers) is not
+    automatically used everywhere that number matters — grep every place
+    a *specific person's* score is displayed for a hardcoded stand-in
+    (a form's max, a class default, a placeholder) before assuming "we
+    already compute this for real" means every screen shows it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

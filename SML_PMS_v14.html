@@ -8934,9 +8934,21 @@ function inferLevelFromPosition(position){
   return 'op';
 }
 let currentReviewerLevel=null;
+let currentReviewerZ=0;
+/* #93: เดิมช่อง Z ในแบบประเมิน (ผู้สอบทานเห็น) ล็อกไว้ที่ cfg.zmax เสมอ (คะแนนเต็มของฟอร์ม เช่น
+   "20.00") ไม่ได้คำนวณจาก ATTENDANCE จริงของพนักงานคนนั้นเลย แม้ computeZScore() ที่คำนวณ Z จริงจาก
+   ข้อมูลเวลาทำงานมีอยู่แล้วและใช้จริงในหน้า "ประเมินตนเอง"/พิมพ์แบบฟอร์ม — ผู้สอบทานจึงไม่เคยเห็นค่า Z
+   จริงหรือรายละเอียดวันลาของพนักงานเลยตอนสอบทาน ผู้ใช้ขอให้ "แสดงรายละเอียดเวลาด้วย เท่าไรในทุก
+   ประเมิน" แก้โดยเรียก computeZScore(lv, code) จริง (เหมือน renderZStats() ที่หน้าประเมินตนเองใช้)
+   แล้วแสดงกล่องรายละเอียด สาย/กลับก่อน/ขาด/ป่วย/กิจ + วันลารวม + คะแนน Z จริง ในแบบประเมินทุกครั้งที่
+   เปิด ไม่ใช่แค่ตัวเลขคะแนนเฉยๆ */
 function openReviewerForm(lv,name,code,position){
   const cfg=SML_FORMS[lv]; if(!cfg){smlToast('ไม่พบแบบฟอร์มของระดับนี้','warn');return;}
   currentReviewerLevel=lv;
+  const zr = (typeof computeZScore==='function') ? computeZScore(lv, code) : {att:{},zDaysExact:0,score:0};
+  currentReviewerZ = zr.score;
+  const att = zr.att||{};
+  const lateEarly = (att.lateCount||0) + (att.earlyCount||0);
   const title=document.getElementById('reviewerTitle');
   const sub=document.getElementById('reviewerSubtitle');
   const area=document.getElementById('reviewerFormArea');
@@ -8954,14 +8966,25 @@ function openReviewerForm(lv,name,code,position){
     <div class="review-employee-grid">
       <div><label>ชื่อ-สกุล</label><b>${name}</b></div><div><label>รหัสพนักงาน</label><b>${code}</b></div><div><label>ตำแหน่ง</label><b>${position}</b></div><div><label>รอบประเมิน</label><b>FY2026</b></div>
     </div>
+    <div class="review-section-title">รายละเอียดเวลาทำงาน (Z) — จาก Attendance จริงของพนักงานคนนี้</div>
+    <div class="review-score-summary" style="margin-bottom:14px">
+      <div><span>มาสาย</span><b>${att.lateCount||0} ครั้ง</b></div>
+      <div><span>กลับก่อนเวลา</span><b>${att.earlyCount||0} ครั้ง</b></div>
+      <div><span>สาย+กลับก่อน ÷ 8</span><b>${lateEarly} ครั้ง = ${(lateEarly/8).toFixed(3)} วัน</b></div>
+      <div><span>ขาดงาน</span><b>${att.absentDay||0} วัน</b></div>
+      <div><span>ลาป่วย</span><b>${att.sickDay||0} วัน</b></div>
+      <div><span>ลากิจ</span><b>${att.personalDay||0} วัน</b></div>
+      <div><span>วันลารวม (เทียบเกณฑ์)</span><b>${zr.zDaysExact.toFixed(3)} วัน</b></div>
+      <div class="total"><span>Z (${cfg.zpct}%) · คะแนนจริง</span><b>${zr.score.toFixed(2)}</b></div>
+    </div>
     <div class="review-section-title">ส่วนที่ 1 — ปัจจัยในการพิจารณาประเมิน (${cfg.factors.length} ข้อ)</div>
     <div class="tw reviewer-table-wrap"><table class="reviewer-table"><thead><tr><th>ปัจจัยในการพิจารณาประเมิน</th><th>น้ำหนัก</th><th>ระดับคะแนน</th><th>คะแนน</th><th>ความเห็นผู้ประเมิน</th></tr></thead><tbody>${scoreRows}</tbody>
       <tfoot><tr><td><b>รวมคะแนนดิบ</b></td><td style="text-align:center"><b>${cfg.total}</b></td><td></td><td><b id="reviewRaw">0</b> / ${cfg.maxRaw}</td><td></td></tr></tfoot></table></div>
     <div class="review-score-summary">
       <div><span>Raw Performance</span><b id="reviewRaw2">0</b></div>
       <div><span>Y (${cfg.ypct}%)</span><b id="reviewY">0.00</b></div>
-      <div class="locked"><span>Z (${cfg.zpct}%) · HRGO</span><b>${cfg.zmax}.00</b></div>
-      <div class="total"><span>X = Y + Z</span><b id="reviewX">${cfg.zmax.toFixed(2)}</b></div>
+      <div class="locked"><span>Z (${cfg.zpct}%) · HRGO</span><b>${zr.score.toFixed(2)}</b></div>
+      <div class="total"><span>X = Y + Z</span><b id="reviewX">${zr.score.toFixed(2)}</b></div>
     </div>
     <div class="review-section-title">ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
@@ -8989,8 +9012,7 @@ function clearReviewerForm(){
   area.querySelectorAll('.review-got').forEach(b=>b.textContent='—');
   area.querySelectorAll('.review-comment').forEach(i=>i.value='');
   area.querySelectorAll('textarea').forEach(t=>t.value='');
-  const cfg=SML_FORMS[currentReviewerLevel];
-  const zval=cfg?cfg.zmax:0;
+  const zval=currentReviewerZ||0;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
   set('reviewRaw','0');set('reviewRaw2','0');set('reviewY','0.00');set('reviewX',zval.toFixed(2));
   smlToast('ล้างคะแนนในแบบประเมินเรียบร้อย','ok');
