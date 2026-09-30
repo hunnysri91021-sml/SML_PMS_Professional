@@ -2753,6 +2753,44 @@ touches employee/attendance/evaluation data.
     rows written before a trim fix existed (or a manual edit outside the
     app) can still carry the untrimmed variant indefinitely.
 
+85. **User's screenshot showed the exact CLAUDE.md #45/#73/#75 symptom in a
+    place none of those passes ever reached: logged in as a real L2 with
+    genuinely zero L1s under her, the "2. ประเมินทีมงาน" page correctly
+    showed "— ไม่มีหัวหน้าที่มีลูกทีม —" and 0/0/0 stat tiles, but the nav
+    sidebar's own red badge next to that same menu item showed "31," and
+    "3. สอบทาน L2" showed "4" — two places claiming the same fact
+    disagreeing, per #34/#67/#73's own trap.** Root cause: `renderNavBadges()`
+    — the function driving every one of the 5 red nav badges
+    (`navBadgeTeam`/`Review`/`Gm`/`Calib`/`Approve`) — counted straight
+    from `MASTER_USERS`/`getDrafts()` with **zero** call to
+    `getMyScopedEmpCodes()`, even though every one of the 5 pages those
+    badges sit next to (`renderTeamFromMaster()`, `renderReviewQueue()`,
+    `renderGmApproveQueue()`, `renderCalibQueue()`, `renderApproveQueue()`)
+    has been correctly scoped since #45/#58/#61. `getMyScopedEmpCodes()`
+    itself was already correct and already used everywhere else — this
+    was a case of the *summary* (badge count) and the *detail* (page
+    table) being computed by two independent pieces of code that only
+    one of them remembered to scope, the same shape of gap #73 found for
+    the org chart page (a real render path CLAUDE.md #45's original sweep
+    never reached because nothing about it looked like a data table).
+    Fixed by adding the identical `getMyScopedEmpCodes()` filter
+    `renderNavBadges()`'s own base functions already use — an `inScope()`
+    helper applied to `teamPending`'s `MASTER_USERS` filter and to
+    `drafts` before any of the 4 status-count filters run — so all 5
+    badges are now counted from the exact same scoped subset the pages
+    themselves render from, not company-wide totals. Verified with a
+    test that seeds a real L2 employee with zero real L1 reports (the
+    user's own reported scenario) and confirms every badge that would
+    have shown a nonzero company-wide count now correctly shows nothing
+    (`display:none`, matching the 5 pages' own genuinely-empty state) —
+    plus the standard click-sweep. General lesson combining #45/#73/#75:
+    a scoping sweep across "every page that reads this data" is not the
+    same as "every *piece of UI* that reads this data" — a badge, a
+    header count, a sidebar number, or any other summary widget sitting
+    next to a scoped page needs the exact same scope check independently
+    checked, since it's very often computed by its own separate function
+    that a page-by-page review can walk right past.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -7655,19 +7655,26 @@ function renderWorkflowPages(){
 
 /* Badge ตัวเลขสีแดงข้างเมนู "2. ประเมินทีมงาน / 3. สอบทาน L2 / 4. อนุมัติ GM / 5. Calibration /
    6. อนุมัติ AMD/MD" นับจากคิวจริงตัวเดียวกับที่แต่ละหน้าใช้ render ตาราง ไม่ใช่ตัวเลขตายตัว —
-   navBadgeCalib เปลี่ยนจากนับ L2Reviewed เป็นนับ Acknowledged ตามลำดับจริงใหม่ (#61) */
+   navBadgeCalib เปลี่ยนจากนับ L2Reviewed เป็นนับ Acknowledged ตามลำดับจริงใหม่ (#61)
+   ต้องกรองด้วย getMyScopedEmpCodes() เหมือนหน้าตารางจริงทุกหน้า (CLAUDE.md #45) — ก่อนหน้านี้
+   badge นับจาก MASTER_USERS/getDrafts() ทั้งบริษัทตรงๆ ไม่ผ่าน scope เลย ทำให้ L1/L2/หัวหน้าหน่วย
+   เห็นเลขแจ้งเตือนของทั้งบริษัท (เช่น "31") ในขณะที่ตารางจริงในหน้านั้นกรองเหลือเฉพาะทีมตัวเอง
+   (เช่น 0 คน) — ตัวเลขสองที่ขัดกันเองแบบเดียวกับ CLAUDE.md #34/#67/#73 */
 function renderNavBadges(){
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
-  const teamPending = MASTER_USERS.filter(u=>u[2]==='emp' && u[12]==='active').filter(u=>{
+  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
+  const inScope = code => !scoped || scoped.has(code);
+  const teamPending = MASTER_USERS.filter(u=>u[2]==='emp' && u[12]==='active' && inScope(u[0])).filter(u=>{
     const d = drafts.find(x=>x[0]===u[0]);
     return !d || d[d.length-1]==='Draft';
   }).length;
+  const scopedDrafts = drafts.filter(d=>inScope(d[0]));
   const counts = {
     navBadgeTeam: teamPending,
-    navBadgeReview: drafts.filter(d=>d[d.length-1]==='Submitted').length,
-    navBadgeGm: drafts.filter(d=>d[d.length-1]==='L2Reviewed').length,
-    navBadgeCalib: drafts.filter(d=>d[d.length-1]==='Acknowledged').length,
-    navBadgeApprove: drafts.filter(d=>d[d.length-1]==='Calibrated').length,
+    navBadgeReview: scopedDrafts.filter(d=>d[d.length-1]==='Submitted').length,
+    navBadgeGm: scopedDrafts.filter(d=>d[d.length-1]==='L2Reviewed').length,
+    navBadgeCalib: scopedDrafts.filter(d=>d[d.length-1]==='Acknowledged').length,
+    navBadgeApprove: scopedDrafts.filter(d=>d[d.length-1]==='Calibrated').length,
   };
   Object.keys(counts).forEach(id=>{
     const el = document.getElementById(id);
