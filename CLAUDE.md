@@ -2423,6 +2423,57 @@ touches employee/attendance/evaluation data.
     to Excel") is the scope specification; implement exactly that list,
     not a smaller or differently-shaped feature.
 
+78. **User's screenshot showed "วันเริ่มงาน" (start date) rendering as a
+    raw number, "41519", instead of a real date, for one employee synced
+    from Excel — "เวลาดึงข้อมูลใน excel แล้วไม่แสดง" (pulling data from
+    Excel, it doesn't show).** Root cause: the real Excel "Employees"
+    sheet has that column formatted as an actual **Date-typed cell**, not
+    plain text — and the Graph API workbook-table-rows endpoint
+    `graphListTableRows()` reads from returns a Date-typed cell's raw
+    value as an **Excel serial date number** (days since 1899-12-30,
+    Excel's epoch), not a pre-formatted date string. `normalizeMs365Employee()`'s
+    `g('startDate')` just did `String(v).trim()` on whatever came back —
+    for a text-formatted date cell that's already the real string (most
+    employees' rows, which is why this bug wasn't caught for everyone),
+    but for a Date-formatted cell it's the literal serial number, which
+    got stored into `MASTER_USERS[14]` and displayed completely raw.
+    Same root shape as CLAUDE.md #30's "the external system's real
+    column layout is a fact from the field, not something to assume" —
+    here it's not the column *position* that was wrong, it's the column's
+    *cell type*, one layer the app never accounted for. Fixed with
+    `excelSerialDateToThaiString(raw)`: returns `null` for anything that
+    isn't a pure numeric string (so a real "16/07/2559" text value, an
+    empty cell, or a "—" placeholder all pass through untouched, never
+    misread as a serial number — CLAUDE.md #14's "don't fabricate/don't
+    misinterpret a value" applies to over-eager parsing too, not just
+    invented values), and for a genuine serial number converts it via the
+    real Excel epoch (`serial - 25569` days from Unix epoch, since Excel
+    serial 25569 = 1970-01-01) into the same `D/M/YYYY` (Buddhist year)
+    format `thaiDateToIso()` and every other date field in this file
+    already expects — `normalizeMs365Employee()` now tries this
+    conversion first and only falls back to the raw text if conversion
+    doesn't apply, so a text-formatted date cell keeps working exactly as
+    before while a Date-formatted one finally renders as a real date
+    instead of a meaningless number. Applied the identical guarded
+    conversion to the employee bulk-import parser's `startDate` field
+    too (#77) — the same failure mode is just as possible if someone
+    prepares the import CSV by copy-pasting out of Excel and a date cell
+    gets exported as a raw serial number instead of formatted text.
+    Verified with a test confirming the exact reported serial (`41519`)
+    converts to the correct real date (`2/9/2556`), a value with a
+    trailing `.0` (another common Excel/Graph quirk) still converts, an
+    already-correct text date is never mistaken for a serial number and
+    passed through unchanged, and empty/placeholder values correctly
+    return `null` rather than a fabricated date. General lesson beyond
+    #30: an external system's real *shape* to verify against isn't just
+    column order — a spreadsheet's per-column **cell type** (text vs.
+    Date vs. number) changes what an API returns for that cell, and a
+    parser that only handles one shape (plain text) will work for most
+    rows and silently misrender the rows where someone formatted that
+    one cell differently — the fix generalizes to any other Date-typed
+    Excel column this app might read in the future (never assume every
+    date-looking column always arrives as pre-formatted text).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

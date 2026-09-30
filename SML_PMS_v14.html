@@ -6946,6 +6946,22 @@ async function testMs365Connection(){
 const EXCEL_EMPLOYEE_COLS = ['id','name','role','group','section','division','department','position',
   'startDate','email','grade','l1','l2','gm','approver','status','potential','lastLogin'];
 
+/* คอลัมน์ "วันเริ่มงาน" ใน Excel บางแถวถูก format เป็นชนิด Date จริง (ไม่ใช่ข้อความ) — Graph API
+   ตาราง (workbook table rows) จะคืนค่าคอลัมน์ชนิดนี้เป็น "เลขลำดับวันแบบ Excel" (serial date number,
+   เช่น 41519) ไม่ใช่ข้อความวันที่จัดรูปแบบแล้ว เห็นเป็นตัวเลขดิบในหน้าเว็บแทนวันที่จริง (เช่น
+   "41519" แทนที่จะเป็น "2/9/2556") — แก้โดยตรวจว่าค่าที่อ่านได้เป็นตัวเลขล้วนหรือไม่ ถ้าใช่ให้แปลง
+   เป็นวันที่จริงก่อน (Excel epoch = 1899-12-30, serial 25569 = 1970-01-01 ตาม Unix epoch) แล้วจัด
+   รูปแบบ D/M/YYYY(พ.ศ.) ให้ตรงกับรูปแบบที่ thaiDateToIso()/ที่อื่นในไฟล์นี้คาดหวังอยู่แล้ว */
+function excelSerialDateToThaiString(raw){
+  const s = String(raw||'').trim();
+  if(!/^\d+(\.\d+)?$/.test(s)) return null;
+  const num = Number(s);
+  if(!num || num < 1) return null;
+  const utcDays = Math.floor(num - 25569);
+  const d = new Date(utcDays*86400*1000);
+  if(isNaN(d.getTime())) return null;
+  return `${d.getUTCDate()}/${d.getUTCMonth()+1}/${d.getUTCFullYear()+543}`;
+}
 function normalizeMs365Employee(row){
   const g = key => {
     const i = EXCEL_EMPLOYEE_COLS.indexOf(key);
@@ -6960,7 +6976,7 @@ function normalizeMs365Employee(row){
     g('id'), g('name'), role, g('group'), g('section'), g('division'), g('department'), g('position'), g('grade'),
     g('l1'), g('l2'), g('approver'), status,
     g('lastLogin') || new Date().toLocaleString('th-TH'),
-    g('startDate') || '—',
+    excelSerialDateToThaiString(g('startDate')) || g('startDate') || '—',
     g('email'),
     ['high','medium','low'].includes(g('potential').toLowerCase()) ? g('potential').toLowerCase() : ''
   ];
@@ -9842,7 +9858,7 @@ function parseEmployeeImportRow(cells){
   const status = EMPLOYEE_IMPORT_VALID_STATUS.includes(statusRaw) ? statusRaw : '';
   return {
     code:g(0), name:g(1), roleRaw, role, group:g(3), section:g(4), division:g(5), department:g(6),
-    position:g(7), startDate:g(8), email:g(9), grade:g(10), l1:g(11), l2:g(12), gm:g(13),
+    position:g(7), startDate: (typeof excelSerialDateToThaiString==='function' && excelSerialDateToThaiString(g(8))) || g(8), email:g(9), grade:g(10), l1:g(11), l2:g(12), gm:g(13),
     approver:g(14), statusRaw, status, potential:g(16)
   };
 }
