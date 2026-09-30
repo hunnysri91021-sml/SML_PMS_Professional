@@ -2508,6 +2508,32 @@ touches employee/attendance/evaluation data.
     these lists always includes) across the whole file one more time to
     confirm no further such list remains missing `gm`/`unit` alongside it.
 
+80. **User asked "Sync HRIS คืออะไร" (what is Sync HRIS) about the org
+    chart page's toolbar button — investigated honestly and confirmed it
+    was another CLAUDE.md #10 placeholder: `onclick="smlToast('Sync HRIS
+    อยู่ในโหมด Demo — พร้อมเชื่อม API ภายหลัง','info')"`, no real
+    integration with any HRIS system exists anywhere in this codebase
+    (the app's one real external data source is MS365/SharePoint Excel,
+    a completely different, already-working feature).** Told the user
+    plainly, then asked whether to build a real integration, relabel it
+    to say so clearly, or remove it — they chose to remove it for now.
+    Deleted the button outright from the org chart page's toolbar (kept
+    "📄 Template พนักงาน" / "⬆️ Import พนักงาน" / "＋ เพิ่มพนักงาน", all
+    real per #76/#77) rather than leaving a fake action sitting next to
+    working ones, per this project's standing convention of deleting
+    code known to be unused/fake rather than leaving it as clutter (see
+    #48's removal of the duplicate "ผู้ใช้งานล่าสุด" table for the same
+    reasoning). Left the matching `actionByText()` dispatcher line
+    (`t.includes('Sync HRIS')`) alone — it's one line inside a large
+    generic text-matching fallback for demo buttons elsewhere in the
+    file, harmless as dead code and not worth touching on its own since
+    no button text triggers it anymore. If a real HRIS integration is
+    ever wanted later, treat it as a new feature from scratch (decide
+    which real HRIS system, what data it would exchange, and whether it
+    needs a Worker-side integration the same way MS365 did per #25) —
+    don't resurrect this placeholder's wording as if the groundwork for
+    it already exists, since none of it currently does.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
