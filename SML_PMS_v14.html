@@ -7565,6 +7565,14 @@ function renderReviewQueue(){
 /* Push ประวัติการอนุมัติ/ตีกลับแต่ละขั้นขึ้น Excel ตาราง Approvals แบบ append (เหตุการณ์ 1 ครั้ง =
    1 แถวเสมอ เหมือน AuditLog/Appraisals — ไม่ใช่ "สถานะปัจจุบัน" ที่ควร upsert) fire-and-forget
    เช่นเดียวกับ pushAuditLogEntryToExcel() — ไม่บล็อก/ไม่ทำให้ action หลักพังถ้า push ไม่สำเร็จ */
+/* #97: ผู้ใช้ส่งไฟล์ Excel จริงมาตรวจ — ชีท Approvals จริงมี 7 คอลัมน์ (EmpID·ชื่อ-สกุล·รอบ·ขั้นตอน·
+   ผู้อนุมัติ·วันที่/เวลา·ความเห็น) แต่ push array เดิมมีแค่ 6 ค่า ไม่มี "ชื่อ-สกุล" เลย — ทุกค่าที่ส่งไป
+   จึงเลื่อนคอลัมน์ผิดตำแหน่งไปหมดตั้งแต่คอลัมน์ B (รอบ ไปตกที่ช่อง ชื่อ-สกุล, ขั้นตอน ไปตกที่ช่อง รอบ
+   ฯลฯ) ทั้งฝั่งเขียนและฝั่งอ่าน (ms365SyncApprovalSignatures #39, ms365SyncHrNotes #96) ใช้ตำแหน่ง
+   เดียวกันนี้มาตลอด เลยดู "ใช้งานได้" กับข้อมูลที่ push จากแอปเอง (อ่าน/เขียนเหลื่อมตำแหน่งแบบเดียวกัน
+   ทั้งคู่ จึงบังเอิญ self-consistent) แต่พังทันทีกับข้อมูลตัวอย่าง/ข้อมูลจริงที่กรอกในเทมเพลต Excel ตรงๆ
+   (คอลัมน์ถูกตำแหน่งจริง) เพิ่ม "ชื่อ-สกุล" (resolve จาก MASTER_USERS ตาม CLAUDE.md #1 ไม่ใช้ชื่อที่
+   ส่งมาตรงๆ) เป็นค่าที่ 2 ในอาร์เรย์ที่ push แล้วเลื่อน index ฝั่งอ่านทั้งสองฟังก์ชันให้ตรงคอลัมน์จริง */
 function pushApprovalRecordToExcel(empCode, cycle, step, comment){
   const approvedByCode = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[0]) || '';
   const approvedBy = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[1]) || currentActorLabel();
@@ -7573,7 +7581,8 @@ function pushApprovalRecordToExcel(empCode, cycle, step, comment){
   if(typeof recordEvalActor==='function') recordEvalActor(empCode, cycle, step, approvedByCode, approvedBy);
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushApprovalRecordToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
-  graphAddTableRow('Approvals', [empCode, cycle, step, approvedBy, new Date().toISOString(), comment||''])
+  const empName = (MASTER_USERS.find(u=>u[0]===empCode)||[])[1] || '';
+  graphAddTableRow('Approvals', [empCode, empName, cycle, step, approvedBy, new Date().toISOString(), comment||''])
     .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push Approvals (${empCode} · ${step}) เข้า Excel`, true); })
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push Approvals (${empCode} · ${step}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
@@ -7772,9 +7781,9 @@ async function ms365SyncHrNotes(silent=true){
     let notes={};
     try{ notes=JSON.parse(localStorage.getItem(EVAL_HR_NOTE_KEY)||'{}'); }catch(e){ notes={}; }
     rows.forEach(r=>{
-      const empCode=String(r[0]??'').trim(), cycle=String(r[1]??'').trim(), step=String(r[2]??'').trim();
+      const empCode=String(r[0]??'').trim(), cycle=String(r[2]??'').trim(), step=String(r[3]??'').trim();
       if(step!=='Calibrated' || !empCode || !cycle) return;
-      const comment=String(r[5]??'');
+      const comment=String(r[6]??'');
       const m = comment.match(/\|\s*หมายเหตุ:\s*(.+)$/);
       if(m && m[1].trim()) notes[empCode+'|'+cycle] = m[1].trim();
     });
@@ -7793,9 +7802,9 @@ async function ms365SyncApprovalSignatures(silent=true){
     let sigs={};
     try{ sigs=JSON.parse(localStorage.getItem(APPROVAL_SIGNATURE_KEY)||'{}'); }catch(e){ sigs={}; }
     rows.forEach(r=>{
-      const empCode=String(r[0]??'').trim(), cycle=String(r[1]??'').trim(), step=String(r[2]??'').trim();
+      const empCode=String(r[0]??'').trim(), cycle=String(r[2]??'').trim(), step=String(r[3]??'').trim();
       if(step!=='Approved' || !empCode || !cycle) return;
-      const approvedBy=String(r[3]??'').trim(), approvedAt=String(r[4]??'').trim(), comment=String(r[5]??'').trim();
+      const approvedBy=String(r[4]??'').trim(), approvedAt=String(r[5]??'').trim(), comment=String(r[6]??'').trim();
       const signedBy = comment.replace(/^ลงนามโดย\s*/,'').trim() || approvedBy;
       const key = empCode+'|'+cycle;
       const existing = sigs[key];

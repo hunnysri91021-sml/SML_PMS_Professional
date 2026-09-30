@@ -3425,6 +3425,88 @@ touches employee/attendance/evaluation data.
     asked for here, flagged for a future request rather than assumed
     out of scope forever.
 
+97. **User attached the real live `SML_PMS_Master.xlsx` workbook itself and
+    asked "เช็คข้อมูลสัมพันธ์กับเวบไหม ดูเหมือนข้อมูลหลายตัวไม่บันทึกขึ้น
+    Excel และก็ไม่ดึงข้อมูลมาที่เวบ" (check whether the data lines up with
+    the web app — several things seem to not save to Excel and don't pull
+    back either).** Opened the real file with `openpyxl` and inspected
+    every table's real header row and real sample data — this is a step
+    up from every earlier screenshot-based fix (#30/#68/#75), since a
+    screenshot can be cropped/scrolled but a full workbook read shows
+    every column and every real table name at once. Two real findings:
+    - **`Employees` was actually fine** — the 18-column order (`id, name,
+      role, group, section, division, department, position, startDate,
+      email, grade, l1, l2, gm, approver, status, potential, lastLogin`)
+      matches `EXCEL_EMPLOYEE_COLS` position-for-position; the earlier
+      screenshot in the same conversation just happened to be scrolled
+      to hide `role`/`group`/`division`/`potential`, which do exist —
+      confirmed by the user before this file arrived, and now verified
+      directly rather than taken on trust.
+    - **`Approvals` was genuinely broken** — the real table has **7**
+      columns (`EmpID · ชื่อ-สกุล · รอบ · ขั้นตอน · ผู้อนุมัติ ·
+      วันที่/เวลา · ความเห็น`), but `pushApprovalRecordToExcel()` (the one
+      function every review/GM/calibration/final-approve/reject action in
+      this file calls, per #34) had only ever built a **6-element** array
+      (`[empCode, cycle, step, approvedBy, timestamp, comment]`) — with
+      no "ชื่อ-สกุล" field at all. Every real push therefore wrote `cycle`
+      into the "ชื่อ-สกุล" column, `step` into "รอบ", `approvedBy` into
+      "ขั้นตอน", and so on — every column from B onward silently
+      shifted one slot left of where it actually belongs, the exact
+      CLAUDE.md #30 shape of bug (an external table's real layout
+      assumed wrong) but with the missing column in the *middle* of the
+      row instead of at the position code already checks. **Why this
+      looked "fine" in the app itself despite being wrong on the real
+      sheet**: both readers that pull this table back down —
+      `ms365SyncApprovalSignatures()` (#39) and `ms365SyncHrNotes()`
+      (#96, added just one turn earlier, inheriting the same wrong
+      assumption from the sibling function it was modeled on) — used the
+      *identical* wrong 6-field positional scheme, so a round-trip
+      through this app's own push-then-pull cycle was internally
+      self-consistent and never surfaced the bug; it only became visible
+      against the real file's actual header row, or against any row a
+      human typed directly into the template (like the sample data
+      already in this workbook, which has real names correctly in column
+      B and would have been silently misread as "the cycle is a
+      person's name" by both sync functions before this fix). Fixed by
+      adding `empName` (resolved from `MASTER_USERS` by `empCode`, never
+      trusted as a passed-in string, per CLAUDE.md #1) as the real second
+      element in the push array, and shifting every downstream index in
+      both readers by one column (`cycle` now `r[2]`, `step` now `r[3]`,
+      `approvedBy`/`approvedAt`/`comment` now `r[4]`/`r[5]`/`r[6]`).
+      Verified with a test that pushes a real approval record, captures
+      the exact array sent to `graphAddTableRow`, confirms it's 7
+      elements with the real name in position 2, then feeds that same
+      row back through `ms365SyncApprovalSignatures()` and confirms the
+      signature round-trips correctly — not just checking the write side
+      in isolation, since the whole point of this bug was that write and
+      read had been silently *agreeing* with each other while both
+      disagreeing with the real file. Also checked `AuditLog` (7 real
+      columns, code writes/reads only 6 — but the missing 7th, `IPAddress`,
+      is intentionally never populated per CLAUDE.md #14, sits at the very
+      *end* of the row rather than the middle, so nothing shifts) and
+      confirmed it's genuinely fine, not another instance of this bug —
+      the difference between "missing column at the end" (harmless) and
+      "missing column in the middle" (shifts everything after it) matters
+      and is worth checking explicitly rather than assuming any column-
+      count mismatch is automatically broken. **`FormWeights`/`OrgMaster`/
+      `IDP` sheets were completely empty (headers only, zero data rows)**
+      in the real file — told the user plainly this looks like those
+      three features (factor-weight overrides, org master-list edits,
+      IDP records) simply haven't been used/saved from this workbook yet
+      rather than a confirmed code bug like the Approvals one; flagged as
+      worth re-checking with a real save attempt from each of those pages
+      if the user expects data there, rather than guessing further from
+      an empty sheet alone. General lesson sharper than #30/#68/#75's own
+      conclusion: when a *push* function and its *pull* counterpart are
+      both wrong in the same self-consistent way (built from the same
+      mistaken assumption, sometimes across two turns as #96 inherited
+      #39's own error), the bug is invisible from *this app's* behavior
+      alone, however thoroughly tested — it only surfaces against the
+      real external file's actual shape, which is exactly why a user-
+      supplied real workbook is worth opening and reading column-by-
+      column rather than continuing to reason from code or from a partial
+      screenshot.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
