@@ -2578,6 +2578,58 @@ touches employee/attendance/evaluation data.
     rather than layout/positioning that only breaks at a size nobody
     tests at by default.
 
+82. **Follow-up to #81: user confirmed a normal desktop/laptop browser at
+    normal width, and that a hard refresh changed nothing — meaning
+    #81's viewport-clamping fix was real but was never the actual root
+    cause of the visible symptom.** Re-reproduced at full 1440px desktop
+    width (not narrow) and finally pinpointed the exact element at the
+    red pill's own pixel coordinates via `elementFromPoint()`: it was the
+    **notification item's own text `<span>`**, with a real computed
+    `background-color: rgb(199,53,53)` (`--err`/`--sml-danger`) and
+    `position:absolute; top:-3px; right:-5px; font-size:9px` — none of
+    which `.notif-item span:last-child` (#81's own new rule) ever sets.
+    Root cause: `.bell span{position:absolute;top:-3px;right:-5px;
+    background:var(--err);...}` (a much older rule, styling the small red
+    unread-count badge `#notifBadge`) selects **every `<span>` anywhere
+    inside `.bell`**, not just its intended one direct-child badge span —
+    and since `#notifPanel` (with its `#notifList` → `.notif-item` →
+    `<span>` icon/text pair) is itself nested *inside* `#notifBell`
+    (`class="bell"`) in the DOM, every notification item's own two spans
+    silently inherited the tiny-absolute-red-badge styling too. This is
+    the exact CLAUDE.md #15 shape of bug (`.up`'s dropzone/trend-text
+    collision) one layer more indirect: not two rules both explicitly
+    targeting one shared class name, but one rule's descendant selector
+    (`.bell span`) silently widening its reach the moment a new, larger
+    subtree (the whole notif panel) was added as a *descendant* of the
+    element that selector was written against, years after the selector
+    itself was written for a single-purpose badge. Fixed by narrowing
+    the selector to `.bell > span` (direct-child combinator) — `#notifBadge`
+    is a literal direct child of `.bell` so it's unaffected, while
+    `.notif-item`'s spans (several levels deeper) no longer match at
+    all. Verified by re-running the exact `elementFromPoint()` probe at
+    the same pixel coordinates the red pill previously occupied — it now
+    resolves to the ordinary `.notif-panel-head` div with a transparent
+    background, and a full-page screenshot confirms the notification
+    list renders normally inside the panel with real dark text, no
+    stray red pill anywhere. #81's viewport-edge clamp fix is left in
+    place — it's a real, independently-valid fix for a real (if
+    secondary) narrow-window issue — but it was never going to resolve
+    this report on its own, which is why the user kept seeing the exact
+    same thing after a hard refresh. **General lesson, a sharper case of
+    #15**: when a generic descendant selector (`X span`, `.card *`, etc.)
+    is written while its target element has only one simple child, it
+    silently becomes a landmine the moment anything else is later nested
+    inside that same ancestor — before writing `.container span{...}`-
+    style rules, prefer a direct-child combinator (`.container > span`)
+    or a real class on the intended target unless deliberately styling
+    every descendant is the actual goal; and when a user reports the
+    same visual symptom as still-present *after* a fix that looked
+    correct and was verified computationally, re-derive the element at
+    the reported pixel location itself (`elementFromPoint`) rather than
+    trusting a `querySelector('.likely-culprit')` guess, since the guess
+    can easily hit a different, coincidentally similar-looking element
+    while the real offender sits one CSS specificity layer away.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
