@@ -2474,6 +2474,40 @@ touches employee/attendance/evaluation data.
     Excel column this app might read in the future (never assume every
     date-looking column always arrives as pre-formatted text).
 
+79. **User's screenshot showed the employee list's "บทบาท" (role) filter
+    dropdown — "บทบาทแสดงไม่ครบ มีตำแหน่งที่เพิ่ม" (roles don't show
+    completely, there are positions that were added) — missing both `gm`
+    and `unit` entirely, only listing the original 6 roles.** This is
+    the exact CLAUDE.md #64/#65 shape of miss happening a third time:
+    `#filterRole` (the employee list's own role filter, separate from
+    `#roleSel`'s Demo UI switcher, `mu_role`'s Add/Edit dropdown, and
+    `NAV_ROLES`'s nav-permission editor — all of which #61/#64/#65
+    already updated) was yet another independent hardcoded role-option
+    list that neither rollout's "add the new role everywhere role
+    enumeration exists" pass ever found, since it sits on a different
+    page (`pg-settings`'s employee list toolbar) from where either
+    rollout was actively working at the time. Fixed by adding `🏢 GM`
+    and `🧭 หัวหน้าหน่วย` options in the same hierarchy order the other
+    role lists already use (`NAV_ROLE_LABEL`'s admin→exec→gm→l2→l1→unit→emp
+    ordering), and relabeling `l1`'s option from the generic "หัวหน้า" to
+    "หัวหน้าแผนก" to match every other list's wording for that role.
+    Verified with a test that seeds a synthetic `gm` employee and a
+    synthetic `unit` employee, confirms both appear as real selectable
+    options in `#filterRole`, and — matching CLAUDE.md #4's "verify a
+    control actually changes rendered output" rule rather than just
+    checking the option exists — confirms selecting each one actually
+    filters the visible employee list down to just that role, not only
+    that the `<option>` tag is present in the DOM. **General lesson
+    sharper than #64's own conclusion**: "grep every independent array of
+    role keys" is necessary but not sufficient when a role list is
+    spelled out as inline `<option>` tags in the HTML rather than a named
+    JS array/constant — a plain-text search for the *role key* (`gm`,
+    `unit`) across the whole file, not just for constant-looking names
+    like `ROLE_DEFS`/`NAV_ROLES`, is the only way to catch every one of
+    these; after this fix, grepped `value="l1"` (a role every one of
+    these lists always includes) across the whole file one more time to
+    confirm no further such list remains missing `gm`/`unit` alongside it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
