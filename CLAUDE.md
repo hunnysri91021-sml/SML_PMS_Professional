@@ -4365,6 +4365,58 @@ touches employee/attendance/evaluation data.
     don't match" report comes in, not just re-deriving the number once
     and assuming the display path is trustworthy.
 
+113. **User asked for a delete button on the L1/L2/L3/L4 review/approval
+    queue pages — clarified via two questions first (since no delete
+    mechanism of any kind existed yet for evaluation records in this
+    codebase, and deleting one is genuinely irreversible-ish): confirmed
+    it means deleting the whole evaluation record outright (for a
+    wrong-person/wrong-data entry mistake, not a one-stage "ตีกลับ"),
+    and that only Admin/HR should ever see or use it.** Added one shared
+    `deleteDraftByKey(key)` — `confirm()`s with the real resolved name/
+    cycle/level before acting (never a silent delete), checks
+    `isAdminOrSysadmin()` (new small helper, `CURRENT_SESSION_USER[2]`
+    against `['admin','sysadmin']`) and refuses with a toast for every
+    other role, then filters the matching record out of `getDrafts()`/
+    `saveDrafts()`, logs to Audit Log, and re-renders via
+    `renderWorkflowPages()`. Wired a 🗑️ button into all 5 real queue
+    render functions (`renderReviewL1Queue`/`renderReviewQueue`/
+    `renderGmApproveQueue`/`renderCalibQueue`/`renderApproveQueue`) —
+    the two that already had a per-row action button column
+    (`สอบทานแบบฟอร์ม`) got the delete button appended next to it with no
+    `<thead>`/colspan change; the three that never had one
+    (`gmapprove`/`calib`/`approve`, whose rows previously ended at
+    grade/note with no action cell at all) got a new trailing `<th></th>`
+    column and their "no rows" placeholder `colspan` bumped by 1 to
+    match. The button itself is only emitted into the row HTML at all
+    when `isAdminOrSysadmin()` is true — **hidden entirely for every
+    other role, not just disabled**, matching the established #72/#90
+    pattern (a cosmetically-disabled control is still discoverable and
+    clickable via DevTools; an admin-only feature with real consequences
+    should not even render in another role's DOM). **Stated honestly,
+    per CLAUDE.md #39's own precedent for `deleteIdp()`**: this can only
+    ever delete the **local** `localStorage` record
+    (`MS365_LOCAL_DRAFT_KEY`) — there is no `graphDeleteTableRow()`
+    anywhere in this codebase, so a record that was already pushed to
+    the `Appraisals`/`Approvals` Excel tables leaves its Excel row(s)
+    untouched; the confirm dialog itself says this plainly rather than
+    implying a full delete. Verified with a test that creates a real
+    `Submitted` draft via the reviewer form, confirms a non-admin
+    session is refused (draft survives, real warning toast fires), then
+    confirms an admin session successfully removes it and the queue
+    re-renders with zero matching rows — plus the standard click-sweep.
+    **Separately answered, from code with no change needed**, the user's
+    accompanying verification question about concurrent edits: the real
+    draft key is `empCode|cycle|level` (`draftKey()`) — not per-reviewer
+    — so there is genuinely only one record per person/cycle/level; if
+    two different supervisors both save for the same employee code,
+    whichever save happens last silently overwrites the earlier one with
+    no conflict warning (a real, already-existing limitation, not newly
+    introduced here). Confirmed yes to the GM-handoff question: once a
+    record reaches `GMApproved`, the real pipeline (#61) proceeds
+    Acknowledge (employee) → Calibration (HR) → Final Approve (AMD/MD) →
+    `Approved`, with HR genuinely driving the Calibration stage onward
+    exactly as the user described.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

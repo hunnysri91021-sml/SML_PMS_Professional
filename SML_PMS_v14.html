@@ -1833,7 +1833,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="card">
       <div class="card-h"><h3>ใบประเมินรออนุมัติ GM</h3><div class="r"><span class="bd b-y" id="gmApproveCount">0 รายการ</span></div></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th></tr></thead>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="gmApproveRows"></tbody>
       </table></div>
     </div>
@@ -1855,7 +1855,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="card">
       <div class="card-h"><h3>ตารางปรับเทียบรายบุคคล</h3><div class="r"><span class="bd b-y" id="calibCount">รอปรับเทียบ 0 รายการ</span></div></div>
       <div class="tw"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงานรับทราบ (X)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>ใบเตือน / หมายเหตุวินัย (HR)</th></tr></thead>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงานรับทราบ (X)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>ใบเตือน / หมายเหตุวินัย (HR)</th><th></th></tr></thead>
         <tbody id="calibRows"></tbody>
       </table></div>
     </div>
@@ -1869,7 +1869,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="card">
       <div class="card-h"><h3>รายการรออนุมัติ</h3><div class="r"><span class="bd b-b" id="approveCount">0 รายการ</span></div></div>
       <div class="tw"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนน (X)</th><th>เกรด</th></tr></thead>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนน (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="approveRows"></tbody>
       </table></div>
     </div>
@@ -7556,6 +7556,30 @@ function getDrafts(){
 }
 function saveDrafts(drafts){ localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(drafts)); }
 function draftKey(d){ return d[0]+'|'+d[2]+'|'+d[3]; }
+/* #113: ลบใบประเมินทั้งใบ (กรณีกรอกคนผิด/ข้อมูลผิด) ตามที่ผู้ใช้ขอ — ลบได้เฉพาะ admin/sysadmin
+   (ปุ่มถูกซ่อนทั้งหมดสำหรับ role อื่นที่ render จุดเรียกใช้ ไม่ใช่แค่ disabled ตามแบบ #72/#90)
+   ข้อจำกัดจริงที่ต้องบอกตรงๆ ไม่ปิดบัง (ตาม CLAUDE.md #39): ฟังก์ชันนี้ลบได้แค่ record ใน
+   localStorage (MS365_LOCAL_DRAFT_KEY) เท่านั้น — ไม่มี graphDeleteTableRow() อยู่ในโค้ดนี้เลย
+   (#39 เคยระบุไว้แล้วสำหรับ deleteIdp()) ถ้าใบนี้เคย push ขึ้น Excel ไปแล้ว (Appraisals/Approvals)
+   แถวที่ค้างอยู่ใน Excel จะไม่ถูกลบตามไปด้วย ต้องลบเองใน Excel ถ้าต้องการ */
+function isAdminOrSysadmin(){
+  const role = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[2]) || '';
+  return ['admin','sysadmin'].includes(role);
+}
+function deleteDraftByKey(key){
+  if(!isAdminOrSysadmin()){ smlToast('มีแต่ Admin/HR เท่านั้นที่ลบใบประเมินได้','warn'); return; }
+  const drafts = getDrafts();
+  const d = drafts.find(x=>draftKey(x)===key);
+  if(!d){ smlToast('ไม่พบใบประเมินนี้','warn'); return; }
+  const [empCode,cycle,level] = key.split('|');
+  const {name} = empDeptLabel(empCode, '');
+  if(!confirm(`ลบใบประเมินของ ${name||empCode} (รอบ ${cycle}, ระดับ ${level}) ทิ้งทั้งใบ?\n\n⚠️ ลบได้เฉพาะข้อมูลในเครื่องนี้เท่านั้น — ถ้าเคย push ขึ้น Excel ไปแล้ว แถวใน Excel จะยังค้างอยู่ ต้องลบเองใน Excel`)) return;
+  const remaining = drafts.filter(x=>draftKey(x)!==key);
+  saveDrafts(remaining);
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ลบใบประเมิน (ทั้งใบ)', empCode+' · รอบ '+cycle+' · '+level, name||empCode);
+  renderWorkflowPages();
+  smlToast('ลบใบประเมินของ '+(name||empCode)+' แล้ว (เฉพาะในเครื่องนี้)','ok');
+}
 /* ลำดับขั้นจริงที่ระบบติดตามได้ (ดู renderDashboardWorkflowSteps เดิม) — ยกออกมาเป็นค่ากลางจุดเดียว
    เพราะ ms365SyncAppraisals() ด้านล่างต้องใช้ตัดสิน "remote ไปไกลกว่า local ไหม" ด้วยลำดับเดียวกันนี้
    เป๊ะๆ ไม่งั้นจะมีจุดนิยาม "ลำดับขั้น" สองที่ที่อาจขยับไม่พร้อมกัน (ดู CLAUDE.md #41 เรื่องรักษา
@@ -7731,7 +7755,7 @@ function renderReviewL1Queue(){
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">สอบทานแบบฟอร์ม</button></td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">สอบทานแบบฟอร์ม</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
 }
@@ -7766,7 +7790,7 @@ function renderReviewQueue(){
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">สอบทานแบบฟอร์ม</button></td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">สอบทานแบบฟอร์ม</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
   restoreCheckedKeys('review-chk', checkedKeys);
 }
@@ -7832,8 +7856,9 @@ function renderGmApproveQueue(){
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${d[0]}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td></tr>`;
-  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรออนุมัติ GM</td></tr>';
+      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+      <td>${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
 }
 /* อนุมัติ GM แล้ว = พร้อมส่งผลให้พนักงานรับทราบ — จึงส่งอีเมลแจ้งพนักงานตรงนี้เลย (ย้ายมาจาก
@@ -7886,8 +7911,9 @@ function renderCalibQueue(){
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
       <td><input type="number" step="0.01" class="calib-adj" data-key="${draftKey(d)}" value="${X}" style="width:80px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
-      <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)" style="width:220px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td></tr>`;
-  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอ Calibration</td></tr>';
+      <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)" style="width:220px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
+      <td>${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอ Calibration</td></tr>';
   if(distBox){
     const calibrated = getDrafts().filter(d=>['Calibrated','Approved'].includes(d[d.length-1])).filter(d=>!scoped || scoped.has(d[0]));
     const counts = {};
@@ -7941,8 +7967,9 @@ function renderApproveQueue(){
     return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${d[0]}</small></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td></tr>`;
-  }).join('') : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอการอนุมัติ</td></tr>';
+      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+      <td>${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอการอนุมัติ</td></tr>';
 }
 const APPROVAL_SIGNATURE_KEY = 'smlPmsApprovalSignatures';
 /* เก็บลายเซ็นอิเล็กทรอนิกส์แยกต่างหากจาก draft (ไม่ต่อท้าย array ของ draft เพราะโค้ดหลายจุดอ่าน
