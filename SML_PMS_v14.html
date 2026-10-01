@@ -5007,7 +5007,10 @@ function printEvalForm() {
      จากรหัสพนักงานจริงของฟอร์มนี้เท่านั้น (ดู CLAUDE.md #1) */
   const empCode = document.getElementById('evalCode')?.value  || MASTER_USERS[0][0];
   const u       = MASTER_USERS.find(x=>x[0]===empCode) || MASTER_USERS[0];
-  const empName = document.getElementById('evalName')?.value  || u[1];
+  /* เดิมใช้ค่าที่พิมพ์ในช่อง evalName ก่อน u[1] เสมอ — กลับลำดับผิดกับหลัก CLAUDE.md #1/#38 (ห้ามเชื่อ
+     ชื่อที่พิมพ์ในฟอร์มก่อนค่าจริงจาก MASTER_USERS) ตอนนี้ u ถูก resolve จากรหัสจริงแล้วข้างบน ให้ใช้
+     u[1] เป็นหลักเสมอ ใช้ช่องพิมพ์เป็น fallback เฉพาะกรณี resolve ไม่ได้จริงๆ เท่านั้น */
+  const empName = u[1] || document.getElementById('evalName')?.value;
   const empPos  = document.getElementById('evalPos')?.value   || u[7];
   const empGroup  = u[3];                                           /* กลุ่ม (Group) */
   const empSection= document.getElementById('evalDept')?.value || u[4]; /* แผนก (Section) */
@@ -6070,10 +6073,18 @@ function onEvalCodeGateChange(){
   if(typeof isEligibleForSelfEval==='function' && !isEligibleForSelfEval(emp)){
     LV_KEYS.forEach(k=>{ const btn=document.getElementById('lv-'+k); if(btn) btn.disabled = true; });
     if(evalCodeEl) evalCodeEl.value = code;
+    const evalNameElX = document.getElementById('evalName');
+    if(evalNameElX){ evalNameElX.value = emp[1]; evalNameElX.readOnly = true; }
     if(note){ note.textContent = `⛔ ${emp[1]} ไม่อยู่ในรายชื่อ/แผนกที่ Admin กำหนดให้ประเมินตนเองได้ในรอบนี้ กรุณาติดต่อ HR`; note.style.color = '#dc2626'; }
     return;
   }
   if(evalCodeEl) evalCodeEl.value = code;
+  /* ชื่อ-สกุล ต้อง resolve จาก MASTER_USERS ตามรหัสเสมอ ห้ามปล่อยให้พิมพ์เอง — เดิมช่อง evalName
+     เป็น input ว่างที่ไม่เคยถูกเติมอัตโนมัติเลยจากจุดนี้ ทำให้คนละข้อมูล/ชื่อเก่าที่ค้างอยู่ในช่อง (จาก
+     คนก่อนหน้าที่ใช้เครื่องเดียวกัน หรือพิมพ์ผิด) ถูกส่งเข้า Excel Appraisals ตรงๆ โดยไม่มีการตรวจสอบเลย
+     (CLAUDE.md #1) — ล็อกช่องนี้ไว้ (readOnly) เพื่อกันการพิมพ์ทับชื่อจริงโดยไม่ตั้งใจด้วย */
+  const evalNameEl = document.getElementById('evalName');
+  if(evalNameEl){ evalNameEl.value = emp[1]; evalNameEl.readOnly = true; }
   const assigned = getAssignedEvalLevel(emp);
   if(assigned){
     setEvalLevel(assigned);
@@ -6884,7 +6895,12 @@ function collectEvaluationPayload(status='Draft'){
   const summary = calcCurrentEvalSummary();
   const cfg = LEVEL_CONFIG[currentLevel];
   const empCode = (document.getElementById('evalCode')?.value || MASTER_USERS[0]?.[0] || '').trim();
-  const empName = (document.getElementById('evalName')?.value || MASTER_USERS[0]?.[1] || '').trim();
+  /* ห้ามเชื่อชื่อที่พิมพ์ไว้ในช่อง evalName ตรงๆ (CLAUDE.md #1) — resolve จาก MASTER_USERS ตามรหัสจริง
+     เสมอ ใช้ค่าที่พิมพ์ในช่องเป็น fallback เฉพาะกรณีไม่พบรหัสนี้ในระบบเท่านั้น (เช่นพนักงานใหม่ที่ยังไม่
+     sync เข้า MASTER_USERS) — แก้ปัญหาที่ชื่อ/รหัสผิดใน Appraisals เพราะช่อง evalName เป็น input ว่าง
+     ที่ไม่เคย resolve อัตโนมัติมาก่อน ค้างชื่อเก่าจากคนก่อนหน้าหรือพิมพ์ผิดได้ */
+  const empFromCode = MASTER_USERS.find(u=>u[0]===empCode);
+  const empName = (empFromCode?.[1] || document.getElementById('evalName')?.value || MASTER_USERS[0]?.[1] || '').trim();
   const m = []; for(let fi=0; fi<10; fi++) m.push(evalScores['m'+fi] || 0);
   const l = []; for(let fi=0; fi<4; fi++) l.push(cfg.leaderShow ? (evalScores['l'+fi] || 0) : null);
   /* เดิมฝัง '2569' ตายตัว — ทุกรอบใหม่ที่ขึ้นจริงก็ยังถูกบันทึกเป็นรอบเดิมซ้ำ ชนกับข้อมูลรอบก่อนหน้า

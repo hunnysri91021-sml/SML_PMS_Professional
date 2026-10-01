@@ -3981,6 +3981,62 @@ touches employee/attendance/evaluation data.
     convenience endpoints this file had used everywhere up to now don't
     expose it directly.
 
+107. **User reported "sheet Appraisals บันทึกข้อมูล รหัสกับชื่อคนไม่ถูกต้อง"
+    (the Appraisals sheet records the wrong employee code/name) — asked for
+    a real screenshot of the sheet's header row first, per the #30/#97
+    convention, before guessing. The screenshot confirmed the real column
+    order (`EmpID, ชื่อ-สกุล, รอบ, ระดับ, m0..m9, l01..l04, Y, Z, X, เกรด,
+    Status` — 23 columns, A–W) matches `collectEvaluationPayload()`'s push
+    order exactly, so this was NOT another #97/#104-shaped column-mapping
+    bug.** The real defect was one step earlier, at the self-eval page's
+    own form: `#evalCode` (รหัสพนักงาน) is correctly auto-filled from the
+    real logged-in/gate-entered code via `onEvalCodeGateChange()`, but
+    `#evalName` (ชื่อ-สกุล) was a completely free `<input>` that **nothing
+    in the entire file ever auto-filled from `MASTER_USERS`** — the exact
+    CLAUDE.md #1 violation ("never trust a name/label that came from a
+    form — always resolve identity by code") sitting in the one place
+    #1's own original fix (HRGO import) never had to cover, since this
+    field is typed by a human directly rather than parsed from a file.
+    In practice this meant: a stale name left in the field from a
+    previous person who used the same device/browser session, or a
+    simple typo, got pushed straight into column B of `Appraisals` with
+    zero cross-check against the real `empCode` sitting right next to it
+    in column A — so a row could easily end up with a real, correct code
+    and a real, but *wrong person's*, name. Fixed at both layers, per
+    this project's usual defense-in-depth pattern: (1) `onEvalCodeGateChange()`
+    now sets `evalName.value = emp[1]` (the real resolved name) and locks
+    it `readOnly = true` the moment a real code is resolved — covering
+    both the "found + eligible" and "found but not eligible" branches, so
+    the field always shows the truth and can't be hand-edited into a
+    mismatch; (2) `collectEvaluationPayload()` (the function that actually
+    builds the pushed row) now resolves `empName` from
+    `MASTER_USERS.find(u=>u[0]===empCode)?.[1]` first, falling back to the
+    DOM field's value only when the code genuinely isn't in `MASTER_USERS`
+    at all (e.g. a not-yet-synced new hire) — so even if some other code
+    path ever makes the field editable again, the actual Excel push still
+    can't carry a mismatched name as long as the code resolves. Also found
+    and fixed the identical backwards-priority bug in `printEvalForm()`
+    (line ~5010) while touching this: it already resolves `u` correctly
+    from `MASTER_USERS` by `empCode` (CLAUDE.md #38's own fix), but then
+    still preferred the raw `evalName` field's value over `u[1]` when
+    building the printed form's header — swapped the priority to match
+    #38's own stated principle (resolved data first, typed field only as
+    last-resort fallback). Verified with a test that seeds a stale/wrong
+    name into `#evalName`, calls `onEvalCodeGateChange()` with a real
+    code and confirms the field is corrected + locked, then forces the
+    field back open and types a wrong name anyway, confirming
+    `collectEvaluationPayload()` still returns the real resolved name
+    rather than the forced-in wrong one — plus the standard click-sweep.
+    General lesson sharper than #1's own statement: "never trust a name
+    that came from a file, form, or another record" applies just as much
+    to a human typing directly into a live `<input>` as it does to a
+    parsed CSV column — any field whose real identity is already pinned
+    by a code field sitting next to it (here, `evalCode`/`evalCodeGate`)
+    should never also be independently user-editable free text; auto-fill
+    it from the resolved record and lock it, the same way #18's
+    supervisor fields and #28's code-entry datalists already do for every
+    other such pairing in this file.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
