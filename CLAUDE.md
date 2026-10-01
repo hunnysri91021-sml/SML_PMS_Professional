@@ -4283,6 +4283,88 @@ touches employee/attendance/evaluation data.
     that conditionally reveals UI must also explicitly hide/reset that
     UI, not just skip past the code that would normally show it.
 
+112. **Follow-up to #111: user's second screenshot (same employee, 90040)
+    showed the red ineligibility warning AND a fully-completed, fully-
+    interactive score form side by side — "ทำแล้ว แบบฟอร์มผิด และ เวลากด
+    ส่งแบบประเมิน รายละเอียดไม่ตรงและ แบบฟอร์มพิมพ์ ก็ไม่ข้อมูลไม่ครบ
+    ไม่มีปีประเมิน" (did it [granted eligibility], form still wrong,
+    submit-confirmation details don't match, printed form also incomplete,
+    no eval year).** Two genuinely separate, previously-undiscovered bugs
+    surfaced while investigating, both independent of #111's stale-form-
+    visibility fix:
+    - **"ตำแหน่ง"/"แผนก (Section)/ส่วน (Division)/ฝ่าย (Dept)" on the
+      self-eval page were plain `<input>`s that `onEvalCodeGateChange()`
+      never auto-filled** — the one field #107's "resolve by code, lock
+      it" treatment (applied to `evalName`) never got extended to when
+      #107 was written. So these two fields sat permanently blank on
+      *every* real self-eval, for every employee, not just this one —
+      exactly what "ข้อมูลไม่ครบ" (data incomplete) describes. Fixed by
+      populating and locking them the same way `evalName` already is
+      (`emp[7]` for position; `[emp[4],emp[5],emp[6]].join(' — ')` for
+      the Section/Division/Dept chain), right next to that existing code.
+    - **The "📤 ยืนยันส่งแบบประเมิน" (submit confirmation) modal's three
+      summary values — "คะแนนตนเองรวม 88.00", "ส่งถึง วิชัย กล้าหาญ
+      (หัวหน้า L1)", "กำหนดส่ง 20 ก.ย. 2569" — were pure hardcoded HTML,
+      never populated from any real data at all**, since the feature was
+      first built: every single submission by every employee, in every
+      real deployment of this file, has always shown this exact same
+      demo text regardless of their real score, their real supervisor,
+      or any real due date — the precise CLAUDE.md #10 placeholder shape
+      (looks like a real confirmation dialog, nothing behind the
+      numbers), just never caught because nobody had reason to compare
+      two different people's submit dialogs side by side until now.
+      "เวลากดส่งแบบประเมิน รายละเอียดไม่ตรง" is explained in full by this
+      alone — of course the details don't match, they were never the
+      real employee's details to begin with. Fixed with
+      `openSubmitConfirmModal()` (replacing the bare `openM('mSubmit')`
+      call on the "📤 ส่งแบบประเมิน" button): computes the real total via
+      `calcCurrentEvalSummary()` (the *same* function
+      `collectEvaluationPayload()` itself uses to build the saved
+      payload, never a second parallel calculation that could drift),
+      resolves the real "ส่งถึง" recipient from `MASTER_USERS` by the
+      real `empCode` — L1 first (`emp[9]`), falling up the chain to
+      L2/approver (`emp[10]`/`emp[11]`) only if L1 is genuinely unset,
+      same chain-fallback principle as CLAUDE.md #22, never a hardcoded
+      name — and reads the real "กำหนดส่ง" due date from
+      `getCycleSetupData().end` (the actual cycle-end date Admin set on
+      the "ตั้งค่ารอบประเมิน" page), showing an honest "—" rather than a
+      fabricated date when nothing has been configured yet (CLAUDE.md
+      #14). Verified with a Playwright test that seeds a real employee
+      with a real supervisor name and a real saved cycle-end date, scores
+      all 10 factors, opens the real submit modal, and confirms all
+      three values are the genuine computed/resolved numbers — plus a
+      second check confirming the due date correctly falls back to "—"
+      when the cycle-end setting was only typed into the DOM but never
+      actually saved (`saveCycleSetup()` never called) — distinguishing
+      "not yet configured" from "configured but not read," since
+      `getCycleSetupData()` reads from `localStorage`, not the live form
+      input — plus the standard click-sweep. **What remains unconfirmed
+      as a distinct bug**: the printed form's own "ไม่มีปีประเมิน" — code
+      inspection shows `printEvalForm()` already prints a real
+      `FY ${getCurrentEvalCycleYear()}` badge (never truly blank, falls
+      back to `'2569'`) and already resolves position/department from
+      the real `MASTER_USERS` record via `u[7]`/`u[4]` (CLAUDE.md #38),
+      so this complaint is most likely the same stale-form symptom #111
+      already fixed (the printed form mirroring whatever was on-screen
+      at the time, which was the wrong leftover form) rather than a
+      separate print-specific bug — told the user to retest printing
+      once eligibility is granted and the page is refreshed, and to
+      report back with a fresh screenshot if the missing year still
+      shows up after that, rather than guessing at a third fix blind.
+    General lesson sharper than #10's own statement: a demo-data
+    placeholder that happens to "look plausible" (a real-looking Thai
+    name, a real-looking near-future date) is exactly the shape most
+    likely to survive years of testing unnoticed — nobody double-checks
+    a confirmation dialog's numbers against the record they just
+    personally filled in, since the numbers *look* like they could be
+    real; the way this one surfaced was a user directly comparing what
+    they entered against what the dialog echoed back, which is worth
+    treating as a standing check (does every confirmation dialog in this
+    file actually reflect the specific record being acted on, or could
+    it be the same static text for everyone) whenever a "the numbers
+    don't match" report comes in, not just re-deriving the number once
+    and assuming the display path is trustworthy.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

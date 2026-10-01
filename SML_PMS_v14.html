@@ -1544,7 +1544,7 @@ tbody tr:hover{background:#f0f6ff!important}
         <button class="btn btn-dg" onclick="clearEvalForm()">🗑️ ล้างผลประเมิน</button>
         <button class="btn" onclick="saveDraftEval()">💾 บันทึกร่าง</button>
         <button class="btn print-eval-btn" data-no-delegate onclick="printEvalForm()">🖨️ พิมพ์ร่าง</button>
-        <button class="btn btn-p" onclick="openM('mSubmit')">📤 ส่งแบบประเมิน</button>
+        <button class="btn btn-p" onclick="openSubmitConfirmModal()">📤 ส่งแบบประเมิน</button>
         <button class="btn" onclick="exportMyDataFile()" title="สำหรับผู้ที่ไม่มี MS365 — บันทึกไฟล์เพื่อส่งให้ Admin นำเข้ารวมภายหลัง">💾 ส่งออกไฟล์ (ไม่มี MS365)</button>
       </div>
     </div>
@@ -3229,9 +3229,9 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-h"><h3>📤 ยืนยันส่งแบบประเมิน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
     <div class="al al-w"><span>⚠️</span><div>เมื่อส่งแล้ว <b>จะไม่สามารถแก้ไขได้</b> จนกว่าหัวหน้าจะตีกลับ</div></div>
-    <div class="kv"><span>คะแนนตนเองรวม</span><b>88.00</b></div>
-    <div class="kv"><span>ส่งถึง</span><b>วิชัย กล้าหาญ (หัวหน้า L1)</b></div>
-    <div class="kv"><span>กำหนดส่ง</span><b>20 ก.ย. 2569</b></div>
+    <div class="kv"><span>คะแนนตนเองรวม</span><b id="mSubmitX">—</b></div>
+    <div class="kv"><span>ส่งถึง</span><b id="mSubmitTo">—</b></div>
+    <div class="kv"><span>กำหนดส่ง</span><b id="mSubmitDue">—</b></div>
   </div>
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="submitEvalOnline()">ยืนยันส่ง</button></div>
 </div></div>
@@ -6099,6 +6099,14 @@ function onEvalCodeGateChange(){
      (CLAUDE.md #1) — ล็อกช่องนี้ไว้ (readOnly) เพื่อกันการพิมพ์ทับชื่อจริงโดยไม่ตั้งใจด้วย */
   const evalNameEl = document.getElementById('evalName');
   if(evalNameEl){ evalNameEl.value = emp[1]; evalNameEl.readOnly = true; }
+  /* "ตำแหน่ง"/"แผนก (Section)/ส่วน (Division)/ฝ่าย (Dept)" เป็น input เปล่าที่ไม่เคยถูกเติมอัตโนมัติ
+     จากจุดนี้เลยเหมือนกัน (ช่องเดียวที่ยังไม่ได้แก้ ตอนที่ #107 แก้ evalName) ทำให้ผู้ใช้เห็นช่องว่างๆ
+     กลางหน้า ดูเหมือนข้อมูลพนักงานไม่ครบ ทั้งที่ MASTER_USERS มีจริง — เติมจากข้อมูลจริงและล็อกไว้
+     เหมือน evalName (ห้ามให้พิมพ์เอง เพราะเป็นข้อมูลที่ resolve จากรหัสได้อยู่แล้ว) */
+  const evalPosEl = document.getElementById('evalPos');
+  if(evalPosEl){ evalPosEl.value = emp[7] || ''; evalPosEl.readOnly = true; }
+  const evalDeptEl = document.getElementById('evalDept');
+  if(evalDeptEl){ evalDeptEl.value = [emp[4],emp[5],emp[6]].filter(Boolean).join(' — '); evalDeptEl.readOnly = true; }
   const assigned = getAssignedEvalLevel(emp);
   if(assigned){
     setEvalLevel(assigned);
@@ -7119,6 +7127,38 @@ async function saveEvaluationToMs365(status='Draft'){
 
 async function saveDraftEval() {
   await saveEvaluationToMs365('Draft');
+}
+
+/* เดิม modal "ยืนยันส่งแบบประเมิน" เป็นค่าตายตัวในโค้ด (88.00 / วิชัย กล้าหาญ / 20 ก.ย. 2569) ไม่เคยดึง
+   จากข้อมูลจริงเลย ทุกคนที่กดส่งเห็นตัวเลขเดียวกันหมด ไม่ว่าจะเป็นใคร คะแนนเท่าไร หรือส่งถึงใครจริง —
+   ตรงกับที่ผู้ใช้รายงานว่า "เวลากดส่งแบบประเมิน รายละเอียดไม่ตรง" (CLAUDE.md #10's placeholder shape)
+   ดึงค่าจริง 3 อย่างก่อนเปิด modal: คะแนนรวม X จาก calcCurrentEvalSummary() (ฟังก์ชันเดียวกับที่
+   collectEvaluationPayload() ใช้จริงตอนบันทึก ไม่ใช่คำนวณซ้ำแยกทาง), ผู้รับจาก MASTER_USERS ตามสาย
+   บังคับบัญชาจริงของคนนี้ (หัวหน้าหน่วย/หัวหน้าแผนก L1 ก่อน ถ้าว่างไล่ขึ้น L2/ผู้จัดการส่วน — ไม่เคย
+   เดา/พิมพ์ชื่อตายตัว ตาม CLAUDE.md #1/#18), และกำหนดส่งจากวันที่สิ้นสุดรอบจริงที่ Admin ตั้งไว้ใน
+   "ตั้งค่ารอบประเมิน" (getCycleSetupData().end) — ถ้ายังไม่เคยตั้งวันที่สิ้นสุดไว้เลย แสดง "—" อย่างตรง
+   ไปตรงมา (CLAUDE.md #14) ไม่ใช่เดาวันที่ขึ้นมาเอง */
+function openSubmitConfirmModal(){
+  if(!currentLevel){ smlToast('กรุณาเลือกระดับตำแหน่งก่อน','warn'); return; }
+  const summary = (typeof calcCurrentEvalSummary==='function') ? calcCurrentEvalSummary() : null;
+  const xEl = document.getElementById('mSubmitX');
+  if(xEl) xEl.textContent = summary ? summary.X.toFixed(2) : '—';
+
+  const empCode = (document.getElementById('evalCode')?.value || '').trim();
+  const emp = MASTER_USERS.find(u=>u[0]===empCode);
+  const toEl = document.getElementById('mSubmitTo');
+  if(toEl){
+    const supervisor = emp ? (emp[9] || emp[10] || emp[11] || '') : '';
+    toEl.textContent = supervisor ? supervisor : '— ยังไม่มีผู้บังคับบัญชาที่กำหนดไว้ —';
+  }
+
+  const dueEl = document.getElementById('mSubmitDue');
+  if(dueEl){
+    const data = (typeof getCycleSetupData==='function') ? getCycleSetupData() : null;
+    const end = data && data.end;
+    dueEl.textContent = end ? new Date(end+'T00:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}) : '—';
+  }
+  openM('mSubmit');
 }
 
 async function submitEvalOnline(){
