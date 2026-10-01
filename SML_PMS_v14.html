@@ -7949,7 +7949,12 @@ function pushAuditLogEntryToExcel(entry){
      แบบไม่มีใครเห็น) เปลี่ยนเป็นบันทึกความล้มเหลวลง sync log จริง (เหมือน sync อื่นๆ ในระบบ) เพื่อให้ HR/
      Admin เห็นสาเหตุจริงที่หน้า MS365 ได้ แทนที่จะเดาว่า "ไม่รู้ทำไมไม่อัปเดต" — ยังคง fire-and-forget
      เหมือนเดิม ไม่ await ไม่บล็อก action หลัก */
-  graphAddTableRow('AuditLog', [entry.at, entry.user, entry.type, entry.action, entry.target, entry.detail])
+  /* ตาราง AuditLog จริงใน Excel มี 7 คอลัมน์ (คอลัมน์ท้าย IPAddress ไม่เคยกรอกจริงตาม CLAUDE.md #14) —
+     Graph API "เพิ่มแถว" ต้องได้อาร์เรย์ยาวเท่าจำนวนคอลัมน์จริงเสมอ ส่งแค่ 6 ค่าทำให้ error
+     "จำนวนของแถวหรือคอลัมน์...ไม่ตรงกับขนาด...ของช่วง" ทุกครั้ง (#97 เคยสรุปผิดว่าคอลัมน์ท้ายที่หายไป
+     "ไม่มีผล" เพราะเทียบกับ Approvals ที่คอลัมน์หายอยู่กลางแถว — แต่สำหรับ rows/add ตำแหน่งไม่สำคัญ
+     จำนวนคอลัมน์ต้องตรงเป๊ะเสมอ) ส่งสตริงว่างเป็นคอลัมน์ที่ 7 เพื่อให้ตรงมิติจริง */
+  graphAddTableRow('AuditLog', [entry.at, entry.user, entry.type, entry.action, entry.target, entry.detail, ''])
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog('Push AuditLog เข้า Excel ไม่สำเร็จ: '+(err?.message||err), false); });
 }
 function getAuditLog(){ try{ return JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]'); }catch(e){ return []; } }

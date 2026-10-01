@@ -3701,6 +3701,55 @@ touches employee/attendance/evaluation data.
     from the one real write chokepoint removes an entire class of "I
     edited it but forgot to also click Push" reports before they happen.
 
+102. **Follow-up to #100's fix: with the Sync Log finally logging real
+    outcomes, the user pasted the real result — "Push AuditLog เข้า
+    Excel ไม่สำเร็จ: จำนวนของแถวหรือคอลัมน์ในอาร์เรย์ป้อนข้อมูลไม่ตรงกับ
+    ขนาดหรือมิติของช่วง" (array row/column count doesn't match the
+    range's size/dimension), firing on nearly every action — the real,
+    previously-invisible reason `AuditLog` was "not updating" all
+    along.** This directly contradicts #97's own conclusion that
+    `AuditLog`'s missing 7th column (`IPAddress`, never populated per
+    CLAUDE.md #14) was "genuinely fine… the missing column sits at the
+    very end of the row rather than the middle, so nothing shifts" —
+    that reasoning only holds for a column *read* (reading fewer fields
+    than exist just leaves the rest unread) or for a `PATCH`-style
+    update (which can target a subset of cells). For a Graph **"add
+    row"** call (`rows/add`), the API requires the submitted array's
+    length to match the table's real column count exactly, trailing or
+    not — a 6-element array against a real 7-column table fails outright
+    with precisely this dimension-mismatch error, every single time,
+    which is exactly why `pushAuditLogEntryToExcel()` (called from
+    `appendAuditLog()` on nearly every action in the app) had never
+    once actually written a row, even though #66/#68/#69's earlier
+    fixes correctly made the *failure itself* loggable — #100 is what
+    finally let this real error surface instead of staying silent.
+    Fixed by appending `''` as the 7th element of the array
+    (`[entry.at, entry.user, entry.type, entry.action, entry.target,
+    entry.detail, '']`) so the push always matches the real table's full
+    width — `ms365SyncAuditLog()`'s own reader needed zero changes, since
+    it only ever reads the first 6 known indices back out of each row,
+    same as before. Verified with a test that calls the real
+    `appendAuditLog()` and confirms the array sent to `graphAddTableRow`
+    is now 7 elements long, matching the real table — plus the standard
+    click-sweep. **What this means for #97's own general lesson,
+    corrected**: "missing column at the end is harmless, missing column
+    in the middle shifts everything" is true for *reads* and for
+    `PATCH`/upsert-style *updates*, but false for a plain **add-row**
+    call — an add must always supply a value for every real column,
+    regardless of position, or the Graph API rejects the whole row. Any
+    future `graphAddTableRow()` call (as opposed to `graphUpsertTableRow()`,
+    which goes through the same add-when-no-match path internally) needs
+    its array length checked against the real table's full column count,
+    not just "are the known fields in the right order." General lesson
+    sharper than #100's own conclusion: #100 made the *symptom* visible
+    (an error now appears in the Sync Log instead of silence) but #100
+    itself didn't diagnose the *cause* — the very next message after a
+    silent-failure diagnostic fix ships is often the real error text
+    coming back for the first time, and it can overturn an earlier,
+    reasonably-argued conclusion (#97's "end-column-is-harmless" rule)
+    that was never actually tested against a real `rows/add` call,
+    only reasoned about from first principles.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
