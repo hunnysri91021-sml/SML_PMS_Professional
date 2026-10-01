@@ -6924,7 +6924,14 @@ async function acknowledgeMyResult(empCode, cycle){
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','รับทราบผลการประเมิน', empCode, (CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||d[1]);
   const cfg = loadMs365Config();
   if(isMs365Configured(cfg)){
-    try{ await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d); }catch(e){}
+    try{
+      await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d);
+      if(typeof appendSyncLog==='function') appendSyncLog(`Push Acknowledged (${d[0]}) เข้า Appraisals`, true);
+    }catch(e){
+      if(typeof appendSyncLog==='function') appendSyncLog(`Push Acknowledged (${d[0]}) เข้า Appraisals ไม่สำเร็จ: ${e.message}`, false);
+    }
+  } else if(typeof appendSyncLog==='function'){
+    appendSyncLog('acknowledgeMyResult: ยังไม่ได้ตั้งค่า MS365', false);
   }
   smlToast('รับทราบผลการประเมินเรียบร้อย','ok');
 }
@@ -6953,9 +6960,11 @@ async function saveEvaluationToMs365(status='Draft'){
     await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], payload);
     updateMs365Status('ok','Connected');
     pushResult = { ok:true };
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push ${status} (${payload[0]}) เข้า Appraisals`, true);
   }catch(err){
     updateMs365Status('warn','Sync error');
     pushResult = { error:err.message, payload };
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push ${status} (${payload[0]}) เข้า Appraisals ไม่สำเร็จ: ${err.message}`, false);
   }
   if(status==='Submitted'){
     const notif = await notifyAdminOfEvalSubmission(payload).catch(()=>({sent:0}));

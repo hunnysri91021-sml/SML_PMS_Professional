@@ -3601,6 +3601,69 @@ touches employee/attendance/evaluation data.
     needs the identical fix, not just the one function whose output the
     user could see.
 
+100. **User reported "ประเมินใหม่แล้วไม่มี update" (re-evaluated, but
+    there's no update in Excel) — pasted real `Appraisals` sheet rows as
+    evidence. Investigated the composite-key upsert mechanism (#41) and
+    column order first (both checked out correct, matching the real
+    header exactly), then asked two clarifying questions rather than
+    guessing which of several possible causes it was: whether re-saving
+    left the old value unchanged or created a second row (ruled out the
+    #41/Worker-redeploy composite-key-mismatch theory — that shape of
+    bug produces a *duplicate* row, not a silently-unchanged one — the
+    user confirmed "ค่าเดิมเป๊ะ ไม่มีแถวใหม่เพิ่ม", exact old value, no
+    new row), and asked to check the Sync Log panel per the established
+    #66/#68/#69 diagnostic convention — **the Sync Log tab came back
+    completely empty**, even right after triggering a fresh save.
+    That emptiness was the real finding: `saveEvaluationToMs365()` —
+    the function behind "บันทึกร่าง"/"ส่งแบบประเมิน," i.e. exactly the
+    self-eval save/resubmit flow the user was using — had **never once
+    called `appendSyncLog()`**, success or failure, in its `try/catch`
+    around the `graphUpsertTableRow()` push. This is the identical
+    CLAUDE.md #66/#68/#69 shape of bug (a push's outcome swallowed with
+    no diagnostic trace) but in a function those three earlier audit
+    passes never caught: #68's mechanical sweep searched for the exact
+    string `if(!isMs365Configured(cfg)) return;` and #69's follow-up
+    searched for the *shape* of a bare `.catch(()=>{})`/`.catch(()=>...)`
+    chained directly after a `graphAddTableRow`/`graphUpsertTableRow`
+    call — `saveEvaluationToMs365()` does neither: it uses a `try/await/
+    catch` block instead of `.catch()` chaining, so it slipped past both
+    prior greps even though the underlying defect is exactly the one
+    those fixes exist to close. `acknowledgeMyResult()`'s own inline
+    `graphUpsertTableRow()` call (added later, #60/#61) had the same
+    gap — a bare `try{...}catch(e){}` with no logging at all, not even
+    on the not-configured path. Fixed both: `saveEvaluationToMs365()`
+    now calls `appendSyncLog()` on both the success and failure branch
+    of its existing `try/catch` (mirroring `pushDraftRowToExcel()`'s
+    exact wording/pattern from #94, the sibling function that already
+    did this correctly for the review/GM/calibration/approve chain —
+    only the self-eval save path had been missed), and
+    `acknowledgeMyResult()` gained success/failure logging plus a
+    not-configured log line, closing the same three-way gap #68
+    originally fixed everywhere else. Verified with a test that mocks
+    `graphUpsertTableRow()` to succeed, then to throw, and confirms
+    `saveEvaluationToMs365('Draft')` leaves a distinct, correctly-worded
+    entry in the sync log for each case — plus the standard click-sweep.
+    **What this fix does and does not resolve, stated plainly**: it does
+    not by itself fix "the Excel row didn't change" — it makes the
+    *real reason* finally visible the next time the user re-evaluates
+    and checks the Sync Log tab, whereas before this fix the log would
+    stay empty regardless of whether the push succeeded, failed, or
+    never ran. The user still needs to re-try and read the new log
+    entry to find out which of those three it actually was (e.g. a
+    genuine Graph/Worker error, confirming or ruling out the still-
+    unconfirmed Worker-redeploy question from the same conversation).
+    General lesson sharper than #69's own conclusion: a mechanical
+    audit pass for a silent-failure bug shape is only as complete as the
+    *syntactic* pattern it searches for (a literal guard string, a
+    chained `.catch()`) — a function using the equivalent-but-differently-
+    shaped `try/await/catch` form for the exact same kind of fire-and-
+    forget push is invisible to both of those searches and needs its own
+    explicit check; when a report's symptom ("the sync log shows
+    nothing") points at a diagnostic channel itself being silent, treat
+    that as a signal to re-run the #66/#68/#69 audit by *behavior*
+    (actually trigger the save and watch the log) rather than trusting
+    that a past mechanical sweep already covered every call site.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
