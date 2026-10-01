@@ -4779,6 +4779,12 @@ function renderTeamFromMaster() {
 
   el.innerHTML = filtered.length ? filtered.map(({u,wf,X,discipline}) => {
     const st = stMap[wf];
+    /* เดิมใช้ inferLevelFromPosition(u[7]) เดา "ระดับฟอร์ม" จากคำในตำแหน่งงานเสมอ — ถ้าคนนี้เคยมีร่าง/
+       ส่งแบบประเมินไว้จริงแล้วภายใต้ระดับจริงที่ Admin กำหนด (emp[18], ดู CLAUDE.md #23) ซึ่งอาจไม่ตรง
+       กับที่เดาจากตำแหน่ง เปิดฟอร์มมาก็จะหาแบบร่างไม่เจอ (เทียบ lv ผิด) ทำให้ restoreReviewerFormFromDraft()
+       (#109) คืนค่าว่างเปล่าเหมือนไม่เคยให้คะแนนมาก่อน ทั้งที่มีจริง — ใช้ระดับจริงที่ Admin กำหนดก่อนเสมอ
+       (getAssignedEvalLevel, #23) เดาจากตำแหน่งเฉพาะกรณีที่ยังไม่เคยกำหนดไว้เท่านั้น */
+    const realLevel = (typeof getAssignedEvalLevel==='function' ? getAssignedEvalLevel(u) : '') || inferLevelFromPosition(u[7]);
     return `<tr>
       <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>
         <div><b>${u[1]}</b><small>${u[0]}</small></div></div></td>
@@ -4788,7 +4794,7 @@ function renderTeamFromMaster() {
       <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
       <td><span class="bd ${st[0]}">${st[1]}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
-        onclick="openReviewerForm(inferLevelFromPosition('${u[7]}'),'${u[1]}','${u[0]}','${u[7]}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'))">
+        onclick="openReviewerForm('${realLevel}','${u[1]}','${u[0]}','${u[7]}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'))">
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
       </button></td>
     </tr>`;

@@ -4172,6 +4172,60 @@ touches employee/attendance/evaluation data.
     after a related fix — that phrasing is itself a signal to re-walk
     every sibling control, not just confirm the one already fixed.
 
+110. **Follow-up to #109: user's screenshot of the reviewer form (opened
+    from "2. ประเมินทีมงาน") showed every factor's "คะแนน" cell as "—"
+    with zero selected grade buttons, for someone confirmed to have a
+    real previously-saved draft — #109's own `restoreReviewerFormFromDraft()`
+    fix appeared not to be working.** Traced the real cause: the team
+    page's "ประเมิน"/"ดูแบบฟอร์ม" button call site (`renderTeamFromMaster()`)
+    still opened the form with `inferLevelFromPosition(u[7])` — a rough
+    keyword guess at the form level from the employee's job-title text
+    (`'ผู้จัดการ'`→`mgr`, `'หัวหน้า'`→`ldr`, etc.) — instead of the real
+    admin-assigned level (`getAssignedEvalLevel(emp)`, CLAUDE.md #23's
+    own established function, already used correctly everywhere else a
+    form is opened, including #109's own three fixed call sites). If an
+    employee's real assigned level (`emp[18]`, set explicitly by Admin)
+    doesn't match what the title-keyword guess would produce — exactly
+    the case for a generic title like "พนักงาน" that matches none of
+    `inferLevelFromPosition()`'s keywords and falls through to `'op'`,
+    while Admin had actually assigned `'ldr'` — the form opens under the
+    *wrong* level string. `restoreReviewerFormFromDraft(lv, empCode,
+    cycle)` then looks for a draft matching `d[3]===lv`, finds none
+    (the real saved draft is keyed to `'ldr'`, not the guessed `'op'`),
+    and silently shows a blank form — reading exactly like #108/#109
+    never restored anything, when the real draft and the restore
+    function were both completely correct; only the *level fed into the
+    lookup* was wrong. This is the one call site #109's "add `cycle` to
+    every `openReviewerForm()` call" sweep touched without also
+    questioning whether its *level* argument was trustworthy — #109
+    fixed the missing cycle but inherited this pre-existing level-guess
+    bug unexamined. Fixed by computing the real level the same way every
+    other form-opening path in this file already does —
+    `getAssignedEvalLevel(u) || inferLevelFromPosition(u[7])` — inside
+    `renderTeamFromMaster()`'s own `.map()` (where the real `MASTER_USERS`
+    row `u` is already in scope, so no second lookup by code is needed)
+    before building the row's `onclick`, falling back to the title-guess
+    only when Admin genuinely never assigned a level (the same fallback
+    `getAssignedEvalLevel()` itself already documents for a fresh
+    employee). Verified with a test that seeds an employee whose real
+    assigned level (`'ldr'`) provably differs from what
+    `inferLevelFromPosition()` would guess from their generic title
+    (`'op'`), saves a real draft under the correct level via the form
+    itself, confirms the team page's own level-resolution logic now
+    matches the real assigned level (not the guess), and confirms
+    reopening the form restores all 14 previously-given scores — plus
+    the standard click-sweep. General lesson sharper than #109's own
+    conclusion: when a restore/lookup function depends on a composite
+    key (`empCode|cycle|level` here), a "nothing restored" report can
+    come from the restore function itself being broken, *or* from any
+    one of the key's components being wrong at the call site that invokes
+    it — #108/#109 already taught to check the restore function itself
+    first, but the real culprit this time was one layer upstream, in
+    how the *level* argument got computed before the restore function
+    ever ran; grep every caller of a newly-fixed restore path for
+    whether each of its key arguments is sourced from a trustworthy
+    place (an admin-assigned fact) rather than a heuristic guess.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
