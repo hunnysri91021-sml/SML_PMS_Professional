@@ -3222,7 +3222,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 <div class="ov" id="mReview"><div class="md reviewer-md" style="max-width:1120px">
   <div class="md-h"><div><h3 id="reviewerTitle">📋 แบบประเมินสำหรับผู้ประเมิน</h3><small id="reviewerSubtitle" style="color:#7b8796">แบบฟอร์มจะเปลี่ยนตามระดับของผู้ถูกประเมิน</small></div><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b" id="reviewerFormArea"></div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="smlToast('ส่งกลับให้ผู้ถูกประเมินเพื่อแก้ไขแล้ว','warn');closeM();">↩️ ตีกลับ</button><button class="btn btn-ok" onclick="smlToast('บันทึกผลการประเมินของผู้ประเมินแล้ว','ok');closeM();">✓ บันทึกและส่งต่อ</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="rejectReviewerForm()">↩️ ตีกลับ</button><button class="btn btn-ok" onclick="submitReviewerForm()">✓ บันทึกและส่งต่อ</button></div>
 </div></div>
 
 <div class="ov" id="mSubmit"><div class="md" style="max-width:440px">
@@ -4788,7 +4788,7 @@ function renderTeamFromMaster() {
       <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
       <td><span class="bd ${st[0]}">${st[1]}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
-        onclick="openReviewerForm(inferLevelFromPosition('${u[7]}'),'${u[1]}','${u[0]}','${u[7]}')">
+        onclick="openReviewerForm(inferLevelFromPosition('${u[7]}'),'${u[1]}','${u[0]}','${u[7]}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'))">
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
       </button></td>
     </tr>`;
@@ -7677,7 +7677,7 @@ function renderReviewL1Queue(){
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','')">สอบทานแบบฟอร์ม</button></td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">สอบทานแบบฟอร์ม</button></td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
 }
@@ -7712,7 +7712,7 @@ function renderReviewQueue(){
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','')">สอบทานแบบฟอร์ม</button></td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">สอบทานแบบฟอร์ม</button></td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
   restoreCheckedKeys('review-chk', checkedKeys);
 }
@@ -9190,6 +9190,8 @@ function inferLevelFromPosition(position){
 }
 let currentReviewerLevel=null;
 let currentReviewerZ=0;
+let currentReviewerCode=null;
+let currentReviewerCycle=null;
 /* #93: เดิมช่อง Z ในแบบประเมิน (ผู้สอบทานเห็น) ล็อกไว้ที่ cfg.zmax เสมอ (คะแนนเต็มของฟอร์ม เช่น
    "20.00") ไม่ได้คำนวณจาก ATTENDANCE จริงของพนักงานคนนั้นเลย แม้ computeZScore() ที่คำนวณ Z จริงจาก
    ข้อมูลเวลาทำงานมีอยู่แล้วและใช้จริงในหน้า "ประเมินตนเอง"/พิมพ์แบบฟอร์ม — ผู้สอบทานจึงไม่เคยเห็นค่า Z
@@ -9197,9 +9199,13 @@ let currentReviewerZ=0;
    ประเมิน" แก้โดยเรียก computeZScore(lv, code) จริง (เหมือน renderZStats() ที่หน้าประเมินตนเองใช้)
    แล้วแสดงกล่องรายละเอียด สาย/กลับก่อน/ขาด/ป่วย/กิจ + วันลารวม + คะแนน Z จริง ในแบบประเมินทุกครั้งที่
    เปิด ไม่ใช่แค่ตัวเลขคะแนนเฉยๆ */
-function openReviewerForm(lv,name,code,position){
+function openReviewerForm(lv,name,code,position,cycle){
   const cfg=SML_FORMS[lv]; if(!cfg){smlToast('ไม่พบแบบฟอร์มของระดับนี้','warn');return;}
   currentReviewerLevel=lv;
+  currentReviewerCode=code;
+  /* เดิมไม่เคยรับ/จำ cycle เลย — ปุ่ม "บันทึกและส่งต่อ"/"ตีกลับ" ในหน้าต่างนี้จึงไม่มีทางรู้ว่ากำลัง
+     แก้ไข/อนุมัติใบของรอบไหน (CLAUDE.md #108's ชุดเดียวกัน ตามด้วยการเชื่อมปุ่มให้ทำงานจริงด้านล่าง) */
+  currentReviewerCycle = cycle || ((typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569');
   const zr = (typeof computeZScore==='function') ? computeZScore(lv, code) : {att:{},zDaysExact:0,score:0};
   currentReviewerZ = zr.score;
   const att = zr.att||{};
@@ -9219,7 +9225,7 @@ function openReviewerForm(lv,name,code,position){
   area.innerHTML=`
     <div class="review-doc-head"><div><b>SML PMS — แบบประเมินผลการปฏิบัติงานประจำปี</b><span>${cfg.label}</span></div><div class="review-doc-badges"><span>Y ${cfg.ypct}%</span><span>Z ${cfg.zpct}%</span><span>รวม ${cfg.total} หน่วย</span></div></div>
     <div class="review-employee-grid">
-      <div><label>ชื่อ-สกุล</label><b>${name}</b></div><div><label>รหัสพนักงาน</label><b>${code}</b></div><div><label>ตำแหน่ง</label><b>${position}</b></div><div><label>รอบประเมิน</label><b>FY2026</b></div>
+      <div><label>ชื่อ-สกุล</label><b>${name}</b></div><div><label>รหัสพนักงาน</label><b>${code}</b></div><div><label>ตำแหน่ง</label><b>${position}</b></div><div><label>รอบประเมิน</label><b>${currentReviewerCycle}</b></div>
     </div>
     <div class="review-section-title">รายละเอียดเวลาทำงาน (Z) — จาก Attendance จริงของพนักงานคนนี้</div>
     <div class="review-score-summary" style="margin-bottom:14px">
@@ -9244,7 +9250,36 @@ function openReviewerForm(lv,name,code,position){
     <div class="review-section-title">ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
     <div class="review-approval-flow"><span>ผู้ประเมิน</span><i>→</i><span>ผู้บังคับบัญชาระดับสูง</span><i>→</i><span>ผู้จัดการทั่วไปฝ่าย</span><i>→</i><span>MD-SML</span></div>`;
+  if(typeof restoreReviewerFormFromDraft==='function') restoreReviewerFormFromDraft(lv, code, currentReviewerCycle);
   openM('mReview');
+}
+/* เหมือน restoreEvalFormFromDraft() (CLAUDE.md #108) แต่สำหรับหน้าต่างนี้ — ถ้าคนนี้มีใบที่เคยให้
+   คะแนนไว้แล้วในรอบ/ระดับเดียวกัน (ไม่ว่าจะเพิ่งส่งเอง, ผ่านสอบทานหัวหน้าแผนกมาแล้ว ฯลฯ) ต้องติ๊ก
+   ปุ่มเกรดที่เคยเลือกไว้กลับมาให้เห็น ไม่ใช่ให้ดูว่างเปล่าทุกครั้งที่เปิด */
+function restoreReviewerFormFromDraft(lv, empCode, cycle){
+  if(!lv || !empCode || !cycle || typeof getDrafts!=='function') return;
+  const draft = getDrafts().find(d => d[0]===empCode && d[2]===cycle && d[3]===lv);
+  if(!draft) return;
+  const cfg = LEVEL_CONFIG[lv];
+  const smCfg = SML_FORMS[lv];
+  const table = document.querySelector('#reviewerFormArea .reviewer-table');
+  if(!table) return;
+  const rows = [...table.querySelectorAll('tbody tr')];
+  const applyFactor = (f, rowIdx, payloadIdx) => {
+    const val = draft[payloadIdx];
+    if(!val) return;
+    const w = f[2];
+    const sc = smlScoreByWeight(w);
+    const grade = Object.keys(sc).find(g => sc[g] === val);
+    const row = rows[rowIdx];
+    if(!grade || !row) return;
+    const btn = [...row.querySelectorAll('button')].find(b => b.getAttribute('onclick').includes(`'${grade}'`));
+    if(btn) selectReviewScore(btn, grade, val);
+  };
+  smCfg.factors.slice(0,10).forEach((f,fi) => applyFactor(f, fi, 4+fi));
+  if(cfg.leaderShow){
+    smCfg.factors.slice(10).forEach((f,fi) => applyFactor(f, 10+fi, 14+fi));
+  }
 }
 function selectReviewScore(btn,grade,score){
   const row=btn.closest('tr'); if(!row)return;
@@ -9271,6 +9306,67 @@ function clearReviewerForm(){
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
   set('reviewRaw','0');set('reviewRaw2','0');set('reviewY','0.00');set('reviewX',zval.toFixed(2));
   smlToast('ล้างคะแนนในแบบประเมินเรียบร้อย','ok');
+}
+
+/* เดิมปุ่ม "✓ บันทึกและส่งต่อ"/"↩️ ตีกลับ" ในหน้าต่างนี้ (mReview) เป็นแค่ toast ปลอม ไม่ได้บันทึก/
+   เปลี่ยนสถานะอะไรจริงเลย — การอนุมัติ/ตีกลับจริงต้องไปติ๊กเลือกแถวที่หน้ารายการ (นอกหน้าต่างนี้)
+   เท่านั้น สับสนเพราะดูเหมือนกดในหน้าต่างนี้ก็ได้ผลเหมือนกัน ผู้ใช้ขอให้เชื่อมปุ่มในหน้าต่างนี้ให้ทำงาน
+   จริง และให้การให้คะแนนรอบแรกจากหน้า "2. ประเมินทีมงาน" (หัวหน้าหน่วย/หัวหน้าแผนกให้คะแนนแทน/ยืนยัน
+   คะแนนพนักงาน ตาม CLAUDE.md #61 ข้อ 1 — แก้ไข/ยืนยันคะแนนชุดเดียวกับที่พนักงานประเมินตนเอง ไม่ใช่
+   คะแนนอีกชุด) ถูกบันทึกจริงด้วย — ฟังก์ชันนี้จึงต้อง "คาดเดา" ขั้นต่อไปจากสถานะปัจจุบันของใบ (ไม่มี
+   ใบอยู่เลย/Draft → Submitted ของหน้าทีมงาน, Submitted → L1Reviewed ของคิวสอบทานหัวหน้าแผนก,
+   L1Reviewed → L2Reviewed ของคิวสอบทานผู้จัดการส่วน) ให้ผลเหมือนปุ่มจริงที่หน้ารายการทุกจุด (สถานะ,
+   push Approvals/Appraisals, audit log, renderWorkflowPages) ไม่ใช่เส้นทางคู่ขนานที่อาจเพี้ยนกัน */
+async function submitReviewerForm(){
+  const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
+  const cfg = LEVEL_CONFIG[lv];
+  if(!code || !cycle || !lv || !cfg){ smlToast('ไม่พบข้อมูลพนักงานสำหรับฟอร์มนี้','warn'); return; }
+  const table = document.querySelector('#reviewerFormArea .reviewer-table');
+  const rows = table ? [...table.querySelectorAll('tbody tr')] : [];
+  if(!rows.length){ smlToast('ไม่พบตารางคะแนนในแบบฟอร์มนี้','warn'); return; }
+  const scores = rows.map(r => { const n = parseFloat(r.querySelector('.review-got')?.textContent); return isNaN(n) ? 0 : n; });
+  if(scores.some(s=>!s)){ smlToast('กรุณาให้คะแนนครบทุกข้อก่อนบันทึก','warn'); return; }
+  const m = scores.slice(0,10);
+  const l = cfg.leaderShow ? scores.slice(10,14) : [null,null,null,null];
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  const empName = emp ? emp[1] : (document.getElementById('reviewerTitle')?.textContent||code);
+  const y = parseFloat(document.getElementById('reviewY')?.textContent||'0');
+  const z = currentReviewerZ||0;
+  const x = y+z;
+  const grade = gradeFromX(x);
+  const existing = getDrafts().find(d => d[0]===code && d[2]===cycle && d[3]===lv);
+  const curStatus = existing ? existing[existing.length-1] : 'Draft';
+  const STEP = { Draft:{next:'Submitted', label:'บันทึกคะแนนรอบแรกโดยหัวหน้า'},
+                 Submitted:{next:'L1Reviewed', label:'ผ่านสอบทานหัวหน้าแผนก'},
+                 L1Reviewed:{next:'L2Reviewed', label:'ผ่านสอบทานผู้จัดการส่วน'} };
+  const step = STEP[curStatus];
+  if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการบันทึกจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
+  const payload = [code, empName, cycle, lv, ...m, ...l, y, z, x, grade, step.next];
+  saveEvaluationLocal(payload);
+  if(typeof pushDraftRowToExcel==='function') pushDraftRowToExcel(payload, step.next);
+  pushApprovalRecordToExcel(code, cycle, step.next, '');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, empName);
+  smlToast(step.label+'เรียบร้อย','ok');
+  closeM();
+  if(typeof renderWorkflowPages==='function') renderWorkflowPages();
+}
+function rejectReviewerForm(){
+  const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
+  if(!code || !cycle || !lv) return;
+  const existing = getDrafts().find(d => d[0]===code && d[2]===cycle && d[3]===lv);
+  if(!existing){ smlToast('ยังไม่มีใบประเมินที่จะตีกลับสำหรับคนนี้','warn'); return; }
+  const curStatus = existing[existing.length-1];
+  const STEP = { Submitted:{prev:'Draft', label:'ตีกลับให้แก้ไข'},
+                 L1Reviewed:{prev:'Submitted', label:'ตีกลับจากสอบทานหัวหน้าแผนก'},
+                 L2Reviewed:{prev:'L1Reviewed', label:'ตีกลับจากสอบทานผู้จัดการส่วน'} };
+  const step = STEP[curStatus];
+  if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการตีกลับจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
+  if(!confirm('ยืนยันตีกลับใบประเมินนี้?')) return;
+  updateDraftStatus([draftKey(existing)], step.prev);
+  pushApprovalRecordToExcel(code, cycle, 'Rejected'+curStatus, '');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, '');
+  smlToast(step.label+'เรียบร้อย','warn');
+  closeM();
 }
 
 /* ====== TAB SAFETY ====== */

@@ -4087,6 +4087,91 @@ touches employee/attendance/evaluation data.
     just a save path — or every re-open looks like data loss even when
     nothing was actually lost.
 
+109. **User asked point-blank "แก้ทุกจุดแล้วใช่ไหม ทั้ง L1 L2 L3 L4" (did you fix
+    every point — L1/L2/L3/L4) right after #108 shipped. The honest
+    answer was no — #108 only fixed the self-eval page's own form; the
+    separate `openReviewerForm()` modal (shared by the "2. ประเมินทีมงาน"
+    page's "ประเมิน" button and the L1/L2 review queues' "สอบทานแบบฟอร์ม"
+    button) had the identical blank-on-reopen gap, plus something worse
+    found while checking: its own "✓ บันทึกและส่งต่อ"/"↩️ ตีกลับ" footer
+    buttons were pure CLAUDE.md #10 placeholders —
+    `onclick="smlToast('บันทึกผลการประเมินของผู้ประเมินแล้ว','ok');closeM()"`
+    and the equivalent for ตีกลับ — a fake success toast with zero
+    underlying write, while the *real* approve/reject pipeline
+    (`approveReviewL1Selected()`/`rejectReviewL1Selected()`/
+    `approveReviewSelected()`/`rejectReviewSelected()`/`approveGmSelected()`/
+    `rejectGmSelected()`, #92/#94) only ever ran from the checkbox +
+    bulk-action buttons on the queue **list page itself**, completely
+    outside this modal. Anyone who opened the form, scored it, and
+    clicked its own "บันทึกและส่งต่อ" expecting that to actually approve
+    it would see a success message and a closed modal — and nothing
+    would have moved; the record stayed exactly where it was until
+    someone separately went back, ticked the checkbox, and used the
+    real page button. Asked the user two clarifying questions before
+    touching this (given it intersects the whole approval pipeline from
+    #61/#92): (1) should the modal's own buttons be wired to really work,
+    confirmed yes; (2) does scoring someone's team member from "2.
+    ประเมินทีมงาน" need to actually save, confirmed yes.
+    **Fixed both gaps together, since they share the same underlying
+    state** (`currentReviewerCode`/`currentReviewerCycle` added
+    alongside the existing `currentReviewerLevel`/`currentReviewerZ`
+    module vars, `openReviewerForm()` now takes a `cycle` parameter from
+    every call site — previously never passed at all, defaulting
+    silently to nothing): `restoreReviewerFormFromDraft(lv, empCode,
+    cycle)` mirrors #108's `restoreEvalFormFromDraft()` exactly (same
+    reverse-lookup-grade-from-saved-score approach, just against
+    `smlScoreByWeight()`'s `Aplus/A/B/Cplus/C` key names instead of
+    self-eval's `Ap/A/B/Cp/C` — same numeric values, different label
+    strings for the two parallel score-tables in this file) — called
+    right after `openM('mReview')` so reopening a review queue's form
+    shows the scores already given, not a blank slate.
+    **The real submit/reject wiring** (`submitReviewerForm()`/
+    `rejectReviewerForm()`) had to solve a genuine ambiguity: the same
+    modal is opened from three different real contexts (team page with
+    no existing record, L1 review queue on a `Submitted` record, L2
+    review queue on an `L1Reviewed` record), and clicking the *same*
+    "✓ บันทึกและส่งต่อ" button in each must do something different —
+    solved by branching on the record's **real current status**, looked
+    up fresh via `getDrafts()` at submit time, not on which page opened
+    it: `Draft`/no-record → build a brand-new payload (same shape as
+    `collectEvaluationPayload()`) and set status `Submitted` (this *is*
+    the L1/unit round-1 scoring entry point per #61's own answer — not a
+    second parallel score set, the one real score, entered by the
+    supervisor on the team member's behalf); `Submitted` → advance to
+    `L1Reviewed`; `L1Reviewed` → advance to `L2Reviewed` — any other
+    status (already past L2Reviewed) refuses with an honest toast
+    pointing back at the real list-page buttons rather than silently
+    doing the wrong thing. Each transition calls the exact same
+    `pushDraftRowToExcel()`/`pushApprovalRecordToExcel()`/
+    `appendAuditLog()`/`renderWorkflowPages()` calls the real per-stage
+    bulk functions already use (CLAUDE.md #94's established "push to
+    both the append-only log and the upsert current-state table" rule),
+    so a record approved through this modal is indistinguishable in
+    Excel/Audit Log from one approved via the checkbox row — never a
+    second, divergent write path. `rejectReviewerForm()` mirrors this
+    with the exact one-stage-back targets #92 already established
+    (`Submitted→Draft`, `L1Reviewed→Submitted`, `L2Reviewed→L1Reviewed`),
+    reusing the shared `updateDraftStatus()` helper directly rather than
+    re-implementing it. Verified end-to-end with a test that opens the
+    form for a brand-new employee with no record (team page scenario),
+    scores all 10 factors and submits — confirms a real `Submitted`
+    draft now exists — reopens the same form and confirms all 10 grade
+    buttons restore as selected, submits again — confirms the real
+    status advances to `L1Reviewed` — reopens once more and rejects —
+    confirms it correctly lands back on `Submitted`, not further back —
+    plus the standard click-sweep. General lesson sharper than #10's own
+    statement: a modal's own action buttons sitting right next to a
+    *separately working* bulk-action mechanism for the same real action
+    (here, the queue page's checkbox+button) is a specific, easy-to-miss
+    shape of the #10 placeholder problem — the real mechanism existing
+    and working elsewhere makes the fake one look harmless in a cursory
+    pass, since "the feature works" is true somewhere in the file; always
+    check whether *every* visible entry point for an action (not just
+    the one that happens to be wired) actually reaches that one real
+    mechanism, especially when a user asks "did you get every point"
+    after a related fix — that phrasing is itself a signal to re-walk
+    every sibling control, not just confirm the one already fixed.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
