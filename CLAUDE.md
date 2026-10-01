@@ -4037,6 +4037,56 @@ touches employee/attendance/evaluation data.
     supervisor fields and #28's code-entry datalists already do for every
     other such pairing in this file.
 
+108. **User reported "บันทึกผลการประเมินแล้ว จะดูแบบ ไม่มีข้อมูลที่เลือกเกรดไว้"
+    (saved the evaluation, but viewing the form shows no selected-grade
+    data).** Traced `setEvalLevel(lv)` (called every time the "ประเมิน
+    ตนเอง" form opens, including re-opening a person who already has a
+    saved Draft/Submitted record) and confirmed it unconditionally does
+    `evalScores = {}` and rebuilds every factor row fresh — there was
+    **no function anywhere in the file** that read a previously-saved
+    draft back out of `getDrafts()` and re-ticked its grade buttons. So
+    every re-open of the form (after a page reload, a re-login, or just
+    navigating away and back) looked completely blank — no grade button
+    highlighted, every "คะแนน" cell showing "—" — even though the real
+    scores were sitting safely in the saved draft the whole time; only
+    the numeric sum (`collectEvaluationPayload()`'s `m0..m9`/`l0..l3`)
+    was ever persisted, never *which grade* produced it, and nothing
+    read even that sum back into the UI. This is the self-eval analogue
+    of CLAUDE.md #9's edit-button bug (opening something that already
+    has real data but showing it as if it were brand new) — just without
+    a dedicated "edit" entry point to miss, since re-opening the same
+    form *is* the only entry point here.
+    Fixed with `restoreEvalFormFromDraft(lv, empCode, cycle)`, called
+    from `onEvalCodeGateChange()` right after `setEvalLevel(assigned)`
+    rebuilds the rows: looks up the matching draft via the same
+    `empCode|cycle|level` key `draftKey()`/#41's upsert already use,
+    then for each of the 10 main factors (and the 4 leadership ones when
+    `cfg.leaderShow`) reverse-looks-up which grade produced the saved
+    numeric value (`Object.keys(SCORES[w]).find(g=>SCORES[w][g]===val)`,
+    since each factor's weight `w` maps grade→a unique score) and calls
+    the real `setScore(key, grade, w, btn)` on the matching button —
+    never writes `evalScores` directly, so the button's active styling,
+    the "คะแนน" cell, and `recalc()`'s running total all update exactly
+    as if the person had just clicked it themselves, through the one
+    real code path instead of a second parallel one that could drift
+    (the same "don't rebuild a second write/render path" discipline
+    CLAUDE.md #20/#44 already established for attendance). A factor with
+    no saved value (`val` falsy — never happens for a real Draft since
+    every factor must be scored to save, but defensive regardless) is
+    simply left unticked, not defaulted to anything. Verified with a
+    test that scores all 10 factors as grade "A", saves a Draft, resets
+    the in-memory `evalScores` and re-opens the same employee's code
+    (simulating a fresh page load), and confirms both the DOM (the "A"
+    button shows `.active`, the score cell shows the real number instead
+    of "—") and `evalScores` itself end up correctly repopulated from the
+    saved draft, not just visually appearing to — plus the standard
+    click-sweep. General lesson: a form that computes and saves a
+    numeric total from several discrete selections (grade buttons here)
+    needs a real "load this total back into its original selections" path
+    the moment the form can ever be re-opened against existing data — not
+    just a save path — or every re-open looks like data loss even when
+    nothing was actually lost.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

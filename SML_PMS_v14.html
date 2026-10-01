@@ -6092,6 +6092,15 @@ function onEvalCodeGateChange(){
     if(!isAdminViewer){
       LV_KEYS.forEach(k=>{ if(k!==assigned){ const btn=document.getElementById('lv-'+k); if(btn) btn.disabled = true; } });
     }
+    /* ถ้าเคยบันทึกร่าง/ส่งแบบประเมินของคนนี้ในรอบนี้ไว้แล้ว ต้องดึงคะแนนที่เคยเลือกไว้กลับมาติ๊กให้เห็น
+       บนฟอร์ม — เดิม setEvalLevel() รีเซ็ต evalScores={} ทุกครั้งที่เปิดฟอร์ม ไม่มีจุดไหนเลยที่โหลดคะแนน
+       เดิมจาก getDrafts() กลับมา ทำให้เปิดฟอร์มที่เคยบันทึกไว้แล้วดูเหมือนไม่มีข้อมูลเกรดที่เลือกไว้เลย
+       ทั้งที่ตัวเลขคะแนนจริงมีอยู่ในร่างที่บันทึกไว้ (CLAUDE.md #107's ชุดเดียวกัน — ห้ามให้ฟอร์มดูเหมือน
+       ว่างเปล่าทั้งที่มีข้อมูลจริงอยู่) */
+    if(typeof restoreEvalFormFromDraft==='function'){
+      const cyc = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
+      restoreEvalFormFromDraft(assigned, code, cyc);
+    }
     if(note){ note.textContent = `✅ แบบฟอร์มของ ${emp[1]} ที่ Admin กำหนดไว้: ${LEVEL_CONFIG[assigned].label}`; note.style.color = '#16a34a'; }
   } else if(note){
     note.textContent = `⚠️ ยังไม่ได้กำหนดแบบฟอร์มประเมินสำหรับ ${emp[1]} — ติดต่อ Admin ระบบ/Admin HR ให้กำหนดที่หน้า "ผู้ใช้ & สิทธิ์" ก่อน`;
@@ -6231,6 +6240,33 @@ function setScore(key, grade, w, btn) {
     sc.style.padding = '2px 6px';
   }
   recalc();
+}
+
+/* ดึงคะแนนที่เคยเลือกไว้ในร่าง/แบบที่เคยส่งของคนนี้ (empCode|cycle|level เดียวกัน) กลับมาติ๊กปุ่มเกรด
+   ให้ตรงกับที่เคยเลือกไว้จริง — payload ที่บันทึกไว้เก็บแค่ "คะแนนดิบ" ต่อปัจจัย (evalScores[key])
+   ไม่ได้เก็บว่าเลือกเกรดไหน จึงต้อง reverse-lookup จาก SCORES[w] หาเกรดที่ให้คะแนนตรงกับค่าที่บันทึกไว้
+   แล้วค้นปุ่มจริงในแถวนั้นมาเรียก setScore() เหมือนผู้ใช้กดเองอีกครั้ง (ไม่ได้ set evalScores ตรงๆ เพื่อให้
+   สถานะปุ่ม/สี/recalc() อัปเดตถูกต้องเหมือนกดจริงทุกจุด) */
+function restoreEvalFormFromDraft(lv, empCode, cycle){
+  if(!lv || !empCode || !cycle || typeof getDrafts!=='function') return;
+  const draft = getDrafts().find(d => d[0]===empCode && d[2]===cycle && d[3]===lv);
+  if(!draft) return;
+  const cfg = LEVEL_CONFIG[lv];
+  const smCfg = SML_FORMS[lv];
+  const applyFactor = (f, fi, prefix, payloadIdx) => {
+    const val = draft[payloadIdx];
+    if(!val) return;
+    const w = f[2];
+    const grade = Object.keys(SCORES[w]).find(g => SCORES[w][g] === val);
+    if(!grade) return;
+    const row = document.getElementById('row-'+prefix+fi);
+    const btn = row && [...row.querySelectorAll('button')].find(b => b.getAttribute('onclick').includes(`'${grade}'`));
+    if(btn) setScore(prefix+fi, grade, w, btn);
+  };
+  smCfg.factors.slice(0,10).forEach((f,fi) => applyFactor(f, fi, 'm', 4+fi));
+  if(cfg.leaderShow){
+    smCfg.factors.slice(10).forEach((f,fi) => applyFactor(f, fi, 'l', 14+fi));
+  }
 }
 
 function recalc() {
