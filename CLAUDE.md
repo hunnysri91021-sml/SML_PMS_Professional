@@ -3877,6 +3877,41 @@ touches employee/attendance/evaluation data.
     ever actually confirmed the two shapes match, or whether it just
     borrowed working code's index numbers on the assumption they would.
 
+105. **Follow-up to #104: user chose option 2 — stop pushing into the real
+    Attendance Excel table at all, treat it as Excel-authoritative, and
+    let the web app only ever pull from it.** Disabled both write paths
+    (`pushAttendanceRowToExcel()`, the auto-push from #101's
+    `writeAttendanceRecord()` chokepoint, and `ms365PushAttendance()`,
+    the manual "📤 Push เข้า Excel 365" button) — neither calls
+    `graphUpsertTableRow()` anymore; both now only log a clear reason to
+    the Sync Log (and the manual button also toasts it) explaining that
+    the real sheet's "วันลารวม"/"Z Score" columns are live formulas the
+    web app's row-replacing push would destroy. Relabeled both buttons
+    (`🔒 Push เข้า Excel (ปิดใช้งาน)`) with a `title` tooltip stating the
+    same reason, rather than silently removing them — a vanished button
+    with no explanation reads as a bug report waiting to happen, per
+    CLAUDE.md #10's "visibly disable with a one-line reason" rule, not a
+    reason to delete the control outright. Left `buildAttendanceExcelRow()`
+    defined but now dead (no remaining caller) rather than deleting it —
+    unlike this project's usual "delete code known to be unused"
+    convention (#48/#51/#80), this one specific function's real,
+    verified column mapping (#104's fix) is worth keeping on file as the
+    reference shape if a future redesign ever wants to re-enable a
+    formula-safe push (e.g. a Worker endpoint that PATCHes only columns
+    D-H, leaving I/J untouched — not built here, since it wasn't asked
+    for). Verified with a test that stubs `graphUpsertTableRow()` to
+    detect any call and confirms neither function ever invokes it, while
+    both still leave a real Sync Log entry explaining why — plus the
+    standard click-sweep. General lesson: when a prior fix (#101) added
+    an automatic best-effort push specifically to remove the "forgot to
+    also click Push" class of report, and a later finding (#104) reveals
+    that same push is actually unsafe for one specific table, disabling
+    it needs to happen at the *same chokepoint* the auto-push was wired
+    into (here, both the manual button and the automatic per-save call),
+    not just the one path that was most recently discussed — grep every
+    caller of the push function being disabled, not just the one the
+    user's screenshot happened to show.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

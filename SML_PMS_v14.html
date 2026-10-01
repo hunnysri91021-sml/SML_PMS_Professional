@@ -2114,7 +2114,7 @@ tbody tr:hover{background:#f0f6ff!important}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button></div></div>
+      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-sm" title="ปิดใช้งาน — ตาราง Attendance มีสูตร Excel ที่ต้องรักษาไว้ แก้ไขข้อมูลในไฟล์ Excel โดยตรงแทน" onclick="ms365PushAttendance()">🔒 Push เข้า Excel (ปิดใช้งาน)</button></div></div>
       <div id="attPushStatus" style="padding:0 16px 4px;font-size:11.5px;color:#64748b"></div>
       <div class="tw"><table>
         <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
@@ -2493,7 +2493,7 @@ tbody tr:hover{background:#f0f6ff!important}
             <button class="btn btn-p" style="width:100%;justify-content:center" onclick="ms365SyncAttendance()">📥 นำเข้าเวลาทำงาน → คำนวณ Z</button>
             <div style="font-size:11px;color:#94a3b8;margin:10px 0 4px">ข้อมูลที่กรอก/แก้ไขในเว็บเครื่องนี้ (กรอกมือ หรือแก้จากที่ Sync มา) ยังไม่เข้า Excel จนกว่าจะกดปุ่มนี้ —
               คนละเครื่องจะยังไม่เห็นตรงกันจนกว่าจะ Push</div>
-            <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAttendance()">📤 Push ข้อมูลเวลา → Excel</button>
+            <button class="btn" style="width:100%;justify-content:center" title="ปิดใช้งาน — ตาราง Attendance มีสูตร Excel ที่ต้องรักษาไว้ แก้ไขข้อมูลในไฟล์ Excel โดยตรงแทน" onclick="ms365PushAttendance()">🔒 Push ข้อมูลเวลา → Excel (ปิดใช้งาน)</button>
           </div>
         </div>
         <div class="card"><div class="card-h"><h3>🔑 PIN & แบบฟอร์มประเมิน</h3></div>
@@ -7260,36 +7260,19 @@ function buildAttendanceExcelRow(code, a){
     a.medCert||''
   ];
 }
-/* Push ข้อมูลเวลา "คนเดียว" ขึ้น Excel ทันทีหลังบันทึก — best-effort, fire-and-forget (ไม่บล็อกการกดบันทึก),
-   log ผลลง Sync Log เสมอทั้งสำเร็จ/ไม่สำเร็จ (ตามแบบแผน CLAUDE.md #66/#68/#69/#100) HR จึงไม่ต้องจำไปกด
-   "Push เข้า Excel 365" แยกอีกครั้งหลังแก้ไขรายบุคคลทุกครั้ง (ซึ่งเป็นจุดที่ทำให้ข้อมูลไม่ตรง Excel บ่อยๆ) */
+/* ปิดการ Push กลับเข้าตาราง "Attendance" จากเว็บโดยเจตนา (CLAUDE.md #104) — คอลัมน์ "วันลารวม"/
+   "Z Score" ในชีทจริงเป็นสูตร Excel ที่คำนวณสดอยู่แล้ว (=F+G+H*3+INT((D+E)/8) และ INDEX/MATCH เข้า
+   ตารางคะแนน) และกลไก Push ของเว็บ (graphUpsertTableRow → PATCH ทั้งแถว) เขียนทับ "ทั้งแถว" รวมสอง
+   คอลัมน์สูตรนั้นด้วยค่าตัวเลขนิ่งทุกครั้งที่กด — ผู้ใช้เลือกให้ Excel เป็นแหล่งข้อมูลหลัก เว็บจึง
+   "ดึง" (ms365SyncAttendance, #104) อย่างเดียว ไม่ "ส่งกลับ" เพื่อไม่ให้สูตรจริงของ HR หายไปโดยไม่ตั้งใจ
+   ถ้าต้องการแก้ข้อมูลวันลาของใคร ให้แก้ตรงในไฟล์ Excel โดยตรง (คอลัมน์ D-H) แล้วกด "ดึงเวลาทำงานจาก
+   Excel" ในเว็บเพื่อรับค่าล่าสุดมาใช้คำนวณคะแนน */
 function pushAttendanceRowToExcel(code){
-  const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)){ appendSyncLog(`pushAttendanceRowToExcel (${code}): ยังไม่ได้ตั้งค่า MS365`, false); return; }
-  const a = ATTENDANCE[code]; if(!a) return;
-  graphUpsertTableRow('Attendance', 0, code, buildAttendanceExcelRow(code, a))
-    .then(()=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) เข้า Excel`, true); updateMs365Status('ok','Connected'); })
-    .catch(err=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) ไม่สำเร็จ: `+(err?.message||err), false); updateMs365Status('warn','Sync error'); });
+  appendSyncLog(`pushAttendanceRowToExcel (${code}): ปิดใช้งาน — ตาราง Attendance มีสูตร Excel ที่ต้องรักษาไว้ แก้ข้อมูลในไฟล์ Excel โดยตรงแล้วดึงเข้าเว็บแทน`, true);
 }
 async function ms365PushAttendance(){
-  const codes = Object.keys(ATTENDANCE);
-  if(!codes.length){ smlToast('ยังไม่มีข้อมูลเวลาในเครื่องนี้ให้ Push','warn'); return; }
-  const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)){
-    smlToast('ยังไม่ได้ตั้งค่า MS365 — ข้อมูลจะยังอยู่แค่ในเครื่องนี้เท่านั้น','warn');
-    appendSyncLog('Push ข้อมูลเวลา: ยังไม่ได้ตั้งค่า MS365', false);
-    return;
-  }
-  let ok=0, fail=0;
-  for(const code of codes){
-    const row = buildAttendanceExcelRow(code, ATTENDANCE[code]);
-    try{ await graphUpsertTableRow('Attendance', 0, code, row); ok++; }
-    catch(e){ fail++; }
-  }
-  updateMs365Status(fail?'warn':'ok', fail?'บาง Push ไม่สำเร็จ':'Connected');
-  smlToast(`Push ข้อมูลเวลาเข้า Excel สำเร็จ ${ok} คน` + (fail?` · ล้มเหลว ${fail} คน`:''), fail?'warn':'ok');
-  appendSyncLog(`Push ข้อมูลเวลา: สำเร็จ ${ok} คน${fail?' · ล้มเหลว '+fail:''}`, fail===0);
-  if(ok){ markSystemUpdated(`Push ข้อมูลเวลา ${ok} คนเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push ข้อมูลเวลาเข้า Excel', 'Attendance', ok+' คนสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
+  smlToast('ปิดการ Push เข้าตาราง Attendance แล้ว — คอลัมน์วันลารวม/Z Score ในชีทจริงเป็นสูตรคำนวณสด การ Push จากเว็บจะเขียนทับสูตรนั้น กรุณาแก้ข้อมูลในไฟล์ Excel โดยตรงแล้วใช้ "ดึงเวลาทำงานจาก Excel" แทน','info');
+  appendSyncLog('Push ข้อมูลเวลา: ปิดใช้งาน (ป้องกันเขียนทับสูตร Excel) — ใช้การดึงข้อมูลจาก Excel แทน', true);
 }
 
 function exportMyDataFile(){
