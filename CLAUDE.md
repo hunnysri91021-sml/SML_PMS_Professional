@@ -4226,6 +4226,63 @@ touches employee/attendance/evaluation data.
     whether each of its key arguments is sourced from a trustworthy
     place (an admin-assigned fact) rather than a heuristic guess.
 
+111. **Follow-up to #110: user's screenshot of a real employee's "ประเมินตนเอง"
+    page (code 90040, real assigned level set to "พนักงานสำนักงาน"/`of` in
+    Add/Edit Employee) showed the form rendering as "พนักงานปฏิบัติการ"
+    (`op`) instead — with "ตำแหน่ง"/"แผนก" also sitting empty — and
+    separately reported "ยังไม่เห็นผลการประเมิน ที่คนก่อนประเมิน" (still
+    can't see the result the previous evaluator gave).** Investigated by
+    reproducing the exact chain end-to-end with Playwright (set evalLevel
+    via the real Add/Edit Employee form → `onEvalCodeGateChange()`) and
+    found both reports traced to **one** real mechanism, not a level-
+    resolution bug: `isEligibleForSelfEval()` — the self-eval access gate
+    #71 defaulted to `'restricted'` — returns `false` for this employee
+    (not on the admin-managed allow-list), and `onEvalCodeGateChange()`'s
+    ineligible branch disables the level buttons, shows the real "⛔ …
+    ไม่อยู่ในรายชื่อ/แผนกที่กำหนด" warning, and `return`s **before ever
+    calling `setEvalLevel()`**. `#formArea` (the whole scoring-form block)
+    starts `display:none` on page load and is only ever shown by
+    `setEvalLevel()` (line ~6186) — so on a *fresh* page load this is
+    invisible and harmless, but if the viewer had just looked at a
+    *different*, eligible employee's form moments earlier (very plausible
+    on the admin/HR account used to spot-check several people in a row),
+    `#formArea` is still sitting visible from that prior call, and the
+    ineligible branch never hides it again — so the *previous* employee's
+    form (wrong level, wrong name fields blank since `evalPos`/`evalDept`
+    are only populated inside `setEvalLevel()`) stays fully on screen,
+    reading exactly like "the system pulled the wrong form" when the
+    real story is "this person is blocked from self-eval entirely, and a
+    stale leftover form from someone else never got cleared." This also
+    directly explains "ยังไม่เห็นผลการประเมิน" — there is no previous
+    evaluator's data to see here at all; the account is blocked before
+    ever reaching a real form, so nothing related to that employee was
+    ever rendered — the visible table belonged to whoever was checked
+    right before. Fixed by hiding `#formArea` (`style.display='none'`)
+    inside the ineligible branch itself, so a blocked employee's code
+    always shows *only* the red warning, never a leftover form from
+    someone else. Verified with a test that opens the form for a real
+    eligible employee first (confirms `#formArea` becomes visible, as
+    expected), then switches to a blocked employee's code and confirms
+    `#formArea` goes back to `display:none` with the correct warning
+    text — the exact two-step sequence that reproduces what the
+    screenshot showed. **Told the user plainly that the real, separate
+    fix needed on their end is at the data-configuration layer, not
+    code**: this specific employee needs to either be added to "🎯
+    สิทธิ์ประเมินตนเอง"'s department/individual allow-list, or the
+    eligibility mode switched back to "ทุกคนประเมินได้," before they can
+    self-evaluate at all — the UI fix here only stops it from
+    *misleadingly showing someone else's form*, it does not and should
+    not grant access on its own. General lesson sharper than #108/#109/
+    #110's own conclusions: when a UI element is conditionally shown by
+    one code path (`setEvalLevel()` → `formArea.style.display=''`) but
+    an *early-return guard* added later (`isEligibleForSelfEval()`, #62/
+    #71) sits in front of that path without itself clearing the element,
+    the guard's "return early" is not actually airtight — it blocks the
+    *new* state from being set, but never erases *leftover* state from
+    before the guard ran; any early-return branch added to a function
+    that conditionally reveals UI must also explicitly hide/reset that
+    UI, not just skip past the code that would normally show it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

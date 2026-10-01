@@ -6082,6 +6082,14 @@ function onEvalCodeGateChange(){
     const evalNameElX = document.getElementById('evalName');
     if(evalNameElX){ evalNameElX.value = emp[1]; evalNameElX.readOnly = true; }
     if(note){ note.textContent = `⛔ ${emp[1]} ไม่อยู่ในรายชื่อ/แผนกที่ Admin กำหนดให้ประเมินตนเองได้ในรอบนี้ กรุณาติดต่อ HR`; note.style.color = '#dc2626'; }
+    /* #formArea ซ่อนไว้ตั้งแต่โหลดหน้า (display:none) และ setEvalLevel() เท่านั้นที่เปิดให้เห็น — แต่
+       กรณีนี้ (ไม่มีสิทธิ์ประเมินตนเอง) ไม่เคยเรียก setEvalLevel() เลย จึงมีได้ 2 แบบ: ถ้าเพิ่งโหลดหน้า
+       ครั้งแรก formArea ยังซ่อนอยู่ปกติ แต่ถ้าก่อนหน้านี้เคยกรอกรหัสคนอื่นที่มีสิทธิ์มาก่อน (formArea เปิด
+       ค้างอยู่จากตอนนั้น) แล้วเพิ่งเปลี่ยนมาเป็นรหัสคนนี้ที่ไม่มีสิทธิ์ ฟอร์มเก่าของคนก่อนหน้า (ระดับผิด/
+       คนละคน) จะยังค้างแสดงอยู่เต็มๆ ให้เข้าใจผิดว่า "ระบบดึงฟอร์มผิดระดับมาให้" ทั้งที่จริงคือถูกบล็อก
+       สิทธิ์แล้วแต่ฟอร์มเก่ายังไม่ถูกซ่อน — ซ่อนทิ้งให้ชัดเจนว่าไม่มีอะไรให้กรอกตราบใดที่ยังไม่มีสิทธิ์ */
+    const formAreaX = document.getElementById('formArea');
+    if(formAreaX) formAreaX.style.display = 'none';
     return;
   }
   if(evalCodeEl) evalCodeEl.value = code;
