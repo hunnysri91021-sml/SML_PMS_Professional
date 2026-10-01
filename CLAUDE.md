@@ -3664,6 +3664,43 @@ touches employee/attendance/evaluation data.
     (actually trigger the save and watch the log) rather than trusting
     that a past mechanical sweep already covered every call site.
 
+101. **User asked whether editing an individual's attendance (the HRGO
+    import page's inline-edit/top-form save) and the Excel push should
+    "update together" instead of needing a separate manual "📤 Push เข้า
+    Excel 365" click every time — I recommended yes (same best-effort
+    auto-push pattern #27 already uses for employee saves) and the user
+    agreed.** Extracted the per-row shape `ms365PushAttendance()` already
+    builds (15-column `Attendance` row) into a shared
+    `buildAttendanceExcelRow(code, a)` so the new single-row path and the
+    existing push-everything-at-once button can never silently diverge
+    on column order again (the same "one function builds the row, every
+    caller goes through it" discipline CLAUDE.md #30/#97 already
+    establishes for Excel row shapes). Added `pushAttendanceRowToExcel(code)` —
+    best-effort, fire-and-forget (never blocks the save itself), logging
+    both success and failure to the Sync Log (the exact convention #100
+    just re-established: a `.then()/.catch()` pair, not a silent
+    `.catch(()=>{})`) — and call it from `writeAttendanceRecord()`
+    (the one real write chokepoint both the top form and inline-edit
+    save already share per CLAUDE.md #20/#44), right after the local
+    `ATTENDANCE[code]` write. The existing "📤 Push เข้า Excel 365" button
+    (`ms365PushAttendance()`, pushes every row in the table) is left
+    fully intact as a bulk re-sync path — useful right after a file
+    import that touches many people at once — it now just shares
+    `buildAttendanceExcelRow()` instead of its own inline row-building
+    code. Verified with a test that edits one employee's attendance
+    through the real `writeAttendanceRecord()` call and confirms the
+    Excel push fires automatically with the correct 15-column row and a
+    real Sync Log entry, for both the success case and a forced-failure
+    case (distinct log message, no silent swallow) — plus the standard
+    click-sweep. General lesson: when a user asks "should these two
+    actions happen together" about a manual two-step flow this file has
+    shipped before (local save, then a separate explicit Excel push),
+    the answer is usually yes per #27's own precedent — unless the
+    second step is genuinely expensive/bulk (a reason to keep a manual
+    "sync everything" button too), auto-triggering the best-effort push
+    from the one real write chokepoint removes an entire class of "I
+    edited it but forgot to also click Push" reports before they happen.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

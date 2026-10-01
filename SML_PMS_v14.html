@@ -7236,6 +7236,32 @@ async function ms365SyncAttendance(silent=false){
    จึงต้องใช้ graphUpsertTableRow() (หา-แล้ว-อัปเดตแถวเดิมด้วยรหัสพนักงาน) ไม่ใช่ graphAddTableRow()
    ที่จะพอกแถวใหม่ทับไปเรื่อยๆ ทุกครั้งที่กด — คอลัมน์เรียงตาม HRGO_TEMPLATE_HEADERS เดียวกับที่
    ms365SyncAttendance() ใช้อ่าน เพื่อให้ไป-กลับ Excel ตรงกันเสมอ */
+/* สร้างแถว Attendance ตามลำดับคอลัมน์จริงเดียวกับ ms365PushAttendance() — ใช้ทั้งแบบ push ทีละคน
+   (writeAttendanceRecord, อัตโนมัติทุกครั้งที่บันทึก) และ push ทั้งตาราง (ms365PushAttendance,
+   ปุ่มกดเอง) กันไม่ให้สองที่ประกอบแถวต่างกัน */
+function buildAttendanceExcelRow(code, a){
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  const name = emp ? emp[1] : (a.name || code);
+  return [
+    code, name, a.absentDay||0,
+    a.lateCount||0, 0,
+    a.personalDay||0, a.personalHr||0, a.personalMin||0,
+    a.sickDay||0, a.sickHr||0, a.sickMin||0,
+    (a.personalDay||0)+(a.sickDay||0), (a.personalHr||0)+(a.sickHr||0), (a.personalMin||0)+(a.sickMin||0),
+    a.medCert||''
+  ];
+}
+/* Push ข้อมูลเวลา "คนเดียว" ขึ้น Excel ทันทีหลังบันทึก — best-effort, fire-and-forget (ไม่บล็อกการกดบันทึก),
+   log ผลลง Sync Log เสมอทั้งสำเร็จ/ไม่สำเร็จ (ตามแบบแผน CLAUDE.md #66/#68/#69/#100) HR จึงไม่ต้องจำไปกด
+   "Push เข้า Excel 365" แยกอีกครั้งหลังแก้ไขรายบุคคลทุกครั้ง (ซึ่งเป็นจุดที่ทำให้ข้อมูลไม่ตรง Excel บ่อยๆ) */
+function pushAttendanceRowToExcel(code){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){ appendSyncLog(`pushAttendanceRowToExcel (${code}): ยังไม่ได้ตั้งค่า MS365`, false); return; }
+  const a = ATTENDANCE[code]; if(!a) return;
+  graphUpsertTableRow('Attendance', 0, code, buildAttendanceExcelRow(code, a))
+    .then(()=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) เข้า Excel`, true); updateMs365Status('ok','Connected'); })
+    .catch(err=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) ไม่สำเร็จ: `+(err?.message||err), false); updateMs365Status('warn','Sync error'); });
+}
 async function ms365PushAttendance(){
   const codes = Object.keys(ATTENDANCE);
   if(!codes.length){ smlToast('ยังไม่มีข้อมูลเวลาในเครื่องนี้ให้ Push','warn'); return; }
@@ -7247,17 +7273,7 @@ async function ms365PushAttendance(){
   }
   let ok=0, fail=0;
   for(const code of codes){
-    const a = ATTENDANCE[code];
-    const emp = MASTER_USERS.find(u=>u[0]===code);
-    const name = emp ? emp[1] : (a.name || code); // ชื่อเชื่อถือจาก MASTER_USERS ก่อนเสมอ ตกลงใช้ที่เก็บไว้เฉพาะถ้าไม่พบคนคนนี้แล้วจริงๆ
-    const row = [
-      code, name, a.absentDay||0,
-      a.lateCount||0, 0,
-      a.personalDay||0, a.personalHr||0, a.personalMin||0,
-      a.sickDay||0, a.sickHr||0, a.sickMin||0,
-      (a.personalDay||0)+(a.sickDay||0), (a.personalHr||0)+(a.sickHr||0), (a.personalMin||0)+(a.sickMin||0),
-      a.medCert||''
-    ];
+    const row = buildAttendanceExcelRow(code, ATTENDANCE[code]);
     try{ await graphUpsertTableRow('Attendance', 0, code, row); ok++; }
     catch(e){ fail++; }
   }
@@ -10013,6 +10029,7 @@ function writeAttendanceRecord(code, vals){
   if(typeof recalc==='function') recalc();
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof appendAuditLog==='function') appendAuditLog('attendance', isEdit?'แก้ไขข้อมูลวันลาด้วยตนเอง':'กรอกข้อมูลวันลาด้วยตนเอง', code, emp[1]);
+  if(typeof pushAttendanceRowToExcel==='function') pushAttendanceRowToExcel(code);
   return { emp, isEdit };
 }
 function saveManualAttendance(){
