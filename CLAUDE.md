@@ -3912,6 +3912,75 @@ touches employee/attendance/evaluation data.
     caller of the push function being disabled, not just the one the
     user's screenshot happened to show.
 
+106. **Follow-up to #105: user asked for editing-via-web to keep saving to
+    Excel like before ("ใหม้มีการแก้ไขผ่าน web แล้วบันทึกใน excel ได้
+    เหมือนเดิม") — i.e. re-enable the push #105 just disabled, without
+    re-introducing #104's formula-destroying risk.** Built a genuinely
+    formula-safe partial upsert instead of the previous "PATCH the whole
+    row" mechanism: `graphUpsertTableRow()` (and the Worker's
+    `upsertRow()`) always sends `values:[[...]]` to `/itemAt(index=N)`,
+    which Graph applies as a literal PATCH over the row's **entire**
+    range — there's no way to tell it "skip these two cells" through
+    that endpoint. Added a new pair, `graphUpsertTableRowPartial()`
+    (client, mirrors `graphUpsertTableRow()`'s Worker/delegated branching)
+    and `upsertRowPartial()` (Worker, new `/rows/upsert-partial`
+    endpoint) that — on an **existing** row only — first reads the row's
+    real `range` address (`itemAt(index=N)/range`, which Graph returns as
+    a sheet-qualified address like `"Attendance!A5:K5"`), parses out the
+    sheet name/row number/starting column letter, groups every column
+    index *not* in a caller-supplied `protectedCols` list into contiguous
+    runs, and issues one `workbook/worksheets('Sheet')/range(address=...)`
+    PATCH per run — so columns 8/9 (`วันลารวม`/`Z Score`, the live-formula
+    columns #104 verified directly from the real file) are never named in
+    any PATCH call at all, leaving whatever formula is already sitting in
+    those cells completely untouched. **Real, stated limit, not hidden**:
+    this only protects an *existing* row's formulas — a brand-new
+    employee code with no row yet still falls through to a plain
+    `rows/add` (the same as before), and a fresh row has no formula to
+    preserve in the first place, so its `วันลารวม`/`Z Score` cells land
+    blank until HR types or drags the formula in from the row above once,
+    same as adding any new row manually in Excel — not attempted to
+    auto-inject formula text on add, since that needs locating the
+    brand-new row's real row number *after* the add (a second round-trip)
+    and Graph's table-row `values` property writes literal text, not a
+    live formula, for a cell that has no earlier formula to inherit from
+    a fill-down; flagged as a known edge case rather than silently
+    assumed solved. `buildAttendanceExcelRow()` was rewritten to the
+    real 11-column order #104 already verified (code/name/cycle/late/
+    early/sick/personal/absent/blank/blank/note — the two blanks are
+    the protected positions, their value is irrelevant on update since
+    `graphUpsertTableRowPartial()` never sends them for an existing row)
+    and now also reads `a.earlyCount` for real instead of the old
+    hardcoded `0` it carried from before #104's read-side fix, since the
+    real sheet genuinely has a separate กลับก่อน column. Re-enabled both
+    push entry points (`pushAttendanceRowToExcel()`'s auto-push from
+    #101's `writeAttendanceRecord()` chokepoint, and the manual
+    "📤 Push เข้า Excel 365"/"Push ข้อมูลเวลา → Excel" buttons #105 had
+    disabled) to call the new partial function instead of the old
+    whole-row one — same Sync Log success/failure convention as every
+    other push in this file (#66/#68/#69/#100/#101). **This changes the
+    Worker's own code** (the new `/rows/upsert-partial` endpoint and its
+    `upsertRowPartial`/`colIndexToLetter`/`colLetterToIndex`/
+    `groupContiguous` helpers), so — same as CLAUDE.md #41's own
+    precedent — **it needs a real redeploy** (copy-paste the updated
+    `tools/sml-pms-proxy-worker.js` into Cloudflare) before this fix has
+    any effect; every purely-client fix in this file goes live the
+    moment GitHub Pages updates, but this one specifically does not
+    until the Worker is redeployed. Verified with a test that mocks the
+    full range-address/PATCH chain and confirms pushing attendance for
+    an existing row sends exactly two PATCH calls — `A5:H5` and `K5:K5`
+    — and never once names `I5`/`J5` in any request URL, plus the
+    standard click-sweep. General lesson: when a prior fix disabled a
+    feature because the only available primitive (`graphUpsertTableRow`'s
+    whole-row PATCH) was unsafe for the specific table, and the user then
+    asks for the feature back, the right move is building the safer
+    primitive the task actually needed (a column-scoped partial update)
+    rather than either re-enabling the unsafe one or leaving it disabled
+    indefinitely — Microsoft Graph's workbook API supports range-level
+    addressing for exactly this reason, even though the table-row
+    convenience endpoints this file had used everywhere up to now don't
+    expose it directly.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

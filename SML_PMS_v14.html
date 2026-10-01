@@ -2114,7 +2114,7 @@ tbody tr:hover{background:#f0f6ff!important}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-sm" title="ปิดใช้งาน — ตาราง Attendance มีสูตร Excel ที่ต้องรักษาไว้ แก้ไขข้อมูลในไฟล์ Excel โดยตรงแทน" onclick="ms365PushAttendance()">🔒 Push เข้า Excel (ปิดใช้งาน)</button></div></div>
+      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" title="Push จะไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร Excel" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button></div></div>
       <div id="attPushStatus" style="padding:0 16px 4px;font-size:11.5px;color:#64748b"></div>
       <div class="tw"><table>
         <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
@@ -2493,7 +2493,7 @@ tbody tr:hover{background:#f0f6ff!important}
             <button class="btn btn-p" style="width:100%;justify-content:center" onclick="ms365SyncAttendance()">📥 นำเข้าเวลาทำงาน → คำนวณ Z</button>
             <div style="font-size:11px;color:#94a3b8;margin:10px 0 4px">ข้อมูลที่กรอก/แก้ไขในเว็บเครื่องนี้ (กรอกมือ หรือแก้จากที่ Sync มา) ยังไม่เข้า Excel จนกว่าจะกดปุ่มนี้ —
               คนละเครื่องจะยังไม่เห็นตรงกันจนกว่าจะ Push</div>
-            <button class="btn" style="width:100%;justify-content:center" title="ปิดใช้งาน — ตาราง Attendance มีสูตร Excel ที่ต้องรักษาไว้ แก้ไขข้อมูลในไฟล์ Excel โดยตรงแทน" onclick="ms365PushAttendance()">🔒 Push ข้อมูลเวลา → Excel (ปิดใช้งาน)</button>
+            <button class="btn btn-ok" style="width:100%;justify-content:center" title="Push จะไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร Excel" onclick="ms365PushAttendance()">📤 Push ข้อมูลเวลา → Excel</button>
           </div>
         </div>
         <div class="card"><div class="card-h"><h3>🔑 PIN & แบบฟอร์มประเมิน</h3></div>
@@ -6641,6 +6641,68 @@ async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
   return 'added';
 }
 
+/* graphUpsertTableRowPartial() — เหมือน graphUpsertTableRow() แต่ "ไม่แตะ" คอลัมน์ที่อยู่ใน
+   protectedColIndexes เลยตอนอัปเดตแถวเดิม (PATCH เฉพาะช่วงคอลัมน์ที่ไม่ถูกป้องกัน ผ่าน worksheet
+   range address แทนการ PATCH ทั้งแถว) — ใช้กับตารางที่มีคอลัมน์สูตร Excel คำนวณสดอยู่ (เช่น
+   "Attendance" คอลัมน์วันลารวม/Z Score ตามเกณฑ์จริง #103/#104) ซึ่งการ PATCH ทั้งแถวแบบเดิมจะ
+   เขียนทับสูตรนั้นด้วยค่านิ่งทุกครั้งที่ Push — ตรรกะต้องตรงกับฝั่ง Worker
+   (upsertRowPartial/colIndexToLetter/groupContiguous ใน tools/sml-pms-proxy-worker.js) ทุก
+   ประการ เหมือนที่ rowMatchesUpsertKey ต้องตรงกันทั้งสองฝั่งอยู่แล้ว (CLAUDE.md #41) — แก้ฝั่ง
+   เดียวโดยไม่แก้อีกฝั่งจะทำให้เส้นทาง Worker กับเส้นทาง delegated (ไม่ได้ตั้งค่า Worker)
+   เขียนทับคอลัมน์ไม่ตรงกัน ถ้าแก้ไฟล์นี้ ต้องแก้ Worker คู่กันแล้ว redeploy ด้วย */
+function colIndexToLetter(idx){
+  let n = idx + 1, s = '';
+  while(n > 0){ const r = (n-1) % 26; s = String.fromCharCode(65+r) + s; n = Math.floor((n-1)/26); }
+  return s;
+}
+function colLetterToIndex(letters){
+  let n = 0;
+  for(let i=0;i<letters.length;i++) n = n*26 + (letters.charCodeAt(i)-64);
+  return n - 1;
+}
+function groupContiguousCols(nums){
+  const groups = []; let cur = [];
+  for(const n of nums){
+    if(cur.length && n !== cur[cur.length-1]+1){ groups.push(cur); cur = []; }
+    cur.push(n);
+  }
+  if(cur.length) groups.push(cur);
+  return groups;
+}
+async function graphUpsertTableRowPartial(tableName, keyColIndex, keyValue, rowValues, protectedColIndexes){
+  const cfg = loadMs365Config();
+  if(isWorkerConfigured(cfg)){
+    const data = await workerFetch(cfg, '/rows/upsert-partial', { method:'POST', body: JSON.stringify({ table: tableName, keyColIndex, keyValue, values: rowValues, protectedCols: protectedColIndexes }) });
+    return data.result || 'updated-partial';
+  }
+  const { driveId, itemId } = await resolveMs365Site();
+  const base = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+    "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows";
+  const data = await graphFetch(base);
+  const rows = data.value || [];
+  const idx = rows.findIndex(r => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue));
+  if(idx >= 0 && rows[idx].index !== undefined){
+    const rangeData = await graphFetch(base + '/itemAt(index=' + rows[idx].index + ')/range');
+    const m = /^(.+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rangeData.address);
+    if(!m) throw new Error('unexpected range address: ' + rangeData.address);
+    const sheetName = m[1], rowNum = m[3];
+    const startColIdx = colLetterToIndex(m[2]);
+    const cols = rowValues.map((_,i)=>i).filter(i => !protectedColIndexes.includes(i));
+    for(const group of groupContiguousCols(cols)){
+      const fromLetter = colIndexToLetter(startColIdx + group[0]);
+      const toLetter = colIndexToLetter(startColIdx + group[group.length-1]);
+      const rangeAddr = sheetName + '!' + fromLetter + rowNum + ':' + toLetter + rowNum;
+      const vals = group.map(i => rowValues[i]);
+      await graphFetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+        "/workbook/worksheets('" + encodeURIComponent(sheetName) + "')/range(address='" + encodeURIComponent(rangeAddr) + "')",
+        { method:'PATCH', body: JSON.stringify({ values: [vals] }) });
+    }
+    return 'updated-partial';
+  }
+  await graphFetch(base + '/add', { method:'POST', body: JSON.stringify({ values: [rowValues] }) });
+  return 'added';
+}
+
 /* ====== SystemStatus (cross-device) — ทุกเครื่องที่มี MS365 login แล้ว (แม้ไม่ใช่ Admin)
    จะเห็นสถานะ "ข้อมูลอัปเดตล่าสุดเมื่อไหร่" อันเดียวกัน โดยอ่าน/เขียนตาราง "SystemStatus"
    ในไฟล์ Excel กลาง — ต้องสร้างตารางชื่อ SystemStatus (คอลัมน์: UpdatedAt, Note, PendingCount)
@@ -7242,37 +7304,60 @@ async function ms365SyncAttendance(silent=false){
 
 /* Push ข้อมูลเวลา/วันลาที่กรอกมือ หรือแก้ไขในเว็บเครื่องนี้ กลับเข้า Excel ตาราง "Attendance"
    ATTENDANCE คือ "สถานะปัจจุบัน" ของแต่ละรหัสพนักงาน ไม่ใช่เหตุการณ์ที่เกิดซ้ำได้แบบผลประเมิน
-   จึงต้องใช้ graphUpsertTableRow() (หา-แล้ว-อัปเดตแถวเดิมด้วยรหัสพนักงาน) ไม่ใช่ graphAddTableRow()
-   ที่จะพอกแถวใหม่ทับไปเรื่อยๆ ทุกครั้งที่กด — คอลัมน์เรียงตาม HRGO_TEMPLATE_HEADERS เดียวกับที่
-   ms365SyncAttendance() ใช้อ่าน เพื่อให้ไป-กลับ Excel ตรงกันเสมอ */
-/* สร้างแถว Attendance ตามลำดับคอลัมน์จริงเดียวกับ ms365PushAttendance() — ใช้ทั้งแบบ push ทีละคน
-   (writeAttendanceRecord, อัตโนมัติทุกครั้งที่บันทึก) และ push ทั้งตาราง (ms365PushAttendance,
-   ปุ่มกดเอง) กันไม่ให้สองที่ประกอบแถวต่างกัน */
+   จึงต้องใช้ graphUpsertTableRowPartial() (หา-แล้ว-อัปเดตเฉพาะคอลัมน์จริง ไม่แตะคอลัมน์สูตร) ไม่ใช่
+   graphAddTableRow() ที่จะพอกแถวใหม่ทับไปเรื่อยๆ ทุกครั้งที่กด — คอลัมน์เรียงตามลำดับจริงที่ยืนยัน
+   กับไฟล์จริงแล้ว (#104): EmpID, ชื่อ-สกุล, รอบ, มาสาย, กลับก่อน, ลาป่วย, ลากิจ, ขาดงาน,
+   วันลารวม(สูตร), Z Score(สูตร), หมายเหตุ — ตรงกับที่ ms365SyncAttendance() ใช้อ่าน */
+const ATTENDANCE_EXCEL_PROTECTED_COLS = [8, 9]; // วันลารวม(Auto)/Z Score(Auto) — คอลัมน์สูตร Excel ห้ามเขียนทับตอนอัปเดตแถวเดิม (#104/#106)
+/* สร้างแถว Attendance ตามลำดับคอลัมน์จริงเดียวกับ ms365SyncAttendance()/ms365PushAttendance() —
+   ใช้ทั้งแบบ push ทีละคน (writeAttendanceRecord, อัตโนมัติทุกครั้งที่บันทึก) และ push ทั้งตาราง
+   (ms365PushAttendance, ปุ่มกดเอง) กันไม่ให้สองที่ประกอบแถวต่างกัน — ตำแหน่ง 8/9 (วันลารวม/Z Score)
+   ใส่ค่าว่างไว้เฉยๆ เพราะเป็นคอลัมน์สูตรที่ graphUpsertTableRowPartial() จะไม่เขียนทับอยู่แล้วตอน
+   อัปเดตแถวเดิม (ค่าที่ใส่ตรงนี้มีผลเฉพาะตอนเพิ่มรหัสพนักงานใหม่ที่ยังไม่มีแถวในชีท ซึ่ง HR ต้อง
+   พิมพ์สูตรเอง/ลากสูตรจากแถวข้างบนในไฟล์ Excel อีกครั้งหนึ่ง เหมือนเพิ่มแถวใหม่ในชีทเอง) */
 function buildAttendanceExcelRow(code, a){
   const emp = MASTER_USERS.find(u=>u[0]===code);
   const name = emp ? emp[1] : (a.name || code);
+  const cycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   return [
-    code, name, a.absentDay||0,
-    a.lateCount||0, 0,
-    a.personalDay||0, a.personalHr||0, a.personalMin||0,
-    a.sickDay||0, a.sickHr||0, a.sickMin||0,
-    (a.personalDay||0)+(a.sickDay||0), (a.personalHr||0)+(a.sickHr||0), (a.personalMin||0)+(a.sickMin||0),
+    code, name, cycle,
+    a.lateCount||0, a.earlyCount||0,
+    a.sickDay||0, a.personalDay||0, a.absentDay||0,
+    '', '',
     a.medCert||''
   ];
 }
-/* ปิดการ Push กลับเข้าตาราง "Attendance" จากเว็บโดยเจตนา (CLAUDE.md #104) — คอลัมน์ "วันลารวม"/
-   "Z Score" ในชีทจริงเป็นสูตร Excel ที่คำนวณสดอยู่แล้ว (=F+G+H*3+INT((D+E)/8) และ INDEX/MATCH เข้า
-   ตารางคะแนน) และกลไก Push ของเว็บ (graphUpsertTableRow → PATCH ทั้งแถว) เขียนทับ "ทั้งแถว" รวมสอง
-   คอลัมน์สูตรนั้นด้วยค่าตัวเลขนิ่งทุกครั้งที่กด — ผู้ใช้เลือกให้ Excel เป็นแหล่งข้อมูลหลัก เว็บจึง
-   "ดึง" (ms365SyncAttendance, #104) อย่างเดียว ไม่ "ส่งกลับ" เพื่อไม่ให้สูตรจริงของ HR หายไปโดยไม่ตั้งใจ
-   ถ้าต้องการแก้ข้อมูลวันลาของใคร ให้แก้ตรงในไฟล์ Excel โดยตรง (คอลัมน์ D-H) แล้วกด "ดึงเวลาทำงานจาก
-   Excel" ในเว็บเพื่อรับค่าล่าสุดมาใช้คำนวณคะแนน */
+/* Push ข้อมูลเวลา "คนเดียว" ขึ้น Excel ทันทีหลังบันทึก — best-effort, fire-and-forget (ไม่บล็อกการกดบันทึก),
+   log ผลลง Sync Log เสมอทั้งสำเร็จ/ไม่สำเร็จ (ตามแบบแผน CLAUDE.md #66/#68/#69/#100) ใช้
+   graphUpsertTableRowPartial() แทน graphUpsertTableRow() เดิม (#101) เพื่อไม่ให้เขียนทับคอลัมน์
+   สูตร "วันลารวม"/"Z Score" ในชีทจริง (#104/#106) */
 function pushAttendanceRowToExcel(code){
-  appendSyncLog(`pushAttendanceRowToExcel (${code}): ปิดใช้งาน — ตาราง Attendance มีสูตร Excel ที่ต้องรักษาไว้ แก้ข้อมูลในไฟล์ Excel โดยตรงแล้วดึงเข้าเว็บแทน`, true);
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){ appendSyncLog(`pushAttendanceRowToExcel (${code}): ยังไม่ได้ตั้งค่า MS365`, false); return; }
+  const a = ATTENDANCE[code]; if(!a) return;
+  graphUpsertTableRowPartial('Attendance', 0, code, buildAttendanceExcelRow(code, a), ATTENDANCE_EXCEL_PROTECTED_COLS)
+    .then(()=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) เข้า Excel (ไม่แตะคอลัมน์สูตร)`, true); updateMs365Status('ok','Connected'); })
+    .catch(err=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) ไม่สำเร็จ: `+(err?.message||err), false); updateMs365Status('warn','Sync error'); });
 }
 async function ms365PushAttendance(){
-  smlToast('ปิดการ Push เข้าตาราง Attendance แล้ว — คอลัมน์วันลารวม/Z Score ในชีทจริงเป็นสูตรคำนวณสด การ Push จากเว็บจะเขียนทับสูตรนั้น กรุณาแก้ข้อมูลในไฟล์ Excel โดยตรงแล้วใช้ "ดึงเวลาทำงานจาก Excel" แทน','info');
-  appendSyncLog('Push ข้อมูลเวลา: ปิดใช้งาน (ป้องกันเขียนทับสูตร Excel) — ใช้การดึงข้อมูลจาก Excel แทน', true);
+  const codes = Object.keys(ATTENDANCE);
+  if(!codes.length){ smlToast('ยังไม่มีข้อมูลเวลาในเครื่องนี้ให้ Push','warn'); return; }
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){
+    smlToast('ยังไม่ได้ตั้งค่า MS365 — ข้อมูลจะยังอยู่แค่ในเครื่องนี้เท่านั้น','warn');
+    appendSyncLog('Push ข้อมูลเวลา: ยังไม่ได้ตั้งค่า MS365', false);
+    return;
+  }
+  let ok=0, fail=0;
+  for(const code of codes){
+    const row = buildAttendanceExcelRow(code, ATTENDANCE[code]);
+    try{ await graphUpsertTableRowPartial('Attendance', 0, code, row, ATTENDANCE_EXCEL_PROTECTED_COLS); ok++; }
+    catch(e){ fail++; }
+  }
+  updateMs365Status(fail?'warn':'ok', fail?'บาง Push ไม่สำเร็จ':'Connected');
+  smlToast(`Push ข้อมูลเวลาเข้า Excel สำเร็จ ${ok} คน` + (fail?` · ล้มเหลว ${fail} คน`:'') + ' (ไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร)', fail?'warn':'ok');
+  appendSyncLog(`Push ข้อมูลเวลา: สำเร็จ ${ok} คน${fail?' · ล้มเหลว '+fail:''}`, fail===0);
+  if(ok){ markSystemUpdated(`Push ข้อมูลเวลา ${ok} คนเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push ข้อมูลเวลาเข้า Excel', 'Attendance', ok+' คนสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
 }
 
 function exportMyDataFile(){

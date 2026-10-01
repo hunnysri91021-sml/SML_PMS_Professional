@@ -97,6 +97,20 @@ export default {
         return json({ ok: true, result }, 200, cors);
       }
 
+      /* /rows/upsert-partial — เหมือน /rows/upsert แต่ "ไม่แตะ" คอลัมน์ที่อยู่ใน protectedCols
+         เลยตอนอัปเดตแถวเดิม (ใช้ worksheet range PATCH เฉพาะกลุ่มคอลัมน์ที่ต่อเนื่องกัน แทนการ
+         PATCH ทั้งแถวแบบ /rows/upsert) — มีไว้สำหรับตารางที่มีคอลัมน์สูตร Excel (เช่น "Attendance"
+         คอลัมน์วันลารวม/Z Score ที่คำนวณสดในไฟล์จริง) ซึ่งการ PATCH ทั้งแถวแบบเดิมจะเขียนทับสูตร
+         นั้นด้วยค่านิ่งทุกครั้ง — ดู CLAUDE.md #104/#106 ของเว็บ SML PMS */
+      if (url.pathname === '/rows/upsert-partial' && request.method === 'POST') {
+        const { table, keyColIndex, keyValue, values, protectedCols } = await request.json();
+        if (!table || keyColIndex === undefined || keyValue === undefined || !values) {
+          return json({ error: 'missing table/keyColIndex/keyValue/values' }, 400, cors);
+        }
+        const result = await upsertRowPartial(token, driveId, itemId, table, keyColIndex, keyValue, values, protectedCols || []);
+        return json({ ok: true, result }, 200, cors);
+      }
+
       return json({ error: 'not found' }, 404, cors);
     } catch (e) {
       return json({ error: String((e && e.message) || e) }, 500, cors);
@@ -217,6 +231,57 @@ async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, v
   if (idx >= 0 && rows[idx].index !== undefined) {
     await graphSend(token, base + `/itemAt(index=${rows[idx].index})`, 'PATCH', { values: [values] });
     return 'updated';
+  }
+  await graphSend(token, base + '/add', 'POST', { values: [values] });
+  return 'added';
+}
+
+function colIndexToLetter(idx) {
+  let n = idx + 1, s = '';
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+function colLetterToIndex(letters) {
+  let n = 0;
+  for (let i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64);
+  return n - 1;
+}
+function groupContiguous(nums) {
+  const groups = []; let cur = [];
+  for (const n of nums) {
+    if (cur.length && n !== cur[cur.length - 1] + 1) { groups.push(cur); cur = []; }
+    cur.push(n);
+  }
+  if (cur.length) groups.push(cur);
+  return groups;
+}
+/* อัปเดตแถวเดิมด้วย worksheet-range PATCH เฉพาะคอลัมน์ที่ไม่อยู่ใน protectedCols (กลุ่มคอลัมน์
+   ต่อเนื่องกันถูกรวม PATCH เดียวกัน) แทนการ PATCH ทั้งแถว — คอลัมน์ที่ "ข้าม" (เช่น สูตร Excel)
+   จะไม่ถูกแตะเลย คงค่า/สูตรเดิมไว้ ถ้ายังไม่มีแถวนี้ (รหัสใหม่) จะ add แถวเต็มตามปกติ — แถวใหม่
+   ไม่มีสูตรเดิมให้รักษาอยู่แล้ว ค่าในตำแหน่ง protectedCols ของแถวใหม่จึงเป็นค่าว่าง/0 ตามที่ values
+   ส่งมา จนกว่า HR จะพิมพ์สูตรเองหรือลากสูตรจากแถวข้างบนในไฟล์ Excel ครั้งเดียว (ไม่เกิดบ่อย เพราะ
+   เป็นแค่ตอนมีรหัสพนักงานใหม่เข้าตารางนี้ครั้งแรก) */
+async function upsertRowPartial(token, driveId, itemId, table, keyColIndex, keyValue, values, protectedCols) {
+  const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
+  const data = await graphGet(token, base);
+  const rows = data.value || [];
+  const idx = rows.findIndex((r) => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue));
+  if (idx >= 0 && rows[idx].index !== undefined) {
+    const rangeData = await graphGet(token, base + `/itemAt(index=${rows[idx].index})/range`);
+    const m = /^(.+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rangeData.address);
+    if (!m) throw new Error('unexpected range address: ' + rangeData.address);
+    const sheetName = m[1], rowNum = m[3];
+    const startColIdx = colLetterToIndex(m[2]);
+    const cols = values.map((_, i) => i).filter((i) => !protectedCols.includes(i));
+    for (const group of groupContiguous(cols)) {
+      const fromLetter = colIndexToLetter(startColIdx + group[0]);
+      const toLetter = colIndexToLetter(startColIdx + group[group.length - 1]);
+      const rangeAddr = `${sheetName}!${fromLetter}${rowNum}:${toLetter}${rowNum}`;
+      const vals = group.map((i) => values[i]);
+      const rangeUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='${encodeURIComponent(rangeAddr)}')`;
+      await graphSend(token, rangeUrl, 'PATCH', { values: [vals] });
+    }
+    return 'updated-partial';
   }
   await graphSend(token, base + '/add', 'POST', { values: [values] });
   return 'added';
