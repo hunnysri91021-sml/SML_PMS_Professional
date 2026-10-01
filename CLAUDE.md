@@ -4470,6 +4470,70 @@ touches employee/attendance/evaluation data.
     the user to confirm the exact direction rather than assuming
     "notify on every edit" is obviously correct.
 
+115. **Follow-up to #114: user said "L3 กับ L4 ก็เช่นกันนะ" (L3 and L4
+    too) — the #114 fix only covered the one modal path
+    (`submitReviewerForm()`) and only the single L1Reviewed→L2Reviewed
+    transition. Clarified via two rounds of questions (the file uses
+    "L1/L2/L3/L4" in at least three different, easily-conflated senses
+    — #70's hierarchy tiers, #92's nav-label numbering, and the STEP-map
+    status key names in code — so guessing which one the user meant
+    risked building the wrong thing twice) and confirmed the real rule
+    against #70's tier definitions (L1=หัวหน้าหน่วย/role `unit`,
+    L2=หัวหน้าแผนก/role `l1`, L3=ผจก.ส่วน/role `l2`, L4=GM/role `gm`):
+    **"แจ้งตามลำดับ ยกเว้น L1 ไม่ต้องแจ้งใคร"** — notify the previous
+    tier whenever any tier above them advances/overwrites a record, for
+    every tier, **except** when the acting role is `unit` (tier L1,
+    the base of the chain — nothing meaningful before them to protect).
+    This reverses part of #113b/#114's narrower scoping (which exempted
+    role `l1`'s own edit from notifying) — the user's final, precise
+    tier definitions made clear the exemption belongs to role `unit`,
+    not role `l1`.
+    Extracted the shared logic into one helper, `notifyPrevTierOnAdvance(empCode,
+    cycle, prevActorSnapshot)`: skips with a reason when the current
+    actor's role is `unit`, skips when there's no real prior actor or
+    the prior actor is the same person acting now (no self-notify), and
+    otherwise reuses `notifyPrevEvaluatorOfEdit()` (#58) plus an Audit
+    Log entry — never a second parallel email-sending implementation.
+    Wired it into **every real chokepoint that advances the chain**,
+    not just the modal: `approveReviewL1Selected()` (tier L2/role `l1`
+    bulk-approving over tier L1/`unit`'s work), `approveReviewSelected()`
+    (tier L3/role `l2` bulk-approving over tier L2/`l1`'s work),
+    `approveGmSelected()` (tier L4/role `gm` bulk-approving over tier
+    L3/`l2`'s work — the real, only way GM currently advances a record,
+    since the GM queue has no score-editing modal at all), and
+    `submitReviewerForm()` itself (generalized from the single
+    `step.next==='L2Reviewed'` special-case to call the same shared
+    helper for every transition, so Submitted→L1Reviewed now correctly
+    notifies tier L1/`unit` too, not just L1Reviewed→L2Reviewed). Each
+    bulk function captures every selected key's `prevActor` snapshot
+    (via `getEvalLastActor()`) **before** its own `pushApprovalRecordToExcel()`
+    loop runs — that call immediately overwrites `EVAL_LAST_ACTOR_KEY`
+    with the new actor, so reading it after would always return the
+    person who just acted, never the person being notified about (the
+    same ordering care #114 already established, just needed repeating
+    at every new call site rather than assumed obvious). Deliberately
+    left `rejectReviewL1Selected()`/`rejectReviewSelected()`/
+    `rejectGmSelected()` untouched — a reject sends the record *backward*
+    to the rejected tier's own queue, which is itself the real,
+    sufficient signal to that tier (they'll see it waiting there), not
+    a case of "someone further up silently overwrote your work without
+    you knowing." Verified end-to-end with a test driving one real
+    evaluation through all 4 tiers via their actual UI mechanisms (team
+    page submit → L1 queue approve → L2 queue approve → GM queue
+    approve, no field ever mutated directly): confirms tier `unit`'s
+    submission sends zero emails, tier `l1`'s edit emails `unit`, tier
+    `l2`'s edit emails `l1`, and GM's real bulk-approve action emails
+    `l2` (alongside the pre-existing, unrelated "notify the employee
+    GM approved" email from #61 — confirmed both fire independently,
+    not one clobbering the other) — plus the standard click-sweep.
+    General lesson sharper than #114's own conclusion: when a user says
+    "the same for L3 and L4," first nail down whether their L1-L4 means
+    the same thing as the last fix's L1-L2 did — this file has multiple
+    independent L1-L4-shaped numbering schemes already on record (#70,
+    #92), and silently assuming continuity between two uses of
+    "L1/L2/L3/L4" two messages apart is exactly how a clarifying
+    question avoids rebuilding the wrong scope from scratch.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

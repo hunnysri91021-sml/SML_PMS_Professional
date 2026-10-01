@@ -7012,6 +7012,26 @@ async function notifyAdminOfEvalSubmission(payload){
    ยังรู้ว่าต้องแจ้งใคร) กันไม่ให้ผู้สอบทาน/อนุมัติคนเดิมไม่รู้ตัวว่ามีการแก้ไขแล้วต้องกลับมาดูซ้ำ — ใช้
    กลไกความซื่อสัตย์เดียวกับ notifyAdminOfEvalSubmission (#40): best-effort ต่อ 1 คน, ต้องตั้งค่า
    Worker ไว้แล้วและผู้รับต้องมีอีเมลจริง ไม่งั้น return เหตุผลจริงแทนที่จะเงียบแล้วสันนิษฐานว่าสำเร็จ */
+/* #114b: ผู้ใช้ยืนยันให้ขยายกฎ "แจ้งผู้ดำเนินการก่อนหน้าเมื่อถูกสอบทาน/อนุมัติทับ" ให้ครบทุกขั้นของ
+   สายบังคับบัญชา 4 ระดับ (L1 หัวหน้าหน่วย → L2 หัวหน้าแผนก → L3 ผจก.ส่วน → L4 GM, ตาม CLAUDE.md #70)
+   ไม่ใช่แค่ขั้นเดียว (L1Reviewed→L2Reviewed) ที่ปิดช่องโหว่ไว้ก่อนหน้า (#114) — กฎจริงตามที่ยืนยัน:
+   "แจ้งตามลำดับ ยกเว้น L1 ไม่ต้องแจ้งใคร" คือ role 'unit' (หัวหน้าหน่วย) ไม่ต้องส่งอีเมลแจ้งใครเลยไม่ว่า
+   กรณีใด (เป็นระดับฐานของสายบังคับบัญชา ไม่มี "คนก่อนหน้า" ที่มีความหมายต้องปกป้อง) ส่วนทุก role อื่น
+   ที่สอบทาน/อนุมัติทับใบที่มีคนทำไว้ก่อนแล้ว (l1/l2/gm) ต้องแจ้งอีเมลกลับไปหาคนนั้นเสมอ — รวมเป็น
+   helper กลางจุดเดียวแทนการเขียนตรรกะนี้ซ้ำในทุกจุดที่เรียก (approve ของ L1/L2/GM queue +
+   submitReviewerForm modal) ผู้เรียกต้องอ่าน prevActor (getEvalLastActor) ไว้ "ก่อน" เรียก
+   pushApprovalRecordToExcel() เสมอ เพราะฟังก์ชันนั้นจะบันทึก actor คนใหม่ทับคนเดิมทันทีที่เรียก */
+async function notifyPrevTierOnAdvance(empCode, cycle, prevActorSnapshot){
+  const actorRole = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[2]) || '';
+  if(actorRole === 'unit') return { sent:false, reason:'L1 (หัวหน้าหน่วย) ไม่ต้องแจ้งใคร' };
+  if(!prevActorSnapshot || !prevActorSnapshot.code) return { sent:false, reason:'ไม่พบผู้ดำเนินการก่อนหน้า' };
+  const myCode = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[0]) || '';
+  if(prevActorSnapshot.code === myCode) return { sent:false, reason:'ผู้ดำเนินการก่อนหน้าคือคนเดียวกับผู้กระทำตอนนี้' };
+  const empName = (MASTER_USERS.find(u=>u[0]===empCode)||[])[1] || empCode;
+  const r = await notifyPrevEvaluatorOfEdit([empCode, empName, cycle], prevActorSnapshot).catch(()=>({sent:false}));
+  if(r.sent && typeof appendAuditLog==='function') appendAuditLog('evaluation','แจ้งเตือนผู้ดำเนินการก่อนหน้าทางอีเมล (สายบังคับบัญชาสอบทาน/อนุมัติทับ)', empCode, r.to);
+  return r;
+}
 async function notifyPrevEvaluatorOfEdit(payload, prevActor){
   const cfg = loadMs365Config();
   if(!isWorkerConfigured(cfg)) return { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
@@ -7759,13 +7779,17 @@ function renderReviewL1Queue(){
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
 }
-function approveReviewL1Selected(){
+async function approveReviewL1Selected(){
   const keys=getCheckedKeys('reviewl1-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  /* #114b: อ่าน prevActor ของทุก key ไว้ "ก่อน" pushApprovalRecordToExcel() ทับ แล้วแจ้งทีหลัง */
+  const prevActors = {};
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
   updateDraftStatus(keys,'L1Reviewed');
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L1Reviewed',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทานหัวหน้าแผนก', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ผ่านสอบทานหัวหน้าแผนกแล้ว '+keys.length+' รายการ — เข้าสู่ขั้นสอบทานผู้จัดการส่วน','ok');
+  for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
 }
 function rejectReviewL1Selected(){
   const keys=getCheckedKeys('reviewl1-chk');
@@ -7818,13 +7842,16 @@ function pushApprovalRecordToExcel(empCode, cycle, step, comment){
     .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push Approvals (${empCode} · ${step}) เข้า Excel`, true); })
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push Approvals (${empCode} · ${step}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
-function approveReviewSelected(){
+async function approveReviewSelected(){
   const keys=getCheckedKeys('review-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  const prevActors = {};
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
   updateDraftStatus(keys,'L2Reviewed');
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L2Reviewed',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทาน L2', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ผ่านสอบทาน L2 แล้ว '+keys.length+' รายการ — เข้าสู่ขั้น Calibration','ok');
+  for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
 }
 function rejectReviewSelected(){
   const keys=getCheckedKeys('review-chk');
@@ -7869,9 +7896,12 @@ async function approveGmSelected(){
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   const drafts = getDrafts();
   const rows = keys.map(k=>drafts.find(d=>draftKey(d)===k)).filter(Boolean);
+  const prevActors = {};
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
   updateDraftStatus(keys,'GMApproved');
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'GMApproved',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติ GM', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
+  for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
   let notifSent = 0;
   for(const d of rows){
     const r = await notifyEmployeeOfApproval(d[0], d[1], d[2]).catch(()=>({sent:false}));
@@ -9422,13 +9452,13 @@ async function submitReviewerForm(){
                  L1Reviewed:{next:'L2Reviewed', label:'ผ่านสอบทานผู้จัดการส่วน'} };
   const step = STEP[curStatus];
   if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการบันทึกจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
-  /* #113b: ปิดช่องโหว่ที่ยืนยันกับผู้ใช้แล้ว — เฉพาะตอนผู้จัดการส่วน (L2) สอบทาน/แก้ไขทับคะแนนที่
-     หัวหน้าแผนก (L1) ทำไว้ก่อน (L1Reviewed -> L2Reviewed) ต้องแจ้งอีเมลกลับไปหา L1 คนที่ทำขั้น
-     L1Reviewed ไว้ก่อน พร้อม log ค่าเดิม/ใหม่ — ตอน L1 สอบทาน/แก้ไขทับคะแนนตนเอง/หัวหน้าหน่วย
-     (Submitted -> L1Reviewed) ไม่ต้องแจ้งใคร ("L1 แก้ไข ไม่ต้องแจ้ง ถ้า L2 แก้ ให้แจ้งมา L1" —
-     ผู้ใช้ยืนยันชัดเจน) ต้องอ่าน prevActor "ก่อน" pushApprovalRecordToExcel() ด้านล่าง เพราะฟังก์ชัน
-     นั้นจะบันทึก actor คนใหม่ (L2) ทับคนเดิม (L1) ทันทีที่เรียก */
-  const prevActor = (step.next === 'L2Reviewed') ? getEvalLastActor(code, cycle) : null;
+  /* #114b: ปิดช่องโหว่ทั่วทุกขั้น ไม่ใช่แค่ L1Reviewed->L2Reviewed แบบเดิม (#113b) — ผู้ใช้ยืนยันกฎจริง
+     คือ "แจ้งตามลำดับ ยกเว้น L1 (หัวหน้าหน่วย) ไม่ต้องแจ้งใคร" จึงใช้ notifyPrevTierOnAdvance() ที่
+     ตัดสินจาก role ของผู้กระทำจริง (role 'unit' เท่านั้นที่ไม่แจ้ง) แทนการเจาะจงที่ step.next อย่างเดิม —
+     ครอบคลุมทั้ง Submitted->L1Reviewed (หัวหน้าแผนกแก้ทับ) และ L1Reviewed->L2Reviewed (ผจก.ส่วนแก้ทับ)
+     ต้องอ่าน prevActor "ก่อน" pushApprovalRecordToExcel() ด้านล่าง เพราะฟังก์ชันนั้นจะบันทึก actor
+     คนใหม่ทับคนเดิมทันทีที่เรียก */
+  const prevActor = getEvalLastActor(code, cycle);
   const oldX = existing ? Number(existing[existing.length-3]) : null;
   const oldGrade = existing ? existing[existing.length-2] : null;
   const payload = [code, empName, cycle, lv, ...m, ...l, y, z, x, grade, step.next];
@@ -9438,13 +9468,8 @@ async function submitReviewerForm(){
   const diffNote = (oldX!==null && !isNaN(oldX) && (oldX!==x || oldGrade!==grade)) ? ` (คะแนนเดิม X=${oldX.toFixed(2)} เกรด ${oldGrade} → ใหม่ X=${x.toFixed(2)} เกรด ${grade})` : '';
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, empName+diffNote);
   smlToast(step.label+'เรียบร้อย','ok');
-  if(prevActor){
-    const editNotif = await notifyPrevEvaluatorOfEdit(payload, prevActor).catch(()=>({sent:false}));
-    if(editNotif.sent){
-      smlToast(`แจ้งเตือน ${editNotif.to} (หัวหน้าแผนก) ทางอีเมลว่าคะแนนถูกแก้ไขแล้ว`,'ok');
-      if(typeof appendAuditLog==='function') appendAuditLog('evaluation','แจ้งเตือนหัวหน้าแผนกทางอีเมล (ผู้จัดการส่วนแก้ไขคะแนน)', code, editNotif.to);
-    }
-  }
+  const editNotif = await notifyPrevTierOnAdvance(code, cycle, prevActor).catch(()=>({sent:false}));
+  if(editNotif.sent) smlToast(`แจ้งเตือน ${editNotif.to} ทางอีเมลว่าคะแนนถูกแก้ไขแล้ว`,'ok');
   closeM();
   if(typeof renderWorkflowPages==='function') renderWorkflowPages();
 }
