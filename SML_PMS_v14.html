@@ -7188,9 +7188,15 @@ async function ms365SyncAttendance(silent=false){
     const rows = await graphListTableRows('Attendance');
     if(!rows.length) throw new Error('ไม่พบแถวข้อมูลในตาราง Attendance');
 
-    let firstCell = String(rows[0]?.[0] ?? '').trim().toLowerCase();
-    let startIdx = firstCell === HRGO_TEMPLATE_HEADERS[0] ? 1 : 0;
-    if(startIdx===1 && String(rows[1]?.[0] ?? '').trim() === HRGO_TEMPLATE_THAI[0]) startIdx = 2;
+    /* ลำดับคอลัมน์จริงของตาราง "Attendance" ใน Excel (ตรวจกับไฟล์จริงที่ผู้ใช้ส่งมา) ไม่ตรงกับ
+       HRGO_TEMPLATE_HEADERS เลย — สองรูปแบบนี้เป็นคนละไฟล์กัน: HRGO_TEMPLATE_HEADERS คือ Template
+       สำหรับ importHrgoFile() (นำเข้า CSV จาก HRGO ตรงๆ มีละเอียดนาที) ส่วนตาราง Excel "Attendance"
+       ที่ Sync ผ่าน MS365 มีคอลัมน์ของตัวเอง: EmpID, ชื่อ-สกุล, รอบ(Period), มาสาย(ครั้ง),
+       กลับก่อน(ครั้ง), ลาป่วย(วัน), ลากิจ(วัน), ขาดงาน(วัน), วันลารวม(Auto,สูตร), Z Score(Auto,สูตร),
+       หมายเหตุ — โค้ดเดิมอ่านด้วย index ของ HRGO_TEMPLATE_HEADERS (15 คอลัมน์) ทับลงไปตรงๆ ทำให้
+       ทุกค่าคลาดเคลื่อนไปคนละตำแหน่งทั้งหมด (ดู CLAUDE.md ฉบับล่าสุด) */
+    const firstCell = String(rows[0]?.[0] ?? '').trim().toLowerCase();
+    const startIdx = (firstCell === 'empid*' || firstCell === 'empid') ? 1 : 0;
 
     let imported=0, unmatched=[];
     for(let i=startIdx;i<rows.length;i++){
@@ -7200,13 +7206,13 @@ async function ms365SyncAttendance(silent=false){
       const emp = MASTER_USERS.find(u=>u[0]===code);
       if(!emp){ unmatched.push(code); continue; }
       const num=(v)=>Number(v)||0;
+      /* ลำดับคอลัมน์จริง: 0 EmpID, 1 ชื่อ-สกุล, 2 รอบ, 3 มาสาย, 4 กลับก่อน, 5 ลาป่วย, 6 ลากิจ,
+         7 ขาดงาน, 8 วันลารวม(Auto), 9 Z Score(Auto), 10 หมายเหตุ */
       ATTENDANCE[code] = {
         name: emp[1],
-        lateCount:num(c[3]), earlyCount:0,
-        absentDay:num(c[2]),
-        personalDay:num(c[5]), personalHr:num(c[6]), personalMin:num(c[7]),
-        sickDay:num(c[8]), sickHr:num(c[9]), sickMin:num(c[10]),
-        medCert:String(c[14] ?? '').trim()
+        lateCount:num(c[3]), earlyCount:num(c[4]),
+        sickDay:num(c[5]), personalDay:num(c[6]), absentDay:num(c[7]),
+        medCert:String(c[10] ?? '').trim()
       };
       imported++;
     }

@@ -3807,6 +3807,76 @@ touches employee/attendance/evaluation data.
     consistent — every "repeat" of the wrong table agreed with every other
     repeat — right up until compared against the real outside policy.
 
+104. **User's screenshot of the attendance list after an Excel sync showed
+    every field wrong (e.g. "วันลารวม" column stuck at 30.00 for people
+    whose real leave total was nowhere near that) — "ข้อมูลไม่เปลี่ยนตาม
+    excel ที่นำเข้า" (data doesn't change according to the imported
+    Excel).** Investigated `ms365SyncAttendance()` (the function behind
+    "ดึงเวลาทำงานจาก Excel") against the real `SML_PMS_Master_2.xlsx`
+    workbook the user had just sent (same file opened directly with
+    `openpyxl` to fix the Z-score lookup table in #103) and found a
+    second, independent, more serious bug in the same sheet: the
+    function parses `graphListTableRows('Attendance')`'s rows using
+    `HRGO_TEMPLATE_HEADERS`' column positions (`emp_code, full_name,
+    absent_day, late_count, late_min, personal_day, personal_hr,
+    personal_min, sick_day, ...` — 15 columns, the shape of the
+    *HRGO CSV import* template from `importHrgoFile()`), but the REAL
+    Excel "Attendance" table has a **completely different, 11-column
+    shape**: `EmpID, ชื่อ-สกุล, รอบ(Period), มาสาย, กลับก่อน, ลาป่วย,
+    ลากิจ, ขาดงาน, วันลารวม(Auto), Z Score(Auto), หมายเหตุ`. These are
+    two genuinely different file formats that happen to share a function
+    name's assumption — `ms365SyncAttendance()` was built reusing
+    `HRGO_TEMPLATE_HEADERS`' index comments verbatim without ever
+    verifying the real MS365 Excel table used that same layout (the
+    exact CLAUDE.md #30 mistake — assume an external column order
+    without checking the real file — but this time committed inside a
+    *sync* function built to intentionally mirror a *different file's*
+    template, which is how it slipped past every earlier review).
+    Concretely: the real `รอบ`/Period column (a year number like 2569)
+    was being read as `absentDay`, the real `ลาป่วย` column was read as
+    `personalDay`, the real `ลากิจ` as nothing, the real `ขาดงาน` was
+    read as `sickDay`, and the real auto-formula `วันลารวม`/`Z Score`
+    columns were read as minute-level HRGO fields that don't exist in
+    this sheet at all — every single field landed in the wrong slot,
+    which is exactly why the displayed numbers bore no relationship to
+    the real imported file. Fixed `ms365SyncAttendance()`'s column
+    indices to the real verified order (`c[3]`=late, `c[4]`=early,
+    `c[5]`=sick, `c[6]`=personal, `c[7]`=absent, `c[10]`=note) — verified
+    with a test that feeds the exact real header+row shape through the
+    function and confirms every field lands correctly — plus the
+    standard click-sweep. **Flagged, not yet fixed, to the user**:
+    `buildAttendanceExcelRow()`/`ms365PushAttendance()`/
+    `pushAttendanceRowToExcel()` (the *write* direction, #101) have the
+    identical wrong-column assumption, but fixing the write side isn't a
+    simple mirror of the read fix — the real sheet's `วันลารวม`/`Z Score`
+    columns are **live Excel formulas** (`=F+G+H*3+INT((D+E)/8)` and an
+    `INDEX/MATCH` into a lookup table, confirmed directly in #103's file
+    read), and `graphUpsertTableRow()`'s underlying Worker call
+    (`PATCH .../itemAt(index=N)` with `values:[[...]]`) replaces the
+    **entire row**, including those two formula cells, with whatever
+    plain values the app supplies — so a naive same-shape fix to the
+    push side would silently convert every pushed row's live formulas
+    into frozen static numbers the moment anyone saves attendance from
+    the web app, which is a real, hard-to-reverse data-integrity risk to
+    HR's own spreadsheet, not just a display bug. Left unfixed pending
+    the user's explicit choice (write matching static mirror values into
+    those two columns on every push, which is functionally fine today
+    since the app's own formula now matches #103's fixed Z_TABLE but
+    permanently loses the "auto-formula" nature of those cells; or stop
+    pushing into this specific table from the web app and treat it as
+    Excel-authoritative with the app only ever pulling) rather than
+    guessing — this is exactly the kind of irreversible-to-the-user's-
+    real-file decision CLAUDE.md's own cautious-action guidance says to
+    surface rather than silently resolve. General lesson sharper than
+    #30/#97's own conclusion: a sync function's column-index comments
+    citing *a* template constant is not proof it was ever checked
+    against *this* table's real columns — when two different file
+    formats exist in the same codebase (an HRGO CSV template and a
+    separate MS365 Excel table) and a function's job is to bridge one
+    into the shape the other already handles, grep whether that function
+    ever actually confirmed the two shapes match, or whether it just
+    borrowed working code's index numbers on the assumption they would.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
