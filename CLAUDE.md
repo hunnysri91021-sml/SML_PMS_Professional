@@ -4417,6 +4417,59 @@ touches employee/attendance/evaluation data.
     `Approved`, with HR genuinely driving the Calibration stage onward
     exactly as the user described.
 
+114. **Follow-up to #109: user asked to verify the real review order
+    (self → L1 → L2 → L3 → L4) and, specifically, whether an edit by one
+    reviewer that overwrites a previous reviewer's work gets logged/
+    notified — confirmed the pipeline is correct (Submitted → L1Reviewed
+    → L2Reviewed → GMApproved → …, per #92/#61) but found a real gap:
+    `submitReviewerForm()` (#109, the modal shared by the team page and
+    the L1/L2 review queues) could silently overwrite a previous
+    reviewer's scores with no notification and no diff log at all — only
+    the self-eval save path (`saveEvaluationToMs365()`, #58) had the
+    "notify the previous actor their work was edited" mechanism.**
+    Asked the user exactly which direction they wanted this closed
+    (notify every edit, or only specific ones) rather than guessing,
+    since the wrong scope here either spams people with irrelevant
+    emails or still leaves the real complaint unaddressed — confirmed:
+    **"L1 แก้ไข ไม่ต้องแจ้ง ถ้า L2 แก้ ให้แจ้งมา L1"** — when the
+    department head (L1) reviews/edits the employee's own self-eval
+    scores (`Submitted → L1Reviewed`), that's expected and needs no
+    notification; only when the section manager (L2) then
+    reviews/edits those same scores (`L1Reviewed → L2Reviewed`,
+    potentially overwriting what L1 just confirmed) does L1 need to
+    know. Fixed inside `submitReviewerForm()` itself: captures
+    `prevActor = getEvalLastActor(code, cycle)` **before**
+    `pushApprovalRecordToExcel()` runs (that call immediately
+    overwrites `EVAL_LAST_ACTOR_KEY` with the new actor, so reading it
+    after would always return the person doing the current edit, never
+    the person being notified about) — and only when `step.next ===
+    'L2Reviewed'`, so an L1 edit (`step.next==='L1Reviewed'`) never
+    triggers it. Reuses the exact `notifyPrevEvaluatorOfEdit()` email
+    function #58 already built (best-effort, `isWorkerConfigured()`-
+    gated, real email required) rather than writing a second one — the
+    only gap was that nothing in the reviewer-form path ever called it.
+    Added `L1Reviewed` to that function's own `stepLabel` map too (it
+    predates #92's `L1Reviewed` stage and was missing it, so the email
+    body would have shown the raw status string instead of a real Thai
+    label). Also closed the requested diff-log half: captures `oldX`/
+    `oldGrade` from the existing draft before overwriting, and appends
+    "(คะแนนเดิม X=… เกรด … → ใหม่ X=… เกรด …)" to the Audit Log entry
+    whenever the score/grade actually changed — visible in the existing
+    Audit Log page (already real-timestamped and Excel-synced per #49),
+    not a new log mechanism. Verified with a test that drives one
+    evaluation through employee→L1→L2 via the real `submitReviewerForm()`
+    calls: confirms L1's review sends **no** email, and L2's review
+    correctly emails L1's real address — plus the standard click-sweep.
+    General lesson sharper than #58's own scope: an "notify the person
+    whose prior work got overwritten" mechanism built for one save path
+    (self-eval) does not automatically cover every other path that can
+    also overwrite the same underlying draft record — grep every
+    function that calls `saveEvaluationLocal()`/mutates a draft's score
+    fields directly for the same gap, and when a business rule like
+    this has an asymmetric trigger (notify on L2's edit, not L1's), ask
+    the user to confirm the exact direction rather than assuming
+    "notify on every edit" is obviously correct.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

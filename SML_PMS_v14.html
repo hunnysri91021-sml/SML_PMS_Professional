@@ -7019,7 +7019,7 @@ async function notifyPrevEvaluatorOfEdit(payload, prevActor){
   const actorEmp = MASTER_USERS.find(u=>u[0]===prevActor.code);
   if(!actorEmp || !actorEmp[15]) return { sent:false, reason:'ผู้ดำเนินการก่อนหน้าไม่มีอีเมลบันทึกไว้ในระบบ' };
   const [empCode, empName, cycle] = payload;
-  const stepLabel = {Submitted:'ส่งแบบประเมิน', L2Reviewed:'สอบทาน L2', RejectedL2Review:'ตีกลับจากสอบทาน L2', GMApproved:'อนุมัติ GM', RejectedGmApproval:'ตีกลับจากอนุมัติ GM', Acknowledged:'รับทราบผลการประเมิน', Calibrated:'Calibration', Approved:'อนุมัติขั้นสุดท้าย', RejectedFinalApproval:'ตีกลับจากอนุมัติขั้นสุดท้าย'}[prevActor.step] || prevActor.step;
+  const stepLabel = {Submitted:'ส่งแบบประเมิน', L1Reviewed:'สอบทานหัวหน้าแผนก', L2Reviewed:'สอบทาน L2', RejectedL2Review:'ตีกลับจากสอบทาน L2', GMApproved:'อนุมัติ GM', RejectedGmApproval:'ตีกลับจากอนุมัติ GM', Acknowledged:'รับทราบผลการประเมิน', Calibrated:'Calibration', Approved:'อนุมัติขั้นสุดท้าย', RejectedFinalApproval:'ตีกลับจากอนุมัติขั้นสุดท้าย'}[prevActor.step] || prevActor.step;
   const subject = `[SML PMS] ใบประเมินที่ท่านดำเนินการไปถูกแก้ไข — ${empName} (${empCode})`;
   const body = `ใบประเมินของ ${empName} (${empCode}) รอบ ${cycle} ซึ่งท่านเคยดำเนินการ (${stepLabel}) ไว้ก่อนหน้านี้ ถูกแก้ไขและบันทึกใหม่แล้ว\n\nวันที่แก้ไข: ${new Date().toLocaleString('th-TH')}\n\nกรุณาเข้าเว็บ SML PMS เพื่อตรวจสอบข้อมูลล่าสุดอีกครั้ง\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
   try{
@@ -9422,12 +9422,29 @@ async function submitReviewerForm(){
                  L1Reviewed:{next:'L2Reviewed', label:'ผ่านสอบทานผู้จัดการส่วน'} };
   const step = STEP[curStatus];
   if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการบันทึกจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
+  /* #113b: ปิดช่องโหว่ที่ยืนยันกับผู้ใช้แล้ว — เฉพาะตอนผู้จัดการส่วน (L2) สอบทาน/แก้ไขทับคะแนนที่
+     หัวหน้าแผนก (L1) ทำไว้ก่อน (L1Reviewed -> L2Reviewed) ต้องแจ้งอีเมลกลับไปหา L1 คนที่ทำขั้น
+     L1Reviewed ไว้ก่อน พร้อม log ค่าเดิม/ใหม่ — ตอน L1 สอบทาน/แก้ไขทับคะแนนตนเอง/หัวหน้าหน่วย
+     (Submitted -> L1Reviewed) ไม่ต้องแจ้งใคร ("L1 แก้ไข ไม่ต้องแจ้ง ถ้า L2 แก้ ให้แจ้งมา L1" —
+     ผู้ใช้ยืนยันชัดเจน) ต้องอ่าน prevActor "ก่อน" pushApprovalRecordToExcel() ด้านล่าง เพราะฟังก์ชัน
+     นั้นจะบันทึก actor คนใหม่ (L2) ทับคนเดิม (L1) ทันทีที่เรียก */
+  const prevActor = (step.next === 'L2Reviewed') ? getEvalLastActor(code, cycle) : null;
+  const oldX = existing ? Number(existing[existing.length-3]) : null;
+  const oldGrade = existing ? existing[existing.length-2] : null;
   const payload = [code, empName, cycle, lv, ...m, ...l, y, z, x, grade, step.next];
   saveEvaluationLocal(payload);
   if(typeof pushDraftRowToExcel==='function') pushDraftRowToExcel(payload, step.next);
   pushApprovalRecordToExcel(code, cycle, step.next, '');
-  if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, empName);
+  const diffNote = (oldX!==null && !isNaN(oldX) && (oldX!==x || oldGrade!==grade)) ? ` (คะแนนเดิม X=${oldX.toFixed(2)} เกรด ${oldGrade} → ใหม่ X=${x.toFixed(2)} เกรด ${grade})` : '';
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, empName+diffNote);
   smlToast(step.label+'เรียบร้อย','ok');
+  if(prevActor){
+    const editNotif = await notifyPrevEvaluatorOfEdit(payload, prevActor).catch(()=>({sent:false}));
+    if(editNotif.sent){
+      smlToast(`แจ้งเตือน ${editNotif.to} (หัวหน้าแผนก) ทางอีเมลว่าคะแนนถูกแก้ไขแล้ว`,'ok');
+      if(typeof appendAuditLog==='function') appendAuditLog('evaluation','แจ้งเตือนหัวหน้าแผนกทางอีเมล (ผู้จัดการส่วนแก้ไขคะแนน)', code, editNotif.to);
+    }
+  }
   closeM();
   if(typeof renderWorkflowPages==='function') renderWorkflowPages();
 }
