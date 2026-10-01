@@ -4534,6 +4534,36 @@ touches employee/attendance/evaluation data.
     "L1/L2/L3/L4" two messages apart is exactly how a clarifying
     question avoids rebuilding the wrong scope from scratch.
 
+116. **User reported "GM ดูรายละเอียดประเมินไม่ได้ ไม่มีให้ดู" (GM can't
+    view the evaluation details — there's nothing to view).** Confirmed
+    from code: `renderGmApproveQueue()` (the "อนุมัติ GM" page) was the
+    one real queue in the whole chain with no form-view button at all —
+    `renderReviewL1Queue()`/`renderReviewQueue()` both have a
+    "สอบทานแบบฟอร์ม" button opening `openReviewerForm()` (#93's real
+    per-employee detail view, with the attendance/Z breakdown and all
+    factor scores), but the GM queue's row only ever showed name/dept/
+    X/grade plus (since #113) a delete button — GM genuinely had no way
+    to see *why* a record scored what it did before approving it, only
+    the bare final number. Fixed by adding a "ดูแบบฟอร์ม" button to each
+    GM-queue row, calling the same real `openReviewerForm()` every other
+    queue already uses — no new view, no second code path to drift out
+    of sync with the real one (same "point at the existing real
+    mechanism, don't build a second one" discipline as #43/#48).
+    **Deliberately left the modal's own footer buttons as-is for this
+    context** rather than adding a separate read-only mode: GM opening
+    this form and clicking "✓ บันทึกและส่งต่อ" already correctly refuses
+    with an honest toast ("ขั้นตอนนี้ไม่รองรับการบันทึกจากหน้าต่างนี้ —
+    ใช้ปุ่มที่หน้ารายการแทน") since `submitReviewerForm()`'s own `STEP`
+    map has no `L2Reviewed` entry (GM never advances a record through
+    this modal, only through the real queue's checkbox+button per #115)
+    — so nothing silently "looks saved" when it wasn't; "↩️ ตีกลับ" does
+    work from here too (`rejectReviewerForm()`'s own `STEP` map already
+    includes `L2Reviewed→L1Reviewed`, #109), which is a real, correct
+    reject path, not a gap. Verified with a test that seeds a real
+    `L2Reviewed` draft, confirms the new button renders in the GM
+    queue, and confirms clicking it opens the real modal with the real
+    employee's name/code in the title — plus the standard click-sweep.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

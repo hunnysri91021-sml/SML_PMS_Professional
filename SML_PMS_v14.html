@@ -7884,7 +7884,7 @@ function renderGmApproveQueue(){
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td>${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">ดูแบบฟอร์ม</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
 }
