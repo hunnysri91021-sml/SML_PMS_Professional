@@ -3750,6 +3750,63 @@ touches employee/attendance/evaluation data.
     that was never actually tested against a real `rows/add` call,
     only reasoned about from first principles.
 
+103. **User attached the company's real reference `.doc` file — "เกณฑ์การ
+    คำนวณสถิติทำงาน" (attendance-statistics scoring criteria), full score
+    30 points, with a day-count → score rank table for all three tiers
+    (ลา 30% / หัวหน้า-ผจก 20% / ผู้บริหาร 10%) — and asked to verify the
+    app's real logic against it.** Converting the legacy `.doc` via
+    LibreOffice failed outright ("source file could not be loaded"), so
+    extracted the real text with `antiword` instead (Thai glyphs render
+    as `?` under antiword's default Latin-1 mapping, but the numeric
+    rank table — the only part this comparison needed — came through
+    perfectly intact). Compared the document's real table against
+    `Z_TABLE.emp`/`.ldr`/`.mgr` (the three score-by-leave-days lookup
+    tables `computeZScore()` already uses for every real Z score in the
+    app — self-eval, reviewer forms per #93, printed forms) and found a
+    genuine, confirmed mismatch: the real document specifies a **flat
+    full-score band for 0–5 days** (0,1,2,3,4,5 all = 30.00/20.00/10.00),
+    with score reduction only starting at day 6 — but the app's tables
+    started reducing the score immediately from day 1 (`[30,28.85,
+    27.70,...]`), with no flat band at all. Every employee with 1–5 real
+    leave/lateness-days-equivalent was being scored *lower* than the real
+    policy entitles them to — a genuine, consequential correctness bug
+    (it changes real evaluation scores), not a display-only issue like
+    most of #93–#99's attendance-formula fixes. Fixed by rebuilding all
+    three `Z_TABLE` arrays (and the simulator's parallel `zTableEmp`,
+    #98/#99's own "keep every parallel display of the same figure in
+    sync" lesson) with the real flat 0–5 band prepended, so index 0–5 =
+    the tier's max score and index 6 onward carries the exact same
+    stepped values that were already correct from day 6 onward — only
+    the first 6 slots were ever wrong; everything from day 6 through day
+    30 already matched the document exactly, which is presumably why
+    this was never caught by any earlier attendance-formula review. The
+    array length changed from 31/32 (with the old day-1 start) to a
+    clean 31 entries (index 0–30, matching `zDaysIdx`'s own existing cap
+    at 30) — `computeZScore()`/`renderZStats()`/`openReviewerForm()`/
+    `printEvalForm()`/`printBatchApproved()` needed **zero code changes**,
+    since every one of them already indexes `Z_TABLE[tier][zDaysIdx]`
+    generically; fixing the three data arrays in place was the entire
+    fix. **This is unrelated to #99's floor-division fix** — #99 governs
+    how raw late/early-leave *counts* convert into a leave-*days*
+    number; this fix governs how that resulting days number maps to a
+    *score* — both were real, independent bugs found in two different
+    layers of the same overall Z-score pipeline, on two different
+    reports. Verified with a test that checks every one of the document's
+    31 real table values (days 0–30, all three tiers) against the live
+    `Z_TABLE` object in the running app and confirms zero mismatches —
+    plus the standard click-sweep. General lesson, sharper than #68/#97's
+    own "verify against the real external file" rule: a user-supplied
+    reference *document* (not just a spreadsheet) describing a scoring
+    policy is worth extracting and diffing value-by-value against the
+    exact in-code table driving real scores — even when a legacy `.doc`
+    won't convert via LibreOffice, a plain-text extractor (`antiword`)
+    that only gets the numbers right (Thai labels garbled is fine, the
+    policy's real content here is entirely numeric) is good enough to
+    catch a genuine scoring-table bug no amount of in-app testing alone
+    would ever surface, since the app was perfectly internally
+    consistent — every "repeat" of the wrong table agreed with every other
+    repeat — right up until compared against the real outside policy.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
