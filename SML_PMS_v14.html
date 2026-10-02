@@ -4858,14 +4858,6 @@ setTimeout(() => {
    4 ระดับ · 1 หน้า A4 · ฟอนต์ชัด มืออาชีพ
    ===================================================== */
 
-/* ข้อมูลสถานะการประเมิน (จำลอง — เชื่อม workflow จริงในอนาคต) */
-const EVAL_STS = {
-  self: { ok:true,  name:'สมชาย วงศ์ดี',  date:'15 พ.ย. 2568', role:'พนักงาน' },
-  l1:   { ok:true,  name:'สุดา มีสุข',     date:'22 พ.ย. 2568', role:'หัวหน้าแผนก' },
-  l2:   { ok:true,  name:'อรุณ ศิริ',      date:'28 พ.ย. 2568', role:'ผู้จัดการส่วน' },
-  md:   { ok:true,  name:'คุณเชิดชัย',     date:'05 ธ.ค. 2568', role:'AGM / MD' },
-};
-
 /* ตาราง Z จริงจากเอกสาร SML */
 /* ตามเกณฑ์จริงของบริษัท (เอกสารเกณฑ์คำนวณสถิติทำงาน): 0-5 วัน = คะแนนเต็มคงที่
    เริ่มลดคะแนนตั้งแต่วันที่ 6 เป็นต้นไป — ก่อนหน้านี้ตารางนี้ลดคะแนนทันทีตั้งแต่วันที่ 1
@@ -4885,16 +4877,19 @@ function _lbl(sc,w){
   return t[sc]||'';
 }
 
-/* sign box — ตรงตามแบบฟอร์ม SML ส่วนที่ 4 */
-function _sign(key, roleTh, officialTitle, approved) {
-  const s = EVAL_STS[key] || {};
-  const ok = approved && s.ok;
+/* sign box — ตรงตามแบบฟอร์ม SML ส่วนที่ 4 — เดิมอ่านชื่อ/วันที่จาก EVAL_STS ซึ่งเป็นค่าจำลองคงที่
+   ("จำลอง — เชื่อม workflow จริงในอนาคต" ตามคอมเมนต์เดิม) ไม่ใช่ของจริง แต่ไม่มีทางแสดงผลเพราะ
+   `approved` (จาก window.__smlEvalApproved) ไม่มีจุดไหนตั้งเป็น true เลย ผู้ใช้ขอ "แก้ให้ใช้ได้จริง"
+   จึงลบ EVAL_STS ทิ้งทั้งก้อน (โค้ดที่รู้แน่ว่าไม่ได้ใช้จริง — ตามธรรมเนียมไฟล์นี้) และรับชื่อ/วันที่
+   ลงนามจริงเป็นพารามิเตอร์ตรงจาก caller แทน — เรียกว่า "ลงนามแล้ว" (ok) จริงเมื่อสถานะ draft จริง
+   เดินผ่านขั้นของบทบาทนั้นไปแล้ว ไม่ใช่ flag ที่ไม่มีทางเป็น true */
+function _sign(roleTh, officialTitle, ok, signedName, signedDate) {
   return `<div class="F-sign">
     <div class="sg-role">${roleTh}</div>
-    <div class="sg-blank">${ok?`<div class="sg-name">${s.name}</div>`:'&nbsp;'}</div>
-    <div class="sg-date">${ok?s.date:'&nbsp;'}</div>
+    <div class="sg-blank">${ok?`<div class="sg-name">${signedName||officialTitle||''}</div>`:'&nbsp;'}</div>
+    <div class="sg-date">${ok?(signedDate||''):'&nbsp;'}</div>
     <span class="sg-chip ${ok?'sg-ok':'sg-wait'}">${ok?'✓ ยืนยันแล้ว':'⏳ กำลังประเมิน'}</span>
-    <div class="sg-title">( ${ok?s.name:officialTitle} )</div>
+    <div class="sg-title">( ${ok?(signedName||officialTitle||''):(officialTitle||'')} )</div>
   </div>`;
 }
 
@@ -5043,7 +5038,18 @@ function printEvalForm() {
   const SC = {1:{Aplus:5,A:4,B:3,Cplus:2,C:1},2:{Aplus:10,A:9,B:8,Cplus:7,C:6},3:{Aplus:15,A:14,B:13,Cplus:12,C:11}};
   let rawY=0, maxY=0;
 
-  const allApproved = window.__smlEvalApproved === true;
+  /* เดิม allApproved อ่านจาก window.__smlEvalApproved ซึ่งไม่มีจุดไหนในไฟล์นี้ตั้งค่าเป็น true เลย —
+     แปลว่าใบนี้แสดงผล "⏳ กำลังประเมิน" และส่วนลงนามแสดงชื่อหัวหน้า/ผจก./ผู้บริหารแบบยังไม่ลงนามเสมอ
+     ไม่ว่าสถานะจริงของใบจะไปถึงไหนแล้วก็ตาม (แม้อนุมัติขั้นสุดท้ายแล้วจริงๆ ก็ยังโชว์ว่ารออยู่) — ผู้ใช้
+     ขอ "แก้ให้ใช้ได้จริง" จึงดึงสถานะจริงจาก draft ที่บันทึกไว้แล้ว (ถ้ามี) มาคำนวณ allApproved/การ
+     ลงนามแต่ละขั้นจริง แทนค่าคงที่ที่ไม่มีทางเป็น true (เหมือนที่ #121 แก้ไว้ให้ buildEvalPrintPage()
+     แล้ว — ตรงนี้คือจุดเดิมที่ #121 เคยตั้งใจไม่แก้ เพราะนอกสโคปตอนนั้น) */
+  const printCycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
+  const liveDraft = (typeof getDrafts==='function') ? getDrafts().find(d=>d[0]===empCode && d[2]===printCycle && d[3]===lv) : null;
+  const liveStatus = liveDraft ? liveDraft[liveDraft.length-1] : null;
+  const liveRank = liveStatus ? ((typeof evalStatusRank==='function') ? evalStatusRank(liveStatus) : 0) : -1;
+  const allApproved = liveStatus ? isFinalStatus(liveStatus) : false;
+  const liveSig = (typeof getApprovalSignature==='function') ? getApprovalSignature(empCode+'|'+printCycle) : null;
 
   /* ===== ตาราง factor ===== */
   const factorRows = cfg.factors.map((f,fi)=>{
@@ -5250,10 +5256,10 @@ function printEvalForm() {
     ส่วนที่ 4 &nbsp; ลงนามผลการประเมิน ( Signature )
   </div>
   <div class="F-signs ${sigGrid}">
-    ${_sign('self','ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน',empName,allApproved)}
-    ${_sign('l1',  'ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )',empL1,allApproved)}
-    ${_sign('l2',  'ผู้ยืนยันผลการประเมิน ( MGR. )',empL2,allApproved)}
-    ${_sign('md',  'ผู้อนุมัติ ( GM. / AGM. / MD )',empExec,allApproved)}
+    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=1, empName, '')}
+    ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, liveRank>=2, empL1, '')}
+    ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, liveRank>=3, empL2, '')}
+    ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, liveSig?liveSig.signedBy:empExec, liveSig?new Date(liveSig.signedAt).toLocaleDateString('th-TH'):'')}
   </div>
 
   <!-- footer -->
@@ -8416,16 +8422,8 @@ let _batchPrinting = false;
    เหมือน printEvalForm() เป๊ะ แต่สถานะ "ลงนามแล้วหรือยัง" อิงจากสถานะ draft จริง
    (evalStatusRank เทียบกับขั้นของผู้ลงนามแต่ละคน) ไม่ใช่ EVAL_STS ที่เป็นข้อมูลจำลองคงที่บนหน้า
    ประเมินตนเองเอง (ดูคอมเมนต์ "จำลอง — เชื่อม workflow จริงในอนาคต" เหนือ EVAL_STS — ไม่เอามาใช้ตรงนี้
-   เพราะเป็นชื่อ/วันที่ปลอมล้วนๆ) */
-function _signReal(roleTh, officialTitle, ok, signedName, signedDate){
-  return `<div class="F-sign">
-    <div class="sg-role">${roleTh}</div>
-    <div class="sg-blank">${ok?`<div class="sg-name">${signedName||officialTitle||''}</div>`:'&nbsp;'}</div>
-    <div class="sg-date">${ok?(signedDate||''):'&nbsp;'}</div>
-    <span class="sg-chip ${ok?'sg-ok':'sg-wait'}">${ok?'✓ ยืนยันแล้ว':'⏳ กำลังประเมิน'}</span>
-    <div class="sg-title">( ${officialTitle||'—'} )</div>
-  </div>`;
-}
+   เพราะเป็นชื่อ/วันที่ปลอมล้วนๆ) — ใช้ _sign() ตัวจริงตัวเดียวกับที่ printEvalForm() เพิ่งแก้ให้ใช้
+   ของจริงแล้ว ไม่สร้างฟังก์ชันซ้ำสอง */
 function buildEvalPrintPage(d, printDate){
   const code = d[0], name = d[1], cycle = d[2], level = d[3];
   const cfg = SML_FORMS[level], lcfg = LEVEL_CONFIG[level];
@@ -8482,10 +8480,10 @@ function buildEvalPrintPage(d, printDate){
      ของ draft แทน EVAL_STS (ซึ่งเป็นชื่อ/วันที่จำลองคงที่ ไม่ใช่ของจริง) */
   const sigFinal = getApprovalSignature(code+'|'+cycle);
   const sigLines = [
-    _signReal('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=1, empName, ''),
-    _signReal('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, empL1, ''),
-    _signReal('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, empL2, ''),
-    _signReal('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')
+    _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=1, empName, ''),
+    _sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, empL1, ''),
+    _sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, empL2, ''),
+    _sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')
   ].join('');
 
   return `<div class="F" style="page-break-after:always">

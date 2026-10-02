@@ -4860,6 +4860,64 @@ touches employee/attendance/evaluation data.
     still carries an old CLAUDE.md #16 mock-data bug of its own, so it
     doesn't get silently duplicated into the new code too.
 
+122. **Follow-up to #121: user said "แก้ให้ใช้ได้จริง" (fix it so it
+    actually works) — the real target was the `EVAL_STS` mock-data bug
+    #121 flagged but deliberately left alone in `printEvalForm()` itself
+    (the self-eval page's own "พิมพ์ร่าง"/"พิมพ์ใบประเมิน (PDF)"
+    button).** Deleted `EVAL_STS` outright (per this project's "delete
+    code known to be unused/fake" convention, #48/#51/#80) — it was a
+    module-level constant of 4 hardcoded fake names/dates that could
+    never actually render anyway, since the `approved` flag gating it
+    (`window.__smlEvalApproved === true`) has no code path anywhere in
+    this file that ever sets it to `true`. Replaced `_sign(key, roleTh,
+    officialTitle, approved)` (which read `EVAL_STS[key]`) with a real
+    `_sign(roleTh, officialTitle, ok, signedName, signedDate)` that
+    takes the actual signer/date as parameters — the exact same
+    function `buildEvalPrintPage()` (#121) had already built as a
+    separate `_signReal()` to avoid inheriting this bug; **deleted that
+    duplicate too** and pointed both callers at the one real `_sign()`,
+    so there's only ever one signature-box renderer in the file now.
+    `printEvalForm()` itself now resolves the real signing state before
+    building its signature grid: looks up the actual saved draft via
+    `getDrafts().find(d=>d[0]===empCode && d[2]===printCycle &&
+    d[3]===lv)` (the same composite key `draftKey()` uses elsewhere),
+    computes `liveRank = evalStatusRank(liveStatus)` and
+    `allApproved = isFinalStatus(liveStatus)` from that real record
+    instead of the dead window flag, and reads the real final signer
+    from `getApprovalSignature()` (#39) — the same real-data sourcing
+    `buildEvalPrintPage()` already used, now shared by both functions
+    through the one `_sign()`. Signing thresholds mirror the real
+    4-slot template both functions have always had (self/L1/L2/final —
+    this form predates the later GM/Acknowledge/Calibrate stages #61/
+    #92 added, so those stages still have no dedicated signature line
+    in either function; a pre-existing template limitation, not
+    something this fix changes): self signed once `liveRank>=1`
+    (Submitted), L1 once `liveRank>=2` (L1Reviewed), L2 once
+    `liveRank>=3` (L2Reviewed), final signer only once `isFinalStatus()`
+    is true, using the real `getApprovalSignature()` name/date rather
+    than the employee's supervisor name as a stand-in. Before any real
+    submission exists at all (`liveDraft` not found, `liveRank=-1`),
+    every row correctly falls back to "⏳ กำลังประเมิน" with the real
+    resolved supervisor/exec names shown unsigned — the same honest
+    default the dead flag accidentally produced before, just now for a
+    real reason instead of a flag nothing sets. Verified with a test
+    that prints the self-eval page's draft for an employee with no
+    saved record yet (every row unsigned, zero fake names), then
+    submits a real record through the reviewer form and reprints —
+    confirms the employee's own signature line now shows
+    "✓ ยืนยันแล้ว" with their real name while L1/L2/exec correctly stay
+    pending (matching the record's real `Submitted` stage, not further)
+    — plus the standard click-sweep and re-runs of #120/#121's own
+    tests to confirm neither regressed. General lesson: when a flagged-
+    but-not-fixed issue from one request ("this is also fake, but out
+    of scope here") gets asked about again as "make it actually work,"
+    the fix usually isn't a new feature — it's locating the one real
+    data source that was already built for the sibling function (here,
+    `buildEvalPrintPage()`'s own real signer logic from #121, written
+    just one turn earlier) and routing the original function through
+    the exact same path, deleting whichever of the two duplicate helpers
+    was built on the fake data rather than keeping both around.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
