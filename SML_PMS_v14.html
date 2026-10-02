@@ -1588,7 +1588,7 @@ tbody tr:hover{background:#f0f6ff!important}
 
       <!-- ===== FORM HEADER ===== -->
       <div class="card eval-source-header" style="margin-bottom:14px;border-top:4px solid var(--evalColor,#0891b2)">
-        <div class="eval-doc-head"><div><b>SML PMS — แบบประเมินผลการปฏิบัติงานประจำปี</b><span id="evalDocLevel">เลือกแบบฟอร์มตามระดับ</span></div><div class="eval-doc-meta"><span>รอบ FY2026</span><span id="evalDocWeight">Y 70% + Z 30%</span></div></div>
+        <div class="eval-doc-head"><div><b>SML PMS — แบบประเมินผลการปฏิบัติงานประจำปี</b><span id="evalDocLevel">เลือกแบบฟอร์มตามระดับ</span></div><div class="eval-doc-meta"><span id="evalDocCycle">รอบ FY —</span><span id="evalDocWeight">Y 70% + Z 30%</span></div></div>
         <div class="card-b" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
           <div class="fg" style="margin:0"><label>ชื่อ-สกุล <i>*</i></label><input id="evalName" placeholder="ชื่อ นามสกุล"></div>
           <div class="fg" style="margin:0"><label>รหัสพนักงาน</label><input id="evalCode" placeholder="SML-001"></div>
@@ -5109,7 +5109,7 @@ function printEvalForm() {
     <div class="F-center-col">
       <div class="F-company-th">บริษัท สยามกลการโลจิสติกส์ จำกัด</div>
       <div class="F-company-en">Siam Motors Logistics Co., Ltd. · Siam Motors Group</div>
-      <div class="F-doc-title">แบบประเมินผลการปฏิบัติงานประจำปี ............</div>
+      <div class="F-doc-title">แบบประเมินผลการปฏิบัติงานประจำปี ${(typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569'}</div>
     </div>
     <div class="F-right-col">
       <span class="F-year-badge">FY ${(typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569'}</span>
@@ -6181,6 +6181,11 @@ function setEvalLevel(lv) {
   if(sub) sub.textContent = cfg.label + ' · Y=' + cfg.Ypct + '% + Z=' + cfg.Zpct + '%';
   const docLevel=document.getElementById('evalDocLevel'); if(docLevel) docLevel.textContent=levelName(lv);
   const docWeight=document.getElementById('evalDocWeight'); if(docWeight) docWeight.textContent='Y '+cfg.Ypct+'% + Z '+cfg.Zpct+'%';
+  /* ผู้ใช้ส่งภาพหน้าพิมพ์จริงมา ชี้ว่าหัวกระดาษไม่มีปี — เดิมป้าย "รอบ FY2026" บนหน้าจอ (ไม่ใช่หน้า
+     พิมพ์) เป็นข้อความคงที่ ไม่เคยอัปเดตตามรอบจริงที่ Admin ตั้งไว้เลย (ดู CLAUDE.md #60's
+     getCurrentEvalCycleYear()) — แก้ให้ดึงรอบจริงเช่นเดียวกับที่ printEvalForm()/buildEvalPrintPage()
+     เพิ่งแก้ (บรรทัดถัดไปในไฟล์นี้) */
+  const docCycle=document.getElementById('evalDocCycle'); if(docCycle) docCycle.textContent='รอบ FY'+((typeof getCurrentEvalCycleYear==='function')?getCurrentEvalCycleYear():'2569');
 
   // color variable
   document.documentElement.style.setProperty('--evalColor', cfg.color);
@@ -8506,7 +8511,7 @@ function buildEvalPrintPage(d, printDate){
       <div class="F-center-col">
         <div class="F-company-th">บริษัท สยามกลการโลจิสติกส์ จำกัด</div>
         <div class="F-company-en">Siam Motors Logistics Co., Ltd. · Siam Motors Group</div>
-        <div class="F-doc-title">แบบประเมินผลการปฏิบัติงานประจำปี ............</div>
+        <div class="F-doc-title">แบบประเมินผลการปฏิบัติงานประจำปี ${cycle}</div>
       </div>
       <div class="F-right-col">
         <span class="F-year-badge">FY ${cycle}</span>

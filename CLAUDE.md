@@ -4989,6 +4989,66 @@ touches employee/attendance/evaluation data.
     both show `✓` for the selected cell and neither contains the `○`
     character anywhere — plus the standard click-sweep.
 
+125. **User's screenshot of a printed evaluation form's header showed the
+    title line reading "แบบประเมินผลการปฏิบัติงานประจำปี ............"
+    (literal dots instead of a real year) — "ไม่มีปี" (no year).**
+    Grepped for this exact string and found it hardcoded, byte-for-byte
+    identically, in **two** separate places: `printEvalForm()` (line
+    5112, the self-eval page's own "พิมพ์ร่าง"/"พิมพ์ใบประเมิน (PDF)"
+    button) and `buildEvalPrintPage()` (line 8514, the shared builder
+    behind every L1-L4 queue's "🖨️ PDF" export and batch print, #120/
+    #121) — a dead, literal placeholder that had never once been
+    replaced with a real year in either function, even though both
+    functions sit right next to code that already computes the real
+    year correctly: `printEvalForm()`'s own `F-year-badge` span a few
+    lines below it already calls `getCurrentEvalCycleYear()` (#60), and
+    `buildEvalPrintPage()` already has a real `cycle` variable
+    (destructured from the stored draft `d[2]`) in scope and uses it for
+    its own `F-year-badge`. So the exact information needed to fix this
+    was sitting one line away in both functions — the title line itself
+    had simply never been wired to either. Fixed by interpolating
+    `getCurrentEvalCycleYear()` into `printEvalForm()`'s title (matching
+    its own `F-year-badge`'s fallback-to-`'2569'` pattern exactly) and
+    the existing `cycle` variable into `buildEvalPrintPage()`'s title —
+    deliberately using two *different* real sources, not the same call
+    in both places: `printEvalForm()` reflects the self-eval page's
+    *live* admin-configured "current" cycle (there is no specific
+    stored record yet when this page first opens for a fresh
+    self-eval), while `buildEvalPrintPage()` must reflect the *specific
+    historical/in-progress record's own stored cycle* (`d[2]`), per this
+    function's whole design philosophy (#120/#121) of always reading
+    from the stored draft, never live "current cycle" state that could
+    differ from what that one record actually belongs to.
+    **Also found and fixed a related, not-separately-reported bug while
+    investigating**: the self-eval page's own *on-screen* (not printed)
+    header had a parallel issue — `<span>รอบ FY2026</span>`, with no
+    `id` and never read or written by any JS in the file, permanently
+    stuck showing the literal text "รอบ FY2026" regardless of the real
+    configured cycle. Gave it `id="evalDocCycle"` and changed its
+    default text to an honest `รอบ FY —` (CLAUDE.md #14's "don't
+    fabricate" convention — `—` until a level is actually selected,
+    not a guessed year), then wired `setEvalLevel()` (called every time
+    the form opens/changes level) to set it from the same real
+    `getCurrentEvalCycleYear()` call. Verified with a test that selects
+    a level and confirms the on-screen span now shows the real
+    configured year (not the old hardcoded "2026"), then prints both
+    via `printEvalForm()` (fresh, no draft) and via `buildEvalPrintPage()`
+    (through `printSingleDraft()` after a real submission) and confirms
+    neither printed output contains the literal `............` string
+    anywhere, and both contain the real year text `ประจำปี {cycle}` —
+    plus the standard click-sweep (`nav pages clicked: 22 errors: []`).
+    General lesson sharper than #60/#120's own conclusion: when a
+    "year/cycle" display bug is reported against one specific element
+    (a printed title), grep for the *exact same dead-placeholder string*
+    across the whole file rather than assuming the report describes a
+    single bug — the identical "............" sat in two independent
+    functions that already had the real year available one line away,
+    and a cosmetic on-screen twin of the same unwired-placeholder shape
+    was sitting on the very page that opens the print function, easy to
+    find once looking for "what else near this never got wired to the
+    real value" rather than stopping at the one line the screenshot
+    pointed at.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
