@@ -8404,22 +8404,65 @@ let _batchPrinting = false;
    printBatchApproved() (หลายคนต่อกัน) และ printSingleDraft() (#119 follow-up: "แต่ละระดับเพิ่มแถบ
    export ใบประเมินเป็น pdf" — ปุ่มพิมพ์รายบุคคลที่คิวสอบทาน/อนุมัติแต่ละระดับ L1-L4) ใช้ร่วมกัน ไม่ให้
    มีเทมเพลตสองชุดที่อาจเพี้ยนไม่ตรงกัน (บทเรียนเดียวกับ CLAUDE.md #56) */
+/* เดิมใช้เทมเพลตคนละชุดจาก printEvalForm() เลย (หัวกระดาษเหมือนกันแต่ตารางปัจจัย/ผลคะแนนเป็นแบบ
+   ย่อ 3 คอลัมน์ ไม่มีช่องติ๊กระดับ A+/A/B/C+/C แบบฟอร์มจริง) — ผู้ใช้ขอให้ PDF ที่ export จากคิว
+   สอบทาน/อนุมัติแต่ละระดับ (L1-L4) "เหมือนกับ พิมพ์ร่าง หน้าประเมินตนเอง" เป๊ะๆ ไม่ใช่แค่หัวกระดาษ
+   เดียวกัน เขียนใหม่ให้ใช้โครงเดียวกับ printEvalForm() ทุกส่วน (ตารางปัจจัยเต็ม 8 คอลัมน์ + ช่องติ๊ก
+   ระดับผ่าน _levelCells() จริง, ส่วน Z, ส่วนสรุปคะแนน X=Y+Z, ส่วนลงนาม) โดยอ่านจาก draft ที่บันทึก
+   ไว้จริง (`d`) แทนสถานะสดของฟอร์มประเมินตนเอง (evalScores/currentLevel) — ตั้งใจไม่ลอกส่วน
+   "ความคิดเห็นเพิ่มเติม/Training" ของ printEvalForm() มาด้วย เพราะเป็นข้อความอิสระที่อ่านจาก
+   textarea สดบนหน้าประเมินตนเองเท่านั้น ไม่มีที่เก็บต่อ draft ในระบบเลย (จะต้องใส่ของปลอมถ้าใส่ใน
+   ที่นี้ — CLAUDE.md #14) ส่วนลงนามก็ใช้ชื่อหัวหน้า/ผู้บริหารจริงจาก MASTER_USERS (empL1/L2/Exec)
+   เหมือน printEvalForm() เป๊ะ แต่สถานะ "ลงนามแล้วหรือยัง" อิงจากสถานะ draft จริง
+   (evalStatusRank เทียบกับขั้นของผู้ลงนามแต่ละคน) ไม่ใช่ EVAL_STS ที่เป็นข้อมูลจำลองคงที่บนหน้า
+   ประเมินตนเองเอง (ดูคอมเมนต์ "จำลอง — เชื่อม workflow จริงในอนาคต" เหนือ EVAL_STS — ไม่เอามาใช้ตรงนี้
+   เพราะเป็นชื่อ/วันที่ปลอมล้วนๆ) */
+function _signReal(roleTh, officialTitle, ok, signedName, signedDate){
+  return `<div class="F-sign">
+    <div class="sg-role">${roleTh}</div>
+    <div class="sg-blank">${ok?`<div class="sg-name">${signedName||officialTitle||''}</div>`:'&nbsp;'}</div>
+    <div class="sg-date">${ok?(signedDate||''):'&nbsp;'}</div>
+    <span class="sg-chip ${ok?'sg-ok':'sg-wait'}">${ok?'✓ ยืนยันแล้ว':'⏳ กำลังประเมิน'}</span>
+    <div class="sg-title">( ${officialTitle||'—'} )</div>
+  </div>`;
+}
 function buildEvalPrintPage(d, printDate){
   const code = d[0], name = d[1], cycle = d[2], level = d[3];
   const cfg = SML_FORMS[level], lcfg = LEVEL_CONFIG[level];
-  const emp = MASTER_USERS.find(u=>u[0]===code);
-  const empPos = emp?.[7] || '—', empDept = emp?.[6] || '—', empGroup = emp?.[3] || '—';
+  const emp = MASTER_USERS.find(u=>u[0]===code) || [];
+  const empName = emp[1] || name;
+  const empPos = emp[7] || '—', empGroup = emp[3] || '—', empSection = emp[4] || '—', empDiv = emp[5] || '—', empDept = emp[6] || '—';
+  const empStart = emp[14] || '—';
+  const empL1 = emp[9] || '—', empL2 = emp[10] || '—', empExec = emp[11] || '—';
   const status = d[d.length-1];
-  const Y = d[d.length-5], Z = d[d.length-4], X = d[d.length-3], grade = d[d.length-2];
-  const sig = getApprovalSignature(d[0]+'|'+d[2]);
-  /* วันลาสรุปของพนักงาน — ผู้ใช้ขอให้ใส่ในทุกรายงานแบบประเมิน ใช้ helper จริงตัวเดียวกับที่คำนวณ
-     คะแนน Z (computeZScore) แทนการเขียนสูตรซ้ำ กันไม่ให้ตัวเลขสองที่ไม่ตรงกัน */
-  const zr = (typeof computeZScore==='function') ? computeZScore(level, code) : null;
+  const rank = (typeof evalStatusRank==='function') ? evalStatusRank(status) : 0;
+  const Y = Number(d[d.length-5])||0, Z = Number(d[d.length-4])||0, X = Number(d[d.length-3])||0, grade = d[d.length-2];
+  const allApproved = isFinalStatus(status);
+
+  const SC = {1:{Aplus:5,A:4,B:3,Cplus:2,C:1},2:{Aplus:10,A:9,B:8,Cplus:7,C:6},3:{Aplus:15,A:14,B:13,Cplus:12,C:11}};
+  let rawY=0, maxY=0;
   const factorRows = (cfg?.factors||[]).map((f,fi)=>{
+    const w = f[2], desc = f[1]||'';
     const key = fi<10 ? 4+fi : 4+10+(fi-10); // m0..m9 at d[4..13], l0..l3 at d[14..17]
-    const score = d[key];
-    return `<tr><td style="padding:4px 6px;font-size:10.5px">${f[0]}</td><td style="padding:4px 6px;text-align:center;font-size:10.5px">${f[2]}</td><td style="padding:4px 6px;text-align:center;font-size:10.5px;font-weight:700">${score==null?'—':score}</td></tr>`;
+    const sc = Number(d[key])||0;
+    const isL = fi>=10;
+    rawY += sc; maxY += SC[w]?.Aplus||0;
+    return `<tr class="${isL?'ldr-row':''}">
+      <td class="tc" style="width:20px;color:#6a7f9a;font-size:7pt;vertical-align:top;padding-top:4px">${fi+1}</td>
+      <td style="font-size:7.8pt;line-height:1.25;vertical-align:top">
+        <div style="font-weight:700;color:#0f2f6a">${f[0]}</div>
+        <div style="font-size:7pt;color:#64748b;margin-top:1px;line-height:1.2">${desc}</div>
+      </td>
+      <td class="tc num" style="width:26px;vertical-align:top;padding-top:4px">${w}</td>
+      ${_levelCells(w, sc, allApproved)}
+    </tr>`;
   }).join('');
+
+  /* วันลาสรุปของพนักงาน — ใช้ helper จริงตัวเดียวกับที่คำนวณคะแนน Z (computeZScore) แทนการเขียน
+     สูตรซ้ำ กันไม่ให้ตัวเลขสองที่ไม่ตรงกัน */
+  const zr = (typeof computeZScore==='function') ? computeZScore(level, code) : {att:{},zDaysExact:0};
+  const formBadge = {op:'op',of:'of',ldr:'ldr',mgr:'mgr'}[level]||'op';
+
   /* ความเห็น/ผู้แก้ไขล่าสุด — ถ้าใบนี้มีคนดำเนินการแล้วอย่างน้อย 1 ครั้ง (EVAL_LAST_ACTOR_KEY, บันทึก
      ทุกครั้งที่สอบทาน/ตีกลับ/Calibrate/อนุมัติ ผ่าน pushApprovalRecordToExcel() — ดู CLAUDE.md #58/
      #114/#115) ให้แสดงว่าใครแก้ไข/ดำเนินการล่าสุด วันที่ เวลาใด ตรงตามที่ผู้ใช้ขอ — ไม่แสดงถ้ายังไม่มี
@@ -8428,54 +8471,94 @@ function buildEvalPrintPage(d, printDate){
   const lastActorBox = lastActor ? `<div class="F-zbox" style="margin-top:4px;background:#eff6ff;border-color:#bfdbfe">
     <div class="zc" style="grid-column:1/-1"><span class="zl">แก้ไข/ดำเนินการล่าสุดโดย:</span><span class="zv">${lastActor.name||'—'} (${lastActor.code||'—'}) · วันที่ ${new Date(lastActor.at).toLocaleDateString('th-TH')} เวลา ${new Date(lastActor.at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})} น.</span></div>
   </div>` : '';
-  /* ใช้โครงหัวกระดาษ (F-header/โลโก้จริง) และฟอนต์/ขนาดเดียวกับ printEvalForm() ทุกประการ —
-     เดิมหน้านี้มีดีไซน์คนละแบบ (ไม่มีโลโก้ ไม่ใช้คลาส F ที่ปรับขนาดให้พอดี A4 ไว้แล้ว) ทำให้แต่ละใบ
-     ในการพิมพ์แบบ Batch ไม่สมดุลกับหน้ากระดาษเท่าใบพิมพ์เดี่ยว (ดู CLAUDE.md #56) */
+  const hrNote = (typeof getEvalHrNote==='function')?getEvalHrNote(code+'|'+cycle):'';
+  const hrNoteBox = hrNote.trim() ? `<div class="F-zbox" style="background:#fef2f2;border-color:#fecaca"><div class="zc" style="grid-column:1/-1"><span class="zl">ใบเตือน/หมายเหตุวินัย (HR):</span><span class="zv">${hrNote}</span></div></div>` : '';
+
+  const yScore = maxY>0 ? (Y || (rawY/maxY)*lcfg.Ypct) : Y;
+  const zScore = Z;
+  const xScore = X || (yScore+zScore);
+
+  /* ลงนาม — ใช้ชื่อหัวหน้า/ผู้บริหารจริงเหมือน printEvalForm() แต่สถานะลงนามอิง evalStatusRank จริง
+     ของ draft แทน EVAL_STS (ซึ่งเป็นชื่อ/วันที่จำลองคงที่ ไม่ใช่ของจริง) */
+  const sigFinal = getApprovalSignature(code+'|'+cycle);
+  const sigLines = [
+    _signReal('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=1, empName, ''),
+    _signReal('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, empL1, ''),
+    _signReal('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, empL2, ''),
+    _signReal('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')
+  ].join('');
+
   return `<div class="F" style="page-break-after:always">
     <div class="F-header">
       <div class="F-logo-col"><div class="F-logo-box"><img src="${SML_LOGO_DATA_URI}" alt="SML"></div></div>
       <div class="F-center-col">
         <div class="F-company-th">บริษัท สยามกลการโลจิสติกส์ จำกัด</div>
         <div class="F-company-en">Siam Motors Logistics Co., Ltd. · Siam Motors Group</div>
-        <div class="F-doc-title">แบบประเมินผลการปฏิบัติงาน — สรุปผล</div>
+        <div class="F-doc-title">แบบประเมินผลการปฏิบัติงานประจำปี ............</div>
       </div>
       <div class="F-right-col">
-        <span class="F-year-badge">รอบ ${cycle}</span>
-        <span class="F-status-badge ${isFinalStatus(status)?'ok':'wait'}">${isFinalStatus(status)?'✓ อนุมัติแล้ว':'⏳ '+(status||'')}</span>
+        <span class="F-year-badge">FY ${cycle}</span>
+        <span class="F-form-badge ${formBadge}">${cfg?.short||level} · ${(cfg?.factors||[]).length} ปัจจัย</span>
+        <span class="F-status-badge ${allApproved?'ok':'wait'}">${allApproved?'✓ อนุมัติแล้ว':'⏳ '+(status||'')}</span>
       </div>
     </div>
     <div class="F-info">
-      <div class="F-info-row"><span class="F-lbl">ชื่อ-สกุล ผู้ถูกประเมิน</span><span class="F-val">${name}</span></div>
+      <div class="F-info-row"><span class="F-lbl">ชื่อ-สกุล ผู้ถูกประเมิน</span><span class="F-val">${empName}</span></div>
       <div class="F-info-row"><span class="F-lbl">รหัสพนักงาน</span><span class="F-val">${code}</span></div>
-      <div class="F-info-row"><span class="F-lbl">ตำแหน่ง</span><span class="F-val">${empPos}</span></div>
-      <div class="F-info-row"><span class="F-lbl">กลุ่ม / ฝ่าย</span><span class="F-val">${empGroup} / ${empDept}</span></div>
-      <div class="F-info-row"><span class="F-lbl">ระดับแบบฟอร์ม</span><span class="F-val">${lcfg?.label||level}</span></div>
+      <div class="F-info-row"><span class="F-lbl">แผนก</span><span class="F-val">${empDept}</span></div>
+      <div class="F-info-row"><span class="F-lbl">ส่วน / ฝ่าย</span><span class="F-val">${empSection} / ${empDiv}</span></div>
+      <div class="F-info-row"><span class="F-lbl">วันเริ่มงาน</span><span class="F-val">${empStart}</span></div>
+      <div class="F-info-row full"><span class="F-lbl">ตำแหน่ง</span><span class="F-val">${empPos}</span></div>
     </div>
-    <table class="F-tbl" style="margin-bottom:6px">
-      <thead><tr><th class="left">ปัจจัยการประเมิน</th><th style="width:60px">น้ำหนัก</th><th style="width:60px">คะแนน</th></tr></thead>
-      <tbody>${factorRows}</tbody>
+
+    <div class="F-sec s1"><span class="sec-num">1</span> ส่วนที่ 1 &nbsp; ตารางประเมินผลการปฏิบัติงาน ( Performance ) &nbsp;·&nbsp; Y = ${lcfg?.Ypct||0}%</div>
+    <table class="F-tbl">
+      <colgroup><col style="width:20px"><col><col style="width:26px"><col style="width:28px"><col style="width:28px"><col style="width:28px"><col style="width:28px"><col style="width:28px"></colgroup>
+      <thead>
+        <tr><th rowspan="2">ข้อ</th><th rowspan="2" class="left">ปัจจัยในการพิจารณาประเมิน (FACTORS FOR APPRAISAL)</th><th rowspan="2">น้ำหนัก</th><th colspan="5">ระดับการพิจารณา (✓ = คะแนนที่เลือก)</th></tr>
+        <tr><th class="sc-ap">A+</th><th class="sc-a">A</th><th class="sc-b">B</th><th class="sc-cp">C+</th><th class="sc-c">C</th></tr>
+      </thead>
+      <tbody>
+        ${factorRows}
+        <tr class="sum-row"><td class="tc" colspan="2" style="font-size:8pt">รวมคะแนนประเมินผลการปฏิบัติงาน</td><td class="tc num">${cfg?.total||''}</td><td colspan="5" style="text-align:right;font-size:8pt">คะแนนผลงาน (Y) = ${rawY||'—'} × ${lcfg?.Ypct||0} ÷ ${maxY||'—'} = <b>${yScore.toFixed(2)}</b></td></tr>
+      </tbody>
     </table>
-    <div class="F-result">
-      <div class="F-grade-circle" style="background:${_gc(grade)}">${grade}</div>
-      <div>
-        <div class="F-score-main">X = Y (${Y}) + Z (${Z}) = <b>${X}</b> คะแนน</div>
-        <div class="F-score-sub">เกรด <b>${grade}</b></div>
-      </div>
-    </div>
-    ${zr ? `<div class="F-zbox" style="margin-top:4px">
+
+    ${['ldr','mgr'].includes(level)?`<div class="F-sec s1b"><span class="sec-num">↳</span> ด้านความสามารถในการบังคับบัญชา ( Leadership Skill )</div>`:''}
+
+    <div class="F-sec s2"><span class="sec-num">2</span> ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${lcfg?.Zpct||0}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO</div>
+    <div class="F-zbox">
       <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zr.att.lateCount||0} ครั้ง</span></div>
       <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">${zr.att.earlyCount||0} ครั้ง</span></div>
       <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">${zr.att.sickDay||0} วัน</span></div>
       <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">${zr.att.personalDay||0} วัน</span></div>
       <div class="zc"><span class="zl">ขาดงาน:</span><span class="zv">${zr.att.absentDay||0} วัน</span></div>
-      <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zr.zDaysExact} วัน</span></div>
-    </div>` : ''}
-    ${(()=>{ const note=(typeof getEvalHrNote==='function')?getEvalHrNote(code+'|'+cycle):''; return note.trim()?`<div class="F-zbox" style="margin-top:4px;background:#fef2f2;border-color:#fecaca"><div class="zc" style="grid-column:1/-1"><span class="zl">ใบเตือน/หมายเหตุวินัย (HR):</span><span class="zv">${note}</span></div></div>`:''; })()}
+      <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zr.zDaysExact||0} วัน</span></div>
+      <div class="ztotal">Z = ${zScore.toFixed(2)}</div>
+    </div>
+    ${hrNoteBox}
     ${lastActorBox}
-    <div class="F-footer" style="border-top:1px solid #cbd5e1;padding-top:8px;font-size:8pt;margin-top:6px">
-      <div><b>ลงนามอนุมัติโดย:</b> ${sig ? sig.signedBy : '—'}</div>
-      <div><b>วันที่อนุมัติ:</b> ${sig ? new Date(sig.signedAt).toLocaleDateString('th-TH') : '—'}</div>
-      <div style="margin-top:6px;color:#94a3b8">พิมพ์เมื่อ ${printDate}</div>
+
+    <div class="F-sec s3"><span class="sec-num">∑</span> คะแนนรวม &nbsp; X = Y + Z</div>
+    <div class="F-result">
+      <div class="F-grade-circle" style="background:${allApproved?_gc(grade):'#94a3b8'}">${allApproved?grade:'?'}</div>
+      <div>
+        <div class="F-score-main">X = ${yScore.toFixed(2)} + ${zScore.toFixed(2)} = <b>${xScore.toFixed(2)}</b> คะแนน</div>
+        <div class="F-score-sub">${allApproved?`เกรด <b>${grade}</b>`:'รอการอนุมัติครบทุกขั้นตอน'}</div>
+      </div>
+      <div class="F-breakdown">
+        <div class="bd-item"><span class="bd-lbl">Y (${lcfg?.Ypct||0}%)</span><span class="bd-val">${yScore.toFixed(2)}</span></div>
+        <div class="bd-item"><span class="bd-lbl">Z (${lcfg?.Zpct||0}%)</span><span class="bd-val">${zScore.toFixed(2)}</span></div>
+        <div class="bd-item"><span class="bd-lbl">รวม X</span><span class="bd-val" style="color:#0f2f6a">${xScore.toFixed(2)}</span></div>
+      </div>
+    </div>
+
+    <div class="F-sec s4"><span class="sec-num">4</span> ส่วนที่ 4 &nbsp; ลงนามผลการประเมิน ( Signature )</div>
+    <div class="F-signs s4">${sigLines}</div>
+
+    <div class="F-footer">
+      <span>หมายเหตุ: ใบนี้ export จากคิว${status?' สถานะ '+status:''} — สถานะลงนามอิงตามขั้นจริงของใบประเมิน</span>
+      <span>SML PMS · พิมพ์เมื่อ ${printDate}</span>
     </div>
   </div>`;
 }

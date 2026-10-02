@@ -4787,6 +4787,79 @@ touches employee/attendance/evaluation data.
     new one, and route a new print entry point through the one shared
     page-builder rather than copy-pasting the batch version's template.
 
+121. **Follow-up to #120: user asked for the exported PDF to look like
+    "พิมพ์ร่าง" (the self-eval page's own print button) and to re-verify
+    all 5 L1-L4 queues actually have the export button.** Confirmed via
+    grep that all 5 real queue render functions
+    (`renderReviewL1Queue`/`renderReviewQueue`/`renderGmApproveQueue`/
+    `renderCalibQueue`/`renderApproveQueue`, covering every real review/
+    approval stage from dept-head review through AMD/MD final approve)
+    already call `printSingleDraft()` from #120 — no gap there. The
+    format request was real, though: `buildEvalPrintPage()` (#120) only
+    reused `printEvalForm()`'s *header* (logo/company name/F-classes)
+    but built a simplified 3-column factor table (factor/weight/score)
+    and a plain result block — visually a different, shorter document
+    than what "พิมพ์ร่าง"/"พิมพ์ใบประเมิน (PDF)" on the self-eval page
+    actually produce (both call the same `printEvalForm()`, which has
+    the full real SML form: an 8-column factor table with A+/A/B/C+/C
+    tick-box columns via `_levelCells()`, a leadership-skill section
+    heading for ldr/mgr forms, a "ส่วนที่ 3 สรุปคะแนนรวม" breakdown box,
+    and a "ส่วนที่ 4 ลงนามผลการประเมิน" 4-person signature grid). Rewrote
+    `buildEvalPrintPage()` to reuse `printEvalForm()`'s real section
+    structure and helpers directly (`_levelCells()` for the same tick-
+    box table, `_gc()` for the grade-circle color) instead of a
+    simplified clone, reading every value from the stored draft `d`
+    (append-position fields, `getEvalLastActor`/`getEvalHrNote`/
+    `getApprovalSignature`) rather than live self-eval page state
+    (`evalScores`/`currentLevel`/live `<textarea>`s), since those only
+    exist for the record currently open on the self-eval page, not for
+    an arbitrary past draft pulled from a queue. **Deliberately did NOT
+    copy `printEvalForm()`'s "ความคิดเห็นเพิ่มเติม/Training Needs" free-
+    text boxes** — those read live `<textarea>` values on the self-eval
+    page and have no storage anywhere per draft record (CLAUDE.md #14 —
+    would have had to fabricate blank/fake text to "match" visually).
+    **Found and deliberately did NOT reuse a genuinely fake section
+    while doing this comparison**: `printEvalForm()`'s own ส่วนที่ 4
+    signature grid is driven by `EVAL_STS`, a module-level constant
+    whose own code comment admits it outright — "ข้อมูลสถานะการประเมิน
+    (จำลอง — เชื่อม workflow จริงในอนาคต)" (simulated status data —
+    connect the real workflow in the future) — hardcoding 4 fake names/
+    dates (`สมชาย วงศ์ดี`, `สุดา มีสุข`, `อรุณ ศิริ`, `คุณเชิดชัย`) that
+    have never been real, exactly the CLAUDE.md #16 shape. This has
+    been invisible in practice because `allApproved = window.
+    __smlEvalApproved === true` is read from a flag nothing in the
+    whole file ever sets to `true`, so `_sign()`'s `ok` branch (the one
+    that would show the fake name) never fires — the grid always falls
+    through to the honest branch showing each role's real resolved
+    supervisor name (`empL1`/`empL2`/`empExec`, genuinely pulled from
+    `MASTER_USERS`) with an "⏳ กำลังประเมิน" chip. Rather than import
+    this latent landmine into the newly-rewritten `buildEvalPrintPage()`,
+    added a new `_signReal(roleTh, officialTitle, ok, signedName,
+    signedDate)` that takes real values as parameters instead of reading
+    the fake global, with `ok` driven by the record's real
+    `evalStatusRank()` (self signed once `Submitted`, L1 once past
+    `L1Reviewed`, L2 once past `L2Reviewed`, final signer from the real
+    `getApprovalSignature()` #39 record once `isFinalStatus()`) — so
+    this new path is honest by construction and never inherits
+    `EVAL_STS`'s dormant fake-data bug at all; `printEvalForm()`'s own
+    `EVAL_STS` bug is left exactly as found, flagged here rather than
+    fixed, since fixing it (replacing a module constant with a real per-
+    stage signer lookup) is a separate task nobody asked for in this
+    request. Verified with a test that submits a real record through
+    the reviewer form and exports it, confirming the printed page has
+    the full 8-column tick-box factor table, the leadership-section
+    conditional, the Z/result/signature section structure, the real L1/
+    L2/exec names resolved from `MASTER_USERS`, and — explicitly —
+    none of `EVAL_STS`'s 3 fake names anywhere in the output — plus the
+    standard click-sweep and a re-run of #120's own test to confirm the
+    rewrite didn't regress the last-actor box. General lesson: "make X
+    look like Y" is worth checking literally — a shared header class
+    name (`.F`) can make two templates *feel* related while actually
+    differing in every section below it; and reusing a reference
+    template is also the moment to notice if that reference secretly
+    still carries an old CLAUDE.md #16 mock-data bug of its own, so it
+    doesn't get silently duplicated into the new code too.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
