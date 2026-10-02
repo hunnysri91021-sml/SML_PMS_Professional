@@ -4806,7 +4806,7 @@ function renderTeamFromMaster() {
       <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
       <td><span class="bd ${st[0]}">${st[1]}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
-        onclick="openReviewerForm('${realLevel}','${u[1]}','${u[0]}','${u[7]}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'))">
+        onclick="openReviewerForm('${realLevel}','${u[1]}','${u[0]}','${u[7]}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'),${wf==='done'})">
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
       </button></td>
     </tr>`;
@@ -7915,7 +7915,7 @@ function renderGmApproveQueue(){
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">ดูแบบฟอร์ม</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}',true)">ดูแบบฟอร์ม</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
 }
@@ -9341,10 +9341,16 @@ let currentReviewerCycle=null;
    ประเมิน" แก้โดยเรียก computeZScore(lv, code) จริง (เหมือน renderZStats() ที่หน้าประเมินตนเองใช้)
    แล้วแสดงกล่องรายละเอียด สาย/กลับก่อน/ขาด/ป่วย/กิจ + วันลารวม + คะแนน Z จริง ในแบบประเมินทุกครั้งที่
    เปิด ไม่ใช่แค่ตัวเลขคะแนนเฉยๆ */
-function openReviewerForm(lv,name,code,position,cycle){
+function openReviewerForm(lv,name,code,position,cycle,viewOnly){
   const cfg=SML_FORMS[lv]; if(!cfg){smlToast('ไม่พบแบบฟอร์มของระดับนี้','warn');return;}
   currentReviewerLevel=lv;
   currentReviewerCode=code;
+  /* #119: ผู้ใช้ขอ "ถ้าสถานะอยู่ที่ดูแบบฟอร์มให้ดูอย่างเดียว ไม่ต้องมีแถบลบ/แก้ไข/บันทึก เพราะถือว่าส่งไปแล้ว"
+     — จุดที่เปิดหน้าต่างนี้ด้วยปุ่ม "ดูแบบฟอร์ม" (ทีมงานที่ส่งแล้ว, คิวอนุมัติ GM) คือบริบท "ดูอย่างเดียว"
+     ส่วนคิวสอบทาน L1/L2 ("สอบทานแบบฟอร์ม") ยังต้องใช้ปุ่มจริงเพื่อนุมัติ/ตีกลับ (#109) — ซ่อนปุ่มแทนการลบ
+     ทิ้งเพื่อให้ยังล้าง/คืนสถานะปุ่มได้ถ้าหน้าต่างถูกเปิดซ้ำในบริบทที่ต่างกัน */
+  const footerBtns = document.querySelectorAll('#mReview .md-f .btn-dg, #mReview .md-f .btn-ok');
+  footerBtns.forEach(b => { b.style.display = viewOnly ? 'none' : ''; });
   /* เดิมไม่เคยรับ/จำ cycle เลย — ปุ่ม "บันทึกและส่งต่อ"/"ตีกลับ" ในหน้าต่างนี้จึงไม่มีทางรู้ว่ากำลัง
      แก้ไข/อนุมัติใบของรอบไหน (CLAUDE.md #108's ชุดเดียวกัน ตามด้วยการเชื่อมปุ่มให้ทำงานจริงด้านล่าง) */
   currentReviewerCycle = cycle || ((typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569');

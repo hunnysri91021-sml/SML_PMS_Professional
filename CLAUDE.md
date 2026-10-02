@@ -4678,6 +4678,58 @@ touches employee/attendance/evaluation data.
     functions that already call the helper — a widened helper does
     nothing for a caller that was never updated to use it.
 
+119. **User asked: "ถ้าสาถนะอยู่ที่ดูแบบฟอร์มให้ดูอย่างเดียวไม่ต้องมีแถบ ลบ
+    แก้ไข บันทึกแล้ว เพราะถือว่าส่งไปแล้ว" (if the status is at 'view
+    form,' make it view-only — no delete/edit/save bar, since it's
+    considered already sent).** The shared `openReviewerForm()` modal
+    (`#mReview`) — used by the team page's own "ประเมิน"/"ดูแบบฟอร์ม"
+    button, the L1/L2 review queues' "สอบทานแบบฟอร์ม" button, and the GM
+    queue's "ดูแบบฟอร์ม" button (#116) — always showed all 4 footer
+    buttons ("ปิด"/"🗑️ ล้างคะแนน"/"↩️ ตีกลับ"/"✓ บันทึกและส่งต่อ")
+    regardless of which button opened it, even though the button *label*
+    itself already distinguishes a real action context ("สอบทานแบบฟอร์ม"
+    — L1/L2 actively reviewing, per #109) from a pure viewing context
+    ("ดูแบบฟอร์ม" — the team page's already-`done` rows, and the GM
+    queue, which never edits scores through this modal at all, only
+    through its own real checkbox+bulk-approve button per #115).
+    `submitReviewerForm()`/`rejectReviewerForm()`'s own `STEP` maps
+    already refused to corrupt data in a context they don't support
+    (e.g. GM's own click on "✓ บันทึกและส่งต่อ" already honestly no-ops
+    with a toast, since no `STEP` entry exists for advancing past
+    `L2Reviewed` from this modal) — so this was purely a UI-affordance
+    gap, not a data-safety one: showing action buttons that look
+    clickable but either shouldn't be used in a "just viewing an
+    already-sent record" context, or genuinely do nothing when clicked.
+    Added a `viewOnly` parameter to `openReviewerForm(lv,name,code,
+    position,cycle,viewOnly)` — when true, hides (`style.display='none'`)
+    every `.md-f` button except "ปิด" (selected via `.btn-dg`/`.btn-ok`
+    class, never touching the plain `.btn` close button), and explicitly
+    resets them visible (`style.display=''`) when false/omitted, so
+    reopening the same modal from a different context (e.g. an admin
+    checking a "done" row right after reviewing an active one) never
+    leaves a stale hidden/shown state from the previous open. Wired
+    `true` into exactly the two already-`ดูแบบฟอร์ม`-labeled call sites —
+    `renderTeamFromMaster()`'s row button (`wf==='done'`, i.e. the exact
+    same condition that already picks the "ดูแบบฟอร์ม" label) and
+    `renderGmApproveQueue()`'s row button (always, since GM's label is
+    always "ดูแบบฟอร์ม") — and left every `สอบทานแบบฟอร์ม`-labeled call
+    site (`renderReviewL1Queue()`/`renderReviewQueue()`) with the
+    parameter omitted, since those remain genuine active-review entry
+    points where approving/rejecting through this exact modal is the
+    real job (#109). Verified with a test opening the modal once with
+    `viewOnly=true` (confirms all 3 action buttons hidden, "ปิด" still
+    visible), once with it omitted (confirms all 3 visible, matching the
+    L1/L2 review-queue behavior unchanged), and a third time back to
+    `viewOnly=true` (confirms no leftover hidden/shown state survives
+    between opens) — plus the standard click-sweep. General lesson: a
+    shared modal opened from several different button labels in the same
+    file is a signal to check whether its own action affordances should
+    track which label opened it — the label text itself (`ดูแบบฟอร์ม` vs
+    `สอบทานแบบฟอร์ม`/`ประเมิน`) had already encoded the right distinction
+    as a human-facing word; the fix was teaching the modal to read that
+    same distinction as a real parameter instead of showing identical
+    controls under both words.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
