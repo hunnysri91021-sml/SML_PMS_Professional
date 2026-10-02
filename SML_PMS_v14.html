@@ -4894,6 +4894,11 @@ function _sign(roleTh, officialTitle, ok, signedName, signedDate) {
 }
 
 /* ปุ่มเลือกระดับ A+ A B C+ C สำหรับปัจจัยแต่ละข้อ */
+/* ผู้ใช้ขอให้ช่องที่เลือกไว้แสดง ✓ เสมอทุกแบบประเมิน ไม่ว่าใบจะอนุมัติขั้นสุดท้ายแล้วหรือยัง — เดิมใบที่
+   ยังไม่อนุมัติ (allApproved=false, คือสถานะจริงของใบส่วนใหญ่ตลอดช่วงสอบทาน/อนุมัติ) แสดงแค่วงกลม
+   เปล่า "○" ซึ่งดูเหมือนยังไม่ได้เลือกคะแนนทั้งที่เลือกไว้จริงแล้ว ตัด allApproved ออกจากการเลือก
+   สัญลักษณ์ (ยังใช้แยก class `chk`/`chk-draft` ไว้ให้ CSS ปรับสีได้ถ้าต้องการ แค่สัญลักษณ์ที่แสดงจริง
+   เป็น ✓ เสมอ) */
 function _levelCells(w, sc, allApproved) {
   const levels = {1:[5,4,3,2,1], 2:[10,9,8,7,6], 3:[15,14,13,12,11]};
   const lbls   = ['A+','A','B','C+','C'];
@@ -4901,7 +4906,7 @@ function _levelCells(w, sc, allApproved) {
   return lbls.map((l,i)=>{
     const isChosen = sc && sc === scores[i];
     const cls = isChosen ? (allApproved?'chk':'chk-draft') : 'tc';
-    return `<td class="${cls}" style="width:28px">${isChosen?(allApproved?'✔':'○'):''}</td>`;
+    return `<td class="${cls}" style="width:28px">${isChosen?'✓':''}</td>`;
   }).join('');
 }
 

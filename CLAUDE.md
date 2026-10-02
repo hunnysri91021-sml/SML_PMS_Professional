@@ -4963,6 +4963,32 @@ touches employee/attendance/evaluation data.
     picking the first available real status value that happens to make
     the "ok" branch render something.
 
+124. **User asked: "ในทุกแบบประเมิน ใส่เครื่องหมายเลือก ✓ ไม่ใช่ o" (in
+    every evaluation form, use a ✓ mark for the selected grade, not an
+    "o").** `_levelCells()` — the one function rendering the A+/A/B/C+/
+    C tick-box cells on every printed evaluation form (self-eval
+    "พิมพ์ร่าง", every per-record queue export via `buildEvalPrintPage()`
+    #121, and batch print, since all three share this one helper) —
+    showed `✔` only once `allApproved` (final `Approved` status) was
+    true, and a plain `○` (hollow circle) for the exact same selected
+    cell at every earlier stage (Draft/Submitted/L1Reviewed/L2Reviewed/
+    GMApproved/Acknowledged/Calibrated — i.e. nearly every real printed
+    form, since most prints happen mid-pipeline, not after final
+    approval). The hollow circle read as "not yet chosen" even though
+    the grade genuinely was chosen — exactly the user's complaint.
+    Fixed by always rendering `✓` for the chosen cell regardless of
+    `allApproved` — the function still keeps the `chk`/`chk-draft` CSS
+    class distinction (approved vs. still-in-progress) so a future style
+    tweak could still color them differently, but the *symbol* itself is
+    now the same ✓ everywhere, matching what the user actually asked
+    for. Since `_levelCells()` is the one shared function behind every
+    printed form in this file, this single fix covers all of them —
+    no other call site needed touching. Verified with a test that
+    prints a never-submitted self-eval draft and a real `Submitted`
+    (not yet approved) record exported from a review queue, confirming
+    both show `✓` for the selected cell and neither contains the `○`
+    character anywhere — plus the standard click-sweep.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
