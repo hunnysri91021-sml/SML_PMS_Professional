@@ -4730,6 +4730,63 @@ touches employee/attendance/evaluation data.
     same distinction as a real parameter instead of showing identical
     controls under both words.
 
+120. **User asked for an export-to-PDF button at each review/approval level
+    (L1-L4 queues), and for a comment showing who last edited a record,
+    with date and time, whenever an edit happened.** The single-person
+    print (`printEvalForm()`) and batch print (`printBatchApproved()`)
+    already existed, but there was no way to export *one specific
+    record* straight from a review/approval queue row (L1/L2/GM/
+    Calibration/Approve) without going through the self-eval page or
+    waiting for the whole batch to reach final `Approved` status.
+    Extracted `printBatchApproved()`'s per-record page-building logic
+    (header/logo, employee info, factor table, Z/attendance box, HR
+    note box, signature footer — all already correct and A4-tuned per
+    CLAUDE.md #56) into one shared `buildEvalPrintPage(d, printDate)`,
+    so the new single-record path and the existing batch path can never
+    drift into two different-looking templates again (the same "one
+    function builds it, every caller goes through it" discipline #30/
+    #97/#101 already establish for Excel rows, now applied to a print
+    template). Added `printSingleDraft(code, cycle, level)` — looks the
+    record up by its real composite key (`draftKey()`'s own fields),
+    builds one page via the shared function, and prints it — unlike
+    `printBatchApproved()`, it does **not** require `isFinalStatus()`,
+    since the whole point is exporting a record that's still mid-
+    pipeline (Submitted/L1Reviewed/L2Reviewed/Acknowledged/Calibrated),
+    right from the queue that's currently handling it. Added a "🖨️ PDF"
+    button to all 5 real queue render functions
+    (`renderReviewL1Queue`/`renderReviewQueue`/`renderGmApproveQueue`/
+    `renderCalibQueue`/`renderApproveQueue`) — the two that already had
+    a status badge in the header show it dynamically now too
+    (`buildEvalPrintPage()` shows "⏳ {status}" instead of a hardcoded
+    "✓ อนุมัติแล้ว" when the record isn't finally Approved, since #14
+    says never claim something is approved when it isn't).
+    For the edit-comment half: `EVAL_LAST_ACTOR_KEY` (`getEvalLastActor()`,
+    #58/#114/#115) already records who performed the most recent real
+    action on a record — any review/reject/calibrate/approve step,
+    since every one of them goes through `pushApprovalRecordToExcel()`
+    which calls `recordEvalActor()` unconditionally — with their real
+    name, code, and a real ISO timestamp. `buildEvalPrintPage()` now
+    shows a "แก้ไข/ดำเนินการล่าสุดโดย: {name} ({code}) · วันที่ … เวลา …
+    น." box on every printed page (single or batch) whenever that
+    record has at least one such action recorded — shown on both
+    `printEvalForm()`'s path (via `printBatchApproved`/`printSingleDraft`
+    sharing the same builder) and never fabricated or shown as an empty
+    placeholder for a record nobody has touched yet (still sitting at
+    `Draft`/freshly `Submitted` by the employee themselves, per #14's
+    honest-empty-state rule). Verified with a test that drives a real
+    record through employee-submit → L1-review via the real UI
+    (`submitReviewerForm()`, never mutating a draft field directly),
+    calls `printSingleDraft()` after each stage, and confirms the
+    printed page's last-actor box correctly shows the L1 reviewer's
+    real name after their review (not the employee's, and not stale
+    from before) — plus the standard click-sweep. General lesson
+    combining #56/#58: once a "who last touched this" fact is already
+    tracked for one purpose (an edit-notification email, #114/#115), the
+    same fact is often exactly what a "show it on the printed record"
+    request needs too — check for an existing tracker before building a
+    new one, and route a new print entry point through the one shared
+    page-builder rather than copy-pasting the batch version's template.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
