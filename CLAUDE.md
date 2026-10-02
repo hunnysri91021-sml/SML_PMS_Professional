@@ -4564,6 +4564,67 @@ touches employee/attendance/evaluation data.
     queue, and confirms clicking it opens the real modal with the real
     employee's name/code in the title — plus the standard click-sweep.
 
+117. **User's screenshot of a GM queue entry, with a caption "หน้า GM ดู
+    ผลการประเมินในแบบฟอร์มไม่แสดงข้อมูลว่าเลือกอะไรบ้าง" (the GM form-
+    view page doesn't show what grades were selected) — opening the new
+    #116 view button showed the factor table with every row empty, no
+    grade button highlighted.** First reproduced the restore chain
+    end-to-end entirely in-memory (self-eval → L1 bulk-approve → L2
+    bulk-approve → GM view) and it worked perfectly, which ruled out the
+    restore logic itself (`restoreReviewerFormFromDraft()`, #109) being
+    broken in general. The real cause only appeared when simulating the
+    one extra step every record genuinely goes through for real before
+    GM ever sees it: a round-trip through `ms365SyncAppraisals()` (#58)
+    pulling the row back from the real `Appraisals` Excel table. Graph
+    API returns a text-formatted cell's numeric-looking value as a
+    **string**, not a number (the same class of type-mismatch #78
+    already found for Date cells returning serial numbers instead of
+    formatted text — here it's the reverse direction, a number-looking
+    value arriving as the wrong JS type) — and `ms365SyncAppraisals()`
+    stored the row from `graphListTableRows()` straight into
+    `getDrafts()` with **zero type coercion**. The moment a draft's
+    `m0..m9`/`Y`/`Z`/`X` fields became strings like `"14"` instead of
+    the number `14`, `restoreReviewerFormFromDraft()`'s/
+    `restoreEvalFormFromDraft()`'s reverse-lookup — `Object.keys(sc)
+    .find(g => sc[g] === val)`, a **strict** `===` against a real
+    `number` — could never match, so every grade button silently stayed
+    unselected even though the real score data was sitting right there
+    in the draft, completely intact. This explains why the bug is most
+    visible specifically at the *GM* stage: by the time a record reaches
+    `GMApproved`-eligibility (`L2Reviewed`), it has almost certainly been
+    pulled down from Excel at least once via the 30-second auto-sync
+    (#59) or a login/reload sync, while a record scored and reviewed
+    entirely on one device without ever syncing (what every earlier
+    #108/#109/#110 test happened to exercise) never hits this path.
+    Fixed at the real ingestion point, `normalizeAppraisalRow(r)`
+    (coerces array positions 4–20 — every `m`/`l`/`Y`/`Z`/`X` numeric
+    field — to `Number()`, skipping `null`/`undefined`/`''` so a
+    genuinely-unset leadership factor stays unset, not `0`), called on
+    every row `ms365SyncAppraisals()` pulls before merging into
+    `getDrafts()` — fixes this for every consumer of synced draft data,
+    not just the two restore functions. Also added a defensive
+    `Number(draft[payloadIdx])` coercion directly inside both restore
+    functions themselves, as a second layer — if any other future
+    ingestion path (a bulk import, a manual `localStorage` edit, a
+    different sync source) ever writes string-typed numbers into a
+    draft again, the restore still won't silently fail. Verified with a
+    test that feeds `ms365SyncAppraisals()` a mocked Excel row with
+    every numeric field as a string (reproducing the exact real-world
+    shape), confirms the merged draft's fields are real `number`s
+    afterward, and confirms GM's "ดูแบบฟอร์ม" button now shows all 10
+    factors correctly selected — plus the standard click-sweep. General
+    lesson sharper than #78's own conclusion: #78 fixed one specific
+    external-type mismatch (a Date cell returning a serial number); this
+    is the general-case version of that same risk — **any** value
+    pulled from `graphListTableRows()` can arrive as a different JS type
+    than the code that later reads it assumes, and a `===` strict
+    comparison against that value is a silent-failure trap waiting to
+    happen the moment the real data takes the "other" type. When merging
+    *any* external-table row into local state that later gets compared
+    by strict equality (not just string-concatenated or displayed), add
+    an explicit type-coercion step at the one ingestion point rather
+    than trusting whatever type Graph happened to hand back.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

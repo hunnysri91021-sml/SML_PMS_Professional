@@ -6276,7 +6276,9 @@ function restoreEvalFormFromDraft(lv, empCode, cycle){
   const cfg = LEVEL_CONFIG[lv];
   const smCfg = SML_FORMS[lv];
   const applyFactor = (f, fi, prefix, payloadIdx) => {
-    const val = draft[payloadIdx];
+    /* #117: ค่าจาก draft ที่เพิ่ง sync มาจาก Excel อาจเป็น string ("14") ไม่ใช่ number — บังคับแปลง
+       ก่อนเทียบเสมอ เป็นชั้นป้องกันที่สองต่อจาก normalizeAppraisalRow() ที่แก้จุด ingestion แล้ว */
+    const val = Number(draft[payloadIdx]);
     if(!val) return;
     const w = f[2];
     const grade = Object.keys(SCORES[w]).find(g => SCORES[w][g] === val);
@@ -7633,6 +7635,23 @@ function hasVisibleResult(status){ return evalStatusRank(status) >= evalStatusRa
    ไม่หายไปแค่เพราะยังไม่มีใน Excel และตั้งใจ "ไม่ดึงทับ" เมื่อ rank เท่ากัน (remote rank ==
    local rank) — ป้องกันการทับข้อมูลที่เพิ่งแก้ในเครื่องนี้เองแต่ push ไปยังไม่สำเร็จ ด้วยสำเนาเก่าจาก
    Excel ที่ดึงมาพร้อมกัน */
+/* #117: Graph API คืนค่าตัวเลขของคอลัมน์ที่ format เป็นข้อความ (text) ใน Excel มาเป็น string ไม่ใช่
+   number (เหมือน CLAUDE.md #78's Date serial number lesson แต่คนละชนิดข้อมูล) — แถวที่ดึงจาก
+   graphListTableRows() แล้วถูกเก็บลง getDrafts() ตรงๆ โดยไม่แปลงชนิด ทำให้ m0..m9/Y/Z/X กลาย
+   เป็น string ("14" แทน 14) ทันทีที่ merge เข้ามา ซึ่งพังการ reverse-lookup เกรดใน
+   restoreReviewerFormFromDraft()/restoreEvalFormFromDraft() ที่เทียบแบบ strict equality
+   (SCORES[w][g] === val) กับค่า number — string "14" ไม่มีวัน === number 14 ได้ ทำให้เปิดฟอร์ม
+   สอบทานแล้วไม่มีปุ่มเกรดไหนถูกติ๊กเลยสักข้อ (ทั้งที่ข้อมูลคะแนนจริงอยู่ครบ) ปัญหานี้จะไม่โผล่ตอน
+   สร้าง/แก้ไขในเครื่องเดียวกัน (ค่าที่เพิ่งคำนวณในหน่วยความจำเป็น number อยู่แล้ว) แต่โผล่แน่ๆ ทันทีที่
+   ใบประเมินผ่าน sync จาก Excel มาอย่างน้อยหนึ่งรอบ — ซึ่งถึงตอน GM เปิดดู (ขั้นท้ายๆ ของ pipeline)
+   แทบจะผ่าน sync มาแล้วเสมอ จึงเป็นจุดที่เจอบั๊กนี้บ่อยที่สุด แก้ที่จุดกิน (ingestion) จุดเดียวแทนที่จะ
+   แก้ทุกจุดอ่านปลายทาง — บังคับแปลงฟิลด์ตัวเลขที่รู้ตำแหน่งแน่นอน (m0..m9/l0..l3/Y/Z/X ตำแหน่ง
+   4-20) เป็น number จริงตั้งแต่ตอน merge เข้า local queue */
+function normalizeAppraisalRow(r){
+  const out = r.slice();
+  for(let i=4;i<=20;i++){ if(out[i]!==null && out[i]!==undefined && out[i]!=='') out[i]=Number(out[i]); }
+  return out;
+}
 async function ms365SyncAppraisals(silent=true){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
@@ -7640,7 +7659,7 @@ async function ms365SyncAppraisals(silent=true){
     return 0;
   }
   try{
-    const rows = await graphListTableRows(cfg.evaluationTable);
+    const rows = (await graphListTableRows(cfg.evaluationTable)).map(normalizeAppraisalRow);
     const local = getDrafts();
     const byKey = new Map(local.map(d => [draftKey(d), d]));
     rows.forEach(r=>{
@@ -9377,7 +9396,8 @@ function restoreReviewerFormFromDraft(lv, empCode, cycle){
   if(!table) return;
   const rows = [...table.querySelectorAll('tbody tr')];
   const applyFactor = (f, rowIdx, payloadIdx) => {
-    const val = draft[payloadIdx];
+    /* #117: เช่นเดียวกับ restoreEvalFormFromDraft() — บังคับแปลงเป็น number ก่อนเทียบเสมอ */
+    const val = Number(draft[payloadIdx]);
     if(!val) return;
     const w = f[2];
     const sc = smlScoreByWeight(w);
