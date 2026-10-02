@@ -5256,7 +5256,13 @@ function printEvalForm() {
     ส่วนที่ 4 &nbsp; ลงนามผลการประเมิน ( Signature )
   </div>
   <div class="F-signs ${sigGrid}">
-    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=1, empName, '')}
+    <!-- เดิมถือว่าพนักงาน "ลงนามรับทราบ" ตั้งแต่ liveRank>=1 (แค่ส่งแบบประเมินของตัวเองเท่านั้น) — ผิด
+         ความหมายจริงของป้าย "ลงนามรับทราบผลการประเมิน": พนักงานยังไม่เห็น "ผล" อะไรเลยตอนส่ง มีแต่
+         คะแนนที่ตัวเองให้ตัวเอง ผลจริงจะถูกส่งให้พนักงานเห็นก็ตอน GM อนุมัติแล้ว (GMApproved, อีเมลแจ้ง
+         จริงที่ #61 ส่ง) และพนักงานกดรับทราบเองที่หน้า "6. ผลประเมิน" ทำให้สถานะขยับเป็น Acknowledged
+         (acknowledgeMyResult(), #60/#61) — ผู้ใช้ขอให้ลงชื่อพนักงานเฉพาะตอนที่ส่งให้รับทราบแล้วจริงๆ
+         จึงเปลี่ยนเงื่อนไขเป็น liveRank>=evalStatusRank('Acknowledged') ตรงตามความหมายของป้ายเอง */
+    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=evalStatusRank('Acknowledged'), empName, '')}
     ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, liveRank>=2, empL1, '')}
     ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, liveRank>=3, empL2, '')}
     ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, liveSig?liveSig.signedBy:empExec, liveSig?new Date(liveSig.signedAt).toLocaleDateString('th-TH'):'')}
@@ -8477,10 +8483,13 @@ function buildEvalPrintPage(d, printDate){
   const xScore = X || (yScore+zScore);
 
   /* ลงนาม — ใช้ชื่อหัวหน้า/ผู้บริหารจริงเหมือน printEvalForm() แต่สถานะลงนามอิง evalStatusRank จริง
-     ของ draft แทน EVAL_STS (ซึ่งเป็นชื่อ/วันที่จำลองคงที่ ไม่ใช่ของจริง) */
+     ของ draft แทน EVAL_STS (ซึ่งเป็นชื่อ/วันที่จำลองคงที่ ไม่ใช่ของจริง) — พนักงานลงนามรับทราบได้จริง
+     ก็ต่อเมื่อผลถูกส่งให้พนักงานรับทราบแล้วเท่านั้น (Acknowledged, ตรงตามป้าย "ลงนามรับทราบผลการ
+     ประเมิน" เป๊ะๆ) ไม่ใช่แค่ตอนส่งแบบประเมินของตัวเอง (Submitted) ซึ่งพนักงานยังไม่เห็นผลอะไรเลย —
+     แก้ตามที่ผู้ใช้ชี้ว่า printEvalForm()'s ตัวเดียวกันนี้เพิ่งแก้ผิดเงื่อนไขไปตอน #122 */
   const sigFinal = getApprovalSignature(code+'|'+cycle);
   const sigLines = [
-    _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=1, empName, ''),
+    _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=evalStatusRank('Acknowledged'), empName, ''),
     _sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, empL1, ''),
     _sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, empL2, ''),
     _sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')

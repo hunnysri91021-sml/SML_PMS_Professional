@@ -4918,6 +4918,51 @@ touches employee/attendance/evaluation data.
     the exact same path, deleting whichever of the two duplicate helpers
     was built on the fake data rather than keeping both around.
 
+123. **Follow-up to #122: user said "แก้ จะลงชื่อพนักงานก็ต่อเมื่อ ส่งไปให้
+    พนักงานรับทราบแล้ว" (fix it — only sign the employee once it's been
+    sent to them for acknowledgment).** #122 had made the employee's
+    signature line real (no longer fake `EVAL_STS`), but used the wrong
+    threshold: `liveRank>=1` (`Submitted`) — true the instant the
+    employee submits their *own* self-score, before anyone has reviewed
+    it and long before the employee has actually seen a real result to
+    acknowledge. The signature label itself says "ลงนามรับทราบผล**การ
+    ประเมิน**" (sign to acknowledge the *evaluation result*) — but at
+    `Submitted` there is no result yet, only the employee's own input.
+    The real point the employee is shown a result and asked to
+    acknowledge it is `GMApproved` (`notifyEmployeeOfApproval()` emails
+    them then, per #61), and they actually sign by clicking "รับทราบผล
+    การประเมิน" on the "6. ผลประเมิน" page, which calls
+    `acknowledgeMyResult()` and advances the real status to
+    `Acknowledged` (#60/#61). Fixed both `printEvalForm()` and
+    `buildEvalPrintPage()`'s employee signature line to require
+    `liveRank>=evalStatusRank('Acknowledged')` / `rank>=evalStatusRank(
+    'Acknowledged')` instead of `>=1` — so the signature only shows
+    "✓ ยืนยันแล้ว" once the employee has genuinely clicked acknowledge,
+    matching the label's own real meaning; every earlier stage
+    (Draft/Submitted/L1Reviewed/L2Reviewed/GMApproved — sent but not yet
+    acknowledged) now correctly shows "⏳ กำลังประเมิน" with the
+    employee's own real name as the unsigned placeholder. L1/L2/final
+    signer thresholds were already correct (tied to their own real
+    review/approval stage, not the employee's) and were left unchanged.
+    Verified end-to-end with a test driving one real record through
+    the full real UI chain (self-submit → L1 review → L2 review → GM
+    approve queue's real checkbox+button → employee's own
+    `acknowledgeMyResult()`), reprinting after each stage: unsigned at
+    Submitted, still unsigned right after GM approves (sent but not yet
+    acknowledged), and only shows the real "✓ ยืนยันแล้ว" signature with
+    the employee's real name after they actually acknowledge — plus the
+    standard click-sweep and re-runs of #120/#121's own tests (one of
+    #121's own assertions, which expected the employee to sign at
+    `Submitted`, now correctly reports `false` — that's this fix working
+    as intended, not a regression, since `Submitted` was always the
+    wrong stage to call "signed"). General lesson: a label like "ลงนาม
+    รับทราบ**ผลการประเมิน**" describes what the signature is *for*, not
+    just *that* a signature exists — when wiring a fake/placeholder
+    signature up to real data, re-read the label's own wording against
+    the real pipeline stage it actually corresponds to, rather than
+    picking the first available real status value that happens to make
+    the "ok" branch render something.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
