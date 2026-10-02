@@ -4749,10 +4749,22 @@ function renderTeamFromMaster() {
   if(me && (me[2]==='l1' || me[2]==='unit')) managerName = me[1]; /* กันค่าค้างจากบทบาท/ผู้ใช้ก่อนหน้า ไม่ให้ L1/หัวหน้าหน่วยเห็นทีมคนอื่น */
   const statusFilter = document.getElementById('teamStatusFilter')?.value || '';
   const q = (document.getElementById('teamSearch')?.value || '').toLowerCase();
+  /* #118: ผู้ใช้รายงาน "ผลการประเมินที่ประเมินพนักงานในสังกัดไปแล้วหายไป ต้องแสดงให้ด้วยทุกสาย
+     บังคับบัญชา" — เดิมหน้านี้กรองแค่ลูกน้องที่ u[9] ชี้ตรงมาที่ตนเอง (1 ชั้น) แม้กระทั่งตอนล็อก
+     managerName เป็นชื่อตัวเองสำหรับ l1/unit — แต่ getMyScopedEmpCodes() (#92) ของ role 'l1' เองคือ
+     2 ชั้นจริง (ลูกน้องตรง + ทีมของหัวหน้าหน่วยทุกคนที่อยู่ใต้ตน) มาตั้งแต่ #92 แล้ว เพียงแต่หน้านี้
+     ไม่เคยถูกเปลี่ยนให้ใช้ scope จริงตัวเดียวกัน จึงทำให้คนที่หัวหน้าหน่วย (unit) ประเมินไปแล้ว ไม่โผล่
+     ในหน้า "2. ประเมินทีมงาน" ของหัวหน้าแผนก (l1) เลยสักคน อ่านว่า "ผลหายไป" ทั้งที่มีจริงใน draft —
+     ใช้ getMyScopedEmpCodes() แทนตรงๆ เฉพาะตอนที่ล็อก managerName เป็นชื่อตัวเอง (l1/unit มองทีมตัวเอง)
+     — role unit ได้ผลเหมือนเดิมเป๊ะ (scope ของ unit ก็คือ 1 ชั้นอยู่แล้ว) ส่วนโหมดเลือกหัวหน้าคนอื่นจาก
+     dropdown (L2/admin/exec ไล่ดูทีละหัวหน้า) ยังใช้ตรรกะเดิม — คนละการใช้งานกัน ไม่ได้ขอให้เปลี่ยน */
+  const myScoped = (me && (me[2]==='l1' || me[2]==='unit') && typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
   const subtitle = document.getElementById('teamPageSubtitle');
-  if(subtitle) subtitle.textContent = managerName ? `ผู้ใต้บังคับบัญชาทางตรงของ ${managerName}` : 'เลือกหัวหน้าเพื่อดูทีมงาน';
+  if(subtitle) subtitle.textContent = managerName ? (myScoped ? `ผู้ใต้บังคับบัญชาทุกสายของ ${managerName}` : `ผู้ใต้บังคับบัญชาทางตรงของ ${managerName}`) : 'เลือกหัวหน้าเพื่อดูทีมงาน';
 
-  const allDirectReports = MASTER_USERS.filter(u => u[12]==='active' && (u[9]||'').trim()===managerName.trim());
+  const allDirectReports = myScoped
+    ? MASTER_USERS.filter(u => u[12]==='active' && myScoped.has(u[0]) && u[0]!==me[0])
+    : MASTER_USERS.filter(u => u[12]==='active' && (u[9]||'').trim()===managerName.trim());
   const stMap = {pending:['b-y','⏳ รอประเมิน'],done:['b-g','✓ ส่งแล้ว']};
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
   const withStatus = allDirectReports.map(u => {

@@ -4625,6 +4625,59 @@ touches employee/attendance/evaluation data.
     an explicit type-coercion step at the one ingestion point rather
     than trusting whatever type Graph happened to hand back.
 
+118. **User reported "ผลการประเมินที่ประเมินพนักงานในสังกัดไปแล้วหายไป
+    ต้องแสดงให้ด้วยทุกสายบังคับบัญชา" (results already evaluated for
+    subordinate employees have disappeared — must show for every level
+    of the chain of command).** Traced to `renderTeamFromMaster()` (the
+    "2. ประเมินทีมงาน" page) — even though it already locks `managerName`
+    to the logged-in user's own name for `l1`/`unit` roles (so they only
+    ever see their own team, correctly), the row list itself was still
+    built from a plain 1-hop filter, `u[9]===managerName`, completely
+    independent of `getMyScopedEmpCodes()` — the same shared scoping
+    helper #92 had *already* extended for role `l1` to a real 2-hop walk
+    (direct reports **plus** every unit head's own team reporting under
+    them), specifically so a department head reviewing their whole
+    department would see everyone in it. That 2-hop scope has been
+    correctly driving the Dashboard/review queues/badges/notifications
+    since #92 — but nobody had gone back and pointed *this* page at the
+    same real scope, so a department head's team page only ever showed
+    people reporting *directly* to them; anyone a unit head under them
+    had already evaluated was invisible here, reading exactly like "the
+    results disappeared" even though the real drafts were sitting
+    correctly in `getDrafts()` the whole time. Fixed by building
+    `allDirectReports` from `getMyScopedEmpCodes()` instead of the raw
+    `u[9]` filter, specifically when `managerName` is locked to the
+    viewer's own name (`l1`/`unit` viewing their own team) — `unit`'s
+    real scope is 1-hop-only already, so this is a pure no-op for that
+    role; only `l1` actually gains the second tier. Left the *other*
+    mode of this same page — an L2/admin/exec picking a specific other
+    manager from the `teamManagerSelect` dropdown to drill into their
+    team one at a time — on its original `u[9]`-filter logic
+    deliberately: that's a genuinely different use case (browsing one
+    named manager's own direct team), not the "show my whole real scope
+    at once" case the report was about, and changing it wasn't asked
+    for. Verified with a test that seeds a real 3-tier chain (L1 →
+    unit head reporting to that L1 → an employee reporting to the unit
+    head) with real `Submitted` drafts for both the L1's direct report
+    and the unit head's own team member, logs in as the L1, and confirms
+    the team page now shows **both** — the direct report (already
+    worked before) and the unit head's team member (the one that was
+    genuinely missing) — plus the standard click-sweep. General lesson
+    sharper than #85/#87's own conclusion ("a scoping sweep across every
+    *page* is not the same as every *piece of UI*"): here the scoping
+    sweep (#92) was real and correct, and even reached the *right*
+    conceptual scope (`getMyScopedEmpCodes()` for `l1`) — but one
+    specific page's row-building logic simply never got pointed at it,
+    continuing to run its own older, narrower, hand-written filter
+    sitting right next to a call to the very same scoping function
+    elsewhere in the page (`populateTeamManagerSelect()` already uses
+    scope-aware logic for the dropdown). Whenever a shared scoping
+    helper is deliberately widened for one purpose, grep every other
+    *independent* filter expression touching the same relationship
+    (`u[9]===`/`u[10]===` by hand) in the same file, not just the
+    functions that already call the helper — a widened helper does
+    nothing for a caller that was never updated to use it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
