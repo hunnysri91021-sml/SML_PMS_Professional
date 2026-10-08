@@ -5658,6 +5658,80 @@ touches employee/attendance/evaluation data.
       never catch; a comment-history feature needs a multi-author test
       from the start, not just a two-stage happy path.
 
+133. **User reported "ถ้ามีการตีกลับแบบฟอร์ม คนที่รับต่อจะต้องประเมินใหม่
+    โดยข้อมูลยังแสดงผลเดิม" (if a form is rejected, the person who
+    receives it next must re-evaluate, while the data still shows the
+    previous result). Asked two clarifying questions before touching
+    code, since the real UI mechanics needed confirming first: (1)
+    confirmed the exact bug — `restoreReviewerFormFromDraft()` (#109)
+    re-ticks the old, already-rejected scores every time the reviewer
+    modal reopens, and clicking "✓ บันทึกและส่งต่อ" with zero changes
+    silently resubmits that same rejected set; (2) confirmed what
+    "ข้อมูลยังแสดงผลเดิม" should mean — keep the old scores visibly
+    ticked (don't blank them, which would lose the real reference data),
+    but require an explicit confirm or a real edit before the submit
+    button works.** Added `EVAL_NEEDS_RECONFIRM_KEY` (a `localStorage`
+    `Set` of `draftKey()` strings — `empCode|cycle|level`, the exact
+    key shape every status/comment store in this file already uses) —
+    `markNeedsReconfirm(key)` is called from all four real reject
+    functions (`rejectReviewerForm()`, `rejectReviewL1Selected()`,
+    `rejectReviewSelected()`, `rejectGmSelected()`), each using the same
+    `draftKey`/checkbox-`value` string already in scope at that call
+    site rather than reconstructing it, so this can never drift from
+    what the status-change itself already used as its key.
+    `openReviewerForm()` — right after `restoreReviewerFormFromDraft()`
+    re-ticks the old scores — now checks `needsReconfirm(empCode|cycle|
+    level)`: if true, a new `#reviewerReconfirmNote` warning banner
+    (`al al-w`, matching #129's established severity-class convention)
+    is inserted above the factor table explaining the scores are the
+    pre-reject values, the real "✓ บันทึกและส่งต่อ" button
+    (`#reviewerSubmitBtn`) is `disabled`, and a new, visible-only-then
+    "✓ ยืนยันว่าตรวจสอบแล้ว" button (`#reviewerConfirmBtn`) appears as
+    the explicit "I looked at this" action. **Two ways to clear the
+    pending state, both funneling through one shared `unlockReviewerSubmit()`**:
+    clicking the explicit confirm button, or genuinely editing any
+    factor's grade — `selectReviewScore()` gained a 4th `isRestore`
+    parameter so it can tell the difference between "the restore
+    function re-ticking old scores on open" (the HTML's own
+    `onclick="selectReviewScore(this,'${g}',${sc[g]})"` never passes a
+    4th arg, so a *real* user click is naturally `isRestore=undefined`/
+    falsy) and "a genuine new click" — only the latter calls
+    `unlockReviewerSubmit()`, while `restoreReviewerFormFromDraft()`'s
+    own internal call now explicitly passes `isRestore=true` so ticking
+    the old scores back on open can never accidentally self-clear the
+    very flag it's supposed to respect. `submitReviewerForm()` itself
+    also re-checks `needsReconfirm()` as defense-in-depth (CLAUDE.md
+    #55's "the UI-level lock is not the only place that must enforce
+    this" instinct) — a disabled button is a UI convenience, not a real
+    guarantee, so the function that actually writes the record refuses
+    independently with its own toast if the flag is somehow still set.
+    Verified with two end-to-end tests driving the real UI (no field
+    ever mutated directly): one confirms the full "reject → reopen →
+    scores restored but submit disabled + banner shown → blocked submit
+    attempt stays blocked → click confirm → submit now succeeds" chain;
+    a second confirms the alternate path — reject → reopen → edit one
+    factor's grade directly (never clicking confirm) → submit button
+    unlocks on its own and the real submission succeeds — plus re-runs
+    of #131/#132's own comment-history tests (unaffected) and the
+    standard click-sweep. **Deliberately scoped to the reviewer modal
+    only, not the self-eval page's own re-submission flow** — the
+    user's own clarifying answer described this exact modal/button by
+    name ("เปิดฟอร์มมา...กด บันทึกและส่งต่อ"), and while the self-eval
+    page's `restoreEvalFormFromDraft()` (#108) has the identical shape
+    of gap for an employee re-submitting after their own self-eval was
+    rejected back to `Draft`, building that too without being asked
+    would have doubled the scope on a guess; flagged here as a related,
+    not-yet-built gap rather than silently assumed out of scope forever.
+    General lesson: a "don't let someone resubmit unchanged data after
+    a reject" request is really two separate asks that must both be
+    satisfied at once — keep showing the old data (so context isn't
+    lost) *and* make the control that re-sends it genuinely require a
+    real touch first — and distinguishing "the system restoring old
+    state programmatically" from "the user genuinely interacting with
+    that same UI control" needs an explicit parameter/flag at the one
+    function both paths call through, not an assumption that only real
+    clicks ever reach it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -3223,7 +3223,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 <div class="ov" id="mReview"><div class="md reviewer-md" style="max-width:1120px">
   <div class="md-h"><div><h3 id="reviewerTitle">📋 แบบประเมินสำหรับผู้ประเมิน</h3><small id="reviewerSubtitle" style="color:#7b8796">แบบฟอร์มจะเปลี่ยนตามระดับของผู้ถูกประเมิน</small></div><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b" id="reviewerFormArea"></div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="rejectReviewerForm()">↩️ ตีกลับ</button><button class="btn btn-ok" onclick="submitReviewerForm()">✓ บันทึกและส่งต่อ</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="rejectReviewerForm()">↩️ ตีกลับ</button><button class="btn btn-p" id="reviewerConfirmBtn" style="display:none" onclick="confirmReviewerReconfirm()">✓ ยืนยันว่าตรวจสอบแล้ว</button><button class="btn btn-ok" id="reviewerSubmitBtn" onclick="submitReviewerForm()">✓ บันทึกและส่งต่อ</button></div>
 </div></div>
 
 <div class="ov" id="mSubmit"><div class="md" style="max-width:440px">
@@ -7934,6 +7934,31 @@ function recordEvalActor(empCode, cycle, step, code, name){
 function getEvalLastActor(empCode, cycle){
   try{ return JSON.parse(localStorage.getItem(EVAL_LAST_ACTOR_KEY)||'{}')[empCode+'|'+cycle] || null; }catch(e){ return null; }
 }
+/* ผู้ใช้รายงาน "ถ้ามีการตีกลับแบบฟอร์ม คนที่รับต่อจะต้องประเมินใหม่ โดยข้อมูลยังแสดงผลเดิม" —
+   restoreReviewerFormFromDraft() (CLAUDE.md #109) ติ๊กคะแนนเดิมกลับให้เสมอตอนเปิดฟอร์ม รวมถึงกรณีใบ
+   เพิ่งถูกตีกลับมา ถ้าไม่แก้อะไรเลยแล้วกด "✓ บันทึกและส่งต่อ" ก็ส่งคะแนนชุดเดิมที่เพิ่งถูกตีกลับกลับขึ้น
+   ไปซ้ำได้ทันที — ผู้ใช้ยืนยัน: ให้ "ยังคงติ๊กคะแนนเดิมไว้ให้" (ไม่เคลียร์ทิ้ง จะเสียข้อมูลอ้างอิงเดิม)
+   "แต่ต้องกดยืนยัน/แก้ไขก่อนส่ง" — เซ็ตของ draftKey (empCode|cycle|level) ที่ถูกตีกลับล่าสุดและยังไม่
+   เคยถูก "สัมผัส" จริง (กดยืนยัน หรือแก้ไขคะแนนจริงอย่างน้อย 1 ข้อ) โดยผู้สอบทานคนถัดไป — เคลียร์ออกทันที
+   ที่สัมผัสจริง (ดู unlockReviewerSubmit()) ไม่ใช่ทันทีที่เปิดฟอร์ม (แค่เปิดดูยังไม่ถือว่าตรวจสอบแล้ว) */
+const EVAL_NEEDS_RECONFIRM_KEY = 'smlPmsEvalNeedsReconfirm';
+function loadNeedsReconfirmSet(){
+  try{ return new Set(JSON.parse(localStorage.getItem(EVAL_NEEDS_RECONFIRM_KEY)||'[]')); }catch(e){ return new Set(); }
+}
+function saveNeedsReconfirmSet(set){
+  localStorage.setItem(EVAL_NEEDS_RECONFIRM_KEY, JSON.stringify([...set]));
+}
+function markNeedsReconfirm(key){
+  if(!key) return;
+  const s = loadNeedsReconfirmSet(); s.add(key); saveNeedsReconfirmSet(s);
+}
+function clearNeedsReconfirm(key){
+  if(!key) return;
+  const s = loadNeedsReconfirmSet(); if(s.delete(key)) saveNeedsReconfirmSet(s);
+}
+function needsReconfirm(key){
+  return loadNeedsReconfirmSet().has(key);
+}
 
 /* เดิม ms365PushAppraisals() เอารายการที่ Approved+push สำเร็จแล้ว "ลบออกจาก" MS365_LOCAL_DRAFT_KEY
    ทันที (กันไม่ให้ re-push ซ้ำ ตาม CLAUDE.md #7) — แต่คิวเดียวกันนี้ยังเป็นแหล่งข้อมูลเดียวที่หน้า
@@ -8038,7 +8063,7 @@ function rejectReviewL1Selected(){
   const keys=getCheckedKeys('reviewl1-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   updateDraftStatus(keys,'Draft');
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedL1Review',''); });
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedL1Review',''); markNeedsReconfirm(k); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากสอบทานหัวหน้าแผนก', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้แก้ไข '+keys.length+' รายการ','warn');
 }
@@ -8103,7 +8128,7 @@ function rejectReviewSelected(){
      แผนกสอบทานใหม่) ไม่ใช่ 'Draft' (ย้อนไปทั้งหมดถึงพนักงาน) เพราะตอนนี้มีขั้นสอบทานหัวหน้าแผนกคั่นอยู่
      ก่อนขั้นนี้แล้ว */
   updateDraftStatus(keys,'Submitted');
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedL2Review',''); });
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedL2Review',''); markNeedsReconfirm(k); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากสอบทานผู้จัดการส่วน', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้หัวหน้าแผนกสอบทานใหม่ '+keys.length+' รายการ','warn');
 }
@@ -8160,7 +8185,7 @@ function rejectGmSelected(){
      ใหม่โดยตรง ตอนนี้ต้องส่งกลับ 'L1Reviewed' (ขั้นก่อนหน้า L2Reviewed) เพื่อให้ landing ตรงคิว
      สอบทานผู้จัดการส่วนอีกครั้ง ไม่ใช่ย้อนไปถึงคิวหัวหน้าแผนกที่ไม่ได้ทำอะไรผิด */
   updateDraftStatus(keys,'L1Reviewed');
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedGmApproval',''); });
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedGmApproval',''); markNeedsReconfirm(k); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากอนุมัติ GM', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้ผู้จัดการส่วนสอบทานอีกครั้ง '+keys.length+' รายการ','warn');
 }
@@ -9847,7 +9872,35 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea id="reviewStrength" rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea id="reviewDev" rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
     <div class="review-approval-flow"><span>ผู้ประเมิน</span><i>→</i><span>ผู้บังคับบัญชาระดับสูง</span><i>→</i><span>ผู้จัดการทั่วไปฝ่าย</span><i>→</i><span>MD-SML</span></div>`;
   if(typeof restoreReviewerFormFromDraft==='function') restoreReviewerFormFromDraft(lv, code, currentReviewerCycle);
+  /* ผู้ใช้ยืนยัน: ถ้าใบนี้เพิ่งถูกตีกลับ คะแนนเดิมยังติ๊กไว้ให้ (ด้านบน) แต่ต้องกดยืนยัน/แก้ไขก่อนส่งซ้ำ —
+     ดู markNeedsReconfirm()/unlockReviewerSubmit() ด้านบน */
+  const reconfirmKey = code+'|'+currentReviewerCycle+'|'+lv;
+  const pending = !viewOnly && typeof needsReconfirm==='function' && needsReconfirm(reconfirmKey);
+  const confirmBtn = document.getElementById('reviewerConfirmBtn');
+  const submitBtn = document.getElementById('reviewerSubmitBtn');
+  if(confirmBtn) confirmBtn.style.display = pending ? '' : 'none';
+  if(submitBtn) submitBtn.disabled = pending;
+  document.getElementById('reviewerReconfirmNote')?.remove();
+  if(pending){
+    area.insertAdjacentHTML('afterbegin', `<div id="reviewerReconfirmNote" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ใบนี้เคยถูกตีกลับ — คะแนนที่เห็นคือคะแนนเดิมก่อนตีกลับ กรุณาตรวจสอบ/แก้ไขให้เรียบร้อย แล้วกด "✓ ยืนยันว่าตรวจสอบแล้ว" หรือแก้ไขคะแนนอย่างน้อย 1 ข้อ ก่อนจึงจะส่งได้</div></div>`);
+  }
   openM('mReview');
+}
+/* เรียกตอนผู้สอบทาน "สัมผัส" ใบที่เคยถูกตีกลับจริง — กดยืนยันตรงๆ หรือแก้ไขคะแนนจริงอย่างน้อย 1 ข้อ
+   (ดู selectReviewScore()'s isRestore param ด้านล่าง — การติ๊กคะแนนคืนตอนเปิดฟอร์มไม่นับเป็นการสัมผัส) */
+function unlockReviewerSubmit(){
+  if(currentReviewerCode && currentReviewerCycle && currentReviewerLevel && typeof clearNeedsReconfirm==='function'){
+    clearNeedsReconfirm(currentReviewerCode+'|'+currentReviewerCycle+'|'+currentReviewerLevel);
+  }
+  const confirmBtn = document.getElementById('reviewerConfirmBtn');
+  const submitBtn = document.getElementById('reviewerSubmitBtn');
+  if(confirmBtn) confirmBtn.style.display = 'none';
+  if(submitBtn) submitBtn.disabled = false;
+  document.getElementById('reviewerReconfirmNote')?.remove();
+}
+function confirmReviewerReconfirm(){
+  unlockReviewerSubmit();
+  smlToast('ยืนยันแล้ว — สามารถบันทึกและส่งต่อได้','ok');
 }
 /* เหมือน restoreEvalFormFromDraft() (CLAUDE.md #108) แต่สำหรับหน้าต่างนี้ — ถ้าคนนี้มีใบที่เคยให้
    คะแนนไว้แล้วในรอบ/ระดับเดียวกัน (ไม่ว่าจะเพิ่งส่งเอง, ผ่านสอบทานหัวหน้าแผนกมาแล้ว ฯลฯ) ต้องติ๊ก
@@ -9871,14 +9924,14 @@ function restoreReviewerFormFromDraft(lv, empCode, cycle){
     const row = rows[rowIdx];
     if(!grade || !row) return;
     const btn = [...row.querySelectorAll('button')].find(b => b.getAttribute('onclick').includes(`'${grade}'`));
-    if(btn) selectReviewScore(btn, grade, val);
+    if(btn) selectReviewScore(btn, grade, val, true);
   };
   smCfg.factors.slice(0,10).forEach((f,fi) => applyFactor(f, fi, 4+fi));
   if(cfg.leaderShow){
     smCfg.factors.slice(10).forEach((f,fi) => applyFactor(f, 10+fi, 14+fi));
   }
 }
-function selectReviewScore(btn,grade,score){
+function selectReviewScore(btn,grade,score,isRestore){
   const row=btn.closest('tr'); if(!row)return;
   row.querySelectorAll('.review-score').forEach(x=>x.classList.remove('selected')); btn.classList.add('selected');
   const got=row.querySelector('.review-got'); if(got)got.textContent=score;
@@ -9891,6 +9944,10 @@ function selectReviewScore(btn,grade,score){
   const y=raw/cfg.maxRaw*cfg.ypct, x=y+zval;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
   set('reviewRaw',raw.toFixed(0));set('reviewRaw2',raw.toFixed(0));set('reviewY',y.toFixed(2));set('reviewX',x.toFixed(2));
+  /* isRestore=true มาจาก restoreReviewerFormFromDraft() เอง (ติ๊กคะแนนเดิมคืนตอนเปิดฟอร์ม) — ไม่นับเป็น
+     การแก้ไขจริง คลิกจริงของผู้ใช้เท่านั้น (onclick ในแม่แบบ HTML ไม่ส่ง isRestore เลย จึง undefined/falsy)
+     ที่ถือว่า "สัมผัส" ใบนี้แล้วและปลดล็อกปุ่มส่งได้ (ดู unlockReviewerSubmit() ด้านบน) */
+  if(!isRestore && typeof unlockReviewerSubmit==='function') unlockReviewerSubmit();
 }
 function clearReviewerForm(){
   const area=document.getElementById('reviewerFormArea'); if(!area)return;
@@ -9918,6 +9975,12 @@ async function submitReviewerForm(){
   const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
   const cfg = LEVEL_CONFIG[lv];
   if(!code || !cycle || !lv || !cfg){ smlToast('ไม่พบข้อมูลพนักงานสำหรับฟอร์มนี้','warn'); return; }
+  /* ป้องกันซ้ำ (defense-in-depth) เผื่อปุ่ม disabled ถูกข้ามมาด้วยวิธีใดก็ตาม — ตัวเช็คจริงอยู่ที่ UI
+     (openReviewerForm()/unlockReviewerSubmit()) แต่ฟังก์ชันที่เขียนข้อมูลจริงต้องกันเองด้วยเสมอ */
+  if(typeof needsReconfirm==='function' && needsReconfirm(code+'|'+cycle+'|'+lv)){
+    smlToast('ใบนี้เคยถูกตีกลับ — กรุณากดยืนยันว่าตรวจสอบแล้ว หรือแก้ไขคะแนนอย่างน้อย 1 ข้อ ก่อนบันทึกและส่งต่อ','warn');
+    return;
+  }
   const table = document.querySelector('#reviewerFormArea .reviewer-table');
   const rows = table ? [...table.querySelectorAll('tbody tr')] : [];
   if(!rows.length){ smlToast('ไม่พบตารางคะแนนในแบบฟอร์มนี้','warn'); return; }
@@ -9998,6 +10061,7 @@ function rejectReviewerForm(){
   if(!confirm('ยืนยันตีกลับใบประเมินนี้?')) return;
   updateDraftStatus([draftKey(existing)], step.prev);
   pushApprovalRecordToExcel(code, cycle, 'Rejected'+curStatus, '');
+  markNeedsReconfirm(draftKey(existing));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, '');
   smlToast(step.label+'เรียบร้อย','warn');
   closeM();
