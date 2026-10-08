@@ -8782,9 +8782,11 @@ function exportNineBox(){
 function getEvaluationAssignments(participants){
   const list = participants || getEvalParticipants();
   return list.map(u => {
-    const l1 = u[9] && u[9]!=='—' ? u[9] : '';
-    const l2 = u[10] && u[10]!=='—' ? u[10] : '';
-    const approver = u[11] && u[11]!=='—' ? u[11] : '';
+    /* trim() ก่อนเช็คว่ามี/ไม่มี — ค่าที่เป็นช่องว่างล้วน (" ") เดิมผ่านเป็น "มีหัวหน้าแล้ว" ทั้งที่ไม่มีค่า
+       จริงอยู่เลย ใช้หลักการเดียวกับ #126 (trim ก่อนเทียบตัวตน ไม่ใช่แค่ตอนเทียบชื่อสองคน) */
+    const l1 = (u[9]||'').trim() && u[9].trim()!=='—' ? u[9].trim() : '';
+    const l2 = (u[10]||'').trim() && u[10].trim()!=='—' ? u[10].trim() : '';
+    const approver = (u[11]||'').trim() && u[11].trim()!=='—' ? u[11].trim() : '';
     let missing = false, missingReason = '';
     if(u[2]==='emp' || u[2]==='unit'){
       /* หัวหน้าหน่วยเองก็ต้องมีคนเหนือขึ้นไปประเมินรอบแรกเหมือนพนักงานทั่วไป (คือหัวหน้าแผนก/l1 —
@@ -8917,15 +8919,18 @@ function checkHierarchyIssues(showToast){
      ทั้งหมดเสมอ เพราะต้องไล่สายจริงแม้สายจะโยงออกนอกขอบเขตที่มองเห็นได้ — กรองแค่ผลลัพธ์ noL1/circular
      ท้ายสุดตาม scope ไม่ใช่กรอง input ก่อนไล่สาย) */
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  const noL1 = MASTER_USERS.filter(u => u[12]==='active' && (u[2]==='emp'||u[2]==='l1') && (!u[9] || u[9]==='—') && (!scoped || scoped.has(u[0])));
+  const noL1 = MASTER_USERS.filter(u => u[12]==='active' && (u[2]==='emp'||u[2]==='l1') && (!(u[9]||'').trim() || (u[9]||'').trim()==='—') && (!scoped || scoped.has(u[0])));
+  /* #126's lesson applied here too — trim() ชื่อก่อนใช้เป็น key/เทียบ ไม่งั้นชื่อที่มีช่องว่างเกินติดมา
+     จะหา byName[supName] ไม่เจอ ทำให้การไล่สายบังคับบัญชาหยุดกลางคันเหมือนสายขาด (false negative ของ
+     circular reference) แทนที่จะไล่ต่อไปจนเจอวงจรจริงหรือสุดสายจริง */
   const byName = {};
-  MASTER_USERS.forEach(u => { byName[u[1]] = u; });
+  MASTER_USERS.forEach(u => { byName[(u[1]||'').trim()] = u; });
   const circular = [];
   MASTER_USERS.filter(u=>u[12]==='active' && (!scoped || scoped.has(u[0]))).forEach(start => {
-    const seen = new Set([start[1]]);
+    const seen = new Set([(start[1]||'').trim()]);
     let cur = start;
     for(let i=0;i<20;i++){
-      const supName = cur[9];
+      const supName = (cur[9]||'').trim();
       if(!supName || supName==='—') break;
       if(seen.has(supName)){ circular.push(start[1]); break; }
       seen.add(supName);

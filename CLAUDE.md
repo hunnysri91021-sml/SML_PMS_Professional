@@ -5094,6 +5094,67 @@ touches employee/attendance/evaluation data.
     this is found and fixed in one place, since each one is a separate,
     equally-reachable landmine until it's fixed too.
 
+127. **Follow-up to #126: user said "ทุกจุดที่เกี่ยวข้องปรับให้เชื่อมกัน"
+    (adjust every related point so they connect/agree with each other)
+    — the exact general lesson #126 closed with, acted on immediately
+    rather than waiting for the next bug report to surface one at a
+    time.** Grepped the whole file for every remaining raw `u[9]`/
+    `u[10]`/`u[11]`/`u[19]` comparison and found two more real,
+    previously-unfixed instances of the identical untrimmed-name shape,
+    both inside `checkHierarchyIssues()` (the org-chart page's
+    hierarchy-problem banner, #73):
+    - `byName[u[1]] = u` indexed every employee by their **raw,
+      untrimmed** name, and the circular-reference walk looked up
+      `cur = byName[supName]` using `supName = cur[9]` — also raw,
+      untrimmed. If any supervisor's own stored name (`MASTER_USERS[1]`)
+      or any employee's `u[9]` pointing to them carried stray
+      whitespace (the exact same real-world data shape #84/#86 already
+      found twice in this file), the lookup would silently miss and the
+      walk would stop early, thinking the chain simply ended — a false
+      negative that would hide a *real* circular reference rather than
+      reporting it, the opposite failure direction from #86's "empty
+      scope" bug but the identical root cause. Fixed by trimming both
+      the `byName` keys and every name read during the walk (`supName`,
+      the seed value put into `seen`) before comparing or looking up.
+    - `getEvaluationAssignments()`'s `l1`/`l2`/`approver` presence
+      checks (`u[9] && u[9]!=='—' ? u[9] : ''`) treated a whitespace-only
+      field (`" "`) as "a real supervisor is set," since a non-empty
+      string of pure spaces is truthy and isn't the literal `'—'`
+      sentinel — so a blank-looking but non-empty cell from a manual
+      Excel edit would silently pass the "do they have a supervisor"
+      check this function exists to enforce, the same `#1`/`#22` shape
+      of bug just one layer more subtle (trimming matters for presence
+      checks, not only identity-equality checks). Fixed by trimming
+      before both the truthiness test and the `'—'` comparison.
+    Verified with three targeted tests: a non-circular chain where one
+    supervisor's own name carries a trailing space doesn't get
+    false-flagged as circular (confirms the trim fix didn't introduce a
+    new false positive), a genuine circular reference between two
+    supervisors whose names also carry trailing-space variants is now
+    correctly detected (confirms the previously-possible false
+    negative is closed), and an employee whose L1 field is a
+    whitespace-only string is now correctly flagged as "missing a
+    supervisor" instead of silently passing — plus the standard
+    click-sweep. **What was checked and found already consistent, so
+    left untouched**: every other identity comparison against
+    `u[9]`/`u[10]`/`u[19]` in the file (`getMyScopedEmpCodes()`,
+    `populateTeamManagerSelect()`, `renderTeamFromMaster()`'s
+    `managerName` filter, `getNotifications()`/`renderNavBadges()`'s
+    scoping) was already trimmed as of #86/#88/#126; the remaining
+    `u[9]`/`u[10]`/`u[11]`/`u[19]` reads in the file (`supervisorChainLabel()`,
+    the employee detail view's `udL1`/`udL2`/`udApprover`/`udGM`,
+    `normalizeMs365Employee()`'s sync assignment) are pure *display* or
+    *write* paths, not identity comparisons a stray space can silently
+    break, so they were correctly left alone rather than trimmed for no
+    functional reason. General lesson: when a user explicitly asks to
+    "connect every related point" right after a narrowly-scoped fix,
+    treat it as a direct instruction to run the fixed bug's own stated
+    general lesson across the whole file immediately — grep for the
+    exact pattern that broke, categorize every hit as a real instance,
+    an already-fixed instance, or a non-comparison read that doesn't
+    need trimming, and fix every real instance in one pass rather than
+    waiting for each one to surface as its own separate future report.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
