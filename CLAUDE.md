@@ -5819,6 +5819,82 @@ touches employee/attendance/evaluation data.
     different guarantees, and shipping the first is not evidence the
     second was ever checked.
 
+135. **User sent a real screenshot of the Excel "Master data" header row and
+    asked to check for mismatches with the app. Column *positions* still
+    matched the code exactly (L=`l1`, M=`l2`, N=`gm`, O=`approver`, per
+    #30/#97's verified `EXCEL_EMPLOYEE_COLS` order — no re-shift bug), but
+    the real header *text* on columns N/O directly contradicted what the
+    app's own L3/L4 hierarchy labeling (#70/#88/#89) had assumed: the real
+    sheet calls column N "ผู้ตรวจ GM **L3**" and column O "ผู้อนุมัติ GM
+    **L4**" — i.e. both are GM-related, review-then-approve, with the
+    code's `gm` field (u[19]) sitting at the real sheet's L3 tier and the
+    code's `approver` field (u[11]) sitting at the real L4 tier — exactly
+    backwards from #70's own labeling (`gm`=L4 "GM", `approver`=L3
+    "ผู้จัดการส่วน").** Confirmed with the user before touching anything
+    which fix they wanted (full workflow-structure change — a genuine
+    second GM review step driving real approval logic — vs. the easy,
+    low-risk fix); user asked which was easiest and I recommended, then
+    built, the **cosmetic-only** one: relabel every L3/L4 display text to
+    match the real sheet's wording and reading order, **without** touching
+    which `MASTER_USERS` index backs which field, which Excel column it
+    maps to, or any approval/scoping logic — the exact same "field ids/
+    storage/semantics untouched, only the human-facing label changes"
+    scope #70 itself used for its own original relabeling. Verified first,
+    via `resolveGmReviewer()`/`getMyScopedEmpCodes()`'s `gm` branch (#88/
+    #128), that the `gm` field (u[19]) is the one actually driving every
+    real GM-approval mechanism (scoping, the GM approve queue, the GM
+    reviewer resolver) — the `approver` field (u[11]) is not wired into
+    any of that, only into #22's chain-completeness check and display —
+    so relabeling alone is honest: the field that the real sheet now calls
+    "L3 ผู้ตรวจ GM" is indeed the one the app's approval logic already
+    treats as "the GM," just previously mislabeled "L4." Updated, in one
+    pass, every place that pairs an L-number with these two fields
+    specifically (not the *separate* #92/#115 workflow-stage L-numbering,
+    which is about which role reviews at which pipeline status and was
+    correctly left untouched — see #115's own warning that this file uses
+    "L1-L4" in several unrelated senses): `supervisorChainLabel()`'s
+    line-building order/labels (now L1→L2→L3(`gm`)→L4(`approver`), with a
+    code comment explaining the swap and that it's display-only), the org
+    chart table's header cells *and* its row-rendering cell order (`renderOrg()`
+    — swapped which `<td>` prints `u[19]` vs `u[11]` to match the new
+    header order, not just the header text alone, which would have been
+    the exact #34 "label says one thing, code renders another" trap),
+    the employee list's chain-column subtitle, the employee detail view
+    (`udGM`/`udApprover` — swapped both the `setId()` assignment order's
+    comment and the two HTML blocks' display order/labels so the field
+    shown first is genuinely L3), the Add/Edit Employee modal's two field
+    labels (`mu_gm`/`mu_approver` — reordered the two `<div class="fg">`
+    blocks in the markup too, not just their `<label>` text, so the form
+    reads L1→L2→L3→L4 top to bottom same as every other L-numbered list
+    in the file), the bulk-import template's reference table and
+    `EMP_TEMPLATE_THAI` display labels, and the Import-modal's inline
+    hint text. **Deliberately left `EMP_TEMPLATE_HEADERS`'s field *order*
+    unchanged** (`...,'l1','l2','gm','approver',...`) — per CLAUDE.md
+    #89's own established reasoning, a raw data-interchange column order
+    must mirror the real external file's actual column order, not a
+    human-reading hierarchy order, so only its Thai *label* text (in
+    `EMP_TEMPLATE_THAI`, a separate parallel array) was updated, never the
+    `EMP_TEMPLATE_HEADERS` machine-parsed field-name order itself.
+    Verified with a test that seeds a synthetic employee with distinct L1-
+    L4 names, confirms `supervisorChainLabel()`'s HTML reads L1→L2→
+    L3(ผู้ตรวจ GM, the real `gm` value)→L4(ผู้อนุมัติ GM, the real
+    `approver` value) in that exact order, confirms the org chart's
+    rendered row puts the `gm` value under the "L3" header cell and the
+    `approver` value under the "L4" header cell (not just checking the
+    header text in isolation), and confirms the employee detail view's
+    `udGM`/`udApprover` elements show the correct values — plus the
+    standard click-sweep (`nav pages clicked: 22 errors: []`). General
+    lesson sharper than #89's own conclusion: #89 fixed *one* function's
+    L3/L4 display order to match a hierarchy the app had already defined
+    correctly; this time the app's own definition of which field is "L3"
+    vs "L4" was itself wrong against the real external sheet — when a
+    user-supplied screenshot of a real system contradicts this file's own
+    established labeling scheme (not just a column-position bug), always
+    confirm which of the two is authoritative and how deep the intended
+    fix should go (cosmetic relabel vs. a genuine second approval-stage
+    rebuild) before touching anything, since the two fixes have wildly
+    different blast radii and the user may only want the cheap one today.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

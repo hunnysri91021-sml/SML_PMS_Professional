@@ -2217,7 +2217,7 @@ tbody tr:hover{background:#f0f6ff!important}
         <input id="orgSearch" oninput="filterOrg()" placeholder="🔍 ค้นหา" style="padding:5px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;width:170px">
       </div></div>
       <div class="tw"><table>
-        <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>กลุ่ม</th><th>แผนก</th><th>ส่วน</th><th>ฝ่าย</th><th>ระดับ</th><th>หัวหน้าหน่วย (L1)</th><th>หัวหน้าแผนก (L2)</th><th>ผู้จัดการส่วน (L3)</th><th>GM (L4)</th><th>สถานะ</th></tr></thead>
+        <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>กลุ่ม</th><th>แผนก</th><th>ส่วน</th><th>ฝ่าย</th><th>ระดับ</th><th>หัวหน้าหน่วย (L1)</th><th>หัวหน้าแผนก (L2)</th><th>ผู้ตรวจ GM (L3)</th><th>ผู้อนุมัติ GM (L4)</th><th>สถานะ</th></tr></thead>
         <tbody id="orgRows"></tbody>
       </table></div>
     </div>
@@ -2963,7 +2963,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
               <th style="width:90px">บทบาท</th>
               <th style="min-width:150px">สังกัด<br><small style="font-weight:400;color:#bfdbfe">Group › Section › Division › Dept</small></th>
               <th style="width:55px">Grade</th>
-              <th style="min-width:150px">สายบังคับบัญชา<br><small style="font-weight:400;color:#bfdbfe">L1 / L2 / L3 / GM (L4)</small></th>
+              <th style="min-width:150px">สายบังคับบัญชา<br><small style="font-weight:400;color:#bfdbfe">L1 / L2 / L3 (ผู้ตรวจ GM) / L4 (ผู้อนุมัติ GM)</small></th>
               <th style="width:75px">สถานะ</th>
               <th style="width:100px">วันเริ่มงาน<br><small style="font-weight:400;color:#bfdbfe">Login ล่าสุด</small></th>
               <th style="width:60px;text-align:center">จัดการ</th>
@@ -3181,8 +3181,8 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         <tr><td>11</td><td><b>grade</b></td><td>เกรด</td><td>G1</td></tr>
         <tr><td>12</td><td><b>l1_unit_head</b></td><td>หัวหน้าหน่วย (L1)</td><td>สุดา มีสุข</td></tr>
         <tr><td>13</td><td><b>l2_dept_head</b></td><td>หัวหน้าแผนก (L2)</td><td>อรุณ ศิริ</td></tr>
-        <tr><td>14</td><td><b>gm</b></td><td>GM (L4)</td><td>คุณสมศักดิ์</td></tr>
-        <tr><td>15</td><td><b>approver_division_mgr</b></td><td>ผู้จัดการส่วน (L3 / ผู้อนุมัติ)</td><td>คุณเชิดชัย</td></tr>
+        <tr><td>14</td><td><b>gm</b></td><td>ผู้ตรวจ GM (L3)</td><td>คุณสมศักดิ์</td></tr>
+        <tr><td>15</td><td><b>approver_division_mgr</b></td><td>ผู้อนุมัติ GM (L4)</td><td>คุณเชิดชัย</td></tr>
         <tr><td>16</td><td><b>status</b></td><td>สถานะ</td><td>active / probation / inactive / resigned</td></tr>
         <tr><td>17</td><td><b>potential</b></td><td>ศักยภาพ (9-Box)</td><td>High / Medium / Low</td></tr>
       </tbody></table>
@@ -4567,15 +4567,17 @@ function supervisorChainLabel(u){
   const gm = u[19] && u[19]!=='—' ? u[19] : '';
   if(!l1 && !l2 && !gm && !approver) return '<span style="color:#94a3b8">— สูงสุดในองค์กร —</span>';
   const lines = [];
-  /* ลำดับต้องตรงกับสายบังคับบัญชาจริง 4 ระดับตามที่ #70 ตั้งชื่อไว้ในฟอร์ม Add/Edit Employee:
-     L1 หัวหน้าหน่วย (u[9]) → L2 หัวหน้าแผนก (u[10]) → L3 ผู้จัดการส่วน/"อนุมัติ" (u[11]) → L4 GM (u[19])
-     เดิมโค้ดนี้ดัน GM (u[19]) เข้าไปก่อน "อนุมัติ" (u[11]) กลับหัวกลับหาง เพราะตอนเพิ่ม GM เข้ามา (#68)
-     ต่อท้ายโค้ดแบบ append-only ตาม CLAUDE.md #5 (ถูกต้องแล้วสำหรับ "ตำแหน่ง index ในอาร์เรย์") แต่ไม่ได้
-     คำนึงถึง "ลำดับการแสดงผลจริง" ซึ่งเป็นคนละเรื่องกัน — ดู CLAUDE.md #89 */
+  /* #100: หัวข้อ Header แถวจริงของชีท Employees (ยืนยันจากภาพหน้าจอ HR ส่งมารอบล่าสุด) เรียงเป็น
+     L1=หัวหน้ากลุ่ม (u[9]) → L2=หัวหน้าแผนก (u[10]) → L3="ผู้ตรวจ GM" (u[19], ฟิลด์ที่โค้ดเรียก `gm`) →
+     L4="ผู้อนุมัติ GM" (u[11], ฟิลด์ที่โค้ดเรียก `approver`) — สลับกับที่ #70/#89 เคยเข้าใจไว้ (L3=ผู้จัดการ
+     ส่วน/approver, L4=GM) ตำแหน่งคอลัมน์ใน Excel/EXCEL_EMPLOYEE_COLS ไม่เปลี่ยน (ยังเป็น l1,l2,gm,approver
+     ตามเดิม) เปลี่ยนแค่ "ป้ายชื่อ"/"ลำดับการแสดงผล" L3 กับ L4 ให้ตรงกับความเข้าใจจริงของ HR — ฟิลด์ `gm`
+     (u[19]) ยังเป็นตัวขับ logic การอนุมัติ GM ทั้งหมดเหมือนเดิม (scoping/resolveGmReviewer/คิวอนุมัติ GM)
+     ไม่มีการเปลี่ยนแปลง มีแค่ตัวเลข L3/L4 ที่ใช้เรียกฟิลด์ตอนแสดงผลที่สลับกัน */
   if(l1) lines.push(`<b>L1</b> ${l1}`);
   if(l2) lines.push(`<b>L2</b> ${l2}`);
-  if(approver) lines.push(`<b>L3</b> ${approver}`);
-  if(gm) lines.push(`<b>L4 (GM)</b> ${gm}`);
+  if(gm) lines.push(`<b>L3 (ผู้ตรวจ GM)</b> ${gm}`);
+  if(approver) lines.push(`<b>L4 (ผู้อนุมัติ GM)</b> ${approver}`);
   return lines.join('<br>');
 }
 function renderUsers(data) {
@@ -4673,8 +4675,8 @@ function renderOrg(data) {
     <td><span class="bd b-s">${U_ROLE_LABEL[u[2]]||u[2]}</span></td>
     <td style="font-size:12px">${u[9]||'—'}</td>
     <td style="font-size:12px">${u[10]||'—'}</td>
-    <td style="font-size:12px">${u[11]||'—'}</td>
     <td style="font-size:12px">${u[19]||'—'}</td>
+    <td style="font-size:12px">${u[11]||'—'}</td>
     <td>${U_STATUS_LABEL[u[12]]||''}${u[20]==='1' ? '<br><span class="bd" style="font-size:10px;background:#f1f5f9;color:#64748b">🚫 ยกเว้นประเมิน</span>' : ''}</td>
   </tr>`).join('');
 }
@@ -5379,8 +5381,8 @@ function openUserDetail(empId) {
   /* Line of authority */
   setId('udL1',       u[9]);   /* หัวหน้าหน่วย (L1) */
   setId('udL2',       u[10]);  /* หัวหน้าแผนก (L2) */
-  setId('udApprover', u[11]);  /* ผู้จัดการส่วน (L3) */
-  setId('udGM',       u[19]);  /* GM (L4) */
+  setId('udGM',       u[19]);  /* #100: ผู้ตรวจ GM (L3) — ฟิลด์ `gm` */
+  setId('udApprover', u[11]);  /* #100: ผู้อนุมัติ GM (L4) — ฟิลด์ `approver` */
 
   /* Info */
   setId('udCode',      u[0]);
@@ -10443,16 +10445,16 @@ document.addEventListener('input',e=>{
           <div id="mu_l2_note" style="font-size:11px;margin-top:3px"></div>
         </div>
         <div class="fg">
-          <label>ผู้จัดการส่วน (L3)</label>
-          <input id="mu_approver_code" list="empCodeList" placeholder="พิมพ์รหัสพนักงาน แล้วชื่อจะขึ้นให้อัตโนมัติ" autocomplete="off" oninput="onSupervisorCodeInput('approver')" style="margin-bottom:5px">
-          <select id="mu_approver" onchange="onSupervisorSelectChange('approver')"></select>
-          <div id="mu_approver_note" style="font-size:11px;margin-top:3px"></div>
-        </div>
-        <div class="fg">
-          <label>GM (L4)</label>
+          <label>ผู้ตรวจ GM (L3)</label>
           <input id="mu_gm_code" list="empCodeList" placeholder="พิมพ์รหัสพนักงาน แล้วชื่อจะขึ้นให้อัตโนมัติ" autocomplete="off" oninput="onSupervisorCodeInput('gm')" style="margin-bottom:5px">
           <select id="mu_gm" onchange="onSupervisorSelectChange('gm')"></select>
           <div id="mu_gm_note" style="font-size:11px;margin-top:3px"></div>
+        </div>
+        <div class="fg">
+          <label>ผู้อนุมัติ GM (L4)</label>
+          <input id="mu_approver_code" list="empCodeList" placeholder="พิมพ์รหัสพนักงาน แล้วชื่อจะขึ้นให้อัตโนมัติ" autocomplete="off" oninput="onSupervisorCodeInput('approver')" style="margin-bottom:5px">
+          <select id="mu_approver" onchange="onSupervisorSelectChange('approver')"></select>
+          <div id="mu_approver_note" style="font-size:11px;margin-top:3px"></div>
         </div>
       </div>
     </div>
@@ -10574,7 +10576,7 @@ document.addEventListener('input',e=>{
 <div class="ov" id="mImportUsers"><div class="md" style="max-width:620px">
   <div class="md-h"><h3>⬆️ Import พนักงานจาก Excel</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="al al-i"><span>📋</span><div><b>Template พนักงานมาตรฐาน</b><br>คอลัมน์บังคับ: รหัสพนักงาน, ชื่อ-สกุล, บทบาท, กลุ่ม, แผนก, ส่วน, ฝ่าย, ตำแหน่ง, วันเริ่มงาน, อีเมล, เกรด, หัวหน้าหน่วย (L1), หัวหน้าแผนก (L2), GM (L4), ผู้จัดการส่วน (L3/ผู้อนุมัติ), สถานะ, ศักยภาพ</div></div>
+    <div class="al al-i"><span>📋</span><div><b>Template พนักงานมาตรฐาน</b><br>คอลัมน์บังคับ: รหัสพนักงาน, ชื่อ-สกุล, บทบาท, กลุ่ม, แผนก, ส่วน, ฝ่าย, ตำแหน่ง, วันเริ่มงาน, อีเมล, เกรด, หัวหน้าหน่วย (L1), หัวหน้าแผนก (L2), ผู้ตรวจ GM (L3), ผู้อนุมัติ GM (L4/ผู้อนุมัติ), สถานะ, ศักยภาพ</div></div>
     <div class="up" style="margin:14px 0" onclick="document.getElementById('employeeFileIn').click()">
       <div class="ic">📁</div><b id="employeeFileLabel">เลือกไฟล์ Excel / CSV</b><span>รองรับ .xlsx, .xls, .csv · สูงสุด 500 แถว / 20 MB</span>
     </div>
@@ -10750,7 +10752,7 @@ document.addEventListener('input',e=>{
    ไม่ครบ" แต่เป็นการล็อกไม่ให้กรอกข้อมูลจริงที่ระบบต้องการ จงใจไม่รวม pinHash/evalLevel/lastLogin
    (ไม่ใช่คอลัมน์จริงในชีต Employees ตาม #17/#23/#30 — เป็นข้อมูล local/ตั้งค่าแยกต่างหาก) */
 const EMP_TEMPLATE_HEADERS = ['emp_code','full_name','role','group','section','division','department','position','start_date','email','grade','l1_unit_head','l2_dept_head','gm','approver_division_mgr','status','potential'];
-const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/unit/l1/l2/gm/exec/admin/sysadmin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','วันเริ่มงาน (DD/MM/YYYY)','อีเมล','เกรด','หัวหน้าหน่วย (L1)','หัวหน้าแผนก (L2)','GM (L4)','ผู้จัดการส่วน (L3 / ผู้อนุมัติ)','สถานะ (active/probation/inactive/resigned)','ศักยภาพ (High/Medium/Low)'];
+const EMP_TEMPLATE_THAI    = ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท (emp/unit/l1/l2/gm/exec/admin/sysadmin)','กลุ่ม','แผนก','ส่วน','ฝ่าย','ตำแหน่ง','วันเริ่มงาน (DD/MM/YYYY)','อีเมล','เกรด','หัวหน้าหน่วย (L1)','หัวหน้าแผนก (L2)','ผู้ตรวจ GM (L3)','ผู้อนุมัติ GM (L4)','สถานะ (active/probation/inactive/resigned)','ศักยภาพ (High/Medium/Low)'];
 function downloadEmployeeTemplate(withExample=true){
   const rows=[EMP_TEMPLATE_HEADERS];
   if(withExample){
@@ -11543,14 +11545,14 @@ async function confirmImportEmployees(){
           font-weight:700;color:#1d4ed8" id="udL2">—</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;font-size:12.5px">
-        <span style="width:110px;color:#94a3b8;font-size:11.5px;flex-shrink:0">ผู้จัดการส่วน (L3)</span>
-        <div style="flex:1;background:#faf5ff;border-radius:6px;padding:6px 10px;
-          font-weight:700;color:#7c3aed" id="udApprover">—</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;font-size:12.5px">
-        <span style="width:110px;color:#94a3b8;font-size:11.5px;flex-shrink:0">GM (L4)</span>
+        <span style="width:110px;color:#94a3b8;font-size:11.5px;flex-shrink:0">ผู้ตรวจ GM (L3)</span>
         <div style="flex:1;background:#fff7ed;border-radius:6px;padding:6px 10px;
           font-weight:700;color:#c2410c" id="udGM">—</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:12.5px">
+        <span style="width:110px;color:#94a3b8;font-size:11.5px;flex-shrink:0">ผู้อนุมัติ GM (L4)</span>
+        <div style="flex:1;background:#faf5ff;border-radius:6px;padding:6px 10px;
+          font-weight:700;color:#7c3aed" id="udApprover">—</div>
       </div>
     </div>
 
