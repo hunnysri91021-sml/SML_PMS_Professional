@@ -1693,6 +1693,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="card" style="margin-bottom:14px">
         <div class="card-h"><h3>ส่วนที่ 3 — ความคิดเห็นและแผนพัฒนา</h3></div>
         <div class="card-b">
+          <div id="evalPrevCommentsBox"></div>
           <div class="grid g2">
             <div class="fg" style="margin:0"><label>จุดเด่น / ความสำเร็จในรอบนี้</label><textarea id="evalStrengths" rows="3" placeholder="ระบุผลงานโดดเด่น 2–3 ข้อ"></textarea></div>
             <div class="fg" style="margin:0"><label>ควรปรับปรุง / ต้องการพัฒนา</label><textarea id="evalDevelopment" rows="3" placeholder="ระบุสิ่งที่อยากพัฒนา"></textarea></div>
@@ -6190,6 +6191,13 @@ function onEvalCodeGateChange(){
       const cyc = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
       restoreEvalFormFromDraft(assigned, code, cyc);
     }
+    /* ผู้ใช้ขอ "ดึง comment จากคนประเมินคนก่อนมาด้วย" — เกิดขึ้นได้ที่หน้านี้เหมือนกันกรณีใบถูกตีกลับ
+       (เช่น หัวหน้าแผนก "ตีกลับให้แก้ไข" พร้อมความเห็น) พนักงานเปิดมาแก้ควรเห็นว่าหัวหน้าเขียนอะไรไว้ */
+    const prevBox = document.getElementById('evalPrevCommentsBox');
+    if(prevBox){
+      const cyc2 = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
+      prevBox.innerHTML = (typeof buildPrevCommentsHtml==='function') ? buildPrevCommentsHtml(code, cyc2) : '';
+    }
     if(note){ note.textContent = `✅ แบบฟอร์มของ ${emp[1]} ที่ Admin กำหนดไว้: ${LEVEL_CONFIG[assigned].label}`; note.style.color = '#16a34a'; }
   } else if(note){
     note.textContent = `⚠️ ยังไม่ได้กำหนดแบบฟอร์มประเมินสำหรับ ${emp[1]} — ติดต่อ Admin ระบบ/Admin HR ให้กำหนดที่หน้า "ผู้ใช้ & สิทธิ์" ก่อน`;
@@ -7215,6 +7223,18 @@ async function saveEvaluationToMs365(status='Draft'){
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', status==='Submitted'?'ส่งแบบประเมิน':'บันทึกร่างแบบประเมิน', payload[0], payload[1]+' — ระดับ '+payload[3]);
   // ข้ามระดับสอบทานที่ไม่มีผู้สอบทานจริงทันทีที่ส่งจริง — ไม่ต้องรอ MS365 ตั้งค่า เพราะทำงานกับข้อมูล local
   if(status==='Submitted' && typeof skipEmptyReviewStages==='function') skipEmptyReviewStages(payload[0], payload[2], payload[3]);
+  /* ผู้ใช้ขอ "ดึง comment จากคนประเมินคนก่อนมาด้วย" — ช่อง evalStrengths/evalDevelopment (ส่วนที่ 3 บน
+     หน้า "1. ประเมินตนเอง") เป็นจุดเริ่มต้นของสายความเห็น บันทึกเฉพาะตอนส่งจริง (Submitted) ไม่ใช่ทุกครั้ง
+     ที่กดบันทึกร่าง เพื่อไม่ให้ประวัติ stage นี้ถูกทับด้วยค่าที่อาจยังพิมพ์ไม่เสร็จระหว่างร่าง — resolve
+     ผู้เขียนจาก CURRENT_SESSION_USER จริง ไม่ใช่ payload[1] (evalName) ที่เป็น fallback เท่านั้นตาม #107 */
+  if(status==='Submitted' && typeof saveEvalCommentStage==='function'){
+    const actor = CURRENT_SESSION_USER;
+    saveEvalCommentStage(payload[0], payload[2], 'Submitted', {
+      by: actor ? actor[1] : payload[1], byCode: actor ? actor[0] : payload[0], byRole: actor ? actor[2] : 'emp',
+      strength: document.getElementById('evalStrengths')?.value || '',
+      dev: document.getElementById('evalDevelopment')?.value || ''
+    });
+  }
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
     smlToast(`บันทึก ${status} ใน Browser แล้ว — ยังไม่ได้ตั้งค่า MS365`, 'warn');
@@ -8249,6 +8269,54 @@ function saveEvalHrNote(key, note){
 }
 function getEvalHrNote(key){
   try{ return JSON.parse(localStorage.getItem(EVAL_HR_NOTE_KEY)||'{}')[key] || ''; }catch(e){ return ''; }
+}
+/* ผู้ใช้ขอ "ใบประเมินให้ดึง comment จากคนประเมินคนก่อนมาด้วย" — ช่อง "จุดเด่น/ผลงาน"・"สิ่งที่ควรพัฒนา"
+   ทั้งในหน้า "1. ประเมินตนเอง" (evalStrengths/evalDevelopment) และในฟอร์มของผู้สอบทาน (openReviewerForm,
+   ส่วนที่ 2) เป็น <textarea> ที่ไม่เคยถูกอ่าน/บันทึกที่ไหนเลยมาก่อน — พิมพ์แล้วหายทันทีที่ปิดหน้าต่าง
+   (CLAUDE.md #16/#10 shape เดียวกับที่ #121 เคยเจอแล้วจงใจไม่แก้ตอนนั้นเพราะไม่มีใครขอ) เก็บแยกจาก draft
+   array เหมือน EVAL_HR_NOTE_KEY/APPROVAL_SIGNATURE_KEY (ไม่ต่อท้าย array เพราะ index ท้ายๆ ถูกยึดไว้แล้ว
+   ทั่วทั้งไฟล์) แต่คีย์ต้องแยกย่อยกว่า — "ความเห็นของคนก่อนหน้า" มีได้หลายคน (พนักงานเอง→หัวหน้าแผนก→
+   ผจก.ส่วน→GM) ไม่ใช่ค่าเดียวเหมือนหมายเหตุ HR ของ Calibration ที่มีแค่ครั้งเดียว จึงเก็บเป็น 1 ค่าต่อ
+   "stage" (สถานะที่เพิ่งเกิดขึ้นจากการบันทึกครั้งนั้น — Submitted/L1Reviewed/L2Reviewed/GMApproved ชื่อ
+   เดียวกับ EVAL_STATUS_ORDER ทั่วทั้งไฟล์ ไม่ใช่ตัวเลข L1-L4 ชุดอื่น ดู #115's คำเตือนเรื่องชื่อซ้อนกัน)
+   ไม่ใช่ append ทุกครั้งที่บันทึกซ้ำสถานะเดิม (กันไม่ให้ history ยาวไม่จบถ้าใครกด "บันทึกร่าง" ซ้ำหลายครั้ง
+   ก่อนส่งจริง — ค่าล่าสุดของ stage นั้นทับของเก่าได้ แต่ของ stage ก่อนหน้ายังอยู่ครบ) */
+const EVAL_COMMENTS_KEY = 'smlPmsEvalComments';
+const EVAL_COMMENT_STAGE_LABEL = { Submitted:'ผู้ประเมินรอบแรก', L1Reviewed:'สอบทานหัวหน้าแผนก (L2)', L2Reviewed:'สอบทานผู้จัดการส่วน (L3)', GMApproved:'อนุมัติ GM (L4)' };
+function loadEvalCommentsAll(){
+  try{ return JSON.parse(localStorage.getItem(EVAL_COMMENTS_KEY)||'{}'); }catch(e){ return {}; }
+}
+function getEvalComments(empCode, cycle){
+  return loadEvalCommentsAll()[empCode+'|'+cycle] || {};
+}
+function saveEvalCommentStage(empCode, cycle, stage, entry){
+  if(!entry) return;
+  const strength = (entry.strength||'').trim(), dev = (entry.dev||'').trim();
+  if(!strength && !dev) return; // honest empty-state (CLAUDE.md #14) — ไม่เขียนรายการว่างเปล่าทิ้งไว้
+  const all = loadEvalCommentsAll();
+  const key = empCode+'|'+cycle;
+  if(!all[key]) all[key] = {};
+  all[key][stage] = { by: entry.by||'', byCode: entry.byCode||'', byRole: entry.byRole||'', at: new Date().toISOString(), strength, dev };
+  localStorage.setItem(EVAL_COMMENTS_KEY, JSON.stringify(all));
+}
+/* สร้าง HTML กล่องแสดงประวัติความเห็นของผู้ประเมินคนก่อนๆ — ใช้ร่วมกันทั้งหน้าประเมินตนเองและฟอร์ม
+   ผู้สอบทาน แสดงเฉพาะ stage ที่มีข้อมูลจริง (ไม่โชว์กล่องเปล่าถ้ายังไม่มีใครเคยเขียนอะไรเลย) */
+function buildPrevCommentsHtml(empCode, cycle){
+  if(typeof getEvalComments!=='function') return '';
+  const stages = getEvalComments(empCode, cycle);
+  const order = ['Submitted','L1Reviewed','L2Reviewed','GMApproved'];
+  const rows = order.filter(s=>stages[s]).map(s=>{
+    const c = stages[s];
+    const dateStr = c.at ? new Date(c.at).toLocaleString('th-TH') : '';
+    const label = EVAL_COMMENT_STAGE_LABEL[s] || s;
+    return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><b>${label} — ${c.by||'—'}</b><small style="color:#94a3b8;white-space:nowrap">${dateStr}</small></div>
+      ${c.strength?`<div style="margin-top:4px"><span style="color:#64748b">จุดเด่น/ผลงาน:</span> ${c.strength}</div>`:''}
+      ${c.dev?`<div style="margin-top:4px"><span style="color:#64748b">สิ่งที่ควรพัฒนา:</span> ${c.dev}</div>`:''}
+    </div>`;
+  }).join('');
+  if(!rows) return '';
+  return `<div class="review-section-title">ความเห็นจากผู้ประเมินก่อนหน้า</div><div style="margin-bottom:14px">${rows}</div>`;
 }
 /* ดึงกลับมาจากตาราง Approvals เหมือนกลไกลายเซ็น (#39) — บันทึกไว้ในคอลัมน์ Comment ต่อท้าย "X=..."
    ด้วย "| หมายเหตุ: {ข้อความ}" ตอน push (ดู confirmCalibration()) แทนที่จะสร้างตาราง Excel ใหม่แยก */
@@ -9696,8 +9764,9 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
       <div class="locked"><span>Z (${cfg.zpct}%) · HRGO</span><b>${zr.score.toFixed(2)}</b></div>
       <div class="total"><span>X = Y + Z</span><b id="reviewX">${zr.score.toFixed(2)}</b></div>
     </div>
+    ${typeof buildPrevCommentsHtml==='function' ? buildPrevCommentsHtml(code, currentReviewerCycle) : ''}
     <div class="review-section-title">ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
-    <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
+    <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea id="reviewStrength" rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea id="reviewDev" rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
     <div class="review-approval-flow"><span>ผู้ประเมิน</span><i>→</i><span>ผู้บังคับบัญชาระดับสูง</span><i>→</i><span>ผู้จัดการทั่วไปฝ่าย</span><i>→</i><span>MD-SML</span></div>`;
   if(typeof restoreReviewerFormFromDraft==='function') restoreReviewerFormFromDraft(lv, code, currentReviewerCycle);
   openM('mReview');
@@ -9813,6 +9882,18 @@ async function submitReviewerForm(){
   if(typeof skipEmptyReviewStages==='function') skipEmptyReviewStages(code, cycle, lv);
   if(typeof pushDraftRowToExcel==='function') pushDraftRowToExcel(payload, step.next);
   pushApprovalRecordToExcel(code, cycle, step.next, '');
+  /* ผู้ใช้ขอ "ดึง comment จากคนประเมินคนก่อนมาด้วย" — บันทึกความเห็นของผู้สอบทานคนนี้เอง (ถ้าพิมพ์จริง)
+     ไว้ที่ stage=step.next (สถานะที่เพิ่งผลิตขึ้นจากการบันทึกครั้งนี้) เพื่อให้ผู้สอบทาน "คนถัดไป" เปิด
+     ฟอร์มมาแล้วเห็นได้ผ่าน buildPrevCommentsHtml() — resolve ชื่อจาก CURRENT_SESSION_USER จริง (ไม่ใช่
+     ข้อความอิสระ ตาม CLAUDE.md #1) */
+  if(typeof saveEvalCommentStage==='function'){
+    const actor = CURRENT_SESSION_USER;
+    saveEvalCommentStage(code, cycle, step.next, {
+      by: actor ? actor[1] : '', byCode: actor ? actor[0] : '', byRole: actor ? actor[2] : '',
+      strength: document.getElementById('reviewStrength')?.value || '',
+      dev: document.getElementById('reviewDev')?.value || ''
+    });
+  }
   const diffNote = (oldX!==null && !isNaN(oldX) && (oldX!==x || oldGrade!==grade)) ? ` (คะแนนเดิม X=${oldX.toFixed(2)} เกรด ${oldGrade} → ใหม่ X=${x.toFixed(2)} เกรด ${grade})` : '';
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, empName+diffNote);
   smlToast(step.label+'เรียบร้อย','ok');

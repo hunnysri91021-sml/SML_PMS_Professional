@@ -5472,6 +5472,95 @@ touches employee/attendance/evaluation data.
     catch a resolver answering a *different* question than the feature
     actually needs.
 
+131. **User's screenshot of the reviewer form's "ส่วนที่ 2 — ความคิดเห็นและ
+    แผนพัฒนา" section (จุดเด่น/ผลงาน · สิ่งที่ควรพัฒนา) asked: "ใบประเมิน
+    ให้ดึง comment มากคนประเมินคนก่อนมาด้วย" (the evaluation form should
+    also pull in the comment from the previous evaluator).** Investigated
+    before writing any code: these two `<textarea>`s inside
+    `openReviewerForm()` (line ~9748) had **no `id`, were never read by
+    `submitReviewerForm()`, and were never restored on reopen** — exactly
+    the CLAUDE.md #16/#10 placeholder shape #121 had already flagged for
+    the *self-eval page's* equivalent boxes ("ความคิดเห็นเพิ่มเติม" —
+    deliberately left unwired then since nobody had asked). So the real
+    starting point was worse than "doesn't carry forward" — these
+    comments were never saved anywhere at all, by any reviewer, ever;
+    there was no "previous evaluator's comment" in existence yet for any
+    real record. Fixing "pull in the previous comment" required first
+    making the comment itself a real, persisted thing.
+    Added `EVAL_COMMENTS_KEY` (`smlPmsEvalComments`), following the exact
+    `EVAL_HR_NOTE_KEY`/`EVAL_LAST_ACTOR_KEY` (#39/#58/#96) key shape —
+    keyed `empCode|cycle`, but one layer deeper than those: a **map of
+    stage → entry** (`{by, byCode, byRole, at, strength, dev}`), since
+    unlike a single HR note or a single last-actor, a comment history
+    genuinely has one real entry *per pipeline stage* (employee's own
+    round-1 → หัวหน้าแผนก's L1Reviewed → ผจก.ส่วน's L2Reviewed → GM's
+    GMApproved) — using the exact same `EVAL_STATUS_ORDER` stage names
+    already used throughout the file (not a new L1-L4 numbering scheme,
+    per #115's own warning about this file having multiple conflicting
+    "L1-L4" senses). `saveEvalCommentStage()` **overwrites** the one
+    entry for a given stage on each save (not append) — so re-saving a
+    Draft before actually submitting never piles up duplicate history
+    entries (CLAUDE.md #12's dedup-on-write rule) — but a *different*
+    stage's entry, once written, is never touched again by a later
+    stage's save. Silently skips writing anything when both fields are
+    blank (CLAUDE.md #14/#54's honest-empty-state rule — no placeholder
+    row for a reviewer who wrote nothing).
+    Wired into the two real places a comment can originate: (1)
+    `saveEvaluationToMs365()` — the self-eval page's own "ส่งแบบประเมิน" —
+    reads `evalStrengths`/`evalDevelopment` (the existing, previously-
+    dead ids from #121) and saves them at stage `'Submitted'`, **only**
+    when actually submitting (not on every "บันทึกร่าง" draft save, so an
+    unfinished draft's half-typed comment can't clobber a stage that's
+    meant to represent "what the employee finally said when they
+    submitted"); (2) `submitReviewerForm()` — now reads the newly-`id`'d
+    `#reviewStrength`/`#reviewDev` and saves them at stage `step.next`
+    (whichever status this exact submit produces — `Submitted`/
+    `L1Reviewed`/`L2Reviewed`), resolving the writer's real name/code/
+    role from `CURRENT_SESSION_USER` (never a free-typed string, per
+    CLAUDE.md #1/#107's own precedent for this exact modal). Both call
+    sites resolve identity from the real logged-in session, matching
+    every other "who did this" field already in this file (#58's
+    `EVAL_LAST_ACTOR_KEY`, #96's calibration note).
+    Added `buildPrevCommentsHtml(empCode, cycle)` — one shared renderer
+    (not two independent copies, matching #30/#97's "one function builds
+    it, every caller goes through it" discipline) producing a read-only
+    history block, one card per stage that actually has a saved entry
+    (skips stages with nothing written, same honest-empty-state rule),
+    showing who wrote it, when, and both fields. Wired into **both** real
+    places a reviewer/employee opens a form against an existing record:
+    `openReviewerForm()` (reviewer modal, shown above the current
+    reviewer's own blank "ส่วนที่ 2" input boxes — deliberately read-only
+    history, never pre-filled into the editable boxes themselves, so one
+    person's words can never silently become attributed to the next
+    person who edits that box) and `onEvalCodeGateChange()` (the self-
+    eval page, into a new `#evalPrevCommentsBox` container right above
+    `evalStrengths`/`evalDevelopment` — covers the real case of an
+    employee reopening their own form after a reject with a comment
+    attached, so they can see what the reviewer actually said before
+    trying again, not just a bare "ตีกลับ" status with no context).
+    Verified end-to-end with a test driving one real record through the
+    actual UI (self-submit with real comments → confirm saved at stage
+    `Submitted` → L1 opens the reviewer form and confirms the employee's
+    own comment is visible in the history block → L1 scores, writes their
+    own comment, and submits → confirms their comment is saved at stage
+    `L1Reviewed` under their real name → reopening the form again
+    confirms **both** the employee's and L1's comments now show together
+    in the history) — plus the standard click-sweep. **Deliberately not
+    built, flagged rather than assumed out of scope**: this is local-only
+    (like `pinHash`/`evalLevel`/`EVAL_HR_NOTE_KEY` before its own Excel
+    round-trip was separately requested, #17/#39/#96) — a comment written
+    on one device won't appear on another device's copy of the same
+    record until a real `Appraisals`/`Approvals`-style Excel column is
+    added for it; not built here since it wasn't asked for, and doing so
+    blind risks the same #97-shaped "guessed column order" bug this file
+    has hit more than once. General lesson combining #96/#107/#121: when
+    a request says "pull forward the previous X," check first whether X
+    is actually being saved anywhere at all — a chain of "the next step
+    should see what came before" is often the signal that reveals the
+    first step was never real to begin with, and the honest fix is
+    building the one shared persist+display path both ends need, not
+    patching the display side onto data that doesn't exist yet.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
