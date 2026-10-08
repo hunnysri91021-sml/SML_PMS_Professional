@@ -4727,6 +4727,7 @@ function populateTeamManagerSelect(){
   let managerNames;
   if(role==='l1' || role==='unit'){
     managerNames = [me[1]];
+    sel.dataset.noL1Count = 0;
   } else if(role==='l2'){
     /* #86 เคยแก้ trim() ใน getMyScopedEmpCodes() ของ role 'l2' ไปแล้ว แต่ dropdown นี้เป็นอีก query
        อิสระที่อ่าน u[10]===me[1] ตรงๆ ไม่เคย trim() — ถ้าชื่อ L2 เองหรือ u[10] ของลูกน้องมีช่องว่างเกิน
@@ -4737,16 +4738,30 @@ function populateTeamManagerSelect(){
        ชี้ตรงมาที่ L2 นี้ได้เช่นกัน ไม่จำเป็นต้องผ่าน l1 ก่อนเสมอไป */
     const myNameL2 = (me[1]||'').trim();
     managerNames = [...new Set(MASTER_USERS.filter(u=>u[12]==='active' && (u[2]==='l1'||u[2]==='unit') && (u[10]||'').trim()===myNameL2).map(u=>(u[1]||'').trim()))].sort();
+    /* ผู้ใช้ยืนยัน: ถ้าพนักงานบางคนขึ้นตรงกับ ผจก.ส่วน (L2) เลยโดยไม่มีหัวหน้า L1 ตัวจริงอยู่ระหว่างกลาง
+       (resolveL1Reviewer คืน null จริง ไม่ใช่แค่ชื่อว่าง — ผ่าน #128's resolver เดียวกับที่ตัดสินใจข้าม
+       ขั้น L1Reviewed ให้คนกลุ่มนี้อยู่แล้ว) ให้ L2 "ดู/ประเมินแทน" คนกลุ่มนี้ได้ตรงในหน้านี้เลย แทนที่
+       dropdown จะว่างเพราะไม่มีหัวหน้า L1 ให้เลือก (คือสิ่งที่ผู้ใช้รายงานว่า "ยังไม่เห็นใบประเมิน") —
+       เพิ่มเป็นตัวเลือกพิเศษ ไม่ใช่ชื่อคนจริง จึงต้องแยกจาก managerNames (string ชื่อ) ข้างล่าง */
+    const noL1Count = MASTER_USERS.filter(u=>u[12]==='active' && u[0]!==me[0] && (u[2]==='emp'||u[2]==='unit')
+      && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
+      && typeof resolveL2Reviewer==='function' && (resolveL2Reviewer(u)||{})[0]===me[0]).length;
+    sel.dataset.noL1Count = noL1Count;
   } else {
     /* trim() ก่อนเข้า Set — ชื่อหัวหน้าที่มีช่องว่างเกินติดมา (พิมพ์มือ/sync เก่าก่อนแก้จุดอื่น) จะถูกมองเป็น
        ชื่อคนละคนกับตัวที่ไม่มีช่องว่าง ทำให้ dropdown นี้ขึ้นชื่อซ้ำ (เห็นเหมือนกันทุกตัวอักษร) สองตัวเลือก
        ทั้งที่เป็นหัวหน้าคนเดียวกัน — กันไว้ตรงนี้เผื่อข้อมูลเก่ายังไม่สะอาด แม้จุดบันทึกค่าใหม่จะ trim() แล้วก็ตาม */
     managerNames = [...new Set(MASTER_USERS.filter(u=>u[12]==='active').map(u=>(u[9]||'').trim()).filter(n=>n && n!=='—'))].sort();
+    sel.dataset.noL1Count = 0;
   }
-  sel.innerHTML = managerNames.map(n=>`<option value="${n}">${n}</option>`).join('') || '<option value="">— ไม่มีหัวหน้าที่มีลูกทีม —</option>';
+  const noL1Count = Number(sel.dataset.noL1Count || 0);
+  const noL1Option = noL1Count > 0 ? `<option value="__noL1__">👤 พนักงานไม่มีหัวหน้า L1 (ขึ้นตรงกับฉัน) — ${noL1Count} คน</option>` : '';
+  const realOptions = managerNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+  sel.innerHTML = (noL1Option + realOptions) || '<option value="">— ไม่มีหัวหน้าที่มีลูกทีม —</option>';
   sel.disabled = (role==='l1' || role==='unit');
-  if(managerNames.includes(cur)) sel.value = cur;
-  else if(managerNames.length) sel.value = managerNames[0];
+  const selectable = noL1Count > 0 ? ['__noL1__', ...managerNames] : managerNames;
+  if(selectable.includes(cur)) sel.value = cur;
+  else if(selectable.length) sel.value = selectable[0];
 }
 function renderTeamFromMaster() {
   const el = document.getElementById('teamRows');
@@ -4767,10 +4782,25 @@ function renderTeamFromMaster() {
      — role unit ได้ผลเหมือนเดิมเป๊ะ (scope ของ unit ก็คือ 1 ชั้นอยู่แล้ว) ส่วนโหมดเลือกหัวหน้าคนอื่นจาก
      dropdown (L2/admin/exec ไล่ดูทีละหัวหน้า) ยังใช้ตรรกะเดิม — คนละการใช้งานกัน ไม่ได้ขอให้เปลี่ยน */
   const myScoped = (me && (me[2]==='l1' || me[2]==='unit') && typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
+  /* โหมดพิเศษ "__noL1__" — ผจก.ส่วน (L2) เลือกดู/ประเมินแทนพนักงานที่ไม่มีหัวหน้า L1 ตัวจริงอยู่ระหว่างกลาง
+     (resolveL1Reviewer คืน null จริง) ผู้ใช้ยืนยันแล้วว่าต้องการให้ L2 ทำตรงนี้ได้เลยแทนที่ dropdown จะว่าง
+     — ใช้ resolver ชุดเดียวกับ #128 เพื่อให้ "ใครอยู่ในหมวดนี้" ตรงกับ "ใครจะถูกข้ามขั้น L1Reviewed จริง"
+     เสมอ ไม่ใช่ query อิสระชุดที่สามที่อาจดริฟท์ออกจากกันอีก (บทเรียน #126/#127) */
+  const isNoL1Mode = managerName === '__noL1__';
   const subtitle = document.getElementById('teamPageSubtitle');
-  if(subtitle) subtitle.textContent = managerName ? (myScoped ? `ผู้ใต้บังคับบัญชาทุกสายของ ${managerName}` : `ผู้ใต้บังคับบัญชาทางตรงของ ${managerName}`) : 'เลือกหัวหน้าเพื่อดูทีมงาน';
+  if(subtitle) subtitle.textContent = isNoL1Mode
+    ? 'พนักงานที่ไม่มีหัวหน้า L1 ตัวจริง — ขึ้นตรงกับคุณ (ผจก.ส่วน) โดยตรง ประเมินแทนหัวหน้า L1 ได้ที่นี่'
+    : (managerName ? (myScoped ? `ผู้ใต้บังคับบัญชาทุกสายของ ${managerName}` : `ผู้ใต้บังคับบัญชาทางตรงของ ${managerName}`) : 'เลือกหัวหน้าเพื่อดูทีมงาน');
 
-  const allDirectReports = myScoped
+  const allDirectReports = isNoL1Mode
+    ? MASTER_USERS.filter(u => u[12]==='active' && u[0]!==me[0] && (u[2]==='emp'||u[2]==='unit')
+        /* จำกัดเฉพาะ role 'emp'/'unit' — resolveL1Reviewer() คืน null ให้ role l1 เองเสมอ (ไม่ต้องมีใคร
+           สอบทานขั้น L1 ของตัวเอง ตามกติกา #22/#128) ซึ่งถูกต้องสำหรับกฎการสอบทาน แต่ถ้าไม่กรอง role ออก
+           ตรงนี้ หัวหน้าแผนก (l1) เองจะโผล่มาเป็น "ลูกทีมที่ไม่มีหัวหน้า L1" ในหน้านี้ด้วย ทั้งที่หัวหน้า
+           แผนกกรอกแบบประเมินตนเองของตัวเองผ่านหน้า "1. ประเมินตนเอง" อยู่แล้ว ไม่ใช่คนที่ L2 ต้องกรอกแทน */
+        && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
+        && typeof resolveL2Reviewer==='function' && (resolveL2Reviewer(u)||{})[0]===me[0])
+    : myScoped
     ? MASTER_USERS.filter(u => u[12]==='active' && myScoped.has(u[0]) && u[0]!==me[0])
     : MASTER_USERS.filter(u => u[12]==='active' && (u[9]||'').trim()===managerName.trim());
   const stMap = {pending:['b-y','⏳ รอประเมิน'],done:['b-g','✓ ส่งแล้ว']};

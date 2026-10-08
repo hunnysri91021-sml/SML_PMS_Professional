@@ -5377,6 +5377,101 @@ touches employee/attendance/evaluation data.
     with no indication the underlying risk it used to represent had
     already been defused by a separate, more recent fix.
 
+130. **User's screenshot of "2. ประเมินทีมงาน (L1 รอบแรก)" — logged in as
+    a real `l2` (ผู้จัดการส่วน, นางสาวโชสิญา ดานเรื่อง) — showed the nav
+    badge reading "5" while the "เลือกหัวหน้า" dropdown was stuck on
+    "— ไม่มีหัวหน้าที่มีลูกทีม —" and every stat tile at 0, with
+    "ต้องปรับหมวดของการประเมินให้สอดคล้องด้วย ยังไม่เห็นใบประเมิน"
+    (the evaluation category needs to be made consistent too — still
+    don't see the evaluation form). Asked a clarifying question before
+    touching code, since the honest diagnosis could point to two very
+    different real causes: either the 5 pending employees genuinely have
+    no real L1/unit supervisor at all (which would make the empty
+    dropdown *correct*, not a bug), or something else.** Confirmed from
+    code first: `navBadgeTeam` (#85) counts every `role==='emp'` within
+    this L2's scope (`getMyScopedEmpCodes()`, which resolves via `u[10]`
+    per #86/#88) still sitting at Draft/no-draft — a broad "round-1
+    pending" count with no requirement that a real L1/unit tier exists
+    for them. `populateTeamManagerSelect()`'s `l2` branch (#126), by
+    contrast, only lists *real* `l1`/`unit`-role supervisors whose own
+    `u[10]` points to this L2 — so if these 5 employees' `u[9]` (round-1
+    reviewer field) is empty, skipping the L1 tier entirely and
+    reporting straight to this L2 via `u[10]`, the dropdown is correctly
+    empty: there is no real supervisor to pick, even though the badge
+    (counting raw emp-role people, not "people with a real L1 tier")
+    still shows 5. Asked the user to confirm this exact shape and offered
+    3 directions; **user chose "ให้ L2 ดู/ประเมินแทนในหน้านี้ได้เลยถ้า
+    ไม่มี L1"** (let L2 view/evaluate directly on this page when there's
+    no L1) — not a badge-only fix, a real new capability on this page.
+    This maps directly onto #128's own resolver functions:
+    `resolveL1Reviewer(emp)` already answers "does this specific employee
+    have a real L1-tier reviewer" (used to decide whether their status
+    auto-skips `L1Reviewed`), so "no real L1" here is defined as
+    `!resolveL1Reviewer(u)` — the *same* test #128's skip logic already
+    uses, not a fourth independent query that could drift from it later
+    (the #126/#127 lesson, applied proactively this time instead of
+    found as a bug afterward).
+    Added a virtual dropdown option, `__noL1__` ("👤 พนักงานไม่มีหัวหน้า
+    L1 (ขึ้นตรงกับฉัน) — N คน"), shown only for role `l2` and only when
+    at least one such employee exists (`sel.dataset.noL1Count`, computed
+    in `populateTeamManagerSelect()` as `MASTER_USERS` filtered to
+    active, role `emp`/`unit` only, `!resolveL1Reviewer(u)`, and
+    `resolveL2Reviewer(u)` resolving back to this exact L2 by code —
+    never by name string, avoiding yet another untrimmed-name landmine
+    per #86/#127's own lesson, since `resolveL2Reviewer()` already does
+    its own trimmed lookup internally and returns the real row). **Role
+    restricted to `emp`/`unit` only, found and fixed during testing**:
+    a first draft filtered purely by `!resolveL1Reviewer(u)` and matched
+    L2 by `u[10]`, which also pulled in real `l1`-role department heads
+    themselves — `resolveL1Reviewer()` correctly returns `null` for role
+    `l1` too (CLAUDE.md #22's "a role doesn't need a reviewer above a
+    level it already occupies" rule), but that answers a *submission-
+    pipeline* question, not "should this person appear as a team-page
+    row L2 fills in for" — an `l1` department head submits their own
+    self-eval via "1. ประเมินตนเอง" like everyone else, they are never a
+    row someone else scores on their behalf. A Playwright test caught
+    this exact miss (a synthetic `l1` row appeared in the no-L1 list
+    alongside 5 real `emp` rows) before it shipped, which is why the
+    role filter is explicit and commented rather than reusing the bare
+    resolver check. `renderTeamFromMaster()` branches on
+    `managerName==='__noL1__'`: subtitle reads "พนักงานที่ไม่มีหัวหน้า L1
+    ตัวจริง — ขึ้นตรงกับคุณ (ผจก.ส่วน) โดยตรง ประเมินแทนหัวหน้า L1 ได้ที่
+    นี่" (directly answering "หมวดของการประเมิน" — the category of this
+    group is now named honestly instead of silently falling into the
+    generic "เลือกหัวหน้าเพื่อดูทีมงาน" placeholder), and `allDirectReports`
+    is built from the identical resolver-based filter, not a separate
+    name-matching query — every row then flows through the exact same
+    `openReviewerForm()`/`submitReviewerForm()` path every other team-
+    page row already uses (#109), so scoring one of these employees
+    creates a real `Submitted` draft, which #128's `skipEmptyReviewStages()`
+    (already wired into `submitReviewerForm()`) immediately advances to
+    `L1Reviewed` — landing the record directly in this same L2's own
+    real review queue ("4. สอบทานผู้จัดการส่วน (L3)"), exactly mirroring
+    what a real L1 supervisor's round-1 entry + the employee's own L1
+    review would have produced, just compressed into one person doing
+    both roles since there's genuinely nobody else in the chain. Verified
+    with two tests: one seeding an L2 with 5 real no-L1 employees plus
+    one normal L1-backed employee, confirming the dropdown shows both
+    the special option (labeled with the real count, 5 — not 6, after
+    the role-filter fix) and the real supervisor option, and that
+    selecting each produces the correct, non-overlapping row set; a
+    second test driving one no-L1 employee through the real UI
+    (click "ประเมิน" → score all 10 factors → `submitReviewerForm()`)
+    and confirming the draft's real status lands on `L1Reviewed` exactly
+    as the skip logic promises — plus the standard click-sweep. General
+    lesson sharper than #126's own conclusion: when a user approves
+    building a genuinely new capability (not just a bug fix) that needs
+    to answer "does this specific person have a real reviewer at this
+    tier," reach for the resolver functions a prior fix (#128) already
+    built for that exact question rather than writing a fresh ad-hoc
+    filter — and when reusing a resolver whose `null` return covers
+    multiple distinct real reasons (a role already past that tier, vs. a
+    role that genuinely has nobody assigned), re-derive which of those
+    reasons actually belongs in the new UI before shipping, since a
+    quick test that scores every visible row is often the fastest way to
+    catch a resolver answering a *different* question than the feature
+    actually needs.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
