@@ -6034,6 +6034,73 @@ touches employee/attendance/evaluation data.
     file-wide before editing, since a relabeling pass is only ever
     "done" when every sibling spot agrees.
 
+138. **User asked "ตรวจดู ว่าทุกจุด เห็นพนักงานในสังกัดของตนเอง" (check that
+    every point correctly shows the employees in one's own scope) —
+    audited every `MASTER_USERS.filter`/`getDrafts().filter` call site
+    in the file (46 of them) against whether it's deliberately company-
+    wide (admin/exec-only pages, where `getMyScopedEmpCodes()` already
+    returns `null`) or should be scoped, and whether scoped ones agree
+    with the real roster the matching page shows.** Most checked out —
+    `getReportData()`/`getNineBoxData()`/`exportPayrollData()`/
+    `getReminderTargets()` (#90) etc. were already correct, either
+    properly scoped or correctly left unscoped for admin/exec-only
+    pages. Found a real gap in two of the three "summary" functions
+    #136's roster rewrite never touched: `renderNavBadges()` and
+    `getNotifications()` still counted straight from `getDrafts()`
+    filtered only by `getMyScopedEmpCodes()`, not through
+    `buildTierRoster()`/`getEvalParticipants()` the way the real queue
+    pages (`renderReviewL1Queue()` etc.) do since #136. Two real
+    differences between "in scope" and "in the actual roster":
+    1. `getEvalParticipants()` (and therefore `buildTierRoster()`)
+       excludes resigned employees (`u[12]!=='active'`) and anyone
+       flagged `evalExempt` (`u[20]==='1'`, CLAUDE.md #83) — the badge/
+       notification counters checked neither, so a stray draft record
+       belonging to someone HR later exempted mid-cycle (or a resigned
+       employee's old record) would still be counted in the badge/bell
+       even though it would never appear as a real row on the actual
+       queue page.
+    2. For the three per-tier queues (L1/L2/GM review), the real roster
+       only counts people whose `resolveL1Reviewer()`/`resolveL2Reviewer()`/
+       `resolveGmReviewer()` (#128) resolves to *this specific viewer* —
+       `getMyScopedEmpCodes()` alone is the *wider* whole-downward-chain
+       scope (#136's own general lesson already states this explicitly),
+       so counting straight off scope is only coincidentally correct
+       when the two happen to agree, not guaranteed to.
+    Both are the same shape of bug as #73/#85/#87/#126/#130 — a summary
+    widget (sidebar badge, notification bell) computed by its own
+    separate logic that a page-level fix doesn't automatically reach,
+    just one layer more subtle this time since #136 was the exact fix
+    that introduced the new, stricter roster model these two functions
+    were never updated to match. Fixed both by reusing `buildTierRoster()`
+    itself (never a fourth independent counting implementation, per
+    #126/#127's own lesson) — `renderNavBadges()`/`getNotifications()`
+    now compute each tier's badge/notification count as
+    `buildTierRoster(resolverFn, me[0], inputStatus, cycle).filter(r=>
+    r.state==='ready').length`, the exact same expression the real page
+    uses for its own header count, so the two can never drift apart
+    again. `teamPending` (the "2. ประเมินทีมงาน" badge) was checked and
+    left unchanged — it already matches `renderTeamFromMaster()`'s own
+    roster logic exactly (neither filters `evalExempt`, a separate,
+    pre-existing gap on the team page itself worth a future look but not
+    what this request was about, since an exempt employee is still a
+    real part of their own supervisor's team regardless of evaluation
+    eligibility — not a cross-scope leak). Verified with a test that
+    seeds a real submission plus a second employee flagged `evalExempt`
+    with a stray `Submitted` draft still sitting in the same reviewer's
+    scope, confirming the badge, the notification bell, and the real
+    queue row count all now agree (1, not 2) and the exempt employee
+    never appears in the DOM — plus re-ran every existing roster/queue
+    test from #136 onward and the standard click-sweep
+    (`nav pages clicked: 22 errors: []`) with zero regressions. General
+    lesson sharper than #136's own conclusion: whenever a page's roster-
+    building logic changes shape (exact-match filter → full roster with
+    3 states, #136), every *other* function that independently counts
+    the same underlying data for a summary widget needs the identical
+    audit — a "did we get every point" request after a structural
+    rewrite is exactly the moment to re-run #85/#87's "grep every bare
+    `getDrafts()`/`MASTER_USERS.filter` call site" check, not just
+    confirm the one page that was directly asked about.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

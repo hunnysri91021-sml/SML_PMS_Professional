@@ -8652,7 +8652,15 @@ function renderWorkflowPages(){
    badge นับจาก MASTER_USERS/getDrafts() ทั้งบริษัทตรงๆ ไม่ผ่าน scope เลย ทำให้ L1/L2/หัวหน้าหน่วย
    เห็นเลขแจ้งเตือนของทั้งบริษัท (เช่น "31") ในขณะที่ตารางจริงในหน้านั้นกรองเหลือเฉพาะทีมตัวเอง
    (เช่น 0 คน) — ตัวเลขสองที่ขัดกันเองแบบเดียวกับ CLAUDE.md #34/#67/#73 */
+/* นับ badge จาก roster จริงเดียวกับที่หน้าคิวเองแสดง (buildTierRoster()/getEvalParticipants(), #136)
+   ไม่ใช่นับจาก getDrafts()/MASTER_USERS ตรงๆ ที่กรองแค่ scope — เดิมจุดนี้กรองเฉพาะ inScope() ไม่ได้
+   กรองคนลาออก/คนที่ถูกยกเว้นไม่ต้องประเมิน (u[20]==='1', CLAUDE.md #83) หรือจำกัดเฉพาะคนที่สายบังคับ
+   บัญชาจริงชี้มาที่ฉันในขั้นนั้น (resolveL1Reviewer()/resolveL2Reviewer()/resolveGmReviewer(), #128) —
+   ถ้ามีใบประเมินค้างอยู่ของคนที่เพิ่งถูกยกเว้นหรือออกจากงานหลุดอยู่ใน scope badge จะเกินจำนวนแถวจริงใน
+   หน้าคิว ย้อนกลับไปเป็นบั๊กรูปแบบเดียวกับ CLAUDE.md #73/#85/#87/#126/#130 (สรุปกับรายละเอียดนับไม่ตรงกัน) */
 function renderNavBadges(){
+  const me = CURRENT_SESSION_USER;
+  const cycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
   const inScope = code => !scoped || scoped.has(code);
@@ -8660,14 +8668,14 @@ function renderNavBadges(){
     const d = drafts.find(x=>x[0]===u[0]);
     return !d || d[d.length-1]==='Draft';
   }).length;
-  const scopedDrafts = drafts.filter(d=>inScope(d[0]));
+  const readyCount = (resolverFn, inputStatus) => me ? buildTierRoster(resolverFn, me[0], inputStatus, cycle).filter(r=>r.state==='ready').length : 0;
   const counts = {
     navBadgeTeam: teamPending,
-    navBadgeReviewL1: scopedDrafts.filter(d=>d[d.length-1]==='Submitted').length,
-    navBadgeReview: scopedDrafts.filter(d=>d[d.length-1]==='L1Reviewed').length,
-    navBadgeGm: scopedDrafts.filter(d=>d[d.length-1]==='L2Reviewed').length,
-    navBadgeCalib: scopedDrafts.filter(d=>d[d.length-1]==='Acknowledged').length,
-    navBadgeApprove: scopedDrafts.filter(d=>d[d.length-1]==='Calibrated').length,
+    navBadgeReviewL1: readyCount(resolveL1Reviewer, 'Submitted'),
+    navBadgeReview: readyCount(resolveL2Reviewer, 'L1Reviewed'),
+    navBadgeGm: readyCount(resolveGmReviewer, 'L2Reviewed'),
+    navBadgeCalib: readyCount(null, 'Acknowledged'),
+    navBadgeApprove: readyCount(null, 'Calibrated'),
   };
   Object.keys(counts).forEach(id=>{
     const el = document.getElementById(id);
@@ -9418,20 +9426,21 @@ function checkHierarchyIssues(showToast){
 /* ====== การแจ้งเตือน (กระดิ่ง) — สรุปรายการที่ต้องติดตามจริง คำนวณจากข้อมูลจริงเท่านั้น ====== */
 function getNotifications(){
   const items = [];
-  /* ต้องกรองด้วย getMyScopedEmpCodes() เหมือน renderNavBadges() (CLAUDE.md #85) — เจอเป็นบั๊กที่ 3
-     ของฟังก์ชันชุดเดียวกันในวันเดียวกัน (queue เดิม, badge, แล้วก็กระดิ่งแจ้งเตือนนี้) ที่ต่างคนต่างนับ
-     จาก MASTER_USERS/getDrafts() ทั้งบริษัทตรงๆ โดยไม่ผ่าน scope เลย ทำให้ L1/L2 เห็นข้อความแจ้งเตือน
-     "มีใบประเมิน N รายการ" ของทั้งบริษัท ทั้งที่คิวจริงในหน้านั้นกรองเหลือ 0 สำหรับทีมตัวเอง */
-  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
-  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  const scopedDrafts = scoped ? drafts.filter(d=>scoped.has(d[0])) : drafts;
+  /* ต้องนับจาก roster จริงเดียวกับที่ renderNavBadges() ใช้ (buildTierRoster(), #138) ไม่ใช่แค่กรอง
+     ด้วย getMyScopedEmpCodes() เฉยๆ (CLAUDE.md #85) — เดิมกรอง scope อย่างเดียวยังไม่ตัดคนลาออก/คนที่
+     ถูกยกเว้นไม่ต้องประเมิน (u[20]==='1', #83) หรือจำกัดเฉพาะคนที่สายบังคับบัญชาจริงชี้มาที่ฉันในขั้น
+     นั้น (resolveL1Reviewer()/resolveL2Reviewer()/resolveGmReviewer(), #128) ออก ทำให้ตัวเลขในกระดิ่ง
+     เกินจำนวนแถวจริงในคิวได้เหมือน badge (บั๊กรูปแบบเดียวกับ CLAUDE.md #73/#85/#87/#126/#130/#138) */
+  const me = CURRENT_SESSION_USER;
+  const cycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
+  const readyCount = (resolverFn, inputStatus) => me ? buildTierRoster(resolverFn, me[0], inputStatus, cycle).filter(r=>r.state==='ready').length : 0;
   /* #92: เพิ่มขั้น L1Reviewed คั่น Submitted/L2Reviewed — l2reviewed เดิมชี้ page:'calib' ซึ่งผิดมา
      ตั้งแต่ #61 ย้าย Calibration ไปอยู่หลัง Acknowledged แล้ว (ขั้นถัดจาก L2Reviewed จริงคืออนุมัติ GM
      ไม่ใช่ Calibration) แก้ให้ตรงพร้อมกันตอนที่กำลังแก้บล็อกนี้อยู่แล้ว */
-  const submitted = scopedDrafts.filter(d=>d[d.length-1]==='Submitted').length;
-  const l1reviewed = scopedDrafts.filter(d=>d[d.length-1]==='L1Reviewed').length;
-  const l2reviewed = scopedDrafts.filter(d=>d[d.length-1]==='L2Reviewed').length;
-  const calibrated = scopedDrafts.filter(d=>d[d.length-1]==='Calibrated').length;
+  const submitted = readyCount(resolveL1Reviewer, 'Submitted');
+  const l1reviewed = readyCount(resolveL2Reviewer, 'L1Reviewed');
+  const l2reviewed = readyCount(resolveGmReviewer, 'L2Reviewed');
+  const calibrated = readyCount(null, 'Calibrated');
   if(submitted) items.push({ icon:'📝', text:`มีใบประเมิน ${submitted} รายการ รอสอบทานหัวหน้าแผนก`, page:'reviewl1' });
   if(l1reviewed) items.push({ icon:'🔍', text:`มีใบประเมิน ${l1reviewed} รายการ รอสอบทานผู้จัดการส่วน`, page:'review' });
   if(l2reviewed) items.push({ icon:'🏢', text:`มีใบประเมิน ${l2reviewed} รายการ รออนุมัติ GM`, page:'gmapprove' });
