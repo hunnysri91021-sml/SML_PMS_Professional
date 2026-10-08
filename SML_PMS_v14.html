@@ -2204,7 +2204,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <button class="btn btn-p" onclick="clearUserModalForm();openM('mAddUser')">＋ เพิ่มพนักงาน</button>
     </div></div>
 
-    <div class="al al-e" id="orgHierarchyBanner" style="display:none"><span>⚠️</span><div><b id="orgHierarchyBannerText"></b> <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true);renderNotifBell()">ตรวจสอบอีกครั้ง</button></div></div>
+    <div class="al al-w" id="orgHierarchyBanner" style="display:none"><span>⚠️</span><div><b id="orgHierarchyBannerText"></b> <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true);renderNotifBell()">ตรวจสอบอีกครั้ง</button></div></div>
     <div class="al al-i" id="orgHierarchyOkBanner" style="display:none"><span>✅</span><div>ไม่พบปัญหาสายบังคับบัญชา <button class="btn btn-sm" style="margin-left:8px" onclick="checkHierarchyIssues(true);renderNotifBell()">ตรวจสอบอีกครั้ง</button></div></div>
 
     <div class="card">
@@ -9069,14 +9069,14 @@ function checkHierarchyIssues(showToast){
   if(total > 0){
     if(banner && bannerText){
       banner.style.display='';
-      bannerText.textContent = `พบปัญหาสายบังคับบัญชา ${total} รายการ — พนักงาน ${noL1.length} คนไม่มีหัวหน้าระดับ 1 และพบ Circular Reference ${circular.length} จุด`;
+      bannerText.textContent = `พบข้อมูลสายบังคับบัญชาไม่ครบ ${total} รายการ — พนักงาน ${noL1.length} คนไม่มีหัวหน้าระดับ 1 และพบ Circular Reference ${circular.length} จุด (ไม่กระทบการส่ง/สอบทานแบบประเมิน — ระบบจะข้ามขั้นตอนที่ไม่มีผู้สอบทานให้อัตโนมัติ แต่ควรกรอกข้อมูลให้ครบเพื่อความถูกต้องของผังองค์กรและสายอนุมัติ)`;
     }
     if(okBanner) okBanner.style.display='none';
   } else {
     if(banner) banner.style.display='none';
     if(okBanner) okBanner.style.display='';
   }
-  if(showToast) smlToast(total ? `พบปัญหา ${total} รายการ` : 'ไม่พบปัญหาสายบังคับบัญชา','ok');
+  if(showToast) smlToast(total ? `ข้อมูลสายบังคับบัญชาไม่ครบ ${total} รายการ (ไม่กระทบการส่งแบบประเมิน)` : 'ไม่พบปัญหาสายบังคับบัญชา','ok');
   return { noL1, circular };
 }
 
@@ -9104,7 +9104,7 @@ function getNotifications(){
 
   const hier = (typeof checkHierarchyIssues==='function') ? checkHierarchyIssues(false) : {noL1:[],circular:[]};
   const hierCount = hier.noL1.length + hier.circular.length;
-  if(hierCount) items.push({ icon:'⚠️', text:`พบปัญหาสายบังคับบัญชา ${hierCount} รายการ`, page:'org' });
+  if(hierCount) items.push({ icon:'⚠️', text:`ข้อมูลสายบังคับบัญชาไม่ครบ ${hierCount} รายการ (ไม่กระทบการส่งแบบประเมิน)`, page:'org' });
 
   let pendingPush = 0;
   try{ pendingPush = JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY)||'[]').filter(d=>isFinalStatus(d[d.length-1])).length; }catch(e){}

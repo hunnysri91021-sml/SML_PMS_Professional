@@ -5272,6 +5272,111 @@ touches employee/attendance/evaluation data.
     "one shared status-transition chokepoint," applied one layer deeper
     to "one shared reviewer-resolution chokepoint" feeding it.
 
+129. **Follow-up to #128: user's screenshot of the org-chart page showed
+    the red "พบปัญหาสายบังคับบัญชา 10 รายการ" banner (and a "35" nav
+    badge next to it) still appearing after #128 shipped — "ยังไมีแจ้ง
+    เตือนอยู่" (there's still an alert showing), which I read on first
+    glance as "did #128 not actually work." Asked a clarifying question
+    before touching anything, since the honest answer could easily be
+    "this is a different, unrelated feature, not a regression of #128."**
+    The user's own follow-up confirmed exactly that question: "ทำไม
+    แบนเนอร์นี้ยังขึ้นอยู่ หลังจากที่เพิ่งแก้ให้ข้ามระดับที่ไม่มีหัวหน้า
+    ได้แล้ว" (why does this banner still show, after we just fixed
+    skipping levels with no supervisor). Traced both features and
+    confirmed they are genuinely independent, by design, not a missed
+    spot: `checkHierarchyIssues()` (#73/#127) answers "is the employee
+    master data complete" (does every active employee have a real L1
+    name, is any supervisor chain circular) — a pure data-quality
+    diagnostic over `MASTER_USERS` that has nothing to do with whether
+    an evaluation can be submitted. #128's `hasAnyRealReviewer()`/
+    `skipEmptyReviewStages()` answer a completely different question —
+    "can *this specific evaluation record* still move through the real
+    approval pipeline despite a missing tier" — and #128 explicitly
+    does NOT touch `MASTER_USERS` or `checkHierarchyIssues()`'s own
+    counting logic at all; it only changes how a draft's *status*
+    advances. So an employee missing a real L1 name correctly still
+    shows up in this banner (the data genuinely is incomplete — that
+    fact didn't change), while that same employee's evaluation now
+    correctly auto-skips the empty tier and keeps moving instead of
+    getting stuck (#128's real fix). Both are true and correct at once
+    — the banner was never a symptom of #128's bug, and #128 was never
+    meant to make this banner stop firing. The *real* problem, once this
+    was clear, was the banner's own wording: it reads exactly like an
+    urgent blocking error ("พบปัญหา," a red `al-e` severity class,
+    identical styling to a real blocking alert elsewhere in this file)
+    with zero indication that, as of #128, this condition no longer
+    blocks anything — so Admin reading it has every reason to panic
+    about an evaluation being stuck, when the real, current behavior is
+    "the evaluation already kept moving on its own; this is purely a
+    'please go complete this data when you get a chance' housekeeping
+    note." Offered the user 3 options (soften the wording in place;
+    leave wording as-is but add a one-line note the skip already
+    happened; or remove the banner's sense of urgency and demote its
+    visual severity) — user picked softening the wording specifically
+    so Admin doesn't mistake it for an urgent blocker.
+    Fixed in `checkHierarchyIssues()` (line ~2207 for the container,
+    ~9040 for the function): downgraded the banner's own CSS class from
+    `al-e` (red/error — `background:#fef2f2;color:#b91c1c`, the same
+    severity as a genuine blocking error banner elsewhere in this file)
+    to the real existing `al-w` (amber/warning —
+    `background:#fffbeb;color:#b45309`, already used by e.g.
+    `#dashDeadlineBanner`) — a data-completeness reminder that no longer
+    blocks anything is a warning, not an error, and the file already has
+    a real warning severity class rather than needing a new one invented
+    for this. Reworded the banner text itself from "พบปัญหาสายบังคับบัญชา
+    N รายการ — ..." to "พบข้อมูลสายบังคับบัญชาไม่ครบ N รายการ — ... (ไม่
+    กระทบการส่ง/สอบทานแบบประเมิน — ระบบจะข้ามขั้นตอนที่ไม่มีผู้สอบทานให้
+    อัตโนมัติ แต่ควรกรอกข้อมูลให้ครบเพื่อความถูกต้องของผังองค์กรและสาย
+    อนุมัติ)" — swapping "ปัญหา" (problem) for "ไม่ครบ" (incomplete) and
+    stating plainly, in the user's own words, that it does not affect
+    evaluation submission/review (since #128 already handles that),
+    while still giving a real, honest reason to complete it anyway (an
+    accurate org chart and approval chain) rather than implying the
+    banner itself is now pointless and should be ignored outright —
+    CLAUDE.md #14's "don't let a UI claim something false" cuts both
+    ways: it must not overstate severity, but also must not understate
+    why the data still matters. **Checked every other place this same
+    fact is displayed**, per the established #34/#49/#67/#73/#85/#87
+    discipline of "grep every independent spot a shared fact is shown,
+    not just the one in the screenshot" — found two more: the manual
+    "ตรวจสอบอีกครั้ง" button's `smlToast` (line ~9079) and the
+    notification bell's own line (`getNotifications()`, line ~9107,
+    itself already independently flagged in #87 for a *different*
+    scoping bug). Both reworded to the same shorter clarifying phrase,
+    "(ไม่กระทบการส่งแบบประเมิน)" — kept deliberately terser than the
+    persistent banner's full explanation **on purpose, not as an
+    oversight**: a toast is transient (a few seconds on screen) and the
+    notification-bell line sits in a tightly-packed list of several
+    other real alerts, so neither has the visual room for the banner's
+    full "ระบบจะข้ามขั้นตอนอัตโนมัติ...ความถูกต้องของผังองค์กร..."
+    explanation — the short form carries the one fact that actually
+    prevents the panic (this doesn't block anything) and defers the
+    full "why it still matters" explanation to the one place (the
+    banner itself, reached by clicking either of these) that has room
+    for it. Deliberately did **not** touch `checkHierarchyIssues()`'s
+    actual `noL1`/`circular` computation, its `getMyScopedEmpCodes()`
+    scoping (#127), or #128's resolver/skip functions at all — this was
+    purely a severity/wording fix on an already-correct diagnostic, not
+    a logic change, and conflating the two in one pass would have risked
+    silently changing *what counts* as a hierarchy issue while only
+    being asked to change *how alarming it sounds*. Verified with a test
+    that seeds an employee with no real L1 and confirms: the banner's
+    container now carries `al al-w` (not `al-e`), its text contains the
+    new "ไม่กระทบการส่งแบบประเมิน" clarification, and `getNotifications()`'s
+    own hierarchy-count line carries the matching shorter clarification
+    too — plus the standard click-sweep (`nav pages clicked: 22 errors:
+    []`). General lesson sharper than #73's own conclusion: when a user
+    reports "this alert is still showing" right after a fix that changed
+    *behavior* (not the alert's own underlying data), first check
+    whether the alert and the fix are actually answering the same
+    question at all — #128 fixed "can the evaluation still proceed,"
+    this banner has always answered "is the master data complete," and
+    both can be simultaneously, correctly true; the real fix the report
+    was pointing at wasn't logic, it was that a now-non-blocking
+    condition was still dressed in blocking-error styling and wording
+    with no indication the underlying risk it used to represent had
+    already been defused by a separate, more recent fix.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
