@@ -6000,6 +6000,40 @@ touches employee/attendance/evaluation data.
     follow-up request, read carefully, is sometimes the real root-cause
     diagnosis arriving one message late.
 
+137. **Follow-up to #135: user sent a screenshot of the "ผู้ตรวจ GM (L3)"
+    label on the employee list's "สายบังคับบัญชา" column and asked
+    "เปี่นเป็น ผู้ตรวจ MGR (L3) แทน" (change it to "ผู้ตรวจ MGR (L3)"
+    instead).** A pure wording change to the label text #135 itself
+    introduced — not a new field, not a new tier, not a scope/semantics
+    question like #135 was. `grep`ped for the exact string "ผู้ตรวจ GM"
+    across the whole file (rather than touching only the one element the
+    screenshot showed) and found it in 10 places: the org chart table
+    header (`renderOrg()`), the employee list's "สายบังคับบัญชา" column
+    subtitle, `supervisorChainLabel()`'s own code comment *and* its
+    actual `lines.push()` HTML output, the employee detail view's `udGM`
+    comment, the Add/Edit Employee modal's field `<label>`, the bulk-
+    import template reference table and `EMP_TEMPLATE_THAI` display
+    array, and the employee detail view's own inline label text — the
+    same 7 spots #135's own relabeling pass had just touched together as
+    one unit, since they all exist to describe the same one field
+    (`u[19]`/`gm`) consistently. A single `sed -i 's/ผู้ตรวจ GM/ผู้ตรวจ
+    MGR/g'` replaced all 10 at once, leaving every underlying identifier
+    (`u[19]`, the `gm` field name, `EXCEL_EMPLOYEE_COLS`'s column
+    mapping, `resolveGmReviewer()`, `getMyScopedEmpCodes()`'s `gm`
+    branch) completely untouched — purely cosmetic, exactly #135's own
+    established scope for this specific field's labeling. Verified with
+    syntax check + the standard click-sweep (`nav pages clicked: 22
+    errors: []`) rather than a dedicated Playwright test, since this is
+    a string-literal swap with zero logic surface to regress — the same
+    "cosmetic relabel needs no new test, just confirm nothing broke"
+    judgment #135 itself used. General lesson, a direct continuation of
+    #89/#135's own: when a user asks to rename a label that a *previous*
+    fix in this same file introduced across several places at once,
+    assume the rename needs to hit every one of those same places again,
+    not just the one in the new screenshot — grep the exact old string
+    file-wide before editing, since a relabeling pass is only ever
+    "done" when every sibling spot agrees.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
