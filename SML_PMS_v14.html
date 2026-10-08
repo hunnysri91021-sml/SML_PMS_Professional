@@ -8042,6 +8042,33 @@ function restoreCheckedKeys(cls, checkedKeys){
   if(!checkedKeys.size) return;
   document.querySelectorAll('.'+cls).forEach(el=>{ if(checkedKeys.has(el.value)) el.checked = true; });
 }
+/* ผู้ใช้ขอ "ให้แต่ละระดับเห็นพนักงานที่ตนเองต้องประเมิน หากผลการประเมินยังไม่ได้ ให้ขึ้นรอผลประเมิน
+   ทุก L" — เดิมทุกคิว (reviewl1/review/gmapprove/calib/approve) แสดง "เฉพาะใบที่สถานะตรงกับขั้นของ
+   ตนพอดี" เท่านั้น คนที่ยังไม่ถึงขั้น (หรือยังไม่มีใบประเมินเลย) จะหายไปจากคิวเฉยๆ ทำให้ดูเหมือนไม่มี
+   พนักงานในสังกัดทั้งที่จริงมี แค่ยังไม่ถึงคิวของระดับนั้น — ฟังก์ชันนี้คืน "roster เต็ม" ของคนที่ระดับ
+   นี้ต้องรับผิดชอบจริง (ไม่ใช่แค่คนที่พร้อมให้กดอนุมัติตอนนี้) แยกสถานะเป็น 3 แบบต่อคน:
+   'ready' = ถึงขั้นนี้พอดี พร้อมให้กดอนุมัติ/สอบทาน (แถวเดิมที่เคยมี)
+   'pending' = ยังไม่ถึงขั้นนี้ (หรือยังไม่มีใบประเมินเลย) → แสดง "รอผลประเมิน" ไม่มีปุ่มกระทำ
+   'done' = ผ่านขั้นนี้ไปแล้ว (อนุมัติ/ตีกลับแล้วเลยไป) → ยังแสดงให้เห็นในรายชื่อ พร้อมคะแนนจริงและปุ่ม
+            "ดูแบบฟอร์ม" (view-only) ไม่ใช่หายไปทันที เพื่อให้เห็นภาพรวมทั้งสังกัดเสมอ
+   resolverFn เป็น null สำหรับ Calibration/อนุมัติ AMD-MD (role admin/exec ที่ scope ทั้งบริษัทอยู่แล้ว
+   ผ่าน getMyScopedEmpCodes()/getEvalParticipants() — ไม่มี field สายบังคับบัญชาเฉพาะของขั้นนี้ให้ resolve
+   รายคน) ส่วน reviewl1/review/gmapprove ใช้ resolveL1Reviewer/resolveL2Reviewer/resolveGmReviewer (#128)
+   ตรงๆ เพื่อให้ roster คือ "คนที่สายบังคับบัญชาจริงชี้มาที่ฉันในขั้นนี้" ไม่ใช่แค่ "ใครก็ได้ในสายที่ฉัน
+   เห็น" (getMyScopedEmpCodes() เองกว้างกว่านั้น รวมทั้งสายลงไป ไม่ใช่เฉพาะคนที่ขั้นนี้เป็นหน้าที่ฉัน) */
+function buildTierRoster(resolverFn, myCode, inputStatus, cycle){
+  const inputRank = evalStatusRank(inputStatus);
+  return getEvalParticipants().map(emp=>{
+    if(resolverFn){
+      const reviewer = resolverFn(emp);
+      if(!reviewer || reviewer[0]!==myCode) return null;
+    }
+    const draft = getDrafts().find(d=>d[0]===emp[0] && d[2]===cycle) || null;
+    const rank = draft ? evalStatusRank(draft[draft.length-1]) : 0;
+    const state = rank===inputRank ? 'ready' : (rank>inputRank ? 'done' : 'pending');
+    return { emp, draft, state };
+  }).filter(Boolean);
+}
 /* ขั้นใหม่ "สอบทานหัวหน้าแผนก" (#92, ก่อน "สอบทานผู้จัดการส่วน" เดิม) — อ่านคิวจาก Submitted
    เหมือนที่ renderReviewQueue() เคยอ่านตอนยังไม่มีขั้นนี้ ผ่าน role l1 scoping ที่เดินสายบังคับบัญชา
    2 ชั้นจาก u[9] (ดู getMyScopedEmpCodes() ด้านบน) จึงเห็นทั้งแผนก ไม่ใช่แค่ลูกน้องที่รายงานตรง */
@@ -8049,19 +8076,37 @@ function renderReviewL1Queue(){
   const tbody=document.getElementById('reviewl1Rows'); const cnt=document.getElementById('reviewl1Count');
   if(!tbody) return;
   const checkedKeys = new Set(getCheckedKeys('reviewl1-chk'));
-  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  const rows = getDrafts().filter(d=>d[d.length-1]==='Submitted').filter(d=>!scoped || scoped.has(d[0]));
-  if(cnt) cnt.textContent = rows.length+' รายการ';
-  tbody.innerHTML = rows.length ? rows.map(d=>{
-    const {name,dept} = empDeptLabel(d[0], d[1]);
-    const X = d[d.length-3], grade = d[d.length-2];
+  const me = CURRENT_SESSION_USER;
+  const cycle = getCurrentEvalCycleYear();
+  const roster = me ? buildTierRoster(resolveL1Reviewer, me[0], 'Submitted', cycle) : [];
+  const readyCount = roster.filter(r=>r.state==='ready').length;
+  const pendingCount = roster.filter(r=>r.state==='pending').length;
+  if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
+  tbody.innerHTML = roster.length ? roster.map(r=>{
+    const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
+    const code = r.emp[0];
+    if(r.state==='pending'){
+      return `<tr style="color:#94a3b8"><td></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td style="font-size:12px">${dept}</td>
+        <td colspan="3" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+    }
+    const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
+    if(r.state==='done'){
+      return `<tr><td></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td style="font-size:12px">${dept}</td>
+        <td style="text-align:center">${X}</td>
+        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+    }
     return `<tr><td><input type="checkbox" class="reviewl1-chk" value="${draftKey(d)}"></td>
-      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${d[0]}</small></div></div></td>
+      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${d[0]}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
 }
 async function approveReviewL1Selected(){
@@ -8088,19 +8133,37 @@ function renderReviewQueue(){
   const tbody=document.getElementById('reviewRows'); const cnt=document.getElementById('reviewCount');
   if(!tbody) return;
   const checkedKeys = new Set(getCheckedKeys('review-chk'));
-  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  const rows = getDrafts().filter(d=>d[d.length-1]==='L1Reviewed').filter(d=>!scoped || scoped.has(d[0]));
-  if(cnt) cnt.textContent = rows.length+' รายการ';
-  tbody.innerHTML = rows.length ? rows.map(d=>{
-    const {name,dept} = empDeptLabel(d[0], d[1]);
-    const X = d[d.length-3], grade = d[d.length-2];
+  const me = CURRENT_SESSION_USER;
+  const cycle = getCurrentEvalCycleYear();
+  const roster = me ? buildTierRoster(resolveL2Reviewer, me[0], 'L1Reviewed', cycle) : [];
+  const readyCount = roster.filter(r=>r.state==='ready').length;
+  const pendingCount = roster.filter(r=>r.state==='pending').length;
+  if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
+  tbody.innerHTML = roster.length ? roster.map(r=>{
+    const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
+    const code = r.emp[0];
+    if(r.state==='pending'){
+      return `<tr style="color:#94a3b8"><td></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td style="font-size:12px">${dept}</td>
+        <td colspan="3" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+    }
+    const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
+    if(r.state==='done'){
+      return `<tr><td></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td style="font-size:12px">${dept}</td>
+        <td style="text-align:center">${X}</td>
+        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+    }
     return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}"></td>
-      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${d[0]}</small></div></div></td>
+      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${d[0]}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีใบประเมินรอสอบทาน</td></tr>';
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('review-chk', checkedKeys);
 }
 /* Push ประวัติการอนุมัติ/ตีกลับแต่ละขั้นขึ้น Excel ตาราง Approvals แบบ append (เหตุการณ์ 1 ครั้ง =
@@ -8158,19 +8221,37 @@ function renderGmApproveQueue(){
   const tbody=document.getElementById('gmApproveRows'); const cnt=document.getElementById('gmApproveCount');
   if(!tbody) return;
   const checkedKeys = new Set(getCheckedKeys('gm-chk'));
-  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  const rows = getDrafts().filter(d=>d[d.length-1]==='L2Reviewed').filter(d=>!scoped || scoped.has(d[0]));
-  if(cnt) cnt.textContent = rows.length+' รายการ';
-  tbody.innerHTML = rows.length ? rows.map(d=>{
-    const {name,dept} = empDeptLabel(d[0], d[1]);
-    const X = d[d.length-3], grade = d[d.length-2];
+  const me = CURRENT_SESSION_USER;
+  const cycle = getCurrentEvalCycleYear();
+  const roster = me ? buildTierRoster(resolveGmReviewer, me[0], 'L2Reviewed', cycle) : [];
+  const readyCount = roster.filter(r=>r.state==='ready').length;
+  const pendingCount = roster.filter(r=>r.state==='pending').length;
+  if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
+  tbody.innerHTML = roster.length ? roster.map(r=>{
+    const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
+    const code = r.emp[0];
+    if(r.state==='pending'){
+      return `<tr style="color:#94a3b8"><td></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td style="font-size:12px">${dept}</td>
+        <td colspan="3" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+    }
+    const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
+    if(r.state==='done'){
+      return `<tr><td></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td style="font-size:12px">${dept}</td>
+        <td style="text-align:center">${X}</td>
+        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+    }
     return `<tr><td><input type="checkbox" class="gm-chk" value="${draftKey(d)}"></td>
-      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${d[0]}</small></div></div></td>
+      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${d[0]}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${d[0]}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรออนุมัติ GM</td></tr>';
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
 }
 /* อนุมัติ GM แล้ว = พร้อมส่งผลให้พนักงานรับทราบ — จึงส่งอีเมลแจ้งพนักงานตรงนี้เลย (ย้ายมาจาก
@@ -8213,22 +8294,41 @@ function renderCalibQueue(){
   if(!tbody) return;
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
   /* Calibration ทำโดย HR *หลัง* พนักงานรับทราบผลแล้ว (#61) — คิวจึงมาจากสถานะ Acknowledged
-     ไม่ใช่ L2Reviewed แบบเดิมก่อน GM/Acknowledge เข้ามาคั่นกลาง */
-  const rows = getDrafts().filter(d=>d[d.length-1]==='Acknowledged').filter(d=>!scoped || scoped.has(d[0]));
-  if(cnt) cnt.textContent = 'รอปรับเทียบ '+rows.length+' รายการ';
-  tbody.innerHTML = rows.length ? rows.map(d=>{
-    const {name,dept} = empDeptLabel(d[0], d[1]);
-    const X = Number(d[d.length-3]), grade = d[d.length-2];
-    const noteKey = d[0]+'|'+d[2];
+     ไม่ใช่ L2Reviewed แบบเดิมก่อน GM/Acknowledge เข้ามาคั่นกลาง HR/exec ไม่มี field สายบังคับบัญชา
+     เฉพาะของตนเอง (scope ทั้งบริษัทอยู่แล้วผ่าน getMyScopedEmpCodes()) จึง resolverFn=null —
+     roster = getEvalParticipants() ทั้งหมดในขอบเขต (ดูคอมเมนต์บน buildTierRoster) */
+  const cycle = getCurrentEvalCycleYear();
+  const roster = buildTierRoster(null, null, 'Acknowledged', cycle);
+  const readyCount = roster.filter(r=>r.state==='ready').length;
+  const pendingCount = roster.filter(r=>r.state==='pending').length;
+  if(cnt) cnt.textContent = 'รอปรับเทียบ '+readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
+  tbody.innerHTML = roster.length ? roster.map(r=>{
+    const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
+    const code = r.emp[0];
+    if(r.state==='pending'){
+      return `<tr style="color:#94a3b8"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
+        <td style="font-size:12px">${dept}</td>
+        <td colspan="5" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+    }
+    const d = r.draft, X = Number(d[d.length-3]), grade = d[d.length-2];
+    if(r.state==='done'){
+      return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
+        <td style="font-size:12px">${dept}</td>
+        <td style="text-align:center">${X}</td>
+        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td colspan="2" style="text-align:center;color:#16a34a">✓ ผ่าน Calibration แล้ว</td>
+        <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+    }
+    const noteKey = code+'|'+d[2];
     const noteVal = (typeof getEvalHrNote==='function' ? getEvalHrNote(noteKey) : '').replace(/"/g,'&quot;');
-    return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${d[0]}</small></td>
+    return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
       <td><input type="number" step="0.01" class="calib-adj" data-key="${draftKey(d)}" value="${X}" style="width:80px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)" style="width:220px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
-      <td><button class="btn btn-sm" onclick="printSingleDraft('${d[0]}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอ Calibration</td></tr>';
+      <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
   if(distBox){
     const calibrated = getDrafts().filter(d=>['Calibrated','Approved'].includes(d[d.length-1])).filter(d=>!scoped || scoped.has(d[0]));
     const counts = {};
@@ -8272,19 +8372,36 @@ function renderApproveQueue(){
   const tbody=document.getElementById('approveRows'); const cnt=document.getElementById('approveCount');
   const btn=document.getElementById('approveAllBtn');
   if(!tbody) return;
-  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated').filter(d=>!scoped || scoped.has(d[0]));
-  if(cnt) cnt.textContent = rows.length+' รายการ';
-  if(btn) btn.textContent = '✅ อนุมัติทั้งหมด ('+rows.length+')';
-  tbody.innerHTML = rows.length ? rows.map(d=>{
-    const {name,dept} = empDeptLabel(d[0], d[1]);
-    const X = d[d.length-3], grade = d[d.length-2];
-    return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${d[0]}</small></td>
+  /* resolverFn=null เหมือน renderCalibQueue() — AMD/MD scope ทั้งบริษัทผ่าน getMyScopedEmpCodes()
+     อยู่แล้ว ไม่มี field สายบังคับบัญชาเฉพาะขั้นนี้ให้ resolve รายคน */
+  const cycle = getCurrentEvalCycleYear();
+  const roster = buildTierRoster(null, null, 'Calibrated', cycle);
+  const readyCount = roster.filter(r=>r.state==='ready').length;
+  const pendingCount = roster.filter(r=>r.state!=='ready' && r.state!=='done').length;
+  if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
+  if(btn) btn.textContent = '✅ อนุมัติทั้งหมด ('+readyCount+')';
+  tbody.innerHTML = roster.length ? roster.map(r=>{
+    const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
+    const code = r.emp[0];
+    if(r.state==='pending'){
+      return `<tr style="color:#94a3b8"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
+        <td style="font-size:12px">${dept}</td>
+        <td colspan="3" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+    }
+    const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
+    if(r.state==='done'){
+      return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
+        <td style="font-size:12px">${dept}</td>
+        <td style="text-align:center">${X}</td>
+        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+    }
+    return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm" onclick="printSingleDraft('${d[0]}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีรายการรอการอนุมัติ</td></tr>';
+      <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
 }
 const APPROVAL_SIGNATURE_KEY = 'smlPmsApprovalSignatures';
 /* เก็บลายเซ็นอิเล็กทรอนิกส์แยกต่างหากจาก draft (ไม่ต่อท้าย array ของ draft เพราะโค้ดหลายจุดอ่าน

@@ -5895,6 +5895,111 @@ touches employee/attendance/evaluation data.
     rebuild) before touching anything, since the two fixes have wildly
     different blast radii and the user may only want the cheap one today.
 
+136. **User reported "ไม่เห็นพนักงานในสังกัดแล้ว และเมื่อ L3 อนุมัติไป L4
+    ไม่เห็นแบบประเมิน" — investigated with same-device Playwright
+    reproductions of the real reported scenario (L1 approves → switch
+    session to L2 → check scoping/queue) before touching any code, since
+    #135's own diff touched zero scoping/pipeline logic (verified via
+    `git diff`) and the report could easily have been a cross-device sync
+    issue, not a code bug (per #75's own precedent). Both tests passed
+    cleanly — status advanced correctly, `getMyScopedEmpCodes()` included
+    the right people, the queue rendered the row — confirming the core
+    logic was sound and pointing at Excel sync as the likely real cause.
+    The user's *next* message reframed the actual ask entirely: "ให้แต่ละ
+    ระดับเห็นพนักงานที่ตนเองต้องประเมิน หากผลการประเมินยังไม่ได้ ให้ขึ้น
+    รอผลประเมิน ทุก L" (let each level see the employees it must evaluate;
+    if the result isn't in yet, show "awaiting result" — for every
+    level). This revealed the real design gap behind the confusion: every
+    one of the 5 review/approval queues (`renderReviewL1Queue`/
+    `renderReviewQueue`/`renderGmApproveQueue`/`renderCalibQueue`/
+    `renderApproveQueue`) had **always** filtered to rows whose status
+    matched that queue's exact input status — anyone who hadn't reached
+    that stage yet (or had no draft at all) simply didn't appear, with no
+    distinction between "genuinely nothing to do" and "your people exist,
+    they just haven't gotten here yet." A real L2 logging in to an
+    honestly-empty queue (because nobody had been approved up to that
+    stage yet) had no way to tell that apart from a scoping bug — which
+    is exactly what made the earlier same-device tests pass while the
+    *human* report still felt like something was broken.
+    Confirmed scope with 2 clarifying questions before the rewrite (this
+    touches all 5 queue pages at once): (1) show the full scoped roster
+    always, not just people who've reached that queue's stage — confirmed
+    yes; (2) employees with zero draft at all (never even self-submitted)
+    should also show as "รอผลประเมิน" rather than being omitted —
+    confirmed yes.
+    Added `buildTierRoster(resolverFn, myCode, inputStatus, cycle)`: for
+    each person in `getEvalParticipants()` (the real eligible-for-
+    evaluation universe, already scope-filtered and resigned/exempt-
+    excluded per #45/#83), optionally filters to only those whose real
+    reviewer at this tier resolves to `myCode` (`resolverFn` —
+    `resolveL1Reviewer`/`resolveL2Reviewer`/`resolveGmReviewer` from
+    #128, the exact functions that already answer "does this specific
+    employee have a real person at this tier" — reused rather than
+    re-derived, so this can never drift from #128's own skip/resolve
+    logic), then classifies each person into one of 3 states by comparing
+    their current-cycle draft's status rank against the queue's own
+    `inputStatus` rank (`evalStatusRank()`, #58): `'ready'` (exactly at
+    this stage — the original actionable row, checkbox/inputs and all,
+    unchanged), `'pending'` (earlier than this stage, or no draft at
+    all — new "⏳ รอผลประเมิน" row, no action controls since there's
+    nothing yet to act on), `'done'` (already past this stage — new row
+    showing the real score/grade with a view-only "ดูแบบฟอร์ม"/PDF/delete
+    button, per #119's existing `viewOnly` modal parameter, so the person
+    never just vanishes from their reviewer's own roster the instant
+    they're approved). **Calibration/AMD-MD approve pass `resolverFn=null`**
+    deliberately — HR/exec roles are unrestricted company-wide via
+    `getMyScopedEmpCodes()` already (#45), with no per-employee chain
+    field naming "the HR calibrator" or "the final approver" the way
+    `resolveL1Reviewer()` etc. do for the other three tiers, so their
+    roster is simply every eligible participant in scope. Each queue's
+    "count" display was split into a ready-count (what the header used to
+    show — "how many can I act on right now") plus a parenthetical
+    pending-count, so the header itself now also communicates "there are
+    N more coming, not nothing at all." **Explicitly chose per-tier real
+    resolvers over `getMyScopedEmpCodes()` directly** — the scoped set is
+    *wider* than "who this specific tier is responsible for" (it's the
+    whole downward chain for l1/l2/gm), so using it bare would have shown
+    people in, say, the department head's queue who are actually the
+    section manager's responsibility at this stage, not theirs; this also
+    means a queue page is now correctly empty under a role it was never
+    meant to be viewed by, even if that role's `getMyScopedEmpCodes()`
+    happens to include the same people (confirmed via one old test from
+    this session's own earlier work, `test_bulk_reject.js`, whose DOM
+    check of `renderReviewL1Queue()` while still logged in as L2 — a
+    pre-existing test quirk, not a real UI path since nav `data-role`
+    already prevents L2 from reaching that page — correctly started
+    returning empty under the new resolver-based roster; the actual
+    status-transition assertions in that same test, the only part that
+    matters, were unaffected and still pass). None of the 9 real bulk
+    approve/reject functions (`approveReviewL1Selected()` etc.) or
+    `confirmCalibration()`/`approveAllFinal()` needed any change — they
+    already only ever read real checked keys / real `.calib-adj` inputs,
+    which now simply don't exist on `pending`/`done` rows, so they
+    continue to operate correctly on exactly the `ready` subset with zero
+    logic changes. Verified with a Playwright test driving three
+    synthetic employees through a real L1→L2 handoff (one never
+    submitted, one submitted-and-approved-by-L1, one exempted via
+    CLAUDE.md #83's `evalExempt` flag): confirms the never-submitted
+    person shows "pending" in L1's queue and stays pending in L2's queue
+    too (since their record hasn't reached L1Reviewed yet), confirms the
+    submitted person is `ready` in L1's queue before approval and flips
+    to `done` (view-only, no checkbox) in that *same* queue immediately
+    after L1 approves — while simultaneously becoming `ready` in L2's own
+    queue — and confirms the exempted employee is excluded from the
+    roster entirely at every tier — plus re-ran all 10 other Playwright
+    tests touching these 5 render functions from this session's earlier
+    work (bulk reject ×2, reconfirm ×2, L2 queue/team, the reject-race
+    test, both comment tests, the L3/L4 relabel test) with zero
+    regressions, plus the standard click-sweep (`nav pages clicked: 22
+    errors: []`). General lesson sharper than #75's own conclusion: when
+    a same-device reproduction proves the scoping/pipeline code is
+    correct, the next step isn't always "the data must be wrong, go check
+    Excel" — it can also mean the *design* itself (show only exact-match
+    rows, nothing else) is what's producing an empty screen that reads
+    as broken even when it's technically accurate; the user's own
+    follow-up request, read carefully, is sometimes the real root-cause
+    diagnosis arriving one message late.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
