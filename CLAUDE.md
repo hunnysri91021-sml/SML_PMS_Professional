@@ -5049,6 +5049,51 @@ touches employee/attendance/evaluation data.
     real value" rather than stopping at the one line the screenshot
     pointed at.
 
+126. **User's screenshot of "2. ประเมินทีมงาน (L1 รอบแรก)" — logged in as
+    a real `l2` (ผู้จัดการส่วน) — showed the nav badge next to that menu
+    item reading "5" while the page itself showed the "เลือกหัวหน้า"
+    dropdown stuck on "— ไม่มีหัวหน้าที่มีลูกทีม —" (no supervisor with
+    a team) and every stat tile at 0 — "ไม่มีรายชื่อแสดง มีแต่ขึ้นว่ามี
+    5 คน" (no names show, it just says there are 5 people).** This is
+    the exact #73/#85/#87/#118 shape (a summary number and the detail
+    view under it disagreeing) but in a new spot: `populateTeamManagerSelect()`'s
+    `role==='l2'` branch — the function that builds this specific
+    dropdown's options — was an **entirely independent query** from
+    both `getMyScopedEmpCodes()` (which the "5" badge is correctly
+    computed from, per #85) and from #86's own fix: it compared
+    `u[10]===me[1]` as **raw, untrimmed strings**, the identical shape
+    of bug #86 already found and fixed inside `getMyScopedEmpCodes()`
+    itself — but #86 only touched that one function, not this
+    *separate* dropdown-building query that happens to check the same
+    relationship. It also required `u[2]==='l1'` exactly, excluding
+    `unit`-role supervisors entirely — so an L2 whose direct reports
+    are `unit` heads (not `l1`) rather than department heads would see
+    an empty dropdown even with perfectly clean, trimmed data. Either
+    gap alone reproduces exactly what the screenshot showed: `getMyScopedEmpCodes()`
+    (trimmed, counts any role under the L2 by `u[10]`) correctly found
+    5 scoped `emp`-role people for the badge, while this dropdown's own
+    untrimmed-and-role-restricted query found zero real supervisor
+    options to list, leaving nothing for the page to show no matter
+    which (nonexistent) option got selected. Fixed by trimming both
+    sides (`(u[10]||'').trim()===(me[1]||'').trim()`, the identical
+    pattern #86 already established) and widening the role match from
+    `u[2]==='l1'` to `u[2]==='l1'||u[2]==='unit'` — a unit head is a
+    legitimate "pick this supervisor to view their team" option here
+    too, the same as it already is for role `l1`/`unit` themselves per
+    #65. Verified with a test that seeds an L2 with a clean name and
+    two real supervisors (one `l1`, one `unit`) whose own `u[10]` both
+    point to her, confirms `getMyScopedEmpCodes()`-driven badge shows
+    the real scoped count, and confirms the dropdown now lists **both**
+    supervisors as real selectable options instead of the empty
+    placeholder — plus the standard click-sweep. General lesson, a
+    sharper case of #86's own conclusion: fixing a name-trim bug inside
+    `getMyScopedEmpCodes()` does not fix every *other* independent
+    query in the file that happens to compare the same `u[9]`/`u[10]`
+    relationship by hand — grep for every other raw `u[10]===`/`u[9]===`
+    comparison against a session user's name whenever a trim bug like
+    this is found and fixed in one place, since each one is a separate,
+    equally-reachable landmine until it's fixed too.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
