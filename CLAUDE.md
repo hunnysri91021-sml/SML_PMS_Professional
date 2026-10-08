@@ -5155,6 +5155,123 @@ touches employee/attendance/evaluation data.
     need trimming, and fix every real instance in one pass rather than
     waiting for each one to surface as its own separate future report.
 
+128. **User asked: "ปรับสายการบังคับบัญชา ให้เป็นไปตามที่กำหนดในข้อมูล
+    พนักงาน ว่าใครประเมินบ้าง ถ้าไม่มีในตำแหน่งไหนให้ข้าม ต้องมีคนประเมิน
+    อย่างน้อย 1 คน" (adjust the review chain to follow what's set in each
+    employee's own record — if a tier has nobody assigned, skip it; there
+    must be at least 1 real reviewer).** Asked two clarifying questions
+    first, given the size of a wrong guess here (this touches the core
+    approval state machine): confirmed the scope is the real 4-level
+    review/approval sequence (L1Reviewed=หัวหน้าแผนก role `l1`,
+    L2Reviewed=ผจก.ส่วน role `l2`, GMApproved=GM role `gm` — #92/#115's
+    status-stage naming, not #70's tier-label naming, which are two
+    different things per #115's own warning), and confirmed the "at
+    least 1" rule means blocking submission outright + emailing Admin,
+    rather than silently auto-assigning a fallback reviewer.
+    **The real gap this closes**: before this fix, every evaluation
+    always marched through all 3 review stages in a fixed order
+    regardless of whether the specific employee being evaluated actually
+    had a real person assigned at each tier. `getEvaluationAssignments()`
+    (#22) already *flagged* a missing supervisor as a dashboard warning,
+    but never stopped a record from being submitted or getting stuck —
+    if an employee's `u[9]` (round-1 reviewer field) was empty, the
+    record would sit at `Submitted` forever, since the L1 queue's scope
+    (`getMyScopedEmpCodes()`'s `l1` branch, walked via `u[9]`) would
+    never include them — nobody's queue would ever show it, with no
+    error, no warning, nothing — a genuinely silent stuck-record bug
+    that had never been reported yet only because it hadn't been hit.
+    Added three resolver functions — `resolveL1Reviewer(emp)`/
+    `resolveL2Reviewer(emp)`/`resolveGmReviewer(emp)` — each answering
+    "does *this specific employee* have a real person at this tier,"
+    the mirror-image question of what `getMyScopedEmpCodes()` already
+    answers ("who does *this reviewer* see"), which nothing in this file
+    computed before. `resolveL1Reviewer()` correctly handles the 2-hop
+    chain `getMyScopedEmpCodes()`'s own `l1` branch already established
+    (#92): if `emp[9]` names a `unit`-role person, climb one more hop
+    through *that* person's own `u[9]` to find the real department
+    head, matching the exact same walk logic rather than inventing a
+    different one. Each resolver also returns `null` (no review needed
+    at that tier) when the evaluee's own role is already at or above
+    that tier (`l1` role skips needing an `L1Reviewed`-tier reviewer,
+    `l2` skips L1+L2, `gm`/`exec`/`admin`/`sysadmin` skip all three) —
+    mirroring CLAUDE.md #22's own "a role doesn't need a reviewer above
+    a level it already occupies" rule. **Explicitly exempted `gm`/`exec`/
+    `admin`/`sysadmin` from the new "must have ≥1 reviewer" block
+    entirely** (`hasAnyRealReviewer()`'s own early-return) — without
+    this, a GM's own self-evaluation would always compute zero possible
+    reviewers (since all three resolvers correctly return `null` for a
+    `gm`-role evaluee) and the new block would have permanently
+    prevented every GM from ever submitting their own self-eval, which
+    is clearly not what "block when nobody's assigned" was meant to
+    catch — caught by a test specifically checking a GM's submission is
+    never blocked, written *because* the first draft of this logic
+    would have failed it.
+    `skipEmptyReviewStages(empCode, cycle, level)` is the actual
+    "skip forward" mechanism: walks `Submitted → L1Reviewed → L2Reviewed
+    → GMApproved` one step at a time, and at each step checks whether
+    the *next* stage has a real resolver — if not, the status jumps
+    straight to that stage's name (meaning "treated as if that tier's
+    review already happened," landing the record in whichever next
+    tier's real queue, since every queue already filters purely by
+    status string) and the loop keeps walking until it reaches a stage
+    that *does* have a real reviewer waiting, or runs out of stages.
+    Wired into the three real chokepoints that ever set a draft's status
+    into this range: `updateDraftStatus()` (covers every bulk approve
+    function — `approveReviewL1Selected()`/`approveReviewSelected()`/
+    `approveGmSelected()` — with one change, the same single-chokepoint
+    discipline CLAUDE.md #94 already established), `saveEvaluationToMs365()`
+    (the self-eval page's own "ส่งแบบประเมิน," called right after the
+    local save so it works even when MS365 isn't configured — the skip
+    logic operates purely on local `getDrafts()`/`saveDrafts()`, no
+    network dependency), and `submitReviewerForm()` (the modal shared by
+    the team page and L1/L2 review queues, #109) — the three places a
+    status can ever land on `Submitted`/`L1Reviewed`/`L2Reviewed`.
+    The **submission-blocking half** is wired into the same two real
+    "first submission" chokepoints: `saveEvaluationToMs365('Submitted')`
+    checks `hasAnyRealReviewer(emp)` before saving anything at all and
+    returns `{blocked:true}` (which `submitEvalOnline()` now checks to
+    keep the confirm modal open instead of closing it, so the warning
+    toast stays visible rather than vanishing with the modal), and
+    `submitReviewerForm()`'s `Draft→Submitted` branch does the identical
+    check before writing anything. Both call a new
+    `notifyAdminOfMissingReviewChain(payload)` — same best-effort/
+    `isWorkerConfigured()`-gated honesty rules as every other admin
+    email in this file (#26/#40/#58) — telling Admin exactly which
+    employee is blocked and why, so the person stuck can't submit *and*
+    someone who can actually fix it (adding a supervisor via Add/Edit
+    Employee) gets told automatically, rather than the employee having
+    to separately go report "I can't submit" through some other channel.
+    Verified with four targeted tests: an employee with all three tiers
+    genuinely empty is blocked outright (no draft record created at
+    all, not even a stuck local one), an employee with only a real L2
+    reviewer (no L1, no GM) auto-skips straight past the L1 stage on
+    submission and lands correctly in the L2 queue, a GM submitting
+    their own self-eval is never blocked despite having zero resolver
+    matches, and a normal employee with a genuinely complete chain
+    submits exactly as before with no skip at all (regression check) —
+    plus a second test confirming the skip also fires correctly mid-
+    pipeline through the real bulk-approve chokepoint (`updateDraftStatus`)
+    when an L1 reviewer exists but the L2 tier is empty: after the real
+    L1 approval, the record auto-skips `L2Reviewed` straight to the GM
+    queue — plus the standard click-sweep. **What was deliberately left
+    unchanged**: `getEvaluationAssignments()` (#22) still computes its
+    own separate "missing supervisor" dashboard warning independently —
+    it answers a different question (assignment *completeness* for
+    display) than the new submission-blocking check (can this specific
+    record actually be submitted right now), and the two were already
+    allowed to disagree in principle (e.g. an `l1`-role employee missing
+    both L2 and approver shows as incomplete there, while under the new
+    rule they'd still be blocked from self-eval since GM is their only
+    remaining real tier and it might also be empty) — not worth merging
+    into one check for this request. General lesson: a workflow-shape
+    change this size ("skip missing tiers, block on zero") is worth
+    building as a small set of named, independently-testable resolver
+    functions answering "does this specific record have what it needs"
+    rather than threading ad-hoc empty-checks through every approve
+    function by hand — the same discipline #94 already established for
+    "one shared status-transition chokepoint," applied one layer deeper
+    to "one shared reviewer-resolution chokepoint" feeding it.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

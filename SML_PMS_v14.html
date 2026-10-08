@@ -7049,6 +7049,29 @@ async function notifyAdminOfEvalSubmission(payload){
   return { sent, total: admins.length };
 }
 
+/* แจ้ง Admin ว่าพนักงานคนหนึ่งถูกบล็อกไม่ให้ส่งแบบประเมิน เพราะไม่มีผู้สอบทาน/อนุมัติจริงในสายบังคับ
+   บัญชาเลยแม้แต่ระดับเดียว (ดู hasAnyRealReviewer() ด้านล่าง) — คนละเหตุผลกับ
+   notifyAdminOfEvalSubmission() (แจ้งว่า "มีคนส่งแล้ว ไปดูต่อ") ฟังก์ชันนี้แจ้งว่า "ส่งไม่ได้เลย
+   ต้องไปตั้งค่าก่อน" ใช้กลไกความซื่อสัตย์เดียวกัน: best-effort, ต้องตั้งค่า Worker ไว้และผู้รับต้องมี
+   อีเมลจริง */
+async function notifyAdminOfMissingReviewChain(payload){
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return { sent:0, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
+  const admins = MASTER_USERS.filter(u => ['admin','sysadmin'].includes(u[2]) && u[15]);
+  if(!admins.length) return { sent:0, reason:'ไม่มี Admin ที่มีอีเมลบันทึกไว้ในระบบ' };
+  const [empCode, empName, cycle, level] = payload;
+  const subject = `[SML PMS] ไม่สามารถส่งแบบประเมินได้ — ไม่มีผู้สอบทาน (${empName})`;
+  const body = `พนักงาน ${empName} (${empCode}) พยายามส่งแบบประเมิน รอบ ${cycle} แต่ระบบบล็อกไว้ เพราะไม่พบผู้สอบทาน/อนุมัติในสายบังคับบัญชาของพนักงานคนนี้เลยแม้แต่ระดับเดียว (หัวหน้าแผนก/ผจก.ส่วน/GM)\n\nกรุณาเข้าเว็บ SML PMS ไปที่ "ตั้งค่าผู้ใช้ & บทบาท" เพื่อกำหนดสายบังคับบัญชาของพนักงานคนนี้ให้มีผู้สอบทานอย่างน้อย 1 คน ก่อนพนักงานจะส่งแบบประเมินได้\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
+  let sent = 0;
+  for(const admin of admins){
+    try{
+      await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: admin[15], toName: admin[1], subject, body }) });
+      sent++;
+    }catch(e){ /* best-effort ต่อคน */ }
+  }
+  return { sent, total: admins.length };
+}
+
 /* แจ้งอีเมลกลับไปหา "ผู้ดำเนินการก่อนหน้า" (คนที่สอบทาน L2/Calibration/อนุมัติ/ตีกลับใบนี้ล่าสุด —
    เก็บไว้ใน EVAL_LAST_ACTOR_KEY โดย pushApprovalRecordToExcel() ทุกครั้งที่มีการดำเนินการ) เมื่อใบ
    ประเมินที่เขาดำเนินการไปแล้วถูก "แก้ไข" และบันทึกใหม่ภายหลัง — เคสหลักคือพนักงาน/หัวหน้าแก้ไขแล้ว
@@ -7141,6 +7164,17 @@ async function acknowledgeMyResult(empCode, cycle){
 
 async function saveEvaluationToMs365(status='Draft'){
   const payload = collectEvaluationPayload(status);
+  /* ผู้ใช้ขอ "ต้องมีคนประเมินอย่างน้อย 1 คน" — บล็อกตั้งแต่ก่อนบันทึกเป็น Submitted ถ้าทั้งสายบังคับ
+     บัญชา (L1/L2/GM) ไม่มีผู้สอบทานจริงเหลือเลยสักระดับ (ดู hasAnyRealReviewer()/getRealReviewChain())
+     — ไม่บล็อกตอนบันทึกร่าง (Draft) เพราะยังไม่ใช่การส่งจริง */
+  if(status==='Submitted'){
+    const emp = MASTER_USERS.find(u=>u[0]===payload[0]);
+    if(!hasAnyRealReviewer(emp)){
+      smlToast('ไม่พบผู้สอบทาน/อนุมัติในสายบังคับบัญชาของพนักงานคนนี้เลยแม้แต่ระดับเดียว — ติดต่อ Admin ให้กำหนดหัวหน้า/ผจก.ส่วน/GM ก่อนส่งแบบประเมิน','warn');
+      const notif = await notifyAdminOfMissingReviewChain(payload).catch(()=>({sent:0}));
+      return { blocked:true, reason:'no-reviewer', notif };
+    }
+  }
   /* ต้องอ่าน draft เดิม + ผู้ดำเนินการก่อนหน้าไว้ "ก่อน" saveEvaluationLocal() ทับข้อมูล — ถ้ามีคนเคย
      ดำเนินการ (สอบทาน/ปรับเทียบ/อนุมัติ/ตีกลับ) กับใบนี้มาก่อนแล้ว การบันทึกครั้งนี้ถือเป็น "แก้ไข" ที่
      ต้องแจ้งกลับไปหาเขา ไม่ใช่การส่งครั้งแรก (ซึ่งยังไม่มี prevActor เลย จึงไม่ต้องแจ้งอะไร) */
@@ -7149,6 +7183,8 @@ async function saveEvaluationToMs365(status='Draft'){
   const isEditAfterAction = !!existingBefore && !!prevActor;
   saveEvaluationLocal(payload);
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', status==='Submitted'?'ส่งแบบประเมิน':'บันทึกร่างแบบประเมิน', payload[0], payload[1]+' — ระดับ '+payload[3]);
+  // ข้ามระดับสอบทานที่ไม่มีผู้สอบทานจริงทันทีที่ส่งจริง — ไม่ต้องรอ MS365 ตั้งค่า เพราะทำงานกับข้อมูล local
+  if(status==='Submitted' && typeof skipEmptyReviewStages==='function') skipEmptyReviewStages(payload[0], payload[2], payload[3]);
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
     smlToast(`บันทึก ${status} ใน Browser แล้ว — ยังไม่ได้ตั้งค่า MS365`, 'warn');
@@ -7226,7 +7262,8 @@ function openSubmitConfirmModal(){
 }
 
 async function submitEvalOnline(){
-  await saveEvaluationToMs365('Submitted');
+  const result = await saveEvaluationToMs365('Submitted');
+  if(result && result.blocked) return; // ไม่ปิด modal ถ้าถูกบล็อก ให้เห็น toast เตือนชัดเจนก่อนลองใหม่
   closeM();
 }
 
@@ -7667,7 +7704,92 @@ function isFinalStatus(status){ return status==='Approved'; }
 /* "มีผลลัพธ์ให้พนักงานเห็นแล้ว" (ยังไม่ใช่ตัวเลขสุดท้ายหลัง Calibration/อนุมัติ AMD/MD — เป็นตัวเลข
    ที่ GM อนุมัติแล้วเท่านั้น) ใช้ตัดสินใจว่าจะโชว์ปุ่ม "รับทราบผล" ในหน้าผลประเมินไหม */
 function hasVisibleResult(status){ return evalStatusRank(status) >= evalStatusRank('GMApproved'); }
-/* ดึงคิวประเมิน (ตาราง Appraisals) กลับจาก Excel มา merge เข้าคิว local — เดิม Appraisals เป็น
+
+/* ผู้ใช้ขอ "ปรับสายการบังคับบัญชาให้เป็นไปตามที่กำหนดในข้อมูลพนักงาน ว่าใครประเมินบ้าง ถ้าไม่มีใน
+   ตำแหน่งไหนให้ข้าม ต้องมีคนประเมินอย่างน้อย 1 คน" — ยืนยันขอบเขตคือลำดับสอบทาน/อนุมัติ 4 ระดับจริง
+   (L1Reviewed=หัวหน้าแผนก role l1, L2Reviewed=ผจก.ส่วน role l2, GMApproved=GM role gm) และถ้าระดับ
+   ไหนไม่มีผู้สอบทานจริงสำหรับพนักงานคนนั้น ให้ข้ามระดับนั้นไปเลย ไม่ใช่ค้างรอคิวของคนที่ไม่มีอยู่จริง —
+   ถ้าไม่มีผู้สอบทานเหลือเลยสักคน (ว่างหมดทั้ง 3 ระดับ) ต้องบล็อกไม่ให้ส่งแบบประเมิน + แจ้ง Admin
+   ก่อนหน้านี้ getMyScopedEmpCodes() (#45/#86/#88) ตอบคำถาม "ผู้สอบทานคนนี้เห็นใครบ้าง" — ฟังก์ชัน
+   ด้านล่างตอบคำถามกลับด้าน "พนักงานคนนี้มีผู้สอบทานจริงที่ระดับนี้ไหม" ซึ่งไม่เคยมีมาก่อน */
+function resolveL1Reviewer(emp){
+  if(!emp) return null;
+  if(['l1','l2','gm','exec','admin','sysadmin'].includes(emp[2])) return null; // อยู่ระดับนี้หรือสูงกว่าแล้ว ไม่ต้องมีใครสอบทานขั้น L1
+  const name1 = (emp[9]||'').trim();
+  if(!name1 || name1==='—') return null;
+  const sup = MASTER_USERS.find(u=>(u[1]||'').trim()===name1 && u[12]==='active');
+  if(!sup) return null;
+  if(sup[2]==='l1') return sup;
+  if(sup[2]==='unit'){
+    // หัวหน้าหน่วยไม่ใช่ผู้สอบทานขั้น L1Reviewed เอง — ต้องไล่ต่อไปหาหัวหน้าแผนกจริงของหัวหน้าหน่วยคนนั้น
+    const name2 = (sup[9]||'').trim();
+    if(!name2 || name2==='—') return null;
+    const sup2 = MASTER_USERS.find(u=>(u[1]||'').trim()===name2 && u[12]==='active' && u[2]==='l1');
+    return sup2 || null;
+  }
+  return null;
+}
+function resolveL2Reviewer(emp){
+  if(!emp) return null;
+  if(['l2','gm','exec','admin','sysadmin'].includes(emp[2])) return null;
+  const name = (emp[10]||'').trim();
+  if(!name || name==='—') return null;
+  return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[2]==='l2') || null;
+}
+function resolveGmReviewer(emp){
+  if(!emp) return null;
+  if(['gm','exec','admin','sysadmin'].includes(emp[2])) return null;
+  const name = (emp[19]||'').trim();
+  if(!name || name==='—') return null;
+  return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[2]==='gm') || null;
+}
+function getRealReviewChain(emp){
+  return [
+    { stage:'L1Reviewed', reviewer: resolveL1Reviewer(emp) },
+    { stage:'L2Reviewed', reviewer: resolveL2Reviewer(emp) },
+    { stage:'GMApproved', reviewer: resolveGmReviewer(emp) },
+  ].filter(x=>x.reviewer);
+}
+/* role gm/exec/admin/sysadmin อยู่สูงสุดในสายบังคับบัญชาแล้ว (เหมือนกฎ CLAUDE.md #22 — "exec/admin
+   ไม่ต้องมีใครอยู่เหนือ ไม่ต้องเช็ค") ไม่มีระดับไหนใน 3 ระดับนี้ (L1/L2/GM) ที่จะเป็นผู้สอบทานของตัวเองได้
+   เลยไม่ว่าข้อมูลจะสมบูรณ์แค่ไหน — ถ้าไม่ยกเว้นตรงนี้ การบล็อก "ต้องมีผู้สอบทานอย่างน้อย 1 คน" จะกลาย
+   เป็นบล็อก GM ไม่ให้ส่งแบบประเมินตัวเองได้เลยตลอดไป ซึ่งไม่ใช่สิ่งที่ผู้ใช้ขอ */
+function hasAnyRealReviewer(emp){
+  if(!emp) return true;
+  if(['gm','exec','admin','sysadmin'].includes(emp[2])) return true;
+  return getRealReviewChain(emp).length > 0;
+}
+/* เดินข้ามระดับที่ไม่มีผู้สอบทานจริงให้สถานะกระโดดไปตำแหน่งถัดไปที่มีคนจริงรออยู่ — เรียกทุกครั้งหลัง
+   ตั้งสถานะเป็น Submitted/L1Reviewed/L2Reviewed (ที่ updateDraftStatus()/saveEvaluationToMs365()/
+   submitReviewerForm() ซึ่งเป็น 3 จุดจริงที่ตั้งสถานะเหล่านี้) ไม่งั้นใบประเมินจะค้างรอคิวของคนที่ไม่มี
+   อยู่จริงตลอดไป (ไม่มีใครเห็นในคิวสอบทานของตน เพราะ scope กรองด้วยชื่อที่ไม่มีอยู่) */
+function skipEmptyReviewStages(empCode, cycle, level){
+  const emp = MASTER_USERS.find(u=>u[0]===empCode);
+  if(!emp) return;
+  const drafts = getDrafts();
+  const d = drafts.find(x=>x[0]===empCode && x[2]===cycle && x[3]===level);
+  if(!d) return;
+  const order = ['Submitted','L1Reviewed','L2Reviewed','GMApproved'];
+  let idx = order.indexOf(d[d.length-1]);
+  if(idx < 0) return; // สถานะนอกช่วงที่ skip-logic นี้ดูแล (Draft, Acknowledged ขึ้นไป ฯลฯ)
+  let status = d[d.length-1], changed = false;
+  while(idx < order.length-1){
+    const nextStage = order[idx+1];
+    const reviewer = nextStage==='L1Reviewed' ? resolveL1Reviewer(emp)
+                    : nextStage==='L2Reviewed' ? resolveL2Reviewer(emp)
+                    : resolveGmReviewer(emp);
+    if(reviewer) break; // มีผู้สอบทานจริงรอที่ระดับนี้ — หยุดข้าม
+    status = nextStage; idx++; changed = true;
+  }
+  if(changed){
+    d[d.length-1] = status;
+    saveDrafts(drafts);
+    if(typeof pushDraftRowToExcel==='function') pushDraftRowToExcel(d, 'ข้ามระดับอัตโนมัติ (ไม่มีผู้สอบทานจริง)');
+    if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ข้ามระดับสอบทานอัตโนมัติ (ไม่มีผู้สอบทานจริงในสายบังคับบัญชา)', empCode, 'สถานะปัจจุบัน: '+status);
+    if(typeof renderWorkflowPages==='function') renderWorkflowPages();
+  }
+}
+/* ดึงกลับจาก Excel มา merge เข้าคิว local — เดิม Appraisals เป็น
    push-only (ดู CLAUDE.md #33/#40): หัวหน้าที่ประเมิน/สอบทาน/อนุมัติจากเครื่องอื่นจะ push ข้อมูลจริง
    ขึ้น Excel ได้ แต่คนอื่นที่มีสิทธิเห็น (เช่น L2/Admin เปิดจากเครื่องของตัวเอง) จะไม่เห็นการอัปเดต
    นั้นเลยในหน้า สอบทาน/Calibration/อนุมัติ/แดชบอร์ด เพราะหน้าพวกนั้นอ่านจาก MS365_LOCAL_DRAFT_KEY
@@ -7800,6 +7922,8 @@ function updateDraftStatus(keys, newStatus){
   saveDrafts(drafts);
   renderWorkflowPages();
   changed.forEach(d=>pushDraftRowToExcel(d));
+  // ข้ามระดับสอบทานที่ไม่มีผู้สอบทานจริงให้อัตโนมัติทันที (ดูคอมเมนต์บน skipEmptyReviewStages ด้านบน)
+  if(typeof skipEmptyReviewStages==='function') changed.forEach(d=>skipEmptyReviewStages(d[0], d[2], d[3]));
 }
 function getCheckedKeys(cls){ return [...document.querySelectorAll('.'+cls+':checked')].map(el=>el.value); }
 function empDeptLabel(code, fallbackName){
@@ -9637,6 +9761,14 @@ async function submitReviewerForm(){
                  L1Reviewed:{next:'L2Reviewed', label:'ผ่านสอบทานผู้จัดการส่วน'} };
   const step = STEP[curStatus];
   if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการบันทึกจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
+  /* ผู้ใช้ขอ "ต้องมีคนประเมินอย่างน้อย 1 คน" — บล็อกเฉพาะการส่งครั้งแรกจริง (Draft→Submitted) เหมือน
+     saveEvaluationToMs365() ด้านบน ไม่บล็อกการสอบทานขั้นถัดไป (Submitted→L1Reviewed ฯลฯ) เพราะขั้น
+     เหล่านั้นผ่านการ block ตั้งแต่ตอนส่งครั้งแรกมาแล้ว */
+  if(curStatus==='Draft' && typeof hasAnyRealReviewer==='function' && !hasAnyRealReviewer(emp)){
+    smlToast('ไม่พบผู้สอบทาน/อนุมัติในสายบังคับบัญชาของพนักงานคนนี้เลยแม้แต่ระดับเดียว — ติดต่อ Admin ให้กำหนดหัวหน้า/ผจก.ส่วน/GM ก่อนส่งแบบประเมิน','warn');
+    if(typeof notifyAdminOfMissingReviewChain==='function') notifyAdminOfMissingReviewChain([code, empName, cycle, lv]).catch(()=>null);
+    return;
+  }
   /* #114b: ปิดช่องโหว่ทั่วทุกขั้น ไม่ใช่แค่ L1Reviewed->L2Reviewed แบบเดิม (#113b) — ผู้ใช้ยืนยันกฎจริง
      คือ "แจ้งตามลำดับ ยกเว้น L1 (หัวหน้าหน่วย) ไม่ต้องแจ้งใคร" จึงใช้ notifyPrevTierOnAdvance() ที่
      ตัดสินจาก role ของผู้กระทำจริง (role 'unit' เท่านั้นที่ไม่แจ้ง) แทนการเจาะจงที่ step.next อย่างเดิม —
@@ -9648,6 +9780,7 @@ async function submitReviewerForm(){
   const oldGrade = existing ? existing[existing.length-2] : null;
   const payload = [code, empName, cycle, lv, ...m, ...l, y, z, x, grade, step.next];
   saveEvaluationLocal(payload);
+  if(typeof skipEmptyReviewStages==='function') skipEmptyReviewStages(code, cycle, lv);
   if(typeof pushDraftRowToExcel==='function') pushDraftRowToExcel(payload, step.next);
   pushApprovalRecordToExcel(code, cycle, step.next, '');
   const diffNote = (oldX!==null && !isNaN(oldX) && (oldX!==x || oldGrade!==grade)) ? ` (คะแนนเดิม X=${oldX.toFixed(2)} เกรด ${oldGrade} → ใหม่ X=${x.toFixed(2)} เกรด ${grade})` : '';
