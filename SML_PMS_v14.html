@@ -7887,6 +7887,7 @@ async function ms365SyncAppraisals(silent=true){
     rows.forEach(r=>{
       if(!r || !r[0] || !r[2] || !r[3]) return; // แถวไม่ครบ empCode/cycle/level ไม่ใช่แถวจริง ข้าม
       const key = r[0]+'|'+r[2]+'|'+r[3];
+      if(pendingPushKeys.has(key)) return; // #134: กำลัง push key นี้อยู่ remote ที่ดึงมาตอนนี้อาจเก่ากว่า local ข้ามไปก่อน รอบ sync ถัดไปจะตรงกัน
       const existing = byKey.get(key);
       if(!existing || evalStatusRank(r[r.length-1]) > evalStatusRank(existing[existing.length-1])){
         byKey.set(key, r);
@@ -7990,12 +7991,26 @@ function isAppraisalPushed(key){
    "กลับมาอีก" เอง ทั้งที่ไม่มีใครกดอะไรซ้ำ ตรงกับรายงานของผู้ใช้เป๊ะ ("เลือกตีกลับแต่ข้อมูลกลับมาอีก")
    แก้โดยให้ทุกจุดที่เปลี่ยนสถานะ push แถวปัจจุบันเข้า Appraisals ทันทีเหมือนกัน (best-effort,
    fire-and-forget, log ผลลง Sync Log ตามแบบแผนเดียวกับ pushApprovalRecordToExcel()) */
+/* #134: pushDraftRowToExcel() เป็น fire-and-forget (ไม่ await) — ถ้า push ยังไม่เสร็จ (เครือข่าย/Worker
+   ช้า) แล้วมี ms365SyncAppraisals() เกิดขึ้นพอดีในช่วงนั้น (startEvalAutoSync() เรียกมันทันทีทุกครั้งที่
+   เข้าหน้า workflow ไม่ใช่แค่ตอน interval 30 วิ — ดูบรรทัดนั้น) remote row ใน Excel ที่ดึงมาตอนนั้นยังเป็น
+   สถานะ "ก่อนตีกลับ" (เก่ากว่า push ที่ยังไม่ถึง) ซึ่งตามลำดับ evalStatusRank() จะดู "ไปไกลกว่า" local ที่
+   เพิ่งตีกลับ (อันดับต่ำกว่า) แล้วถูก merge เฉพาะเมื่อ remote ไปไกลกว่า (#58) ทับ local กลับไปเป็นสถานะเดิม
+   ทันที — ตรงกับรายงาน "ตีกลับแล้ว แต่แบบฟอร์มยังอยู่ และไม่ไปหน้าคนประเมินก่อนหน้า" เป๊ะ (คนละสาเหตุกับ #94
+   ที่เคยเป็น "ไม่ push เข้า Appraisals เลย" — ตอนนี้ push จริง แค่ชนะ/แพ้ sync ไม่แน่นอนตามจังหวะเครือข่าย)
+   แก้ด้วย pendingPushKeys: ระหว่างที่ draftKey หนึ่งกำลัง push อยู่ (ยังไม่ resolve/reject) ให้
+   ms365SyncAppraisals() ข้าม key นั้นไปก่อนในรอบ merge นี้ — รอบ sync ถัดไป (30 วิ หรือเข้าหน้าใหม่) จะเห็น
+   remote ตรงกับ local แล้วเพราะ push เสร็จไปแล้ว ไม่ต้องใช้ timestamp เพิ่มในโครงสร้าง draft */
+var pendingPushKeys = new Set();
 function pushDraftRowToExcel(d, label){
   const cfg = loadMs365Config();
+  const key = draftKey(d);
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog(`pushDraftRowToExcel (${label||d[d.length-1]}): ยังไม่ได้ตั้งค่า MS365`, false); return; }
+  pendingPushKeys.add(key);
   graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d)
     .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) เข้า Appraisals`, true); })
-    .catch(err=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) ไม่สำเร็จ: `+(err?.message||err), false); });
+    .catch(err=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) ไม่สำเร็จ: `+(err?.message||err), false); })
+    .finally(()=>{ pendingPushKeys.delete(key); });
 }
 function updateDraftStatus(keys, newStatus){
   const keySet = new Set(keys);

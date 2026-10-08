@@ -5732,6 +5732,93 @@ touches employee/attendance/evaluation data.
     function both paths call through, not an assumption that only real
     clicks ever reach it.
 
+134. **User reported "ตีกลับแล้ว แต่แบบฟอร์มยังอยู่ และ ไม่ไปหน้าคนประเมิน
+    ก่อนหน้า" (rejected it, but the record is still there, and it doesn't
+    go to the previous evaluator's page) — directly contradicting my own
+    just-given explanation of reject timing (same-device instant,
+    cross-device up to 30s/#59 or next login/#58).** Wrote targeted
+    Playwright tests driving all four real reject entry points
+    (`rejectReviewerForm()`'s modal path, and the three bulk-checkbox
+    functions `rejectReviewL1Selected()`/`rejectReviewSelected()`/
+    `rejectGmSelected()`) purely in-memory (`isWorkerConfigured=false`) —
+    every one worked perfectly: status changed, the row left the current
+    queue's DOM, appeared in the correct prior queue, and survived a
+    manual `ms365SyncAppraisals()` call. This ruled out a logic bug in
+    the reject functions or `updateDraftStatus()`/`renderWorkflowPages()`
+    themselves — but a pure in-memory test can never exercise the one
+    thing that's different in the user's real deployment: `pushDraftRowToExcel()`
+    (CLAUDE.md #94's own fix) is fire-and-forget, never `await`ed, so a
+    real network call to the Cloudflare Worker/Graph API takes real,
+    non-zero time to land. Re-read `startEvalAutoSync()` (#59) and found
+    it does **not** only sync on the 30-second interval — it also calls
+    `ms365SyncAppraisals(true)` **immediately** every single time a
+    workflow page is entered (`if(evalAutoSyncTimer) return;` guards the
+    interval setup, not this first call). So the exact real-world
+    sequence that reproduces the report: L2 rejects a record (local
+    status changes instantly, `pushDraftRowToExcel()` starts a real but
+    not-yet-finished network push) → L2 (or anyone) navigates away and
+    back to a workflow page within the next few seconds, which is an
+    extremely ordinary thing to do right after rejecting something to go
+    double-check it → `startEvalAutoSync()` fires its immediate sync →
+    pulls the `Appraisals` Excel row, which **still shows the pre-reject
+    status** because the push hasn't landed in Excel yet → `ms365SyncAppraisals()`'s
+    own merge rule ("only overwrite local when remote is strictly further
+    along `evalStatusRank()`, never on a tie," #58) sees the stale-but-
+    still-ahead remote status and faithfully overwrites the just-rejected
+    local draft right back to where it was — silently, with no error,
+    exactly matching "the form is still there" and "it doesn't go to the
+    previous evaluator's page" (since the status visibly snapped back
+    before anyone else's queue could show it there to stay). This is a
+    **different** root cause from #94's own report despite the nearly
+    identical user wording ("ตีกลับแล้วข้อมูลกลับมาอีก" then vs. "ตีกลับ
+    แล้วแบบฟอร์มยังอยู่" now) — #94 was "never pushes to Appraisals at
+    all, so the next sync always wins"; this is "pushes correctly, but a
+    sync landing inside the real network latency window can still beat
+    it to the local draft," a timing race that only exists because #94's
+    own fix (a real, un-awaited push) was never also guarded against a
+    concurrent pull. Reproduced deterministically with a Playwright test
+    that mocks `graphUpsertTableRow()` to resolve after an artificial
+    300ms delay (standing in for real Worker/Graph latency) and
+    `graphListTableRows()` to return the pre-reject row until that mock
+    push actually resolves — confirmed a sync at the 50ms mark (well
+    before the mocked 300ms push lands) reverted the local reject back to
+    `L1Reviewed`, precisely reproducing the report, when the fix below
+    was temporarily disabled; restored, the same test holds the rejected
+    `Submitted` status through the race window and remains correct once
+    the push actually completes and a later sync re-checks it. Fixed with
+    a small in-memory guard, `pendingPushKeys` (a plain `Set`, not
+    persisted — it only needs to describe "is a push for this key
+    currently in flight in this tab," which is meaningless across a
+    reload anyway since the in-flight promise itself wouldn't survive
+    one): `pushDraftRowToExcel()` adds the draft's key before starting
+    the real `graphUpsertTableRow()` call and removes it in a `.finally()`
+    once that promise settles (success or failure, either way the push is
+    no longer "in flight"); `ms365SyncAppraisals()`'s own merge loop skips
+    any remote row whose key is currently in `pendingPushKeys` instead of
+    comparing its rank at all — deferring that specific key's merge to
+    whichever sync runs *after* the in-flight push actually lands, at
+    which point the remote row genuinely reflects the new status and the
+    normal rank-based merge is correct again with nothing further needed.
+    This needed no change to `updateDraftStatus()`, `renderWorkflowPages()`,
+    or any of the four reject functions — the fix lives entirely inside
+    the one push/pull pair that race against each other. Verified with
+    the new race test, re-ran every existing reject-path test (#109/#133's
+    `test_reconfirm.js`/`test_reconfirm2.js`, the modal path; new bulk-
+    checkbox tests covering all three bulk reject functions end-to-end
+    through their real UI checkboxes) to confirm zero regressions — plus
+    the standard click-sweep (`nav pages clicked: 22 errors: []`). General
+    lesson sharper than #94's own conclusion: making a fire-and-forget
+    push real (awaited eventually, logged, upserting correctly) closes
+    the "never pushed at all" failure mode, but a push that is still
+    un-awaited at its call site remains racing against anything else that
+    reads the same remote table in the meantime — any function that pulls
+    from a table another function pushes to, where the push isn't
+    guaranteed to finish before the pull can run, needs an explicit
+    "this key is mid-flight, don't let a pull undo it" guard; "the push
+    now happens" and "the push can never be outrun by a pull" are two
+    different guarantees, and shipping the first is not evidence the
+    second was ever checked.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
