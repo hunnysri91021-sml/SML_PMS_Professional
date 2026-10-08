@@ -5561,6 +5561,103 @@ touches employee/attendance/evaluation data.
     building the one shared persist+display path both ends need, not
     patching the display side onto data that doesn't exist yet.
 
+132. **Follow-up to #131: user asked "ทำ syny ขั้น excel และ คนใหม่ที่
+    comment ก็เก็บไว้ และ ลงชื่อไว้ด้วยว่าใคร" (do the Excel sync step
+    too, and if a new person comments also keep it, and sign who wrote
+    it).** Two real gaps in #131's own design, both fixed together:
+    - **"เก็บไว้" (keep it) meant #131's storage shape was wrong, not
+      just missing sync.** `saveEvalCommentStage()` stored exactly *one*
+      entry per stage and **overwrote** it on every save — correct for
+      "the same person edits their own comment again before moving on"
+      (CLAUDE.md #12's dedup-on-write rule), but wrong the moment a
+      *different* person later writes at the same stage (e.g. a record
+      rejected back to `Submitted` and re-reviewed by a different
+      department head than the first time) — the second person's save
+      would silently discard the first person's real comment with no
+      trace. Changed the store from one-entry-per-stage to an
+      **array-per-stage**: `mergeEvalCommentEntry()` only replaces an
+      existing entry when its `byCode` matches the new one (same person
+      editing their own prior entry at that stage); a different
+      `byCode` is appended, never overwritten. "ลงชื่อ" (sign who wrote
+      it) was already true for the single-entry version (#131 already
+      resolved `by`/`byCode`/`byRole` from `CURRENT_SESSION_USER`, never
+      a free-typed string, per CLAUDE.md #1) — carried forward
+      unchanged into every array entry, so a stage with 2 comments now
+      shows both authors' real names, not one overwriting the other's
+      byline. `buildPrevCommentsHtml()` updated to loop every entry per
+      stage instead of assuming exactly one.
+    - **"sync ขั้น excel"**: reused the *same* `Approvals` table #39/#96
+      already read/write (no new Excel table, same reasoning both of
+      those established — a comment/note is naturally "current state
+      attached to an existing approval event," not a new kind of row).
+      `saveEvalCommentStage()` now returns the formatted comment text
+      (`formatEvalCommentText()`, `"จุดเด่น: … / พัฒนา: …"`) instead of
+      void, and both real write call sites — `submitReviewerForm()` and
+      `saveEvaluationToMs365()` — fold that text into the **same**
+      `pushApprovalRecordToExcel()` call that already logs the step
+      transition (prefixed `"| ความเห็นผู้ประเมิน: …"`, a distinct marker
+      from #96's `"| หมายเหตุ: …"` and #39's `"ลงนามโดย …"`, so the three
+      never collide when parsed back) — never a second, duplicate
+      Approvals row for the same action (the #97/#42-shaped mistake of
+      pushing two rows where one event happened). **One new wrinkle
+      found and handled**: `saveEvaluationToMs365()` (the self-eval
+      page's own "ส่งแบบประเมิน") had **never once** called
+      `pushApprovalRecordToExcel()` for the `'Submitted'` step at all
+      (#58 only wires that function into review/reject/calibrate/
+      approve actions) — so there was no existing push to fold a comment
+      into. Added a push for this one step, but **only when the
+      formatted comment text is non-empty** — a plain submission with no
+      comment written produces exactly the same (zero) Excel/audit
+      footprint as before this fix; only a submission that actually
+      carries real comment text starts a new `Approvals` row (and, as a
+      side effect of `pushApprovalRecordToExcel()`'s own existing
+      `recordEvalActor()` call, starts populating `EVAL_LAST_ACTOR_KEY`
+      for a plain self-submit too, which it never did before — a small,
+      arguably-correct side effect, called out here rather than left
+      silently discovered later).
+      `ms365SyncEvalComments(silent)` — the pull side, mirroring
+      `ms365SyncHrNotes()`/`ms365SyncApprovalSignatures()` structurally
+      — reads the whole `Approvals` table, filters rows whose step is
+      one of the four real comment stages, parses the `"| ความเห็น
+      ผู้ประเมิน: …"` suffix back into strength/dev, **resolves the
+      writer's `byCode` from `MASTER_USERS` by the stored name** (the
+      Comment column has no code column, only the name #97's fix
+      already writes there — same CLAUDE.md #1 "resolve by code, never
+      trust the string" principle applied on the *read* side this time,
+      since without this the same-person dedup in
+      `mergeEvalCommentEntry()` couldn't recognize "this is the same
+      author's edit" against a locally-saved entry that does have a real
+      code), and merges each row through the exact same
+      `mergeEvalCommentEntry()` the local save path uses (never a
+      second, parallel merge implementation that could drift). On a
+      genuine same-author tie between a local and a synced copy, keeps
+      whichever has the later `at` timestamp — never assumes the synced
+      copy is newer just because the sync ran (same caution #58's own
+      Appraisals merge already applies). Wired into both silent-sync
+      groups (`doLogin()`/`tryRestoreSession()`), right next to
+      `ms365SyncHrNotes()`. Verified with a 6-assertion test driving a
+      real multi-reviewer scenario end-to-end: employee self-submits
+      with a comment → L1-A reviews with their own comment (stored
+      correctly, 1 entry) → record rejected back to `Submitted` → a
+      **different** L1-B reviews the same `L1Reviewed` stage with a
+      different comment → confirms **both** L1-A's and L1-B's comments
+      survive side by side (2 entries, not 1 overwriting the other) →
+      L1-B edits their own comment again at the same stage → confirms
+      their own entry is replaced in place (still 2 entries total, not
+      3) → a mocked `Approvals` row in the real 7-column shape (#97) is
+      fed through `ms365SyncEvalComments()` and confirms it merges in
+      correctly with the real author resolved by name — plus the
+      standard click-sweep. General lesson sharper than #131's own
+      conclusion: "pull in the previous evaluator's comment" sounds like
+      a read-side feature, but a user's very next follow-up ("keep the
+      new person's comment too, and sign it") revealed the *write-side*
+      storage shape itself was still wrong — a single-slot-per-stage
+      store silently loses history the moment more than one real person
+      ever writes at the same stage, which a single first-pass test
+      (one employee, one reviewer, one pass through the pipeline) will
+      never catch; a comment-history feature needs a multi-author test
+      from the start, not just a two-stage happy path.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
