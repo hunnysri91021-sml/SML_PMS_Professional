@@ -6158,6 +6158,70 @@ touches employee/attendance/evaluation data.
     difference explains itself rather than reading as unexplained data
     loss.
 
+140. **User's screenshot, logged in as the real "Admin ระบบ (Super Admin)"
+    account, showed "3. สอบทานหัวหน้าแผนก (L2)" — and the user confirmed
+    L3 and L4's queues too — rendering completely empty ("ไม่มีพนักงานใน
+    สังกัดที่ต้องสอบทาน") even though the "2. ประเมินทีมงาน" badge right
+    above it showed a real 32 pending — "L2 ทำไม่มีรายชื่อแสดง L3 กับ L4
+    ก็ด้วย" (L2's queue shows no names, L3 and L4 too).** Traced
+    `buildTierRoster()` (#136): for the three per-tier queues
+    (`renderReviewL1Queue`/`renderReviewQueue`/`renderGmApproveQueue`),
+    its `resolverFn` parameter (`resolveL1Reviewer`/`resolveL2Reviewer`/
+    `resolveGmReviewer`, #128) checks — correctly, for a *real* L1/L2/GM
+    — whether this specific employee's real chain-field reviewer
+    resolves to exactly `myCode`. But Admin/sysadmin (and `exec`) are
+    never anyone's real L1/L2/GM in `MASTER_USERS` — they're company-
+    wide oversight roles with no chain-field pointing at them at all —
+    so the resolver check always failed for an Admin session and the
+    roster came back empty at every one of the three tiers, regardless
+    of how much real pending work existed. This is the mirror image of
+    #73/#85/#87's own bug shape: those were data *leaking* to a role
+    that should only see its own team; this is data *hidden* from a
+    role that's supposed to see everything. The file already has the
+    exact right precedent for this: Calibration/AMD-MD approve (#61,
+    `renderCalibQueue`/`renderApproveQueue`) already pass
+    `resolverFn=null` to `buildTierRoster()` for this very reason — HR/
+    exec aren't anyone's chain-field reviewer either, so those two
+    queues were built unrestricted from the start. The three *earlier*
+    tiers (L1/L2/GM review) were never given the same unrestricted
+    fallback when #136 first built them, since every test case that
+    shipped with #136 happened to log in as a real L1/L2/GM, never as
+    Admin checking the same queue for oversight.
+    Added one shared helper, `effectiveResolver(resolverFn, role)` —
+    returns `null` (unrestricted, same mechanism Calibration/Approve
+    already use) when `role` is `admin`/`sysadmin`/`exec`, otherwise
+    passes the real resolver through unchanged — and wrapped every one
+    of the 5 real `buildTierRoster()` call sites with it:
+    `renderReviewL1Queue()`/`renderReviewQueue()`/`renderGmApproveQueue()`
+    (the 3 queue pages themselves) *and* `renderNavBadges()`/
+    `getNotifications()`'s own `readyCount()` wrappers (#138's badge/
+    notification-bell counters, which reuse the same resolver functions
+    and would have shown the identical "0 for Admin" mismatch against
+    the team-page badge otherwise). One shared helper rather than four
+    independent `['admin','sysadmin','exec'].includes(...)` checks,
+    following the #126/#127/#138 "reuse one function, don't recompute
+    the same condition independently" discipline. `getMyScopedEmpCodes()`
+    itself needed zero changes — it already correctly returns `null`
+    (unrestricted) for these three roles (#45); this fix brings the
+    per-tier resolver mechanism into agreement with that same existing
+    convention, not a new rule. Verified with a test that seeds a real
+    L1/L2/GM chain plus one employee with a real `Submitted` draft,
+    logs in as the real Admin account (`90230`, not set as anyone's
+    chain-field reviewer), and confirms `renderReviewL1Queue()` now
+    shows the real pending row (previously empty) and
+    `navBadgeReviewL1` matches it (`"1"`) — plus re-ran every existing
+    bulk-reject/L2-queue/team-badge test from this session's earlier
+    work with zero regressions, plus the standard click-sweep
+    (`nav pages clicked: 22 errors: []`). General lesson sharper than
+    #61's own precedent: when a new per-tier resolver mechanism is
+    built to replace a blanket `getMyScopedEmpCodes()` scope check
+    (#136's `resolverFn`), it's easy to forget that the file's own
+    unrestricted-oversight-role convention (`admin`/`sysadmin`/`exec`
+    see everything, #45) has to be re-implemented at the *new*
+    mechanism's level too — `getMyScopedEmpCodes()` being correct for
+    these roles doesn't help if a sibling, more specific mechanism
+    built later doesn't consult it or its own role list at all.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

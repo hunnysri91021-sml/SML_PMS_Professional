@@ -8091,6 +8091,21 @@ function restoreCheckedKeys(cls, checkedKeys){
    รายคน) ส่วน reviewl1/review/gmapprove ใช้ resolveL1Reviewer/resolveL2Reviewer/resolveGmReviewer (#128)
    ตรงๆ เพื่อให้ roster คือ "คนที่สายบังคับบัญชาจริงชี้มาที่ฉันในขั้นนี้" ไม่ใช่แค่ "ใครก็ได้ในสายที่ฉัน
    เห็น" (getMyScopedEmpCodes() เองกว้างกว่านั้น รวมทั้งสายลงไป ไม่ใช่เฉพาะคนที่ขั้นนี้เป็นหน้าที่ฉัน) */
+/* #140: ผู้ใช้ล็อกอินเป็น Admin (ซึ่ง getMyScopedEmpCodes() ให้ unrestricted/null เสมอ ดู #45) แต่
+   หน้าคิวสอบทานขั้น L1/L2/GM กลับว่างเปล่าทุกขั้น ("ไม่มีพนักงานในสังกัดที่ต้องสอบทาน") ทั้งที่ badge
+   หน้า "2. ประเมินทีมงาน" บอกว่ามีงานค้างจริง 32 คน — ต้นเหตุ: buildTierRoster()'s resolverFn
+   (resolveL1Reviewer/resolveL2Reviewer/resolveGmReviewer, #128/#136) เช็คแบบตรงตัวว่า "ผู้สอบทาน
+   จริงของพนักงานคนนี้คือฉันหรือไม่" (reviewer[0]===myCode) — ซึ่งถูกต้องสำหรับ L1/L2/GM ตัวจริงที่มีชื่อ
+   อยู่ในสายบังคับบัญชาจริงของพนักงานบางคน แต่ Admin/sysadmin/exec ไม่เคยถูกตั้งเป็น "หัวหน้า" ของใครใน
+   MASTER_USERS เลย (พวกเขาไม่ได้อยู่ในสายบังคับบัญชา เป็นบทบาทดูแลภาพรวมทั้งบริษัทต่างหาก) — resolver จึง
+   คืนค่าไม่ตรง myCode ของ Admin เสมอ roster จึงว่างทุกแถว เหมือนบั๊ก scope รูปแบบ #73/#85/#87 แต่กลับทาง
+   (ข้อมูลหายไปสำหรับบทบาทที่ควรเห็น "ทุกคน" ไม่ใช่บทบาทที่ควรเห็น "แค่ทีมตัวเอง") ใช้หลักการเดียวกับที่
+   Calibration/AMD-MD approve (#61 — HR/exec ไม่มีสาย "ผู้สอบทาน Calibration" ใน MASTER_USERS ก็เลยส่ง
+   resolverFn=null/unrestricted อยู่แล้ว) — ขยายให้ L1/L2/GM สามเวทีนี้ก็ตรวจก่อนว่าใครกำลังดู ถ้าเป็น
+   admin/sysadmin/exec ให้ resolverFn=null (เห็นทุกคนในขั้นนั้นทั้งบริษัท) เช่นกัน */
+function effectiveResolver(resolverFn, role){
+  return (role==='admin' || role==='sysadmin' || role==='exec') ? null : resolverFn;
+}
 function buildTierRoster(resolverFn, myCode, inputStatus, cycle){
   const inputRank = evalStatusRank(inputStatus);
   return getEvalParticipants().map(emp=>{
@@ -8113,7 +8128,7 @@ function renderReviewL1Queue(){
   const checkedKeys = new Set(getCheckedKeys('reviewl1-chk'));
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
-  const roster = me ? buildTierRoster(resolveL1Reviewer, me[0], 'Submitted', cycle) : [];
+  const roster = me ? buildTierRoster(effectiveResolver(resolveL1Reviewer, me[2]), me[0], 'Submitted', cycle) : [];
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -8170,7 +8185,7 @@ function renderReviewQueue(){
   const checkedKeys = new Set(getCheckedKeys('review-chk'));
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
-  const roster = me ? buildTierRoster(resolveL2Reviewer, me[0], 'L1Reviewed', cycle) : [];
+  const roster = me ? buildTierRoster(effectiveResolver(resolveL2Reviewer, me[2]), me[0], 'L1Reviewed', cycle) : [];
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -8258,7 +8273,7 @@ function renderGmApproveQueue(){
   const checkedKeys = new Set(getCheckedKeys('gm-chk'));
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
-  const roster = me ? buildTierRoster(resolveGmReviewer, me[0], 'L2Reviewed', cycle) : [];
+  const roster = me ? buildTierRoster(effectiveResolver(resolveGmReviewer, me[2]), me[0], 'L2Reviewed', cycle) : [];
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -8699,7 +8714,7 @@ function renderNavBadges(){
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
   const teamPending = countTeamPending(scoped);
-  const readyCount = (resolverFn, inputStatus) => me ? buildTierRoster(resolverFn, me[0], inputStatus, cycle).filter(r=>r.state==='ready').length : 0;
+  const readyCount = (resolverFn, inputStatus) => me ? buildTierRoster(effectiveResolver(resolverFn, me[2]), me[0], inputStatus, cycle).filter(r=>r.state==='ready').length : 0;
   const counts = {
     navBadgeTeam: teamPending,
     navBadgeReviewL1: readyCount(resolveL1Reviewer, 'Submitted'),
@@ -9464,7 +9479,7 @@ function getNotifications(){
      เกินจำนวนแถวจริงในคิวได้เหมือน badge (บั๊กรูปแบบเดียวกับ CLAUDE.md #73/#85/#87/#126/#130/#138) */
   const me = CURRENT_SESSION_USER;
   const cycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
-  const readyCount = (resolverFn, inputStatus) => me ? buildTierRoster(resolverFn, me[0], inputStatus, cycle).filter(r=>r.state==='ready').length : 0;
+  const readyCount = (resolverFn, inputStatus) => me ? buildTierRoster(effectiveResolver(resolverFn, me[2]), me[0], inputStatus, cycle).filter(r=>r.state==='ready').length : 0;
   /* #92: เพิ่มขั้น L1Reviewed คั่น Submitted/L2Reviewed — l2reviewed เดิมชี้ page:'calib' ซึ่งผิดมา
      ตั้งแต่ #61 ย้าย Calibration ไปอยู่หลัง Acknowledged แล้ว (ขั้นถัดจาก L2Reviewed จริงคืออนุมัติ GM
      ไม่ใช่ Calibration) แก้ให้ตรงพร้อมกันตอนที่กำลังแก้บล็อกนี้อยู่แล้ว */
