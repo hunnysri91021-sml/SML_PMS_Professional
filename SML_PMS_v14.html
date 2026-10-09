@@ -1805,7 +1805,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="ph-act"><button class="btn" onclick="rejectReviewL1Selected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewL1Selected()">✓ อนุมัติที่เลือก</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
+      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามหัวหน้าหน่วยงาน (หัวหน้าหน่วย/หัวหน้าแผนก) เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.reviewl1-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="reviewl1Rows"></tbody>
@@ -1819,7 +1819,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="ph-act"><button class="btn" onclick="rejectReviewSelected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewSelected()">✓ อนุมัติที่เลือก</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
+      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewFilter" onchange="renderReviewQueue()" title="กรองตามหัวหน้าแผนก เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.review-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="reviewRows"></tbody>
@@ -1833,7 +1833,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="ph-act"><button class="btn" onclick="rejectGmSelected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveGmSelected()">✓ อนุมัติที่เลือก</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>ใบประเมินรออนุมัติ GM</h3><div class="r"><span class="bd b-y" id="gmApproveCount">0 รายการ</span></div></div>
+      <div class="card-h"><h3>ใบประเมินรออนุมัติ GM</h3><div class="r"><select class="btn" id="gmApproveFilter" onchange="renderGmApproveQueue()" title="กรองตามผู้จัดการส่วน เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="gmApproveCount">0 รายการ</span></div></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="gmApproveRows"></tbody>
@@ -8106,6 +8106,47 @@ function restoreCheckedKeys(cls, checkedKeys){
 function effectiveResolver(resolverFn, role){
   return (role==='admin' || role==='sysadmin' || role==='exec') ? null : resolverFn;
 }
+/* #141: ผู้ใช้ขอ "ให้ L2,L3,L4 มีกรองเลือกชื่อ ด้วยจะได้รู้ว่าใครมีลูกทีมใครบ้าง" — คิวสอบทาน/อนุมัติทั้ง 3
+   หน้า (reviewl1/review/gmapprove) แสดงทุกคนในสโคปรวมกันเป็นตารางเดียว (#136) ไม่เคยแยกว่าใครรายงาน
+   กับหัวหน้าคนไหน — เพิ่ม dropdown กรองตามชื่อ "หัวหน้าตัวจริง" ของแต่ละแถว (ผ่าน resolverFn ตัวจริง
+   เดียวกับที่ buildTierRoster() ใช้ตัดสินสถานะ ready/pending/done อยู่แล้ว ไม่ใช่ query อิสระชุดใหม่ที่
+   อาจดริฟท์ออกจากกัน ตามบทเรียน #126/#127/#138) — ใช้ resolverFn ตัวจริงเสมอ (ไม่ใช่ effectiveResolver
+   ที่เป็น null สำหรับ admin/sysadmin/exec) เพราะจุดประสงค์ตรงนี้คือ "ใครคือหัวหน้าจริงของคนนี้" ไม่ใช่
+   "ฉันเห็นคนนี้ไหม" — ผู้ใช้สังเกตเจอ "คุณเชิดชัย" โผล่ในคิว L3/L4 ทั้งที่ไม่ควรต้องถูกประเมิน (น่าจะเป็น
+   ผู้บริหารระดับสูงสุด) — dropdown นี้ช่วยให้เห็นภาพว่าใครรายงานใครชัดขึ้น ส่วนการยกเว้นคนที่ไม่ควรถูก
+   ประเมินใช้ checkbox "ยกเว้นไม่ต้องรับการประเมิน" ที่มีอยู่แล้วใน Add/Edit Employee (CLAUDE.md #83) */
+function realReviewerNameFor(resolverFn, emp){
+  const r = resolverFn ? resolverFn(emp) : null;
+  return r ? (r[1]||'').trim() : '';
+}
+/* กรองของแต่ละหน้าต้องใช้ resolver ของ "ชั้นก่อนหน้า" ไม่ใช่ resolver ของชั้นตัวเอง — เพราะใครก็ตามที่
+   เปิดคิวของชั้นตัวเอง (เช่น resolveL2Reviewer บนหน้า L3) จะได้ผู้สอบทาน = ตัวผู้ดูเองทุกแถวเสมอ (ไม่มี
+   ประโยชน์เป็นตัวกรอง) หน้า "L3 (ผจก.ส่วน)" จึงกรองด้วย resolveL1Reviewer (ว่าใครคือหัวหน้าแผนกของคนนี้)
+   หน้า "L4 (GM)" กรองด้วย resolveL2Reviewer (ว่าใครคือผจก.ส่วนของคนนี้) ส่วนหน้า "L2 (หัวหน้าแผนก)" ไม่มี
+   resolver สำเร็จรูปสำหรับ "หัวหน้าหน่วยโดยตรง" (resolveL1Reviewer ไต่ขึ้นไปถึงหัวหน้าแผนกเสมอ) จึงเพิ่ม
+   helper ใหม่นี้อ่าน u[9] ดิบเฉพาะกรณีที่ชี้ไปหาคนที่เป็น role 'unit' จริง — คืนค่าว่างถ้าพนักงานรายงาน
+   ตรงกับหัวหน้าแผนก (ไม่มีหัวหน้าหน่วยคั่นกลาง) */
+function resolveUnitHeadFor(emp){
+  if(!emp) return null;
+  const name = (emp[9]||'').trim();
+  if(!name || name==='—') return null;
+  return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[2]==='unit') || null;
+}
+function populateReviewManagerFilter(selectId, roster, resolverFn){
+  const sel = document.getElementById(selectId);
+  if(!sel) return;
+  const cur = sel.value;
+  const names = [...new Set(roster.map(r=>realReviewerNameFor(resolverFn, r.emp)).filter(n=>n))].sort();
+  sel.innerHTML = '<option value="">ทุกหัวหน้า ('+roster.length+' คน)</option>' + names.map(n=>{
+    const cnt = roster.filter(r=>realReviewerNameFor(resolverFn, r.emp)===n).length;
+    return `<option value="${n}">${n} (${cnt} คน)</option>`;
+  }).join('');
+  sel.value = names.includes(cur) ? cur : '';
+}
+function filterRosterByManager(selectId, roster, resolverFn){
+  const val = document.getElementById(selectId)?.value || '';
+  return val ? roster.filter(r=>realReviewerNameFor(resolverFn, r.emp)===val) : roster;
+}
 function buildTierRoster(resolverFn, myCode, inputStatus, cycle){
   const inputRank = evalStatusRank(inputStatus);
   return getEvalParticipants().map(emp=>{
@@ -8128,7 +8169,9 @@ function renderReviewL1Queue(){
   const checkedKeys = new Set(getCheckedKeys('reviewl1-chk'));
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
-  const roster = me ? buildTierRoster(effectiveResolver(resolveL1Reviewer, me[2]), me[0], 'Submitted', cycle) : [];
+  const fullRoster = me ? buildTierRoster(effectiveResolver(resolveL1Reviewer, me[2]), me[0], 'Submitted', cycle) : [];
+  populateReviewManagerFilter('reviewl1Filter', fullRoster, resolveUnitHeadFor);
+  const roster = filterRosterByManager('reviewl1Filter', fullRoster, resolveUnitHeadFor);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -8185,7 +8228,9 @@ function renderReviewQueue(){
   const checkedKeys = new Set(getCheckedKeys('review-chk'));
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
-  const roster = me ? buildTierRoster(effectiveResolver(resolveL2Reviewer, me[2]), me[0], 'L1Reviewed', cycle) : [];
+  const fullRoster = me ? buildTierRoster(effectiveResolver(resolveL2Reviewer, me[2]), me[0], 'L1Reviewed', cycle) : [];
+  populateReviewManagerFilter('reviewFilter', fullRoster, resolveL1Reviewer);
+  const roster = filterRosterByManager('reviewFilter', fullRoster, resolveL1Reviewer);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -8273,7 +8318,9 @@ function renderGmApproveQueue(){
   const checkedKeys = new Set(getCheckedKeys('gm-chk'));
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
-  const roster = me ? buildTierRoster(effectiveResolver(resolveGmReviewer, me[2]), me[0], 'L2Reviewed', cycle) : [];
+  const fullRoster = me ? buildTierRoster(effectiveResolver(resolveGmReviewer, me[2]), me[0], 'L2Reviewed', cycle) : [];
+  populateReviewManagerFilter('gmApproveFilter', fullRoster, resolveL2Reviewer);
+  const roster = filterRosterByManager('gmApproveFilter', fullRoster, resolveL2Reviewer);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');

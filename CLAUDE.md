@@ -6222,6 +6222,92 @@ touches employee/attendance/evaluation data.
     these roles doesn't help if a sibling, more specific mechanism
     built later doesn't consult it or its own role list at all.
 
+141. **User's screenshot (same "2. ประเมินทีมงาน" page while investigating
+    #140's bigger field-mapping question) asked: "ให้ L2,L3,L4 มีกรองเลือก
+    ชื่อ ด้วยจะได้รู้ว่าใครมีลูกทีมใครบ้าง เพราะ ลองดู L3 กับ L4 แล้วมีชื่อ
+    คุณเชิดชัย ซึ่งน่าจะตัดออกเพราะไม่ต้องเมิน" (add a name filter to the
+    L2/L3/L4 queue pages so it's clear whose team is whose — I noticed
+    "คุณเชิดชัย" showing up at L3 and L4 even though he probably shouldn't
+    need evaluating).** The three queue pages (`renderReviewL1Queue`/
+    `renderReviewQueue`/`renderGmApproveQueue`) show every scoped person
+    in one flat table since #136's roster rewrite — with no way to see
+    which specific subordinate manager's team a given row belongs to,
+    exactly what the user asked for.
+    Added a shared `populateReviewManagerFilter(selectId, roster,
+    resolverFn)`/`filterRosterByManager()` pair and a `<select>` dropdown
+    on each of the 3 pages, reusing a real resolver function (never a
+    fourth independent query, per #126/#127/#138's own discipline) to
+    label each row with its real immediate manager. **The one subtlety
+    that needed getting right**: the filter on each page must use the
+    resolver for the *previous* tier, not the page's own tier — using
+    e.g. `resolveL2Reviewer` to filter the L3 (ผจก.ส่วน) queue would
+    resolve every row to the viewer themself (useless as a filter, since
+    everyone in that queue already reports to the one person viewing
+    it). So "L3 (review)" filters by `resolveL1Reviewer` (which dept
+    head owns this row), "L4 (gmapprove)" filters by `resolveL2Reviewer`
+    (which ผจก.ส่วน owns this row), and "L2 (reviewl1)" — which has no
+    ready-made resolver for "direct unit head" since `resolveL1Reviewer`
+    itself climbs through a unit head to the real dept head — got a new
+    small helper, `resolveUnitHeadFor(emp)`, reading the raw `u[9]`
+    value only when it resolves to a real `unit`-role person (blank for
+    an employee reporting straight to the dept head, which is correct —
+    nothing to sub-filter by there). A first draft used the *current*
+    tier's own resolver on all three pages and the test caught it
+    immediately (every option on the L3 test page showed one single
+    option labeled with the viewer's own name, "4 คน" — a real but
+    useless filter), which is why the final version routes through the
+    three different functions above. Verified with tests seeding two
+    real department heads under one ผจก.ส่วน (confirms the L3 filter
+    lists both dept heads separately with correct counts, and selecting
+    one hides the other's rows) and two real unit heads under one dept
+    head (confirms the same for the L2 page) — plus the standard
+    click-sweep (`nav pages clicked: 22 errors: []`) and a re-run of
+    #140's own admin-oversight test to confirm it still passes unaffected.
+    **On "คุณเชิดชัย" showing up needing no evaluation**: this app already
+    has the exact mechanism for this — the "ยกเว้นไม่ต้องรับการประเมิน"
+    checkbox in Add/Edit Employee (`MASTER_USERS[20]`, CLAUDE.md #83),
+    which `getEvalParticipants()`/`buildTierRoster()` already both
+    exclude. Admin/sysadmin and exec roles are deliberately **not**
+    auto-excluded by role alone (#83's own stated reasoning — some
+    companies do want execs evaluated) — told the user plainly to tick
+    that checkbox on his real employee record rather than guessing he
+    should be excluded by role, since this is a real per-person HR
+    decision the app was built to let HR make explicitly, not infer.
+    **Separately, a much bigger architectural question was raised and
+    left open, not resolved in this fix**: while investigating the
+    original "no team members" report for a different L2 user, the real
+    Excel/Admin screenshots showed her name as "ผู้จัดการส่วน" appearing
+    under the "L3 (ผู้ตรวจ MGR)" column (the `gm` field, u[19]) rather
+    than under the field the code's `resolveL2Reviewer()`/
+    `getMyScopedEmpCodes()`'s `l2` branch actually reads (u[10]) — which
+    would mean the code's L2/GM field assignments (`resolveL2Reviewer`
+    reading u[10], `resolveGmReviewer`/`getMyScopedEmpCodes()`'s `gm`
+    branch reading u[19], per #88) are swapped relative to how HR is
+    actually filling in the real sheet today, company-wide. This is a
+    different, much larger fix than today's filter-dropdown request (it
+    would mean editing `resolveL2Reviewer()`, `resolveGmReviewer()`, and
+    `getMyScopedEmpCodes()`'s `l2`/`gm` branches together) and was
+    explicitly NOT made — the user said "ไม่แน่ใจ / ขอเช็คก่อน" (not sure,
+    want to check first) on the confirming question of where the real
+    GM's own name appears in the chain, and the conversation moved to
+    this narrower, independently-useful filter request instead. **Left
+    open, to be resumed once confirmed**: if the user later confirms a
+    real employee's actual GM reviewer's name appears under "L4 (ผู้อนุมัติ
+    GM)" (u[11]/`approver`) rather than "L3 (ผู้ตรวจ MGR)" (u[19]/`gm`),
+    that confirms the swap and the three functions above need to trade
+    which field they read — a change with company-wide blast radius
+    across every L2/GM scoping, badge, and queue in the file, so it
+    must not be guessed at from one person's data alone. General lesson:
+    a narrower, clearly-scoped request ("add a filter") that surfaces
+    mid-investigation of a much bigger, still-unconfirmed one ("are two
+    core chain fields swapped") should be shipped on its own merits
+    without either blocking on the bigger question or quietly folding
+    a guess about it into the smaller fix — the filter here was built to
+    work correctly under the *current* field assignment, so it costs
+    nothing if the bigger swap is confirmed later (the resolvers it
+    calls will simply start returning different names, with no change
+    needed to the filter mechanism itself).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
