@@ -1414,7 +1414,7 @@ tbody tr:hover{background:#f0f6ff!important}
   <!-- หมวด 2: กระบวนการประเมิน (เรียงตาม workflow) -->
   <div class="nav-sec">กระบวนการประเมิน</div>
   <div class="nav-item" data-pg="myeval"><span class="ic">📝</span> 1. ประเมินตนเอง</div>
-  <div class="nav-item" data-pg="team" data-role="l1,unit,l2,exec"><span class="ic">👥</span> 2. ประเมินทีมงาน (L1 รอบแรก) <span class="nav-badge" id="navBadgeTeam" style="display:none">0</span></div>
+  <div class="nav-item" data-pg="team" data-role="l1,unit,l2,gm,exec"><span class="ic">👥</span> 2. ประเมินทีมงาน (L1 รอบแรก) <span class="nav-badge" id="navBadgeTeam" style="display:none">0</span></div>
   <div class="nav-item" data-pg="reviewl1" data-role="l1,exec"><span class="ic">📋</span> 3. สอบทานหัวหน้าแผนก (L2) <span class="nav-badge" id="navBadgeReviewL1" style="display:none">0</span></div>
   <div class="nav-item" data-pg="review" data-role="l2,exec"><span class="ic">🔍</span> 4. สอบทานผู้จัดการส่วน (L3) <span class="nav-badge" id="navBadgeReview" style="display:none">0</span></div>
   <div class="nav-item" data-pg="gmapprove" data-role="gm,exec"><span class="ic">🏢</span> 5. อนุมัติ GM <span class="nav-badge" id="navBadgeGm" style="display:none">0</span></div>
@@ -4757,19 +4757,39 @@ function populateTeamManagerSelect(){
       && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
       && typeof resolveL2Reviewer==='function' && (resolveL2Reviewer(u)||{})[0]===me[0]).length;
     sel.dataset.noL1Count = noL1Count;
+    sel.dataset.noL1L2Count = 0;
+  } else if(role==='gm'){
+    /* ผู้ใช้รายงาน: พนักงานที่ไม่มีทั้งหัวหน้า L1 และ ผจก.ส่วน L2 ตัวจริงเลย (resolveL1Reviewer และ
+       resolveL2Reviewer คืน null ทั้งคู่) มองไม่เห็นชื่อที่หน้านี้ — ผู้บังคับบัญชาลำดับถัดไปที่ควร
+       เห็น/ประเมินแทนคือ GM จริง (resolveGmReviewer คืนค่าจริงสำหรับคนกลุ่มนี้ และเป็น resolver เดียวกับ
+       ที่ #128's skipEmptyReviewStages() ใช้ตัดสินข้ามขั้น L1Reviewed+L2Reviewed ให้คนกลุ่มนี้อยู่แล้ว)
+       เพิ่มบัคเก็ตพิเศษแบบเดียวกับ "__noL1__" ของ role 'l2' (#130) แต่ครอบคลุมทั้ง 2 ชั้นที่หายไป ไม่ใช่
+       แค่ชั้นเดียว — ยังไม่ต้องสร้าง dropdown ไล่ดูทีละหัวหน้าย่อยให้ GM (getMyScopedEmpCodes() ของ role
+       'gm' เดินสายแค่ 1 ชั้นจาก u[19] เท่านั้น ยังไม่รองรับไล่ลึกผ่าน L2 — นอกขอบเขตคำขอนี้) */
+    managerNames = [];
+    const myCodeGm = me[0];
+    const noL1L2Count = MASTER_USERS.filter(u=>u[12]==='active' && u[0]!==myCodeGm && (u[2]==='emp'||u[2]==='unit')
+      && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
+      && typeof resolveL2Reviewer==='function' && !resolveL2Reviewer(u)
+      && typeof resolveGmReviewer==='function' && (resolveGmReviewer(u)||{})[0]===myCodeGm).length;
+    sel.dataset.noL1Count = 0;
+    sel.dataset.noL1L2Count = noL1L2Count;
   } else {
     /* trim() ก่อนเข้า Set — ชื่อหัวหน้าที่มีช่องว่างเกินติดมา (พิมพ์มือ/sync เก่าก่อนแก้จุดอื่น) จะถูกมองเป็น
        ชื่อคนละคนกับตัวที่ไม่มีช่องว่าง ทำให้ dropdown นี้ขึ้นชื่อซ้ำ (เห็นเหมือนกันทุกตัวอักษร) สองตัวเลือก
        ทั้งที่เป็นหัวหน้าคนเดียวกัน — กันไว้ตรงนี้เผื่อข้อมูลเก่ายังไม่สะอาด แม้จุดบันทึกค่าใหม่จะ trim() แล้วก็ตาม */
     managerNames = [...new Set(MASTER_USERS.filter(u=>u[12]==='active').map(u=>(u[9]||'').trim()).filter(n=>n && n!=='—'))].sort();
     sel.dataset.noL1Count = 0;
+    sel.dataset.noL1L2Count = 0;
   }
   const noL1Count = Number(sel.dataset.noL1Count || 0);
+  const noL1L2Count = Number(sel.dataset.noL1L2Count || 0);
   const noL1Option = noL1Count > 0 ? `<option value="__noL1__">👤 พนักงานไม่มีหัวหน้า L1 (ขึ้นตรงกับฉัน) — ${noL1Count} คน</option>` : '';
+  const noL1L2Option = noL1L2Count > 0 ? `<option value="__noL1L2__">👤 พนักงานไม่มีหัวหน้า L1/L2 (ขึ้นตรงกับฉัน) — ${noL1L2Count} คน</option>` : '';
   const realOptions = managerNames.map(n=>`<option value="${n}">${n}</option>`).join('');
-  sel.innerHTML = (noL1Option + realOptions) || '<option value="">— ไม่มีหัวหน้าที่มีลูกทีม —</option>';
+  sel.innerHTML = (noL1Option + noL1L2Option + realOptions) || '<option value="">— ไม่มีหัวหน้าที่มีลูกทีม —</option>';
   sel.disabled = (role==='l1' || role==='unit');
-  const selectable = noL1Count > 0 ? ['__noL1__', ...managerNames] : managerNames;
+  const selectable = [...(noL1Count>0?['__noL1__']:[]), ...(noL1L2Count>0?['__noL1L2__']:[]), ...managerNames];
   if(selectable.includes(cur)) sel.value = cur;
   else if(selectable.length) sel.value = selectable[0];
 }
@@ -4816,9 +4836,16 @@ function renderTeamFromMaster() {
      — ใช้ resolver ชุดเดียวกับ #128 เพื่อให้ "ใครอยู่ในหมวดนี้" ตรงกับ "ใครจะถูกข้ามขั้น L1Reviewed จริง"
      เสมอ ไม่ใช่ query อิสระชุดที่สามที่อาจดริฟท์ออกจากกันอีก (บทเรียน #126/#127) */
   const isNoL1Mode = managerName === '__noL1__';
+  /* โหมดพิเศษ "__noL1L2__" — GM เลือกดู/ประเมินแทนพนักงานที่ไม่มีทั้งหัวหน้า L1 และ ผจก.ส่วน L2 ตัวจริง
+     เลย (resolveL1Reviewer และ resolveL2Reviewer คืน null ทั้งคู่) — ผู้ใช้รายงานว่ากลุ่มนี้มองไม่เห็น
+     ชื่อที่หน้านี้เลย ทั้งที่ผู้บังคับบัญชาลำดับถัดไปที่ควรประเมินแทนคือ GM จริง เหมือน "__noL1__" ของ
+     role 'l2' (#130) ทุกประการ แค่ครอบคลุม 2 ชั้นที่หายไปแทนที่จะเป็นชั้นเดียว */
+  const isNoL1L2Mode = managerName === '__noL1L2__';
   const subtitle = document.getElementById('teamPageSubtitle');
   if(subtitle) subtitle.textContent = isNoL1Mode
     ? 'พนักงานที่ไม่มีหัวหน้า L1 ตัวจริง — ขึ้นตรงกับคุณ (ผจก.ส่วน) โดยตรง ประเมินแทนหัวหน้า L1 ได้ที่นี่'
+    : isNoL1L2Mode
+    ? 'พนักงานที่ไม่มีทั้งหัวหน้า L1 และ ผจก.ส่วน L2 ตัวจริง — ขึ้นตรงกับคุณ (GM) โดยตรง ประเมินแทนได้ที่นี่'
     : (managerName ? (myScoped ? `ผู้ใต้บังคับบัญชาทุกสายของ ${managerName}` : `ผู้ใต้บังคับบัญชาทางตรงของ ${managerName}`) : 'เลือกหัวหน้าเพื่อดูทีมงาน');
 
   const allDirectReports = isNoL1Mode
@@ -4829,6 +4856,11 @@ function renderTeamFromMaster() {
            แผนกกรอกแบบประเมินตนเองของตัวเองผ่านหน้า "1. ประเมินตนเอง" อยู่แล้ว ไม่ใช่คนที่ L2 ต้องกรอกแทน */
         && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
         && typeof resolveL2Reviewer==='function' && (resolveL2Reviewer(u)||{})[0]===me[0])
+    : isNoL1L2Mode
+    ? MASTER_USERS.filter(u => u[12]==='active' && u[0]!==me[0] && (u[2]==='emp'||u[2]==='unit')
+        && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
+        && typeof resolveL2Reviewer==='function' && !resolveL2Reviewer(u)
+        && typeof resolveGmReviewer==='function' && (resolveGmReviewer(u)||{})[0]===me[0])
     : myScoped
     ? MASTER_USERS.filter(u => u[12]==='active' && myScoped.has(u[0]) && u[0]!==me[0])
     : MASTER_USERS.filter(u => u[12]==='active' && (u[9]||'').trim()===managerName.trim());

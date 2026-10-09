@@ -6459,6 +6459,90 @@ touches employee/attendance/evaluation data.
     through whichever round-trip table the file already has for fields
     of that same shape, not writing a better re-merge guard.
 
+144. **User asked: "พนักงานที่ไม่มี L1 หรือ L2 ให้แสดงชื่อ ผู้บังคับบัญชา
+    ลำดับถัดไปประเมินเลย ปัจจุบันมองไม่เห็นรายชื่อ" (for employees missing
+    both L1 and L2, show them to the next supervisor in the chain so that
+    person can evaluate them directly — currently the names are nowhere
+    to be seen). Confirmed via one clarifying question that this is about
+    the "2. ประเมินทีมงาน" page specifically** — the exact same page
+    #130 already solved for the *single-tier* case (an employee with no
+    real L1, reporting straight to their L2 via `u[10]`): a virtual
+    `__noL1__` dropdown option appears only for role `l2`, backed by
+    `resolveL1Reviewer()`/`resolveL2Reviewer()` (#128) so "who's in this
+    bucket" can never drift from "who the pipeline will actually skip
+    straight to L2 for." This request is the *two-tier* version of the
+    exact same gap: an employee missing **both** a real L1 and a real L2
+    has no page anywhere that shows them to the person who should score
+    them — per #128's `skipEmptyReviewStages()`, that's whoever
+    `resolveGmReviewer()` resolves to (the real GM field, `u[19]`), but
+    nothing on the team page ever surfaced that bucket to GM, and worse,
+    **the team page's own nav item didn't even list `gm` in its
+    `data-role`** (`data-role="l1,unit,l2,exec"` — #92's original nav
+    item, written before role `gm` needed a reason to reach this page at
+    all), so a real GM couldn't open "2. ประเมินทีมงาน" through the UI
+    in the first place, nav permissions or not.
+    Fixed by mirroring #130's exact mechanism one tier wider, reusing
+    the same three resolver functions rather than writing a fourth
+    independent query (the #126/#127/#130 discipline): added a
+    `role==='gm'` branch to `populateTeamManagerSelect()` that computes
+    `noL1L2Count` — active `emp`/`unit`-role employees (same role filter
+    #130 already established, since an `l1`-role person always resolves
+    `resolveL1Reviewer()` to `null` trivially per #22/#128 and would
+    otherwise falsely show up here) where `!resolveL1Reviewer(u) &&
+    !resolveL2Reviewer(u)` **and** `resolveGmReviewer(u)` resolves back
+    to this exact GM — and surfaces it as a new `__noL1L2__` virtual
+    option ("👤 พนักงานไม่มีหัวหน้า L1/L2 (ขึ้นตรงกับฉัน) — N คน"),
+    alongside (not replacing) the existing `__noL1__` option so both
+    buckets can coexist in the same dropdown for whichever role needs
+    each one. `renderTeamFromMaster()` got the matching `isNoL1L2Mode`
+    branch building `allDirectReports` with the identical resolver
+    triple, plus its own subtitle text explaining the bucket — every row
+    then flows through the exact same `openReviewerForm()`/
+    `submitReviewerForm()` path every other team-page row already uses
+    (#109), so GM scoring one of these employees creates a real
+    `Submitted` draft that #128's `skipEmptyReviewStages()` (already
+    wired into `submitReviewerForm()`) immediately walks forward to
+    `GMApproved` directly — correctly skipping both missing tiers in one
+    step, mirroring what a real L1+L2 chain would have produced two
+    stages later. Added `gm` to the `team` nav item's `data-role` so a
+    real GM session can reach the page at all — the dropdown fix alone
+    would have been unreachable without this. Deliberately did **not**
+    build a "browse by manager" drill-down list for role `gm` (left
+    `managerNames = []` for that branch) — `getMyScopedEmpCodes()`'s own
+    `gm` branch (#88) only walks one hop from `u[19]`, not the full
+    multi-tier chain beneath an L2, so a correct drill-down list would
+    need real chain-walking logic nobody asked for here; the one bucket
+    the user actually reported missing (`__noL1L2__`) doesn't depend on
+    that at all. Verified with a test seeding two GMs and three
+    employees — one with neither L1 nor L2, reporting straight to GM 1
+    (must appear, count 1); one with a real L1 (must be excluded even
+    though it also points at GM 1 for u[19]); and one with neither L1
+    nor L2 but reporting to GM **2** (must be excluded from GM 1's
+    bucket, confirming no scope leak across GMs) — confirms the dropdown
+    shows exactly "1 คน," the subtitle names the right bucket, and the
+    rendered row list contains only the one correct employee — plus
+    re-ran #139's team-badge-note test and #140's admin-oversight test
+    to confirm zero regressions, plus the standard click-sweep (`nav
+    pages clicked: 22 errors: []`). **Caught during testing, not
+    guessed**: the chain fields (`u[9]`/`u[10]`/`u[19]`) all store the
+    supervisor's real *name*, never their employee code, per every
+    earlier fix in this file (#18 onward) — a first draft of the test
+    seeded `u[19]` with the GM's employee *code* instead of their name
+    and got a silently-empty bucket (`resolveGmReviewer()` found no
+    matching active row), which is exactly the kind of "no names show"
+    symptom a real HR data-entry mistake could also produce; worth
+    remembering as a diagnostic path if a future report says this exact
+    bucket is empty when it shouldn't be — check whether the chain field
+    was accidentally filled with a code instead of the person's name.
+    General lesson combining #126/#128/#130: when a user names a two-
+    tier version of a gap a prior fix only closed for one tier (`L1 or
+    L2` here, vs. #130's `L1` alone), the fix is almost always "apply
+    the same resolver-reuse pattern one level further," not a new
+    mechanism — but always re-check the *reachability* path too (nav
+    `data-role`, page dispatch) for the new role involved, since a
+    feature can be built perfectly correctly and still be invisible if
+    the role that needs it was never granted a door to the page at all.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
