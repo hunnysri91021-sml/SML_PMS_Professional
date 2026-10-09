@@ -6101,6 +6101,63 @@ touches employee/attendance/evaluation data.
     `getDrafts()`/`MASTER_USERS.filter` call site" check, not just
     confirm the one page that was directly asked about.
 
+139. **User's screenshot of "2. ประเมินทีมงาน (L1 รอบแรก)" showed the sidebar
+    badge reading "32" while the page's own table/stat tiles showed only
+    5 people — "จำนวนคนที่แสดงรวมแล้วไม่เท่ากับตัวเลข 32" (the total shown
+    doesn't equal 32).** Traced both numbers to confirm which was wrong,
+    rather than guessing: `renderTeamFromMaster()` has two deliberately
+    different modes (#118) — when an L2/admin/exec picks one specific
+    manager from the `teamManagerSelect` dropdown ("drill-down" mode,
+    the subtitle literally says "ผู้ใต้บังคับบัญชา**ทางตรง**ของ {name}"),
+    the table and its "ทีมทั้งหมด" stat correctly show only *that one
+    manager's* direct reports (5, matching the screenshot) — while
+    `navBadgeTeam` (`renderNavBadges()`'s `teamPending`) counts pending
+    round-1 self-evals across the **logged-in viewer's entire scope**
+    (`getMyScopedEmpCodes()`, every manager under them combined), which
+    is a different, legitimately wider number by design. Both were
+    correct under their own definition — this is the same "two numbers
+    disagree but both answer different questions" shape #129 already
+    found for the hierarchy-issues banner, not a scoping bug like
+    #73/#85/#87/#126/#130. While verifying this, also found and closed
+    the one real gap #138 had explicitly deferred: `teamPending` never
+    excluded `evalExempt` employees (`u[20]==='1'`, CLAUDE.md #83) the
+    way every other badge/notification count already does — a stray
+    pending draft for someone HR later exempted mid-cycle would still
+    have inflated this one badge.
+    Fixed by extracting `countTeamPending(scopedCodes)` — the exact
+    `teamPending` expression, now also excluding `evalExempt`, taking
+    the scope `Set` (or `null` for unrestricted) as a parameter — and
+    pointing both `renderNavBadges()`'s badge count *and* a new
+    same-page clarification note at this one shared function, so the
+    two numbers can never independently drift apart again (the
+    #126/#127/#138 "reuse one counting function, don't recompute
+    independently" discipline). Added `#teamScopeWideNote` (an `al-w`
+    warning-style banner, right under the existing "หน้านี้แสดงเฉพาะ...
+    ไม่เห็นทีมของหัวหน้าคนอื่น" info banner) that `renderTeamFromMaster()`
+    now populates whenever the viewer's real scope-wide pending count
+    (`countTeamPending(getMyScopedEmpCodes())`) differs from what the
+    table currently shows (`pendingCount`, the selected manager's own
+    count) — spelling out both numbers and stating plainly that they
+    are different, correct scopes, not conflicting data, rather than
+    silently changing either number's meaning to make them match.
+    Verified with a test that seeds a real L2 overseeing two L1
+    managers (one with 5 direct reports, one with 20), selects the
+    5-person manager in the drill-down dropdown, and confirms the badge
+    shows 25 (both managers' pending combined, under the viewer's full
+    scope), the table/stat tile shows 5 (the selected manager only), and
+    the new note renders with both real numbers and the clarifying
+    sentence — plus the standard click-sweep (`nav pages clicked: 22
+    errors: []`). General lesson sharper than #129's own conclusion:
+    when a summary number (sidebar badge) and a detail view (a page
+    filtered to one specific sub-selection the summary doesn't know
+    about) are compared, "do they count different scopes by design" is
+    a real third explanation beyond "the summary is wrong" or "the
+    detail is wrong" — confirm which of the three it is from the actual
+    code before changing anything, and when it's genuinely the third
+    case, surface both real numbers together on the page itself so the
+    difference explains itself rather than reading as unexplained data
+    loss.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

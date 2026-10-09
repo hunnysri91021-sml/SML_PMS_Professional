@@ -1781,6 +1781,7 @@ tbody tr:hover{background:#f0f6ff!important}
     </div></div>
 
     <div class="al al-i"><span>🔒</span><div>หน้านี้แสดงเฉพาะผู้ใต้บังคับบัญชาทางตรงของหัวหน้าที่เลือกไว้ด้านบนเท่านั้น (ดึงจากสายบังคับบัญชาจริงในข้อมูลพนักงาน) — ไม่เห็นทีมของหัวหน้าคนอื่น</div></div>
+    <div class="al al-w" id="teamScopeWideNote" style="display:none"><span>ℹ️</span><div id="teamScopeWideNoteText"></div></div>
 
     <div class="grid g4" style="margin-bottom:18px">
       <div class="stat s-i"><div class="lb">👥 ทีมทั้งหมด</div><div class="vl" id="teamStatTotal">0</div><div class="sb">คน</div></div>
@@ -4769,6 +4770,25 @@ function populateTeamManagerSelect(){
   if(selectable.includes(cur)) sel.value = cur;
   else if(selectable.length) sel.value = selectable[0];
 }
+/* #139: ผู้ใช้รายงาน badge เมนู "2. ประเมินทีมงาน" ขึ้น 32 แต่หน้าตารางเองแสดงแค่ 5 คน —
+   "จำนวนคนที่แสดงรวมแล้วไม่เท่ากับตัวเลข 32" สาเหตุจริงคือหน้านี้มี 2 ความหมายที่ต่างกันโดยตั้งใจ
+   (ดูคอมเมนต์ #118 ด้านบน): เมื่อเลือกหัวหน้าคนเดียวจาก dropdown (โหมด "drill-down") ตารางจะแสดงแค่
+   ลูกทีมตรงของหัวหน้าคนนั้น (5 คน ในเคสนี้) ส่วน badge ที่เมนูซ้ายนับยอดรอประเมินทั้ง "สังกัด" ของ
+   ผู้ใช้ที่ล็อกอินอยู่ขณะนี้ (ทุกหัวหน้ารวมกันที่อยู่ใน scope ของตน ผ่าน getMyScopedEmpCodes()) ซึ่งกว้าง
+   กว่าหัวหน้าคนเดียวที่เลือกดูอยู่มาก — ทั้งสองเลขถูกต้องตามนิยามของตัวเอง แต่วางคู่กันแล้วดูเหมือนขัดแย้ง
+   กัน (รูปแบบเดียวกับที่ #129 เจอกับแบนเนอร์สายบังคับบัญชา) ไม่ใช่บั๊กเรื่อง scope ผิดแบบ #73/#85/#87/
+   #126/#130 — แก้ด้วยการแสดงเลข "ยอดรวมทั้งสังกัด" ไว้บนหน้านี้เองให้เห็นที่มาของเลข badge ชัดๆ แทนการ
+   เดาเปลี่ยนตรรกะ นับด้วยฟังก์ชันร่วม countTeamPending() ตัวเดียวกับที่ renderNavBadges() ใช้ เพื่อไม่ให้
+   เลขทั้งสองที่ควรตรงกันดริฟท์ออกจากกันอีก (บทเรียน #126/#127/#138) — ฟังก์ชันนี้ยังปิดช่องโหว่ที่ #138
+   เคยพบแล้วตั้งใจเลื่อนไว้ก่อน (teamPending เดิมไม่กรอง evalExempt, u[20]==='1') ไปด้วยในคราวนี้ */
+function countTeamPending(scopedCodes){
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  return MASTER_USERS.filter(u=>u[2]==='emp' && u[12]==='active' && u[20]!=='1' && (!scopedCodes || scopedCodes.has(u[0]))).filter(u=>{
+    const d = drafts.find(x=>x[0]===u[0]);
+    return !d || d[d.length-1]==='Draft';
+  }).length;
+}
+
 function renderTeamFromMaster() {
   const el = document.getElementById('teamRows');
   if(!el) return;
@@ -4870,6 +4890,21 @@ function renderTeamFromMaster() {
   set('teamStatPending', pendingCount);
   set('teamStatAvg', teamAvg==null?'—':teamAvg);
   set('teamStatOrgAvg', 'องค์กร '+(orgAvg==null?'—':orgAvg));
+
+  /* #139: โชว์ที่มาของเลข badge "รอประเมิน" ที่เมนูซ้าย (นับทั้งสังกัดของผู้ใช้ที่ล็อกอิน) เทียบกับเลข
+     ในตารางหน้านี้ (นับแค่หัวหน้าคนเดียวที่เลือกอยู่) ให้เห็นชัดว่าทำไมต่างกัน ไม่ใช่บั๊ก */
+  const scopeNoteEl = document.getElementById('teamScopeWideNote');
+  const scopeNoteTextEl = document.getElementById('teamScopeWideNoteText');
+  if(scopeNoteEl && scopeNoteTextEl){
+    const myFullScope = (me && typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
+    const scopeWidePending = me ? countTeamPending(myFullScope) : 0;
+    if(me && scopeWidePending !== pendingCount){
+      scopeNoteEl.style.display = '';
+      scopeNoteTextEl.innerHTML = `ยอดป้ายแจ้งเตือน "รอประเมิน" ที่เมนูด้านซ้ายนับรวม <b>ทุกหัวหน้าในสังกัดของคุณ</b> ได้ <b>${scopeWidePending}</b> คน — ส่วนตารางด้านล่างแสดงเฉพาะหัวหน้าที่เลือกไว้ด้านบนเท่านั้น (<b>${pendingCount}</b> คน) ทั้งสองเลขถูกต้อง เป็นคนละขอบเขตกัน ไม่ใช่ข้อมูลขัดกัน`;
+    } else {
+      scopeNoteEl.style.display='none';
+    }
+  }
 }
 
 /* ==========================================
@@ -8663,11 +8698,7 @@ function renderNavBadges(){
   const cycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  const inScope = code => !scoped || scoped.has(code);
-  const teamPending = MASTER_USERS.filter(u=>u[2]==='emp' && u[12]==='active' && inScope(u[0])).filter(u=>{
-    const d = drafts.find(x=>x[0]===u[0]);
-    return !d || d[d.length-1]==='Draft';
-  }).length;
+  const teamPending = countTeamPending(scoped);
   const readyCount = (resolverFn, inputStatus) => me ? buildTierRoster(resolverFn, me[0], inputStatus, cycle).filter(r=>r.state==='ready').length : 0;
   const counts = {
     navBadgeTeam: teamPending,
