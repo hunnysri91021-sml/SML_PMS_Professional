@@ -6308,6 +6308,73 @@ touches employee/attendance/evaluation data.
     calls will simply start returning different names, with no change
     needed to the filter mechanism itself).
 
+142. **Immediately after #141 shipped, user's screenshot of the L3
+    ("สอบทานขั้นที่ 4 (ผู้จัดการส่วน L3)") page's new filter dropdown
+    showed only "ทุกหัวหน้า (46 คน)" — zero individual manager names —
+    while the table itself showed real pending employees. Asked
+    "ควรมีชื่อ ผู้จัดการ5คนไหม" (should there be 5 manager names).**
+    This meant `resolveL1Reviewer(emp)` (#128) returned `null` for every
+    single one of the 46 real people in this queue's roster — the exact
+    symptom the still-paused field-swap investigation (flagged at the
+    end of #141) would also produce, but also explainable by something
+    far more mundane: these specific 46 people simply don't have a real,
+    resolvable "หัวหน้าหน่วย (L1)" value on file yet (blank field, a
+    typo'd name, or a name that resolves to a real person whose own role
+    isn't set to `l1`/`unit`) — three completely different real causes
+    that all look identical from the outside ("no names in the
+    dropdown"), and I have no access to the user's live Excel-synced
+    `MASTER_USERS` data to tell which one it is. Per this file's own
+    "don't guess at a company-wide-blast-radius fix from one person's
+    data" discipline (already applied twice for the paused swap
+    question), the right move was not to guess which of the three it is,
+    nor to re-ask the user to manually go check 3 named employees' raw
+    field values one at a time — instead, built the diagnosis *into the
+    page itself* so HR can see the real breakdown without needing to be
+    walked through it by hand.
+    Added `diagnoseResolverGaps(roster, resolverFn, fieldIdx)` — for
+    every roster member the resolver already says has no real reviewer,
+    classifies *why* into exactly the three mutually-exclusive causes
+    above (`noField`: the raw field is blank/`'—'`; `notFound`: a name is
+    there but no active `MASTER_USERS` row matches it; `foundNoChain`: a
+    real person matches, but `resolverFn` still rejected them — almost
+    always a role mismatch, e.g. the named person's role isn't `l1`/
+    `unit`/`l2` as that tier requires) — and `renderReviewerFilterDiagNote()`,
+    which renders a real `al-w` warning banner (CLAUDE.md #129's
+    established non-alarming severity class) stating the real counts in
+    plain Thai and pointing HR at "ตั้งค่า → ผังองค์กร & พนักงาน" to fix
+    it, shown only when the filter dropdown has zero manager names but
+    the roster is non-empty (never shown when there's genuinely nothing
+    in the queue, and never shown once at least one real name resolves).
+    Wired into all three queue pages (`renderReviewL1Queue`/
+    `renderReviewQueue`/`renderGmApproveQueue`), each passing its own
+    filter's real resolver + the matching raw field index
+    (`resolveUnitHeadFor`/`resolveL1Reviewer`→field 9, `resolveL2Reviewer`
+    →field 10 — the exact same resolver+field pairs #141 already
+    established for the filter dropdowns themselves, so this can never
+    disagree with what the filter is actually computing). Verified with
+    a test seeding 3 real employees under one real L2, one with each of
+    the 3 gap causes deliberately engineered (blank L1 field, a
+    nonexistent name typed into it, and a real person whose role is
+    `emp` not `l1`/`unit`), confirming the banner renders with the
+    correct count for each of the three (1/1/1) — plus re-ran #141's own
+    two filter tests, #140's admin-oversight test, and #139's team-badge
+    test to confirm zero regressions, plus the standard click-sweep
+    (`nav pages clicked: 22 errors: []`). **This does not resolve the
+    paused field-swap investigation** — it only turns "the dropdown is
+    empty, why" from an unanswerable question into a self-service
+    diagnostic HR can read directly off the page; the user's next report
+    (whichever of the three real causes the banner actually shows for
+    their 46 people) is the next real data point toward answering it,
+    not a guess made here. General lesson: when a report could stem from
+    any of several distinct real causes a screenshot can't distinguish,
+    and asking the user to manually inspect raw data field-by-field is
+    both slow and error-prone for a non-technical user, build the
+    diagnosis as a feature on the page itself — the same instinct
+    CLAUDE.md #129 already applied to a banner's *wording*, extended
+    here to actually computing and displaying *which* of several root
+    causes applies, so the next report arrives with the real answer
+    already attached instead of another round of guessing.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -1806,6 +1806,7 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="card">
       <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามหัวหน้าหน่วยงาน (หัวหน้าหน่วย/หัวหน้าแผนก) เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
+      <div class="al al-w" id="reviewl1FilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.reviewl1-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="reviewl1Rows"></tbody>
@@ -1820,6 +1821,7 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="card">
       <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewFilter" onchange="renderReviewQueue()" title="กรองตามหัวหน้าแผนก เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
+      <div class="al al-w" id="reviewFilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.review-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="reviewRows"></tbody>
@@ -1834,6 +1836,7 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="card">
       <div class="card-h"><h3>ใบประเมินรออนุมัติ GM</h3><div class="r"><select class="btn" id="gmApproveFilter" onchange="renderGmApproveQueue()" title="กรองตามผู้จัดการส่วน เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="gmApproveCount">0 รายการ</span></div></div>
+      <div class="al al-w" id="gmApproveFilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="gmApproveRows"></tbody>
@@ -8147,6 +8150,38 @@ function filterRosterByManager(selectId, roster, resolverFn){
   const val = document.getElementById(selectId)?.value || '';
   return val ? roster.filter(r=>realReviewerNameFor(resolverFn, r.emp)===val) : roster;
 }
+/* #142: ถ้ากรองแล้วไม่มีชื่อหัวหน้าเลยสักคน (dropdown เหลือแค่ "ทุกหัวหน้า") ทั้งที่มีพนักงานอยู่ในคิวจริง —
+   ผู้ใช้ (HR) ไม่มีทางรู้ว่าทำไม ไม่ใช่ว่าระบบพัง แต่ข้อมูลพนักงานแต่ละคนยังไม่มีผู้สอบทานจริงที่ระดับนี้
+   (CLAUDE.md #128/#129's own "ไม่กระทบการส่ง" shape) ฟังก์ชันนี้แยกสาเหตุออกเป็น 3 กลุ่ม นับจาก field
+   ดิบ (fieldIdx) ที่ resolver ตัวนั้นอ่าน เพื่อบอกเป็นตัวเลขจริงว่าควรไปแก้ตรงไหน ไม่ใช่เดา */
+function diagnoseResolverGaps(roster, resolverFn, fieldIdx){
+  let noField=0, notFound=0, foundNoChain=0;
+  roster.forEach(r=>{
+    const emp = r.emp;
+    if(resolverFn(emp)) return; // มีผู้สอบทานจริงแล้ว ไม่ใช่ช่องโหว่
+    const name = (emp[fieldIdx]||'').trim();
+    if(!name || name==='—'){ noField++; return; }
+    const sup = MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active');
+    if(!sup){ notFound++; return; }
+    foundNoChain++;
+  });
+  return { noField, notFound, foundNoChain, total: roster.length };
+}
+function renderReviewerFilterDiagNote(noteId, roster, resolverFn, fieldIdx, fieldLabel){
+  const el = document.getElementById(noteId);
+  if(!el) return;
+  const names = [...new Set(roster.map(r=>realReviewerNameFor(resolverFn, r.emp)).filter(n=>n))];
+  if(names.length>0 || roster.length===0){ el.style.display='none'; el.innerHTML=''; return; }
+  const g = diagnoseResolverGaps(roster, resolverFn, fieldIdx);
+  el.style.display='';
+  let msg = `⚠️ ตัวกรอง "เลือกหัวหน้า" ไม่มีชื่อให้เลือก เพราะทั้ง ${g.total} คนในคิวนี้ ยังไม่มีข้อมูลผู้สอบทานจริงที่ระดับนี้ — `;
+  const parts = [];
+  if(g.noField) parts.push(`${g.noField} คน ไม่ได้กรอกชื่อ "${fieldLabel}" ไว้เลยในข้อมูลพนักงาน`);
+  if(g.notFound) parts.push(`${g.notFound} คน กรอกชื่อไว้ แต่ไม่พบคนนี้ในระบบ (พิมพ์ผิด/ลาออกไปแล้ว)`);
+  if(g.foundNoChain) parts.push(`${g.foundNoChain} คน กรอกชื่อไว้ตรงกับคนในระบบ แต่บทบาท (role) ของคนนั้นยังไม่ถูกตั้งให้ตรงกับตำแหน่งที่ต้องสอบทานขั้นนี้`);
+  msg += parts.join(' / ') + ' — ไปแก้ไขที่หน้า "ตั้งค่า → ผังองค์กร & พนักงาน" แล้วเปิดแก้ไขพนักงานคนนั้น';
+  el.innerHTML = msg;
+}
 function buildTierRoster(resolverFn, myCode, inputStatus, cycle){
   const inputRank = evalStatusRank(inputStatus);
   return getEvalParticipants().map(emp=>{
@@ -8171,6 +8206,7 @@ function renderReviewL1Queue(){
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveL1Reviewer, me[2]), me[0], 'Submitted', cycle) : [];
   populateReviewManagerFilter('reviewl1Filter', fullRoster, resolveUnitHeadFor);
+  renderReviewerFilterDiagNote('reviewl1FilterDiag', fullRoster, resolveUnitHeadFor, 9, 'หัวหน้าหน่วย (L1)');
   const roster = filterRosterByManager('reviewl1Filter', fullRoster, resolveUnitHeadFor);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
@@ -8230,6 +8266,7 @@ function renderReviewQueue(){
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveL2Reviewer, me[2]), me[0], 'L1Reviewed', cycle) : [];
   populateReviewManagerFilter('reviewFilter', fullRoster, resolveL1Reviewer);
+  renderReviewerFilterDiagNote('reviewFilterDiag', fullRoster, resolveL1Reviewer, 9, 'หัวหน้าหน่วย (L1)');
   const roster = filterRosterByManager('reviewFilter', fullRoster, resolveL1Reviewer);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
@@ -8320,6 +8357,7 @@ function renderGmApproveQueue(){
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveGmReviewer, me[2]), me[0], 'L2Reviewed', cycle) : [];
   populateReviewManagerFilter('gmApproveFilter', fullRoster, resolveL2Reviewer);
+  renderReviewerFilterDiagNote('gmApproveFilterDiag', fullRoster, resolveL2Reviewer, 10, 'หัวหน้าแผนก (L2)');
   const roster = filterRosterByManager('gmApproveFilter', fullRoster, resolveL2Reviewer);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
