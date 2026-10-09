@@ -2503,9 +2503,9 @@ tbody tr:hover{background:#f0f6ff!important}
         </div>
         <div class="card"><div class="card-h"><h3>🔑 PIN & แบบฟอร์มประเมิน</h3></div>
           <div class="card-b">
-            <div style="font-size:11px;color:#94a3b8;margin-bottom:10px">PIN เข้าระบบ และแบบฟอร์มประเมินที่กำหนดให้แต่ละคน sync ผ่านตารางนี้ — ให้พนักงานล็อกอินจากมือถือ/เครื่องอื่นแล้วเจอ PIN และแบบฟอร์มเดียวกันได้ ต้องสร้างตาราง "EmployeeSettings" ในไฟล์ Excel ก่อน (คอลัมน์: EmpCode, PinHash, EvalLevel, UpdatedAt)</div>
-            <button class="btn btn-p" style="width:100%;justify-content:center;margin-bottom:8px" onclick="ms365SyncEmployeeSettings()">📥 ดึง PIN/แบบฟอร์ม จาก Excel</button>
-            <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushEmployeeSettings()">📤 Push PIN/แบบฟอร์ม → Excel</button>
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:10px">PIN เข้าระบบ, แบบฟอร์มประเมินที่กำหนดให้แต่ละคน, และสถานะ "ยกเว้นไม่ต้องรับการประเมิน" sync ผ่านตารางนี้ — ให้พนักงานล็อกอินจากมือถือ/เครื่องอื่น หรือเปิดระบบใหม่ แล้วเจอค่าเดิม ไม่ต้องตั้งซ้ำทุกครั้ง ต้องสร้างตาราง "EmployeeSettings" ในไฟล์ Excel ก่อน (คอลัมน์: EmpCode, PinHash, EvalLevel, UpdatedAt, EvalExempt)</div>
+            <button class="btn btn-p" style="width:100%;justify-content:center;margin-bottom:8px" onclick="ms365SyncEmployeeSettings()">📥 ดึง PIN/แบบฟอร์ม/ยกเว้นประเมิน จาก Excel</button>
+            <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushEmployeeSettings()">📤 Push PIN/แบบฟอร์ม/ยกเว้นประเมิน → Excel</button>
             <div style="font-size:10.5px;color:#94a3b8;margin-top:8px">ตั้ง/รีเซ็ต PIN หรือเปลี่ยนแบบฟอร์มที่หน้า "ผู้ใช้ & สิทธิ์" จะ Push ให้อัตโนมัติอยู่แล้ว ปุ่มนี้ไว้กดซ้ำเองเผื่อ Push อัตโนมัติไม่สำเร็จ</div>
           </div>
         </div>
@@ -4437,7 +4437,7 @@ async function pushSingleEmployeeSettings(code){
   const emp = MASTER_USERS.find(u=>u[0]===code);
   if(!emp) return;
   try{
-    await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, code, [code, emp[17]||'', emp[18]||'', new Date().toISOString()]);
+    await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, code, [code, emp[17]||'', emp[18]||'', new Date().toISOString(), emp[20]==='1'?'1':'0']);
     if(typeof appendSyncLog==='function') appendSyncLog(`Push การตั้งค่า ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
   }catch(e){
     if(typeof appendSyncLog==='function') appendSyncLog(`Push การตั้งค่า ${emp[1]} (${code}) ไม่สำเร็จ: ${e.message}`, false);
@@ -5821,7 +5821,9 @@ function saveUserFromModal() {
   if(typeof populateEmpCodeDatalist==='function') populateEmpCodeDatalist();
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
-  if(evalLevel && typeof pushSingleEmployeeSettings==='function') pushSingleEmployeeSettings(id);
+  /* เรียกเสมอ ไม่ใช่แค่ตอน evalLevel/evalExempt เป็นค่าจริง — การ "ติ๊กออก" (เปลี่ยนเป็นค่าว่าง/'0')
+     ก็ต้อง push ขึ้น Excel เหมือนกัน ไม่งั้นการยกเลิกยกเว้นประเมินจะไม่ sync ข้ามอุปกรณ์/ข้ามการเปิดระบบใหม่ */
+  if(typeof pushSingleEmployeeSettings==='function') pushSingleEmployeeSettings(id);
   if(typeof pushSingleEmployeeToExcel==='function') pushSingleEmployeeToExcel(id);
   closeM();
 }
@@ -6945,12 +6947,18 @@ async function fetchSystemStatusFromMs365(){
 
 /* ====== EmployeeSettings (cross-device) — PIN hash + แบบฟอร์มประเมินที่ Admin กำหนดต้องใช้ได้
    จากหลายเครื่อง/มือถือของพนักงานเอง จึงต้องมีตารางกลางใน Excel ชื่อ "EmployeeSettings"
-   (คอลัมน์: EmpCode, PinHash, EvalLevel, UpdatedAt) ต่างจาก SystemStatus ตรงที่สองค่านี้กระทบ
-   การเข้าระบบจริงของพนักงาน จึงรายงาน error ตรงๆ เมื่อ push/sync ไม่สำเร็จ ไม่ fallback เงียบๆ */
+   (คอลัมน์: EmpCode, PinHash, EvalLevel, UpdatedAt, EvalExempt) ต่างจาก SystemStatus ตรงที่สามค่านี้
+   กระทบการเข้าระบบจริงของพนักงาน จึงรายงาน error ตรงๆ เมื่อ push/sync ไม่สำเร็จ ไม่ fallback เงียบๆ
+   EvalExempt (CLAUDE.md #83) เพิ่มเป็นคอลัมน์ที่ 5 — รายงาน "ต้องติ๊กยกเว้นประเมินใหม่ทุกครั้งที่เปิด
+   ระบบใหม่" ตรงนี้มาจากจุดเดียวกับ PIN/evalLevel ก่อนที่จะมีคอลัมน์นี้: MASTER_USERS ไม่มี localStorage
+   ของตัวเอง (CLAUDE.md #32) ต้องพึ่ง Excel round-trip นี้เท่านั้นถึงจะรอดข้ามการเปิดระบบใหม่ได้ */
 const EMPLOYEE_SETTINGS_TABLE = 'EmployeeSettings';
 
 /* ผสานแถวจาก Excel เข้า MASTER_USERS จริง (โดยรหัสพนักงาน) — ใช้ร่วมกันทั้งโหมดกดเองและโหมด
-   เงียบตอน login ค่าว่างในแถว Excel จะไม่ไปเขียนทับของเดิมในเครื่อง (กันกรณีบางคนยังไม่เคย push) */
+   เงียบตอน login ค่าว่างในแถว Excel จะไม่ไปเขียนทับของเดิมในเครื่อง (กันกรณีบางคนยังไม่เคย push)
+   EvalExempt ('1'/'0') เขียนแบบ explicit เสมอตอน push จึงใช้ "ค่าเท่ากับ '1' หรือ '0' เป๊ะ" เป็นตัวบอก
+   ว่าคอลัมน์นี้มีจริงในแถว — ถ้าตารางยังไม่มีคอลัมน์ EvalExempt เลย (ยังไม่อัปเดต Excel) ค่าจะว่าง/undefined
+   แล้วจะไม่ไปทับค่าที่ตั้งไว้ในเครื่องนี้ */
 function applyEmployeeSettingsRows(rows){
   let applied = 0;
   rows.forEach(r=>{
@@ -6960,18 +6968,20 @@ function applyEmployeeSettingsRows(rows){
     if(!emp) return;
     const pinHash = String(r[1]||'').trim();
     const evalLevel = String(r[2]||'').trim();
+    const evalExempt = String(r[4]!==undefined && r[4]!==null ? r[4] : '').trim();
     if(pinHash) emp[17] = pinHash;
     if(evalLevel) emp[18] = evalLevel;
+    if(evalExempt==='1' || evalExempt==='0') emp[20] = evalExempt==='1' ? '1' : '';
     applied++;
   });
   return applied;
 }
 
-/* Push PIN hash + แบบฟอร์มประเมินของพนักงานทุกคนที่มีค่าตั้งไว้ในเครื่องนี้ ขึ้น Excel จริง
-   ใช้ upsert (คีย์ = รหัสพนักงาน) กันแถวซ้ำเวลากด push หลายรอบ (เหมือน ms365PushAttendance) */
+/* Push PIN hash + แบบฟอร์มประเมิน + สถานะยกเว้นประเมินของพนักงานทุกคนที่มีค่าตั้งไว้ในเครื่องนี้ ขึ้น
+   Excel จริง ใช้ upsert (คีย์ = รหัสพนักงาน) กันแถวซ้ำเวลากด push หลายรอบ (เหมือน ms365PushAttendance) */
 async function ms365PushEmployeeSettings(){
-  const rows = MASTER_USERS.filter(u => u[17] || u[18]);
-  if(!rows.length){ smlToast('ยังไม่มีข้อมูล PIN หรือแบบฟอร์มประเมินที่ตั้งไว้ในเครื่องนี้ให้ Push','warn'); return; }
+  const rows = MASTER_USERS.filter(u => u[17] || u[18] || u[20]==='1');
+  if(!rows.length){ smlToast('ยังไม่มีข้อมูล PIN/แบบฟอร์มประเมิน/ยกเว้นประเมินที่ตั้งไว้ในเครื่องนี้ให้ Push','warn'); return; }
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
     smlToast('ยังไม่ได้ตั้งค่า MS365 — ข้อมูลจะยังอยู่แค่ในเครื่องนี้เท่านั้น','warn');
@@ -6980,13 +6990,13 @@ async function ms365PushEmployeeSettings(){
   }
   let ok=0, fail=0;
   for(const u of rows){
-    try{ await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, u[0], [u[0], u[17]||'', u[18]||'', new Date().toISOString()]); ok++; }
+    try{ await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, u[0], [u[0], u[17]||'', u[18]||'', new Date().toISOString(), u[20]==='1'?'1':'0']); ok++; }
     catch(e){ fail++; }
   }
   updateMs365Status(fail?'warn':'ok', fail?'บาง Push ไม่สำเร็จ':'Connected');
-  smlToast(`Push การตั้งค่าพนักงาน (PIN/แบบฟอร์ม) เข้า Excel สำเร็จ ${ok} คน` + (fail?` · ล้มเหลว ${fail} คน — ตรวจสอบว่ามีตาราง "${EMPLOYEE_SETTINGS_TABLE}" ในไฟล์ Excel แล้วหรือยัง`:''), fail?'warn':'ok');
+  smlToast(`Push การตั้งค่าพนักงาน (PIN/แบบฟอร์ม/ยกเว้นประเมิน) เข้า Excel สำเร็จ ${ok} คน` + (fail?` · ล้มเหลว ${fail} คน — ตรวจสอบว่ามีตาราง "${EMPLOYEE_SETTINGS_TABLE}" คอลัมน์ EvalExempt ในไฟล์ Excel แล้วหรือยัง`:''), fail?'warn':'ok');
   appendSyncLog(`Push การตั้งค่าพนักงาน: สำเร็จ ${ok} คน${fail?' · ล้มเหลว '+fail:''}`, fail===0);
-  if(ok){ markSystemUpdated(`Push การตั้งค่าพนักงาน ${ok} คนเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push PIN/แบบฟอร์มประเมินเข้า Excel', EMPLOYEE_SETTINGS_TABLE, ok+' คนสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
+  if(ok){ markSystemUpdated(`Push การตั้งค่าพนักงาน ${ok} คนเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push PIN/แบบฟอร์มประเมิน/ยกเว้นประเมินเข้า Excel', EMPLOYEE_SETTINGS_TABLE, ok+' คนสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
 }
 
 /* ดึง PIN/แบบฟอร์มประเมินล่าสุดจาก Excel มาไว้ในเครื่องนี้ — โหมดกดเอง (Admin ตั้งใจกด ยอมให้เด้ง

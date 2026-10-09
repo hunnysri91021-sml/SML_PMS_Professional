@@ -6375,6 +6375,90 @@ touches employee/attendance/evaluation data.
     causes applies, so the next report arrives with the real answer
     already attached instead of another round of guessing.
 
+143. **User's screenshot of the "ยกเว้นไม่ต้องรับการประเมิน" checkbox
+    (Add/Edit Employee, CLAUDE.md #83) asked "เวลาเปิดใหม่ ต้องเลือกทุก
+    ครั้งเลย" (every time [the app/page] opens anew, I have to tick it
+    again).** Traced the in-session save/reopen path first
+    (`saveUserFromModal()`→`MASTER_USERS[existing]=newUser`→
+    `fillUserFormFields()`'s `emp[20]==='1'` read) and confirmed it was
+    already correct — re-opening the same edit modal without reloading
+    the page shows the right state. The real cause was one layer out:
+    per CLAUDE.md #32, `MASTER_USERS` has **zero `localStorage` of its
+    own** — it resets to the file's hardcoded demo baseline on every
+    page load and is then silently rebuilt from the real MS365
+    `Employees` Excel table via `loadEmployeesFromMs365()`. `evalExempt`
+    (`u[20]`) was deliberately scoped as local-only in #83 (no confirmed
+    real column in HR's actual sheet) with a re-merge
+    (`r[20]=old?.[20]||''`) that only protects it *within the same
+    already-loaded session* — it does nothing for a genuine page reload
+    or fresh login, since `old` is read from the in-memory array that
+    itself just got wiped. So "เวลาเปิดใหม่" was describing exactly
+    that: every fresh page load/login silently reset every employee's
+    exemption flag back to unticked, with nothing to restore it from —
+    the same shape of gap #39 originally found for IDP/FormWeights
+    (local-only field with **zero** persistence of any kind), just one
+    tier more hidden since #83's own re-merge code *looked* like a real
+    persistence mechanism at a glance.
+    The file already has the exact right real mechanism for this class
+    of field — `EmployeeSettings` (#24), the small Excel table that
+    already round-trips `pinHash`/`evalLevel` (two other local-only
+    `MASTER_USERS` fields) via `ms365SyncEmployeeSettingsSilent()`,
+    called from both `doLogin()`/`tryRestoreSession()`'s silent-sync
+    groups (#32/#33) — so extending that *existing* table was the right
+    fix, not inventing a new one. Added `EvalExempt` as the table's 5th
+    column (`EmpCode, PinHash, EvalLevel, UpdatedAt, EvalExempt`),
+    written explicitly as `'1'`/`'0'` on every push (never left blank,
+    unlike `pinHash`/`evalLevel`'s "only write if truthy" convention) —
+    an unticked exemption is a real, meaningful value that must also
+    sync, not just the ticked one; `applyEmployeeSettingsRows()` only
+    applies it back when the pulled value is exactly `'1'` or `'0'`
+    (never a bare truthy check), so a row pushed by *older* client code
+    before this fix — or a real Excel table HR hasn't added the new
+    column to yet — reads as "column not present" and correctly leaves
+    the local value untouched rather than silently un-exempting
+    everyone, the same CLAUDE.md #102 caution about an "add row" call's
+    real column-count being load-bearing, applied here on the *read*
+    side instead. `pushSingleEmployeeSettings(code)` (the per-person
+    auto-push, previously only triggered after a PIN reset) and
+    `ms365PushEmployeeSettings()` (the manual bulk button) both now
+    include the 5th value; `saveUserFromModal()`'s auto-push call was
+    widened from `if(evalLevel && ...)` to an unconditional call on
+    every save — the old truthy-gated version would never have pushed
+    the moment HR *unticked* the box (an empty string is falsy), so the
+    "un-exempt" direction would have silently stayed local-only forever
+    even after this fix if left as a truthy check. Updated the MS365
+    settings page's own hint text/button labels to name the real 5
+    columns and the real 3 things that now sync through this table,
+    per the CLAUDE.md #34/#49/#67 "keep the UI's own claim in sync with
+    what the code actually does" discipline. Verified with a test that
+    pushes a real `evalExempt='1'` value, captures the exact 5-element
+    array sent to `graphUpsertTableRow`, simulates a fresh page load by
+    resetting the employee's in-memory record to have no exemption set,
+    feeds the captured row back through `applyEmployeeSettingsRows()`
+    (the same function the real silent sync calls), and confirms the
+    exemption is correctly restored — then repeats the same round-trip
+    for the un-exempt (`'0'`) direction and confirms it correctly
+    clears a stale local `'1'` rather than being mistaken for "no
+    column" — plus the standard click-sweep (`nav pages clicked: 22
+    errors: []`). **Real operational step the user still needs to
+    take, stated plainly**: this only takes effect once the real Excel
+    "EmployeeSettings" table has the `EvalExempt` column added (the
+    same per-table setup #24 always required) and at least one save/
+    push has happened for each employee who should stay exempt across
+    a reload — a push to a table that doesn't yet have the column will
+    fail with a real, visible Sync Log error (per #68/#69's established
+    "never silently swallow a push failure" convention), not pretend to
+    have worked. General lesson sharper than #83's own conclusion: a
+    `localStorage`-style "re-merge the old value so a sync doesn't wipe
+    it" guard (the same pattern #17/#6 establish for `pinHash`) only
+    protects a field *within* an already-loaded session — it is not
+    itself a persistence mechanism, and a local-only field with no real
+    Excel round-trip at all (as #83 explicitly scoped `evalExempt` to
+    be) is *always* one page reload away from reverting, no matter how
+    careful the re-merge code looks; the actual fix is routing it
+    through whichever round-trip table the file already has for fields
+    of that same shape, not writing a better re-merge guard.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
