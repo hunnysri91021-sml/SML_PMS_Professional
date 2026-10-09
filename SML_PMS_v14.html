@@ -4162,8 +4162,9 @@ let CURRENT_SESSION_USER = null;
    ตั้งใจจำกัดเฉพาะ l1/l2 เท่านั้น: admin/sysadmin/exec ต้องเห็นทั้งบริษัทเพื่อกำกับดูแลจริง และ emp
    ไม่ได้ถูกขอให้จำกัดในงานนี้ (จะกระทบ UI อื่นๆ ที่ emp ใช้เทียบค่าเฉลี่ยองค์กรอยู่แล้ว) — L1 เห็นลูกน้อง
    ทางตรงเท่านั้น (u[9]=หัวหน้า L1 ตรงกับชื่อตัวเอง) L2 เห็นทั้งสายบังคับบัญชา (L1 ทุกคนใต้ตนบวกลูกทีมของ
-   L1 เหล่านั้น) เพราะ u[10]=หัวหน้า L2 ของทุกคนในสายงานนั้นอ้างอิงชื่อ L2 ตัวจริงอยู่แล้วไม่ว่าจะเป็น
-   ระดับ l1 หรือ emp (ดู CLAUDE.md #22 เรื่อง role-aware supervisor chain) */
+   L1 เหล่านั้น) เพราะ u[19] ("L3 ผู้ตรวจ MGR" — #145 แก้ให้ resolveL2Reviewer()/scope นี้อ่านจาก u[19]
+   แทน u[10] ให้ตรงกับป้ายหน้าจอจริง) ของทุกคนในสายงานนั้นอ้างอิงชื่อ ผจก.ส่วน (role l2) ตัวจริงอยู่แล้ว
+   ไม่ว่าจะเป็นระดับ l1 หรือ emp (ดู CLAUDE.md #22 เรื่อง role-aware supervisor chain) */
 function getMyScopedEmpCodes(){
   const me = CURRENT_SESSION_USER;
   if(!me) return null;
@@ -4197,16 +4198,18 @@ function getMyScopedEmpCodes(){
     return new Set(codes);
   }
   if(role==='l2'){
-    const codes = MASTER_USERS.filter(u=>(u[10]||'').trim()===myName).map(u=>u[0]);
+    /* #145: อ่าน u[19] ("L3 ผู้ตรวจ MGR") ไม่ใช่ u[10] ("L2 หัวหน้าแผนก") แล้ว — ตรงกับที่
+       resolveL2Reviewer() แก้ไปแล้วในคราวเดียวกัน ให้ scope ของ ผจก.ส่วน (role l2) ตรงกับฟิลด์จริงที่
+       HR กรอกชื่อผจก.ส่วนไว้ตามป้ายหน้าจอ */
+    const codes = MASTER_USERS.filter(u=>(u[19]||'').trim()===myName).map(u=>u[0]);
     codes.push(myCode);
     return new Set(codes);
   }
   if(role==='gm'){
-    /* ตอน #61 เพิ่ม role 'gm' ยังไม่มีฟิลด์ "สายบังคับบัญชา GM" แยกใน MASTER_USERS เลยปล่อยให้
-       ตกไปที่ return null (ไม่จำกัดขอบเขต) — #68/#70 เพิ่ม u[19] (ฟิลด์ GM จริง) และ UI สำหรับกรอกแล้ว
-       จึงมีข้อมูลจริงให้ scope ตามนี้ได้แล้ว ไม่ใช่ "known limit" ที่ยังทำไม่ได้อีกต่อไป (ดู
-       renderGmApproveQueue()'s คอมเมนต์เดิม ซึ่งอ้างอิงสถานะก่อนหน้านี้) */
-    const codes = MASTER_USERS.filter(u=>(u[19]||'').trim()===myName).map(u=>u[0]);
+    /* #145: อ่าน u[11] ("L4 ผู้อนุมัติ GM") ไม่ใช่ u[19] แล้ว — ตรงกับที่ resolveGmReviewer() แก้ไปแล้ว
+       ในคราวเดียวกัน ให้ scope ของ GM ตรงกับฟิลด์จริงที่ HR กรอกชื่อ GM ไว้ตามป้ายหน้าจอ (u[19] ซึ่งเคย
+       ใช้ scope ตรงนี้มาก่อน #145 ไม่ใช่ฟิลด์ GM จริงตามป้ายหน้าจอ แต่เป็นฟิลด์ "ผู้ตรวจ MGR") */
+    const codes = MASTER_USERS.filter(u=>(u[11]||'').trim()===myName).map(u=>u[0]);
     codes.push(myCode);
     return new Set(codes);
   }
@@ -4575,9 +4578,11 @@ function supervisorChainLabel(u){
      L1=หัวหน้ากลุ่ม (u[9]) → L2=หัวหน้าแผนก (u[10]) → L3="ผู้ตรวจ MGR" (u[19], ฟิลด์ที่โค้ดเรียก `gm`) →
      L4="ผู้อนุมัติ GM" (u[11], ฟิลด์ที่โค้ดเรียก `approver`) — สลับกับที่ #70/#89 เคยเข้าใจไว้ (L3=ผู้จัดการ
      ส่วน/approver, L4=GM) ตำแหน่งคอลัมน์ใน Excel/EXCEL_EMPLOYEE_COLS ไม่เปลี่ยน (ยังเป็น l1,l2,gm,approver
-     ตามเดิม) เปลี่ยนแค่ "ป้ายชื่อ"/"ลำดับการแสดงผล" L3 กับ L4 ให้ตรงกับความเข้าใจจริงของ HR — ฟิลด์ `gm`
-     (u[19]) ยังเป็นตัวขับ logic การอนุมัติ GM ทั้งหมดเหมือนเดิม (scoping/resolveGmReviewer/คิวอนุมัติ GM)
-     ไม่มีการเปลี่ยนแปลง มีแค่ตัวเลข L3/L4 ที่ใช้เรียกฟิลด์ตอนแสดงผลที่สลับกัน */
+     ตามเดิม) เปลี่ยนแค่ "ป้ายชื่อ"/"ลำดับการแสดงผล" L3 กับ L4 ให้ตรงกับความเข้าใจจริงของ HR ตอนแรก (#135)
+     ฟิลด์แสดงผลที่นี่ไม่เปลี่ยน — **แต่ #145 (ผู้ใช้ยืนยันแล้วว่า "ผู้ตรวจ MGR (L3)" ต้องเป็นผจก.ส่วนจริง
+     และ "ผู้อนุมัติ GM (L4)" ต้องเป็น GM จริงตามป้าย) ได้แก้ resolveL2Reviewer()/resolveGmReviewer()/
+     getMyScopedEmpCodes() ให้สลับไปอ่าน u[19]→ขั้น L2Reviewed (role l2) และ u[11]→ขั้น GMApproved
+     (role gm) แล้ว ตรงกับที่แสดงผลตรงนี้พอดี ไม่ใช่สลับกันเหมือนก่อน #145 อีกต่อไป** */
   if(l1) lines.push(`<b>L1</b> ${l1}`);
   if(l2) lines.push(`<b>L2</b> ${l2}`);
   if(gm) lines.push(`<b>L3 (ผู้ตรวจ MGR)</b> ${gm}`);
@@ -4747,7 +4752,8 @@ function populateTeamManagerSelect(){
        ตัวเลือก "หัวหน้า" ที่เลือกดูทีมได้เหมือนกัน (ประเมินทีมงานรอบแรกของตัวเอง) และ u[10] ของเขาก็อาจ
        ชี้ตรงมาที่ L2 นี้ได้เช่นกัน ไม่จำเป็นต้องผ่าน l1 ก่อนเสมอไป */
     const myNameL2 = (me[1]||'').trim();
-    managerNames = [...new Set(MASTER_USERS.filter(u=>u[12]==='active' && (u[2]==='l1'||u[2]==='unit') && (u[10]||'').trim()===myNameL2).map(u=>(u[1]||'').trim()))].sort();
+    /* #145: อ่าน u[19] ไม่ใช่ u[10] แล้ว — ตรงกับ getMyScopedEmpCodes()'s role 'l2' ที่แก้ไปแล้ว */
+    managerNames = [...new Set(MASTER_USERS.filter(u=>u[12]==='active' && (u[2]==='l1'||u[2]==='unit') && (u[19]||'').trim()===myNameL2).map(u=>(u[1]||'').trim()))].sort();
     /* ผู้ใช้ยืนยัน: ถ้าพนักงานบางคนขึ้นตรงกับ ผจก.ส่วน (L2) เลยโดยไม่มีหัวหน้า L1 ตัวจริงอยู่ระหว่างกลาง
        (resolveL1Reviewer คืน null จริง ไม่ใช่แค่ชื่อว่าง — ผ่าน #128's resolver เดียวกับที่ตัดสินใจข้าม
        ขั้น L1Reviewed ให้คนกลุ่มนี้อยู่แล้ว) ให้ L2 "ดู/ประเมินแทน" คนกลุ่มนี้ได้ตรงในหน้านี้เลย แทนที่
@@ -7388,7 +7394,8 @@ function openSubmitConfirmModal(){
   const emp = MASTER_USERS.find(u=>u[0]===empCode);
   const toEl = document.getElementById('mSubmitTo');
   if(toEl){
-    const supervisor = emp ? (emp[9] || emp[10] || emp[11] || '') : '';
+    /* #145: ลำดับ fallback ตรงกับฟิลด์จริงที่ resolver ใช้ตรวจสอบตามป้ายหน้าจอ (u[9]→u[19]→u[11]) */
+    const supervisor = emp ? (emp[9] || emp[19] || emp[11] || '') : '';
     toEl.textContent = supervisor ? supervisor : '— ยังไม่มีผู้บังคับบัญชาที่กำหนดไว้ —';
   }
 
@@ -7869,17 +7876,29 @@ function resolveL1Reviewer(emp){
   }
   return null;
 }
+/* #145: ผู้ใช้ยืนยันแล้วว่าให้ "แก้โค้ดให้ตรงกับป้ายหน้าจอ" — หน้าจอ Add/Edit Employee เขียนว่า
+   "ผู้ตรวจ MGR (L3)" = ฟิลด์ gm (u[19]) และ "ผู้อนุมัติ GM (L4)" = ฟิลด์ approver (u[11]) (ดูคอมเมนต์ที่
+   #135 ทิ้งไว้บรรทัด ~4575) ดังนั้นผู้สอบทานขั้น L2Reviewed จริง (ผจก.ส่วน, role 'l2') ต้องอ่านจากฟิลด์
+   "L3 ผู้ตรวจ MGR" (u[19]) ไม่ใช่ u[10] ("L2 หัวหน้าแผนก" ซึ่งซ้ำกับเป้าหมายที่ resolveL1Reviewer() ไต่ถึง
+   อยู่แล้ว ไม่เคยมีประโยชน์จริงสำหรับขั้นนี้) และผู้อนุมัติขั้น GMApproved จริง (GM, role 'gm') ต้องอ่าน
+   จากฟิลด์ "L4 ผู้อนุมัติ GM" (u[11]) ไม่ใช่ u[19] — ก่อนแก้ครั้งนี้ ถ้า HR กรอกข้อมูลตามป้ายหน้าจอจริง
+   (ใส่ชื่อผจก.ส่วนไว้ในช่อง "ผู้ตรวจ MGR" และชื่อ GM ไว้ในช่อง "ผู้อนุมัติ GM") resolver ทั้งสองตัวนี้จะ
+   หาชื่อเจอแต่ปฏิเสธเพราะ role ไม่ตรง (ต้องการ role 'l2' ที่ u[19] แต่ชื่อนั้นจริงๆ มี role 'gm' และกลับกัน)
+   แล้วข้ามขั้นสอบทานไปเงียบๆ — อธิบายปริศนาที่ #141/#142 เคยสงสัยไว้แต่ไม่ยืนยัน (ตัวกรองหาไม่เจอชื่อ
+   หัวหน้า 46 คน) ตอนนี้ยืนยันได้จากโค้ดเองแล้ว u[10] ("L2 หัวหน้าแผนก") กลายเป็นฟิลด์แสดงผลอย่างเดียว
+   ไม่มี resolver ไหนใช้แล้ว (เหมือน u[11] เดิมก่อนแก้ครั้งนี้) — ยังคงแสดงในหน้าจอ/สายบังคับบัญชาต่อไป
+   เป็นข้อมูลอ้างอิง ไม่ใช่ตัวขับ scoring/scoping */
 function resolveL2Reviewer(emp){
   if(!emp) return null;
   if(['l2','gm','exec','admin','sysadmin'].includes(emp[2])) return null;
-  const name = (emp[10]||'').trim();
+  const name = (emp[19]||'').trim();
   if(!name || name==='—') return null;
   return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[2]==='l2') || null;
 }
 function resolveGmReviewer(emp){
   if(!emp) return null;
   if(['gm','exec','admin','sysadmin'].includes(emp[2])) return null;
-  const name = (emp[19]||'').trim();
+  const name = (emp[11]||'').trim();
   if(!name || name==='—') return null;
   return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[2]==='gm') || null;
 }
@@ -8389,8 +8408,8 @@ function rejectReviewSelected(){
 
 /* ขั้นใหม่ "อนุมัติ GM" (#61) — คั่นระหว่างสอบทาน L2 กับการแจ้งพนักงานรับทราบ อ่านคิวจาก
    L2Reviewed เช่นเดียวกับที่ renderCalibQueue เคยอ่าน (ก่อนขยับ Calibration ไปอยู่หลังพนักงาน
-   รับทราบ) getMyScopedEmpCodes() ตอนนี้ scope role 'gm' ด้วย u[19] แล้ว (ดู CLAUDE.md #88 —
-   #68/#70 เพิ่มฟิลด์ GM จริงเข้ามาหลังจากคอมเมนต์นี้เขียนไว้ตอน #61 ว่ายังทำไม่ได้) */
+   รับทราบ) getMyScopedEmpCodes() ตอนนี้ scope role 'gm' ด้วย u[11] ("L4 ผู้อนุมัติ GM" — #145 แก้จาก
+   u[19] เดิม ให้ตรงกับป้ายหน้าจอจริง ดู CLAUDE.md #88/#145) */
 function renderGmApproveQueue(){
   const tbody=document.getElementById('gmApproveRows'); const cnt=document.getElementById('gmApproveCount');
   if(!tbody) return;
@@ -8399,7 +8418,7 @@ function renderGmApproveQueue(){
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveGmReviewer, me[2]), me[0], 'L2Reviewed', cycle) : [];
   populateReviewManagerFilter('gmApproveFilter', fullRoster, resolveL2Reviewer);
-  renderReviewerFilterDiagNote('gmApproveFilterDiag', fullRoster, resolveL2Reviewer, 10, 'หัวหน้าแผนก (L2)');
+  renderReviewerFilterDiagNote('gmApproveFilterDiag', fullRoster, resolveL2Reviewer, 19, 'ผู้ตรวจ MGR (L3)');
   const roster = filterRosterByManager('gmApproveFilter', fullRoster, resolveL2Reviewer);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
@@ -9425,7 +9444,9 @@ function getEvaluationAssignments(participants){
     /* trim() ก่อนเช็คว่ามี/ไม่มี — ค่าที่เป็นช่องว่างล้วน (" ") เดิมผ่านเป็น "มีหัวหน้าแล้ว" ทั้งที่ไม่มีค่า
        จริงอยู่เลย ใช้หลักการเดียวกับ #126 (trim ก่อนเทียบตัวตน ไม่ใช่แค่ตอนเทียบชื่อสองคน) */
     const l1 = (u[9]||'').trim() && u[9].trim()!=='—' ? u[9].trim() : '';
-    const l2 = (u[10]||'').trim() && u[10].trim()!=='—' ? u[10].trim() : '';
+    /* #145: "ผู้สอบทาน L2" ที่แท้จริง (ผจก.ส่วน) อยู่ในฟิลด์ u[19] ("L3 ผู้ตรวจ MGR") ไม่ใช่ u[10]
+       ("L2 หัวหน้าแผนก") แล้ว — ตรงกับ resolveL2Reviewer()/getMyScopedEmpCodes() ที่แก้ไปแล้ว */
+    const l2 = (u[19]||'').trim() && u[19].trim()!=='—' ? u[19].trim() : '';
     const approver = (u[11]||'').trim() && u[11].trim()!=='—' ? u[11].trim() : '';
     let missing = false, missingReason = '';
     if(u[2]==='emp' || u[2]==='unit'){

@@ -6543,6 +6543,102 @@ touches employee/attendance/evaluation data.
     feature can be built perfectly correctly and still be invisible if
     the role that needs it was never granted a door to the page at all.
 
+145. **User asked to remember the real 4-tier hierarchy order (L1=หัวหน้า
+    หน่วย, L2=หัวหน้าแผนก, L3=ผู้จัดการส่วน, L4=GM — the exact #70/#88
+    convention) and to check whether the system enforces it consistently
+    everywhere. This reopened the field/resolver question #135/#141 had
+    deliberately paused rather than guessed at.** Audited the two chain
+    fields directly against their own real UI labels (Add/Edit Employee,
+    confirmed unchanged since #70/#137): `mu_l2`(u[10])="หัวหน้าแผนก (L2)",
+    `mu_gm`(u[19])="ผู้ตรวจ MGR (L3)", `mu_approver`(u[11])="ผู้อนุมัติ GM
+    (L4)". But the *resolver* functions driving every real scoping/
+    queue/approval mechanism disagreed with those labels: `resolveL2Reviewer()`
+    read **u[10]** (the field labeled L2/หัวหน้าแผนก) while requiring the
+    matched person's role to be `'l2'` (ผจก.ส่วน, the real L3 tier) —
+    and `resolveGmReviewer()` read **u[19]** (the field labeled L3/
+    ผู้ตรวจ MGR) while requiring role `'gm'` (the real L4 tier). So the
+    field a reviewer function actually consulted and the field HR would
+    naturally fill in based on what the screen calls it were two
+    different columns — exactly the mismatch #135's own code comment had
+    already flagged as a live possibility, and exactly what made #141/
+    #142's "the filter dropdown shows zero names" reports unexplainable
+    by a data problem alone, since HR filling in the field the *label*
+    told them to use would never populate the field the *code* was
+    actually reading.
+    Presented the two fix directions (relabel the screen to match the
+    code, or fix the code to match the screen) rather than guessing;
+    user chose **"แก้โค้ดให้ตรงกับป้ายหน้าจอ (แนะนำ)"** — fix the code,
+    since the screen labels are what HR has been reading and filling in
+    against this whole time, and are far more expensive to have been
+    silently wrong for. Swapped both resolvers to match their own
+    labeled field: `resolveL2Reviewer(emp)` now reads **u[19]** (ผู้ตรวจ
+    MGR (L3)) and still requires the matched person's role to be `'l2'`;
+    `resolveGmReviewer(emp)` now reads **u[11]** (ผู้อนุมัติ GM (L4)) and
+    still requires role `'gm'` — the role requirement was always correct
+    (it matches the real tier the field's label describes), only the
+    field index was swapped. Propagated the identical swap to every
+    other place that read these two fields by raw index for the same
+    *identity* purpose (not a display/Excel-column purpose, which must
+    stay as-is per #30's own established rule): `getMyScopedEmpCodes()`'s
+    `l2` branch (`u[10]===myName`→`u[19]===myName`) and `gm` branch
+    (`u[19]===myName`→`u[11]===myName`), `populateTeamManagerSelect()`'s
+    raw `l2` query (independent of `getMyScopedEmpCodes()`, same #126
+    reasoning for why it needed its own fix), `getEvaluationAssignments()`'s
+    (#22) `l2` chain-completeness variable, and `openSubmitConfirmModal()`'s
+    (#112) "ส่งถึง" recipient fallback chain. Also caught, while auditing
+    every consumer rather than stopping at the two resolvers themselves,
+    that `renderGmApproveQueue()`'s own diagnostic note
+    (`renderReviewerFilterDiagNote('gmApproveFilterDiag', fullRoster,
+    resolveL2Reviewer, 10, 'หัวหน้าแผนก (L2)')`, #142) still passed the
+    OLD field index (`10`) and OLD label as its diagnostic parameters —
+    left unfixed, this note would have checked the wrong raw field and
+    told HR to look for a missing "หัวหน้าแผนก (L2)" value when the real
+    gap (per the now-corrected resolver) would be a missing "ผู้ตรวจ MGR
+    (L3)" value; fixed to `(..., 19, 'ผู้ตรวจ MGR (L3)')` to match.
+    **Explicitly left untouched, confirmed correct as-is**:
+    `pushSingleEmployeeToExcel()`'s `EXCEL_EMPLOYEE_COLS`-keyed `byKey`
+    mapping (#27/#30/#68 — Excel push/pull must always map by field
+    *name*, never a tier-semantic guess, so `gm:emp[19]` and
+    `approver:emp[11]` stay exactly as they already correctly were —
+    this fix never changed which `MASTER_USERS` index backs which Excel
+    column, only which index a *resolver* reads to answer "who evaluates
+    this person"), `supervisorChainLabel()`'s display logic, the org
+    chart table, the employee detail view, the Add/Edit Employee
+    modal's own field markup/labels, `normalizeMs365Employee()`, and the
+    bulk-import template — none of these describe *who reviews whom*,
+    only *which value is stored where and what it's called*, which #137's
+    labels already got right and this fix never needed to touch.
+    `getEvaluationAssignments()`'s `u[2]==='l2'` branch's own "missing
+    approver" check (`missing = !approver`, where `approver` already read
+    `u[11]`) needed no change — it was, by lucky accident, already
+    reading the field this fix confirms is the real L4/GM field.
+    Verified by re-running every existing Playwright test touching either
+    resolver and fixing each one's seed data to the corrected field
+    positions (the stale seed data itself, written under the old field
+    assumption, was the only reason any test result changed — not a new
+    logic bug): `test_review_filter.js`/`test_review_filter2.js` (moved
+    each test employee's ผจก.ส่วน/GM name from the old index to the new
+    one), `test_nol1l2_gm.js` (#144's own test — moved the GM's name from
+    u[19] to u[11] in each employee record), `test_team_badge_note.js`
+    (#139's own test — moved the L2's name from u[10] to u[19] for the
+    L1-manager records), and `test_review_filter_diag.js` (#142's own
+    test — same u[10]→u[19] move) — all five now pass with the real
+    resolver behavior confirmed correct, plus `test_admin_oversight_queues.js`
+    and `test_evalexempt_sync.js` re-run unaffected, plus the standard
+    click-sweep (`nav pages clicked: 22 errors: []`). General lesson
+    sharper than #135's own conclusion: #135 fixed a *display-order*
+    mismatch (which field prints under which header); this time the
+    screen's field *labels* and the code's own *identity-resolution*
+    logic had drifted apart on which raw column answers "who is this
+    person's L3/L4 reviewer" — when a user asks to audit a whole
+    hierarchy for consistency, grep every resolver/scoping function that
+    reads a chain field by raw index and compare each one's required
+    role against the field's own displayed label, not just whether the
+    column position used for *Excel/display* purposes is correct; the
+    two kinds of "correct" (which Excel column, vs. which column a
+    reviewer-identity check trusts) can diverge silently and only the
+    second one explains a "the filter dropdown has nobody in it" report.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
