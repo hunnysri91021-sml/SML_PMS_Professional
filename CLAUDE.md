@@ -6921,6 +6921,68 @@ touches employee/attendance/evaluation data.
     exactly what was already described, not re-deriving scope from
     scratch.
 
+149. **Follow-up to #148: user tested the real webhook end-to-end — typing a
+    fake code ("SML-001") correctly got the honest "ไม่พบรหัสพนักงาน" reply
+    (confirming signature verification, the Employees lookup, and the reply
+    mechanism all genuinely work), but typing two real codes ("91021",
+    "90230") produced **zero reply at all** — "เงียบไม่มีอะไร".** Traced
+    `handleLineEvent()` (#148): once a real employee is found, it calls
+    `listRows(...,'EmployeeSettings')`/`upsertRow(...,'EmployeeSettings',...)`
+    and only then the success `replyLine()` — but this whole block was
+    wrapped by `handleLineWebhook()`'s outer loop as
+    `handleLineEvent(ev,...).catch(()=>{})`, exactly the CLAUDE.md #66/#68/
+    #69 shape of bug (a fire-and-forget call whose failure is silently
+    swallowed with zero trace) — just reached for the first time in this
+    file via a LINE webhook instead of an Excel push/pull. Since the
+    "not found" reply (which fires *before* ever touching
+    `EmployeeSettings`) worked correctly, the failure is provably
+    somewhere after that point — most plausibly the real Excel workbook's
+    `EmployeeSettings` table doesn't exist yet or is named differently
+    (the same "Table not found" shape #66 already diagnosed for
+    `AuditLog`), though this can't be confirmed without seeing the actual
+    Cloudflare Logs output. Fixed by wrapping the
+    `EmployeeSettings`-read/upsert/success-reply block in its own
+    `try/catch` inside `handleLineEvent()`: on failure, it now (1) calls
+    `console.error()` with the real error message (so Cloudflare's Logs
+    panel shows the actual cause instead of nothing) and (2) sends an
+    honest in-chat reply via the same already-proven-working `replyLine()`
+    — "⚠️ พบรหัสพนักงาน … แล้ว แต่บันทึกข้อมูลไม่สำเร็จ … กรุณาแจ้ง Admin
+    ให้ตรวจสอบ Log" — rather than the employee typing a correct code and
+    getting total silence with no way to tell whether it worked. Also
+    added the same `console.error()` to `handleLineWebhook()`'s outer
+    catch (covers `getAppToken()`/`resolveSite()` failing before any
+    employee lookup even starts — a case that would currently reply to
+    nobody at all, not even with the "not found" message, since the loop
+    never runs). Verified with a 5th test case added to the existing
+    webhook test suite: mocks the `EmployeeSettings` GET call to fail with
+    a real "Table not found" error (the most likely real cause), confirms
+    the webhook still returns `200` to LINE (so LINE doesn't retry-storm
+    it), confirms a real honest error reply is sent in chat instead of
+    silence, confirms `EmployeeSettings` itself is left untouched (no
+    partial/corrupt write), and confirms the real error text is captured
+    via `console.error` — plus re-ran all 4 of #148's original test cases
+    with zero regressions. **This fix makes the failure visible — it does
+    not by itself fix whatever the real underlying Excel problem is.**
+    Told the user plainly: after redeploying this fix, send a real
+    employee code again — now either a real in-chat warning will appear
+    (telling them it failed, not just silence), or (if they also open
+    Cloudflare's Logs panel while testing) the exact error text will show
+    up, which is the next real diagnostic step rather than guessing
+    further; most likely next finding is that the real Excel workbook
+    needs an `EmployeeSettings` table created (same per-table setup #24
+    always required for every Excel-backed feature in this file).
+    General lesson sharper than #66/#68/#69's own conclusion: those three
+    fixes closed every silent `.catch(()=>{})` reachable from the *web
+    app's* own sync/push functions, but a brand-new entry point added
+    later (#148's LINE webhook) is a fresh place for the identical mistake
+    to reappear, since it's a different file section built at a different
+    time — "never let a fire-and-forget call swallow its own failure with
+    zero trace" is a standing rule for *any* new async call in this
+    codebase, not a one-time sweep that's ever fully "done"; grep for
+    `.catch(() => {})`/bare `catch(e){}` in any newly-added function
+    before considering it finished, the same way #69's own mechanical
+    pass should have been re-run here from the start.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

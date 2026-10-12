@@ -331,26 +331,40 @@ async function handleLineEvent(ev, env, token, driveId, itemId) {
   const empCode = String(emp[0]).trim();
   const empName = String(emp[1] || '').trim();
 
-  const settingsRows = await listRows(token, driveId, itemId, 'EmployeeSettings');
-  const existing = settingsRows.find((r) => String(r[0] || '').trim() === empCode);
-  const pinHash = existing ? existing[1] || '' : '';
-  const evalLevel = existing ? existing[2] || '' : '';
-  const evalExempt = existing ? existing[4] || '0' : '0';
+  /* หาตัวพนักงานได้แล้ว (ผ่านมาถึงนี่คือ listRows('Employees')/getAppToken/resolveSite ทำงานถูก
+     ทั้งหมด) — ถ้าพังต่อจากนี้ (ตาราง EmployeeSettings ไม่มี/ชื่อไม่ตรง, upsertRow พัง ฯลฯ) ต้อง
+     ไม่เงียบแบบเดิมอีก: ต้อง (1) console.error ค่าจริงไว้ให้เห็นใน Cloudflare Logs และ (2) ตอบกลับ
+     ในแชทตรงๆว่ามีปัญหา — ไม่ใช่ปล่อยให้คนพิมพ์รหัสถูกแล้วไม่ได้รับอะไรกลับเลย ตรงตาม CLAUDE.md
+     #10/#14/#66 ของเว็บ (ห้ามดูเหมือนทำงานสำเร็จ/เงียบทั้งที่จริงมีปัญหา) */
+  try {
+    const settingsRows = await listRows(token, driveId, itemId, 'EmployeeSettings');
+    const existing = settingsRows.find((r) => String(r[0] || '').trim() === empCode);
+    const pinHash = existing ? existing[1] || '' : '';
+    const evalLevel = existing ? existing[2] || '' : '';
+    const evalExempt = existing ? existing[4] || '0' : '0';
 
-  await upsertRow(token, driveId, itemId, 'EmployeeSettings', 0, empCode, [
-    empCode,
-    pinHash,
-    evalLevel,
-    new Date().toISOString(),
-    evalExempt,
-    userId,
-  ]);
+    await upsertRow(token, driveId, itemId, 'EmployeeSettings', 0, empCode, [
+      empCode,
+      pinHash,
+      evalLevel,
+      new Date().toISOString(),
+      evalExempt,
+      userId,
+    ]);
 
-  await replyLine(
-    env.LINE_CHANNEL_ACCESS_TOKEN,
-    replyToken,
-    `✅ ลงทะเบียนรับการแจ้งเตือนทาง LINE สำเร็จ สำหรับ: ${empName} (${empCode})\nต่อไปนี้จะได้รับการแจ้งเตือนเรื่องการประเมินผลผ่าน LINE นี้`
-  );
+    await replyLine(
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+      replyToken,
+      `✅ ลงทะเบียนรับการแจ้งเตือนทาง LINE สำเร็จ สำหรับ: ${empName} (${empCode})\nต่อไปนี้จะได้รับการแจ้งเตือนเรื่องการประเมินผลผ่าน LINE นี้`
+    );
+  } catch (e) {
+    console.error('handleLineEvent registration failed for', empCode, ':', (e && e.message) || e);
+    await replyLine(
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+      replyToken,
+      `⚠️ พบรหัสพนักงาน ${empName} (${empCode}) แล้ว แต่บันทึกข้อมูลไม่สำเร็จ (ระบบขัดข้องชั่วคราว) กรุณาแจ้ง Admin ให้ตรวจสอบ Log ของ Worker หรือลองพิมพ์รหัสส่งใหม่อีกครั้งในภายหลัง`
+    );
+  }
 }
 
 /* จุดเข้า webhook จริง — ต้องตอบ 200 กลับ LINE เสมอไม่ว่าข้างในจะสำเร็จหรือพังยังไง (ไม่งั้น LINE
@@ -377,11 +391,15 @@ async function handleLineWebhook(request, env) {
     const token = await getAppToken(env);
     const { driveId, itemId } = await resolveSite(env, token);
     for (const ev of events) {
-      await handleLineEvent(ev, env, token, driveId, itemId).catch(() => {});
+      await handleLineEvent(ev, env, token, driveId, itemId).catch((e) => {
+        console.error('handleLineEvent threw unexpectedly:', (e && e.message) || e);
+      });
     }
   } catch (e) {
     // ปัญหาฝั่ง MS365/Graph (token/site ตั้งค่าไม่ถูก ฯลฯ) ไม่ควรทำให้ LINE คิดว่า webhook พัง
     // และส่งซ้ำรัวๆ — ตอบ 200 ไปตามปกติ แต่ไม่ได้เขียนอะไรจริง (จะไม่มีการตอบกลับยืนยันในแชทด้วย)
+    // ยัง console.error ไว้ให้เห็นใน Cloudflare Logs เสมอ ไม่ใช่กลืนเงียบแบบไม่มีร่องรอยเลย (#66)
+    console.error('handleLineWebhook outer MS365/Graph setup failed:', (e && e.message) || e);
   }
   return new Response('OK', { status: 200 });
 }
