@@ -7255,6 +7255,64 @@ touches employee/attendance/evaluation data.
     must stay private in Bcc), not just trust that Bcc alone is enough to
     make a compose window actually sendable.
 
+154. **User reported "ระบบยังไม่ดึงข้อมูล Line ID มาที่เวบ" (the system
+    still isn't pulling the LINE ID into the web app) — the pull side
+    itself (`applyEmployeeSettingsRows()`, `ms365SyncEmployeeSettings()`/
+    `...Silent()`) checked out completely correct on inspection, reading
+    `r[5]` and applying it to `emp[21]` exactly as #147 built it. The
+    real bug was one function over, and only visible by reading the
+    *other* sync that always runs first in the same chain.** `doLogin()`
+    and `tryRestoreSession()` both call `ms365SyncEmployees(true)` (pulls
+    the whole `Employees` Excel table and wholesale-replaces
+    `MASTER_USERS`) immediately **before**
+    `ms365SyncEmployeeSettingsSilent()` (pulls `lineUserId` back from
+    `EmployeeSettings`) — the same ordering #32/#33 established. The
+    first sync's own re-merge step (`loadEmployeesFromMs365()`'s
+    `normalized.forEach(...)`, the mechanism CLAUDE.md #17 built
+    specifically to stop a wholesale Employees-table replace from wiping
+    local-only fields like `pinHash`/`evalLevel`/`evalExempt`) carried
+    forward `r[17]`/`r[18]`/`r[20]` but **never `r[21]`** — `lineUserId`
+    (#147's field) was simply never added to this re-merge list when it
+    was introduced, so every `MASTER_USERS.splice(0, MASTER_USERS.length,
+    ...normalized)` silently reset every employee's LINE User ID to
+    `undefined` first, and only the *subsequent* `EmployeeSettingsSilent`
+    sync could put it back — and only for an employee whose real Excel
+    `EmployeeSettings` row happened to already exist with a non-empty
+    `LineUserId` at that exact moment. The manual "📥 ดึงข้อมูลพนักงานจาก
+    Excel" button (calling `ms365SyncEmployees()` directly, with no
+    guaranteed follow-up settings sync right after) hit this gap even
+    harder — a real click there could wipe a webhook-captured LINE ID
+    with nothing to restore it until the next full login/reload. This is
+    the exact same shape of bug CLAUDE.md #17 already names and #83/#143
+    already fixed twice for `evalExempt`/other local-only fields — just
+    missed for this one newest field (#147), since it was added to
+    `MASTER_USERS` and to the *pull* side of `EmployeeSettings` without
+    anyone separately checking whether the *Employees* sync's own
+    re-merge list had been updated to match.
+    Fixed by adding `r[21] = old?.[21] || '';` to the same `forEach`
+    block, directly alongside `r[17]`/`r[18]`/`r[20]` — identical
+    pattern, identical reasoning, nothing else needed changing since
+    `applyEmployeeSettingsRows()`'s own pull logic was already correct.
+    Verified with a test that seeds a real employee with a locally-known
+    `lineUserId` (as the LINE webhook would have set it), mocks a real
+    `ms365SyncEmployees(true)` pull (Employees table only, no
+    `LineUserId` column — that field genuinely doesn't live there) with
+    an *empty* `EmployeeSettings` table response (the worst real case —
+    the webhook's write hasn't landed in Excel yet, or this device has
+    never pulled it down before), and confirms the LINE User ID survives
+    the Employees sync intact instead of being silently reset to blank
+    — plus the standard click-sweep (`nav pages clicked: 17 errors: []`).
+    General lesson sharper than #83's own conclusion: every time a new
+    local-only field is added alongside `pinHash`/`evalLevel`/
+    `evalExempt` in the same `EmployeeSettings` round-trip pattern (#24/
+    #83/#143/#147), the checklist isn't just "add it to the pull
+    function and the push function" — it's a *third* place too: the
+    wholesale `Employees`-table sync's own re-merge `forEach`, which
+    runs on a completely different schedule (every login/reload, plus a
+    manual button) and will silently erase any local-only field that
+    forEach doesn't explicitly know to carry forward, regardless of how
+    correct the field's own dedicated pull/push functions are.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -7559,6 +7559,12 @@ async function loadEmployeesFromMs365(silent=false){
       /* evalExempt (ยกเว้นไม่ต้องรับการประเมิน) ก็เป็นค่า local-only เหมือน pinHash/evalLevel
          ไม่ใช่คอลัมน์จริงใน Excel Employee Master — ต้อง re-merge ไม่ให้ sync ล้างทิ้ง (CLAUDE.md #17) */
       r[20] = old?.[20] || '';
+      /* lineUserId (#147) ก็เป็นค่า local-only อีกตัว ไม่ใช่คอลัมน์ใน Employees sheet (อยู่ใน
+         EmployeeSettings table ต่างหาก) — จุดนี้ลืม re-merge มาตั้งแต่แรก ทำให้ loadEmployeesFromMs365()
+         (เช่นปุ่ม "ดึงข้อมูลพนักงานจาก Excel" หรือ ms365SyncEmployees ที่ doLogin() เรียกก่อน
+         ms365SyncEmployeeSettingsSilent() ทุกครั้ง) ล้าง LINE User ID ที่ webhook เพิ่งบันทึกไว้ทิ้ง
+         ทุกครั้งที่ sync พนักงานใหม่ — พบจากรายงานจริงว่า "ระบบยังไม่ดึงข้อมูล Line ID มาที่เวบ" */
+      r[21] = old?.[21] || '';
     });
     MASTER_USERS.splice(0, MASTER_USERS.length, ...normalized);
     populateUserFilters();
