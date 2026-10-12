@@ -7216,6 +7216,45 @@ touches employee/attendance/evaluation data.
     architectural (ack fast, defer the slow work) rather than another
     layer of exception handling.
 
+153. **User's screenshot of Outlook, opened by clicking "📢 ส่ง Reminder"'s
+    "ส่งทันที" button, showed the real `mailto:` compose window with no
+    "To" field filled in at all — "ไม่มีอยู่ช่อง to" (there's no address
+    in the To field).** Traced `sendReminder()` (#90/#146/#147): the
+    generated link was `mailto:?bcc=${bcc}&subject=...&body=...` — every
+    real recipient was deliberately put in Bcc only (so recipients can't
+    see each other's addresses), leaving the `mailto:` scheme's own
+    address slot completely empty. Many mail clients, Outlook among them,
+    refuse to enable Send with an empty "To" field even when Bcc is
+    populated — the feature wasn't a placeholder (CLAUDE.md #10's usual
+    shape), it genuinely opened a real compose window with the real
+    recipient list already in Bcc, it just couldn't actually be sent
+    without the sender manually typing something into To first, which
+    defeats the "เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง N คน" toast's own claim.
+    Fixed by putting the sending Admin's own real email
+    (`CURRENT_SESSION_USER[15]`, falling back to the first real recipient
+    only in the unlikely case the admin's own record has no email on
+    file) into the `mailto:` link's address slot — `mailto:${toSelf}?
+    bcc=${bcc}&...` — so there is always a real, pre-filled "To" address
+    satisfying Outlook's send gate, while every actual recipient stays
+    exactly where #90 originally put them (Bcc), preserving the original
+    privacy intent unchanged. Verified the fix at the string-construction
+    level (Chromium's `window.location`/`Location.prototype.href` setter
+    could not be safely intercepted in headless Playwright to test a real
+    click-through, since `location` is non-configurable on both the
+    window object and its prototype in this engine) — confirmed the
+    generated URL decodes to a real `name@domain` address before the `?`
+    and still carries every recipient in `&bcc=`, matching exactly what
+    Outlook's screenshot was missing. General lesson: a `mailto:` link
+    built entirely from `bcc=` with no address portion is syntactically
+    valid per the URI scheme, but several real mail clients (Outlook
+    among the most common in a corporate setting like this one) treat an
+    empty "To" as a hard block on sending regardless of how many Bcc
+    addresses are present — any future `mailto:` construction in this
+    file should always put a real address in the scheme's own slot (the
+    sender's own address is the natural choice when every real recipient
+    must stay private in Bcc), not just trust that Bcc alone is enough to
+    make a compose window actually sendable.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

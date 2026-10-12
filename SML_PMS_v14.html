@@ -6073,10 +6073,15 @@ async function sendReminder(){
   if(wantLine) lineResult = await sendLineReminder(targets, message);
 
   if(wantEmail && withEmail.length){
+    /* โปรแกรมอีเมลหลายตัว (รวม Outlook) จะไม่ยอมให้กดส่งถ้าช่อง "To" ว่างเปล่า — เดิมใส่ผู้รับไว้ใน
+       Bcc เท่านั้นเพื่อไม่ให้แต่ละคนเห็นอีเมลกันและกัน แต่ผลคือ To ว่าง ส่งไม่ได้จริง (รายงานจริงจาก
+       ภาพหน้าจอ Outlook) ใส่อีเมลของผู้ส่งเอง (Admin ที่กำลังส่ง) ไว้ใน "To" แทน — มีช่อง To ที่ใช้ได้
+       จริง และยังคงความเป็นส่วนตัวของผู้รับทุกคนไว้ใน Bcc เหมือนเดิมทุกประการ */
+    const toSelf = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[15]) ? CURRENT_SESSION_USER[15] : withEmail[0][15];
     const bcc = withEmail.map(u=>u[15]).join(',');
     const subject = encodeURIComponent('แจ้งเตือน: SML PMS — กรุณาดำเนินการประเมินผล');
     const body = encodeURIComponent(message);
-    window.location.href = `mailto:?bcc=${bcc}&subject=${subject}&body=${body}`;
+    window.location.href = `mailto:${encodeURIComponent(toSelf)}?bcc=${bcc}&subject=${subject}&body=${body}`;
   } else if(wantEmail && !withEmail.length){
     smlToast('ไม่มีใครในกลุ่มนี้มีอีเมลในระบบ — เพิ่มอีเมลที่หน้าแก้ไขพนักงานก่อน','warn');
   }
