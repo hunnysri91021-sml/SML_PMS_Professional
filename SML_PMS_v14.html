@@ -4223,10 +4223,20 @@ function getMyScopedEmpCodes(){
      เก็บไว้ใน u[9]/u[10] มีช่องว่างเกินติดมา (ข้อมูลเก่าก่อน trim ที่จุดบันทึกอื่น หรือแก้ตรงจาก
      Excel มือ) การเทียบแบบ exact string เดิมจะได้ Set ว่างเปล่า — คนอนุมัติจริงกลับเห็น "ไม่มี
      ลูกน้อง" ทั้งที่ Excel มีข้อมูลจริงอยู่ */
+  /* #158: ไม่ว่า role จริงจะเป็นอะไร (l1/unit/l2) ถ้ามีชื่อเราอยู่ใน u[11] ("ผู้อนุมัติ GM (L4)") ของ
+     พนักงานคนอื่น คนนั้นต้องอยู่ใน scope ของเราด้วยเสมอ — HR อาจตั้งให้ ผจก.ส่วน (role l2) คนหนึ่งทำ
+     หน้าที่อนุมัติระดับ GM ให้พนักงานบางคนด้วย โดยไม่ต้องเปลี่ยน role จริงเป็น 'gm' ก่อน (ตรงกับ
+     resolveGmReviewer()'s ที่แก้พร้อมกันในคราวนี้) ใช้ร่วมกับทุก branch ด้านล่างที่คืน Set จริง —
+     ไม่แตะ role ที่คืน null (emp/admin/sysadmin/exec) เพราะ null แปลว่า "ไม่จำกัดอยู่แล้ว" การเพิ่ม
+     เงื่อนไขจะกลายเป็นจำกัดแคบลงแทน ซึ่งผิดเจตนา */
+  const addGmNamedScope = (set)=>{
+    MASTER_USERS.forEach(u=>{ if((u[11]||'').trim()===myName) set.add(u[0]); });
+    return set;
+  };
   if(role==='unit'){
     const codes = MASTER_USERS.filter(u=>(u[9]||'').trim()===myName).map(u=>u[0]);
     codes.push(myCode);
-    return new Set(codes);
+    return addGmNamedScope(new Set(codes));
   }
   if(role==='l1'){
     /* #92: เดิมหัวหน้าแผนก (l1) ใช้กฎ scoping เดียวกับหัวหน้าหน่วย (unit) เป๊ะ — เห็นแค่คนที่เก็บชื่อ
@@ -4243,7 +4253,7 @@ function getMyScopedEmpCodes(){
       MASTER_USERS.forEach(u=>{ if((u[9]||'').trim()===unitName) codes.push(u[0]); });
     });
     codes.push(myCode);
-    return new Set(codes);
+    return addGmNamedScope(new Set(codes));
   }
   if(role==='l2'){
     /* #145: อ่าน u[19] ("L3 ผู้ตรวจ MGR") ไม่ใช่ u[10] ("L2 หัวหน้าแผนก") แล้ว — ตรงกับที่
@@ -4251,7 +4261,7 @@ function getMyScopedEmpCodes(){
        HR กรอกชื่อผจก.ส่วนไว้ตามป้ายหน้าจอ */
     const codes = MASTER_USERS.filter(u=>(u[19]||'').trim()===myName).map(u=>u[0]);
     codes.push(myCode);
-    return new Set(codes);
+    return addGmNamedScope(new Set(codes));
   }
   if(role==='gm'){
     /* #145: อ่าน u[11] ("L4 ผู้อนุมัติ GM") ไม่ใช่ u[19] แล้ว — ตรงกับที่ resolveGmReviewer() แก้ไปแล้ว
@@ -4288,6 +4298,17 @@ function applySession(u){
   const resultNotifyBtnEl = document.getElementById('resultNotifyBtn');
   if(resultNotifyBtnEl) resultNotifyBtnEl.style.display = ['admin','sysadmin'].includes(u[2]) ? '' : 'none';
   if(typeof setRole === 'function') setRole(u[2]);
+  /* #158: setRole() ซ่อน/โชว์เมนูตาม role เท่านั้น (ค่าตั้งต้น NAV_PERMS ของ "5. อนุมัติ GM" คือ
+     "gm,exec") — แต่ CLAUDE.md #158 ทำให้ resolveGmReviewer()/getMyScopedEmpCodes() ยอมรับคนที่ role
+     จริงไม่ใช่ gm (เช่น ผจก.ส่วน/l2) ได้แล้ว ถ้ามีชื่อเขาอยู่ในช่อง "ผู้อนุมัติ GM (L4)" ของพนักงานคนอื่น
+     จริง — เมนูเองก็ต้องตามให้ทัน ไม่งั้นมีสิทธิ์จริงแต่ไม่มีทางเข้าหน้า เช็คเฉพาะคนนี้ (ไม่ใช่ role
+     ทั้งก้อน) ว่าถูกระบุเป็นผู้อนุมัติ GM ของใครจริงไหม แล้วบังคับโชว์เมนูทับ setRole() อีกที */
+  const gmNavEl = document.querySelector('.nav-item[data-pg="gmapprove"]');
+  if(gmNavEl && !['gm','exec','admin','sysadmin'].includes(u[2])){
+    const myName = (u[1]||'').trim();
+    const isNamedGmApprover = MASTER_USERS.some(x=>(x[11]||'').trim()===myName);
+    if(isNamedGmApprover) gmNavEl.style.display = 'flex';
+  }
   const badge = document.getElementById('sessionBadge');
   const nameEl = document.getElementById('sessionName');
   if(badge) badge.style.display = 'flex';
@@ -8196,7 +8217,10 @@ function resolveGmReviewer(emp){
   if(['gm','exec','admin','sysadmin'].includes(emp[2])) return null;
   const name = (emp[11]||'').trim();
   if(!name || name==='—') return null;
-  return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[2]==='gm') || null;
+  /* #158: ไม่บังคับ role==='gm' แล้ว — HR อาจตั้งพนักงาน role อื่น (เช่น ผจก.ส่วน/l2) ให้เป็นผู้อนุมัติ
+     ระดับ GM ของคนบางคนได้ โดยไม่ต้องเปลี่ยน role จริงเป็น 'gm' ก่อน ใครก็ตามที่ชื่อจริงตรงกับช่อง
+     "ผู้อนุมัติ GM (L4)" (u[11]) และยัง active อยู่ ถือเป็นผู้อนุมัติ GM ของคนนี้จริง */
+  return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active') || null;
 }
 function getRealReviewChain(emp){
   return [

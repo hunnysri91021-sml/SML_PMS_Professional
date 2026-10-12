@@ -7558,6 +7558,83 @@ touches employee/attendance/evaluation data.
     time, which would risk disagreeing with whatever score the real
     workflow actually saved.
 
+158. **User's screenshot of a real logged-in account viewing "4. สอบทาน
+    ผู้จัดการส่วน (L3)" asked "หน้าของผู้ประเมินตามที่ admin กำหนด มีแถบ
+    ไม่ครบ เช่น ตำแหน่ง MGR เป็น สามารถประเมินในระดับ GM ได้" — asked two
+    clarifying questions given the blast radius (this touches the core
+    resolver/scoping chain #128/#145 already built): confirmed via Q1
+    this was a real PIN login, not an admin Demo-UI preview (ruling out
+    #72's distinction); confirmed via Q2 the precise rule — a person
+    whose real `MASTER_USERS` role is `l2` (ผจก.ส่วน) but who is named
+    in another employee's "ผู้อนุมัติ GM (L4)" field (u[11]) should see/
+    approve at the GM level for that specific person, **regardless of
+    their own role actually being `'gm'`**.
+    `resolveGmReviewer(emp)` (#128/#145) required the matched person's
+    own `MASTER_USERS[2]` to literally equal `'gm'` — so when HR, per
+    #145's own established real-world pattern, assigns a `l2`-role
+    section manager as a specific employee's u[11] GM approver (a
+    small-org "one person wears two hats" case), the resolver silently
+    rejected the match purely on role, even though the real chain field
+    named them correctly. Fixed by dropping the `u[2]==='gm'` requirement
+    entirely — any active employee whose name matches u[11] is now
+    accepted as a real GM reviewer, the same way the field's own label
+    already promises ("ผู้อนุมัติ GM") without a hidden role prerequisite.
+    `getMyScopedEmpCodes()` needed the matching generalization: its
+    `unit`/`l1`/`l2` branches (the ones that return a real restricted
+    `Set`, as opposed to `admin`/`sysadmin`/`exec`/`emp` which correctly
+    stay `null`/unrestricted per #45) now additionally union in every
+    employee whose u[11] names the viewer — via one shared
+    `addGmNamedScope()` helper, not four separate copies of the same
+    `MASTER_USERS.filter` — so a real `l2` named as someone's GM approver
+    sees that person in every scoped page/badge/notification (#136-#140's
+    `buildTierRoster()` chain reuses `getMyScopedEmpCodes()`/the resolver
+    functions directly, so this one fix cascades correctly). **The nav
+    item itself still needed a separate, explicit fix**: `setRole()`
+    (#64) gates every `.nav-item[data-role]` purely by the viewer's own
+    `role` string against `NAV_PERMS[pg]` (admin-configurable, but
+    company-wide per role, never per individual) — "5. อนุมัติ GM"'s
+    default permission is `gm,exec`, so a real `l2`-role person would
+    still never see the menu item even once the underlying resolver/
+    scope correctly granted them the data. Added a small per-person
+    override in `applySession()`, right after the existing `setRole()`
+    call (the same chokepoint #72/#90 already use for per-person
+    overrides): checks whether `CURRENT_SESSION_USER` is named in
+    *anyone's* u[11] field, and if so, forces the gmapprove nav item's
+    `display` back to `'flex'` regardless of what `setRole()` just set
+    it to — a real, data-driven exception layered on top of the
+    role-based gate, not a change to the gate's own default behavior for
+    everyone else. Verified with a test that seeds a real `l2`-role
+    "section manager" employee and a second employee whose u[11] names
+    that section manager by name (not role): confirms
+    `resolveGmReviewer()` now returns the `l2`-role person (not null),
+    confirms `getMyScopedEmpCodes()` includes the named employee after
+    logging in as the section manager, confirms the "5. อนุมัติ GM" nav
+    item is forced visible for this specific account, confirms the real
+    queue page renders the actual pending row once clicked, and confirms
+    a plain employee not named anywhere in any u[11] still correctly
+    never sees the nav item — plus re-ran all 6 of #138-#145's own
+    resolver/scoping/filter tests (admin-oversight, no-L1/L2 bucket, both
+    review-filter tests, the filter diagnostic note, the team-badge note)
+    with zero regressions, plus the standard click-sweep (`nav pages
+    clicked: 22 errors: []`). General lesson sharper than #145's own
+    conclusion: #145 fixed *which raw field* a resolver reads to answer
+    "who is this person's L3/L4 reviewer" — this time the *role
+    requirement layered on top of the matched field* was itself too
+    strict for how HR actually assigns people in a real small
+    organization (one real person can hold more than one functional
+    tier); when a resolver function pairs a chain-field match with an
+    extra `&& role===X` condition, that condition is a second, separate
+    claim about the matched person beyond "their name is in this field"
+    — confirm with the user whether the field itself is the sole source
+    of truth, or whether the role check is a real additional requirement,
+    before assuming the stricter check was intentional. Also worth
+    remembering: fixing a resolver/scoping function alone is not enough
+    when a *static*, role-based nav gate (`setRole()`/`NAV_PERMS`) sits
+    in front of the same page — a per-person exception to a per-role
+    gate needs its own explicit override at the one real session
+    chokepoint, the same pattern #72/#90 already established for other
+    per-person nav/button visibility exceptions.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
