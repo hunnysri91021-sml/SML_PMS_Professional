@@ -6707,6 +6707,118 @@ touches employee/attendance/evaluation data.
     actually send. Told the user this plainly rather than building an
     unasked-for scheduling feature on a guess.
 
+147. **Follow-up to #146: user asked "ต้องการแจ้งผ่าน line ได้ไหม" (can we
+    notify via LINE?) — explained honestly what it would take (a real
+    LINE Official Account + Messaging API channel, a token that must go
+    through the Worker since it can never be embedded in the page per
+    #25's own reasoning, and each employee's LINE User ID — which the
+    app has no way to invent or guess) and asked two clarifying
+    questions before building anything.** Confirmed: the company has or
+    can get a real LINE OA/Messaging API channel, but nobody currently
+    knows employees' real LINE User IDs or where they're stored — and
+    the user explicitly chose to start preparing the data structure now
+    (a new field + Add/Edit Employee UI) even with no channel token set
+    yet, rather than wait.
+    **Built the real send mechanism, token-ready but not yet live**:
+    added a `/send-line` endpoint to `tools/sml-pms-proxy-worker.js`
+    (LINE Messaging API `/v2/bot/message/multicast`, chunked at 500
+    recipients per call per LINE's own limit) using a brand-new Worker
+    secret, `LINE_CHANNEL_ACCESS_TOKEN` — deliberately a **separate**
+    secret from every MS365 one, since LINE's channel access token is a
+    static long-lived string with its own completely different auth
+    flow, not an OAuth client-credentials token like `getAppToken()`'s.
+    Placed the `/send-line` route check **before** `getAppToken(env)` is
+    ever called in the Worker's request handler — sending LINE messages
+    has nothing to do with Microsoft Graph at all, so it must not fail
+    just because `TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET` are missing or
+    wrong (the same "don't let one channel's setup block another
+    channel" reasoning #58's `#dash`-page special-case already
+    establishes for a different kind of ordering hazard). **This changes
+    the Worker's own code, so per CLAUDE.md #41/#106's own precedent it
+    needs a real redeploy** before this fix has any live effect — every
+    purely-client change in this file goes live the moment GitHub Pages
+    updates, this one specifically does not.
+    Added `MASTER_USERS[21]` (`lineUserId`, append-only per CLAUDE.md
+    #5) with a real `mu_lineid` text field in Add/Edit Employee (wired
+    into `saveUserFromModal()`/`clearUserModalForm()`/
+    `fillUserFormFields()` the same three-point pattern every other
+    field in this modal already follows) — its own help text states
+    plainly that this is **not** a LINE ID/phone number the employee
+    picks, it's the opaque string LINE itself assigns, and the *only*
+    real way to obtain it honestly is for the employee to add the
+    company's LINE OA as a friend and send it any message once (so a
+    LINE webhook event carrying their real `userId` fires) — this app
+    has no webhook receiver to capture that automatically (a materially
+    bigger feature nobody asked for in this request, flagged in the
+    Worker file's own doc comment rather than built on a guess, same
+    "flag, don't build the bigger thing" discipline as #76), so for now
+    IT/Admin must read the real value off LINE's own chat log/Developers
+    Console and type it in by hand. Round-tripped the new field through
+    Excel the same `EmployeeSettings` table that already carries
+    `pinHash`/`evalLevel`/`evalExempt` (#24/#83/#143) — extended to a 6th
+    column, `LineUserId` — rather than the main `Employees` table, since
+    there's no confirmed real column for it there (#30's "verify against
+    the field, never assume" rule) and it's exactly the same
+    local-admin-set-fact shape as the other three fields already in that
+    table. `applyEmployeeSettingsRows()`/`pushSingleEmployeeSettings()`/
+    `ms365PushEmployeeSettings()` all updated together, same discipline
+    #143 just established for adding `EvalExempt` as that table's 5th
+    column — never update one without the other two, or read and write
+    silently disagree on the table's shape.
+    **Wired the real send into the existing "📢 ส่ง Reminder" modal**
+    (#10/#90) rather than building a second, parallel notification
+    screen: the LINE checkbox (previously permanently `disabled` with
+    "ยังไม่รองรับ") is now a real, checked-by-default channel —
+    `sendLineReminder(targets, message)` filters to only the people who
+    actually have a real `lineUserId` on file, calls the new Worker
+    endpoint via the existing `workerFetch()` helper (never a second,
+    parallel HTTP-calling path), and returns an honest `{sent, failed,
+    reason}` result rather than ever assuming success — the same
+    best-effort/never-silently-fail rules #26/#40/#58's other emails
+    already follow. `sendReminder()` itself now sends through **both**
+    channels independently in one click when both are checked (email via
+    the existing `mailto:` flow, LINE via the new Worker call) and
+    reports each channel's real outcome separately in one toast — one
+    channel failing (e.g. the Worker not yet configured) never silently
+    swallows or blocks the other succeeding. `renderReminderPreview()`'s
+    recipient list now shows a "💬 LINE" tag next to anyone with a real
+    `lineUserId`, the same honest-presence-check pattern the email
+    column next to it already used. Verified with a test that mocks
+    `workerFetch`/`isWorkerConfigured` (no real network reachable from a
+    test environment) and confirms: the preview correctly tags only the
+    employee with a real LINE User ID; `sendReminder()`'s real `/send-
+    line` call carries exactly that one employee's ID and the real
+    message text; and with the Worker reported as not configured,
+    `sendLineReminder()` returns the honest "ยังไม่ได้ตั้งค่า Proxy"
+    reason rather than a fake success — plus a second test driving the
+    real Add/Edit Employee UI end-to-end (not direct array mutation):
+    saves a real LINE User ID, confirms it round-trips on reopening the
+    edit form, confirms editing it updates in place rather than
+    duplicating the row, and confirms leaving the field blank on a later
+    edit preserves the previously-saved value rather than wiping it
+    (matching the existing `mu_email` field's own established
+    convention) — plus the standard click-sweep (`nav pages clicked: 22
+    errors: []`). **Found and deliberately left alone, not a regression
+    from this fix**: a pre-existing scratchpad test from earlier in this
+    session (`test_reminder.js`) failed when re-run — traced to the test
+    itself assigning a free-text string to `mu_position`, which has been
+    a real `<select>` (populated from `ORG_MASTER`) since CLAUDE.md #51,
+    several fixes before this one; setting `.value` to a string with no
+    matching `<option>` silently fails exactly as #50 already documents,
+    so the test's own seed data (written before #51, never updated since)
+    is stale, not a sign this fix broke employee saving — confirmed by
+    building a fresh equivalent test using a real option value, which
+    passed cleanly. General lesson combining #25/#76: when a user asks
+    for a new notification channel, the real blocker is almost never
+    "can the code call that platform's API" (that part is usually
+    small, as the Worker endpoint here was) — it's "where does the
+    per-recipient identifier the API needs actually come from," and if
+    the honest answer is "nowhere yet, and this app has no way to
+    capture it automatically," say so plainly and build the data
+    structure + send mechanism ready to receive that identifier, rather
+    than quietly building a webhook receiver nobody asked for just to
+    make the feature feel more "finished."
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

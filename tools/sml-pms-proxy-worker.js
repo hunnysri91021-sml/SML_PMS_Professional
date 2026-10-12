@@ -14,7 +14,7 @@
  * วิธี deploy (Cloudflare, ฟรี):
  *   1. สร้างบัญชี Cloudflare (ฟรี) → Workers & Pages → Create Worker
  *   2. วางโค้ดไฟล์นี้ทั้งหมดแทนโค้ดตัวอย่าง แล้วกด Deploy
- *   3. ไปที่ Settings → Variables → เพิ่ม Secret (encrypted) ทั้ง 7 ตัว:
+ *   3. ไปที่ Settings → Variables → เพิ่ม Secret (encrypted) ทั้ง 8 ตัว:
  *        TENANT_ID       = Azure AD Tenant ID
  *        CLIENT_ID       = Azure AD App (client) ID ที่ขอสิทธิ์ Application แล้ว
  *        CLIENT_SECRET   = Client secret ที่สร้างไว้ใน Azure AD (เห็นครั้งเดียวตอนสร้าง)
@@ -24,8 +24,23 @@
  *        SEND_AS_EMAIL   = อีเมล HR/Admin จริงใน Microsoft 365 ที่จะใช้เป็น "ผู้ส่ง" เวลาส่ง PIN
  *                          ให้พนักงานทางอีเมล (เช่น hr@siammotor.com) — ต้องเป็นกล่องอีเมลจริง
  *                          ที่มีอยู่ในองค์กร ไม่ใช่ที่อยู่ลอยๆ
+ *        LINE_CHANNEL_ACCESS_TOKEN = Channel access token (long-lived) ของ LINE Official Account
+ *                          ที่บริษัทใช้ (LINE Developers Console → ช่อง Messaging API ของ OA นั้น
+ *                          → ออก token) ใช้สำหรับปุ่ม "ส่ง Reminder" ช่องทาง LINE เท่านั้น — ไม่
+ *                          เกี่ยวกับ Microsoft/Azure เลย เป็นความลับคนละชุดกับ CLIENT_SECRET
  *   4. คัดลอก URL ของ Worker (เช่น https://sml-pms-proxy.<ชื่อบัญชี>.workers.dev) ไปกรอกที่
  *      หน้า "เชื่อมต่อ MS365 Excel" → แท็บ "ขั้นตอนตั้งค่า" ช่อง "Proxy URL" / "Proxy API Key"
+ *      (ช่องเดียวกันนี้ยังเป็นที่เว็บเรียก /send-line ผ่าน ไม่มีหน้าตั้งค่าแยกสำหรับ LINE)
+ *
+ * วิธีได้ LINE User ID ของพนักงานแต่ละคน (ข้อจำกัดที่ต้องทำความเข้าใจก่อนใช้ช่องทาง LINE):
+ *   ระบบนี้ "เดา" LINE User ID ของใครไม่ได้เลย — ค่านี้มีอยู่จริงก็ต่อเมื่อพนักงานคนนั้นเพิ่มเพื่อนกับ
+ *   LINE OA ของบริษัทแล้วส่งข้อความ/สติกเกอร์อะไรก็ได้มาที่ OA อย่างน้อย 1 ครั้ง (เช่น ให้พิมพ์รหัส
+ *   พนักงานของตัวเองส่งมา) ซึ่งจะทำให้เกิด webhook event ฝั่ง LINE ที่มี userId จริงอยู่ในนั้น — Worker
+ *   นี้ **ไม่ได้ทำหน้าที่รับ webhook จาก LINE** (เป็นคนละเรื่องกับการส่งข้อความออก) ดังนั้นตอนนี้ IT/Admin
+ *   ต้องไปดูค่า userId จาก LINE Official Account Manager (chat log) หรือสร้างตัวรับ webhook แยกเอง
+ *   แล้วพิมพ์ค่านั้นเข้าช่อง "LINE User ID" ในหน้าแก้ไขพนักงานของเว็บด้วยมือทีละคน ถ้าต้องการให้ระบบนี้
+ *   รับ LINE User ID ได้เองอัตโนมัติ (ไม่ต้องพิมพ์มือ) ต้องเพิ่ม endpoint รับ webhook ไว้ใน Worker นี้
+ *   อีกชุดหนึ่ง (ยังไม่ได้ทำ — เป็นงานแยกที่ใหญ่กว่าการส่งข้อความออกเฉยๆ)
  *
  * ข้อกำหนดฝั่ง Azure AD ที่ทีม IT/แอดมิน M365 ต้องทำ (ใครก็ตามที่มี Global/Application
  * Administrator หรือสิทธิ์เทียบเท่า):
@@ -60,6 +75,17 @@ export default {
     }
 
     try {
+      /* /send-line ไม่เกี่ยวกับ Microsoft/Azure เลยแม้แต่น้อย — ไม่ต้องขอ getAppToken() (ซึ่งเป็น
+         token ของ Microsoft Graph) เลย วางไว้ก่อนบรรทัดนั้นโดยเจตนา เพื่อให้ช่องทาง LINE ทำงานได้
+         แม้ TENANT_ID/CLIENT_ID/CLIENT_SECRET ของฝั่ง MS365 ยังตั้งไม่ครบ/ผิด */
+      if (url.pathname === '/send-line' && request.method === 'POST') {
+        const { userIds, message } = await request.json();
+        if (!Array.isArray(userIds) || !userIds.length || !message) return json({ error: 'missing userIds/message' }, 400, cors);
+        if (!env.LINE_CHANNEL_ACCESS_TOKEN) return json({ error: 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN ใน Worker' }, 500, cors);
+        await sendLineMulticast(env.LINE_CHANNEL_ACCESS_TOKEN, userIds, message);
+        return json({ ok: true, count: userIds.length }, 200, cors);
+      }
+
       const token = await getAppToken(env);
 
       /* /send-mail ไม่เกี่ยวกับ Excel เลย ไม่ต้อง resolveSite() (ซึ่งไปหา SharePoint site/ไฟล์)
@@ -202,6 +228,26 @@ async function sendMail(token, fromEmail, toEmail, toName, subject, bodyText) {
     },
     saveToSentItems: true,
   });
+}
+
+/* ส่งข้อความ LINE จริงผ่าน LINE Messaging API /v2/bot/message/multicast — คนละ token/คนละ API
+   กับ Microsoft Graph ทั้งหมด (LINE_CHANNEL_ACCESS_TOKEN เป็น token แบบคงที่อายุยาว ไม่ต้องขอใหม่
+   ทุกครั้งแบบ getAppToken() ของฝั่ง MS365) multicast รับคนได้สูงสุด 500 คน/ครั้ง จึงแบ่งเป็นชุดๆ
+   ถ้าเกิน — ชุดใดชุดหนึ่งพังจะ throw ออกไปทันที (ให้ /send-line ด้านบนรายงาน error ตามจริง ไม่กลืน) */
+async function sendLineMulticast(token, userIds, text) {
+  const chunks = [];
+  for (let i = 0; i < userIds.length; i += 500) chunks.push(userIds.slice(i, i + 500));
+  for (const chunk of chunks) {
+    const res = await fetch('https://api.line.me/v2/bot/message/multicast', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: chunk, messages: [{ type: 'text', text }] }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error('LINE multicast failed: ' + res.status + ' ' + errText);
+    }
+  }
 }
 
 async function listRows(token, driveId, itemId, table) {

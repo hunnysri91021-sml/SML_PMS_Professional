@@ -3307,8 +3307,8 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     <div class="fg"><label>กลุ่มเป้าหมาย</label><select id="rm_target" onchange="renderReminderPreview()"></select></div>
     <div class="fg"><label>ช่องทาง</label>
       <label style="font-weight:400"><input type="checkbox" id="rm_ch_email" checked style="width:auto;margin-right:5px">อีเมล</label>
+      <label style="font-weight:400;margin-left:14px"><input type="checkbox" id="rm_ch_line" checked style="width:auto;margin-right:5px">LINE <small style="color:#64748b">(เฉพาะคนที่มี LINE User ID บันทึกไว้แล้ว)</small></label>
       <label style="font-weight:400;margin-left:14px;color:#94a3b8"><input type="checkbox" disabled style="width:auto;margin-right:5px">แจ้งเตือนในระบบ <small>(ยังไม่รองรับ — ต้องมีระบบ Login รายบุคคล)</small></label>
-      <label style="font-weight:400;margin-left:14px;color:#94a3b8"><input type="checkbox" disabled style="width:auto;margin-right:5px">LINE <small>(ยังไม่รองรับ — ต้องเชื่อม LINE Messaging API)</small></label>
     </div>
     <div class="fg"><label>ข้อความ</label><textarea id="rm_message" rows="4">เรียนท่านหัวหน้างาน กรุณาดำเนินการประเมินผลพนักงานในสังกัดให้แล้วเสร็จภายในวันที่ 20 ก.ย. 2569</textarea></div>
     <div class="fg"><label>รายชื่อผู้รับ (ดึงจากข้อมูลพนักงานจริง)</label>
@@ -4452,7 +4452,7 @@ async function pushSingleEmployeeSettings(code){
   const emp = MASTER_USERS.find(u=>u[0]===code);
   if(!emp) return;
   try{
-    await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, code, [code, emp[17]||'', emp[18]||'', new Date().toISOString(), emp[20]==='1'?'1':'0']);
+    await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, code, [code, emp[17]||'', emp[18]||'', new Date().toISOString(), emp[20]==='1'?'1':'0', emp[21]||'']);
     if(typeof appendSyncLog==='function') appendSyncLog(`Push การตั้งค่า ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
   }catch(e){
     if(typeof appendSyncLog==='function') appendSyncLog(`Push การตั้งค่า ${emp[1]} (${code}) ไม่สำเร็จ: ${e.message}`, false);
@@ -5833,13 +5833,14 @@ function saveUserFromModal() {
   const potential= document.getElementById('mu_potential')?.value || '';
   const evalLevel= document.getElementById('mu_evallevel')?.value || '';
   const evalExempt= document.getElementById('mu_evalexempt')?.checked ? '1' : '';
+  const lineUserId= (document.getElementById('mu_lineid')?.value || '').trim();
 
   if (!id || !name || !role || !group || !section || !position || !grade || !status) {
     smlToast('กรุณากรอกข้อมูลที่มี * ให้ครบถ้วน', 'warn');
     return;
   }
 
-  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential,pinHash,evalLevel,gm,evalExempt] */
+  /* [id,name,role,group,section,division,department,position,grade,l1,l2,approver,status,lastLogin,startDate,email,potential,pinHash,evalLevel,gm,evalExempt,lineUserId] */
   const existingRow = MASTER_USERS.find(u => u[0] === id);
   const newUser = [id, name, role, group, section, division||'—', dept||'—',
                    position, grade, l1||'—', l2||'—', approver||'—', status,
@@ -5850,7 +5851,8 @@ function saveUserFromModal() {
                    existingRow?.[17] || '',
                    evalLevel,
                    gm||'—',
-                   evalExempt];
+                   evalExempt,
+                   lineUserId || existingRow?.[21] || ''];
 
   const existing = MASTER_USERS.findIndex(u => u[0] === id);
   if (existing >= 0) {
@@ -5901,7 +5903,7 @@ function thaiDateToIso(str){
 }
 
 function clearUserModalForm(){
-  ['mu_id','mu_name','mu_position','mu_email'].forEach(id=>{
+  ['mu_id','mu_name','mu_position','mu_email','mu_lineid'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
   ['mu_l1','mu_l2','mu_approver','mu_gm'].forEach(id=>{
@@ -5957,6 +5959,7 @@ function fillUserFormFields(emp){
   const sdEl=document.getElementById('mu_startdate'); if(sdEl) sdEl.value = thaiDateToIso(emp[14]);
   set('mu_email', emp[15]);
   set('mu_potential', emp[16]);
+  set('mu_lineid', emp[21]);
   const evlEl=document.getElementById('mu_evallevel'); if(evlEl) evlEl.value = emp[18] || '';
   const evxEl=document.getElementById('mu_evalexempt'); if(evxEl) evxEl.checked = emp[20]==='1';
   if(typeof renderPinStatus==='function') renderPinStatus(emp[0]);
@@ -6027,21 +6030,47 @@ function renderReminderPreview(){
   }
   box.innerHTML = targets.map(u => {
     const hasEmail = !!u[15];
+    const hasLine = !!u[21];
     return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f1f5f9">
       <span>${u[1]} <span style="color:#94a3b8">(${u[0]})</span></span>
-      <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมลในระบบ'}</span>
+      <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมล'}${hasLine ? ' · 💬 LINE' : ''}</span>
     </div>`;
   }).join('');
 }
 
-function sendReminder(){
+/* #147: "LINE" เปลี่ยนจากปุ่มปิด (disabled, ยังไม่รองรับ) มาเป็นช่องทางจริง — ส่งผ่าน Worker เดียวกับที่
+   ใช้ส่งอีเมล (/send-line, ดู tools/sml-pms-proxy-worker.js) เพราะ LINE Channel Access Token ห้ามฝัง
+   ในหน้าเว็บตรงๆ เหมือนกับเหตุผลเดียวกันที่ MS365/อีเมลต้องผ่าน Worker (#25/#26) ส่งได้จริงเฉพาะคนที่มี
+   LINE User ID บันทึกไว้แล้วเท่านั้น (mu_lineid, #147) — คนที่ไม่มีจะถูกรายงานแยกให้เห็นชัด ไม่ใช่เงียบๆ
+   ข้ามไป ช่องอีเมล/LINE เป็น "best-effort ของตัวเอง" ทั้งคู่ — ช่องหนึ่งส่งไม่สำเร็จไม่กระทบอีกช่อง */
+async function sendLineReminder(targets, message){
+  const withLine = targets.filter(u=>u[21]);
+  if(!withLine.length) return { sent:0, failed:0, reason:'ไม่มีใครในกลุ่มนี้มี LINE User ID บันทึกไว้ — เพิ่มที่หน้าแก้ไขพนักงาน' };
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return { sent:0, failed:withLine.length, reason:'ยังไม่ได้ตั้งค่า Proxy (Worker) — ต้องตั้งก่อนจึงส่ง LINE ได้ (ดู tools/sml-pms-proxy-worker.js)' };
+  try{
+    await workerFetch(cfg, '/send-line', { method:'POST', body: JSON.stringify({ userIds: withLine.map(u=>u[21]), message }) });
+    return { sent:withLine.length, failed:0 };
+  }catch(e){
+    return { sent:0, failed:withLine.length, reason:'ส่ง LINE ไม่สำเร็จ: '+e.message };
+  }
+}
+
+async function sendReminder(){
   const targets = getReminderTargets(document.getElementById('rm_target')?.value || 'pending');
   const message = document.getElementById('rm_message')?.value || '';
   const wantEmail = document.getElementById('rm_ch_email')?.checked;
+  const wantLine = document.getElementById('rm_ch_line')?.checked;
   if(!targets.length){ smlToast('ไม่มีผู้รับในกลุ่มเป้าหมายนี้','warn'); return; }
+  if(!wantEmail && !wantLine){ smlToast('กรุณาเลือกช่องทางที่จะส่งอย่างน้อย 1 ช่องทาง','warn'); return; }
 
   const withEmail = targets.filter(u=>u[15]);
   const withoutEmail = targets.filter(u=>!u[15]);
+
+  /* ส่ง LINE ก่อนปิด modal — ไม่ await เสร็จสมบูรณ์ก่อนเปิด mailto ก็ได้ เพราะคนละ channel กัน แต่ต้อง
+     เก็บผลจริงมารายงาน ไม่ใช่สมมติว่าสำเร็จ (CLAUDE.md #10/#26) */
+  let lineResult = null;
+  if(wantLine) lineResult = await sendLineReminder(targets, message);
 
   if(wantEmail && withEmail.length){
     const bcc = withEmail.map(u=>u[15]).join(',');
@@ -6050,14 +6079,17 @@ function sendReminder(){
     window.location.href = `mailto:?bcc=${bcc}&subject=${subject}&body=${body}`;
   } else if(wantEmail && !withEmail.length){
     smlToast('ไม่มีใครในกลุ่มนี้มีอีเมลในระบบ — เพิ่มอีเมลที่หน้าแก้ไขพนักงานก่อน','warn');
-    return;
   }
 
   closeM();
-  const msg = wantEmail
-    ? `เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง ${withEmail.length} คน` + (withoutEmail.length ? ` · ${withoutEmail.length} คนไม่มีอีเมลในระบบ (${withoutEmail.map(u=>u[0]).join(', ')}) ต้องแจ้งช่องทางอื่นเอง` : '')
-    : 'ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน (มีแค่อีเมลที่ส่งได้จริงตอนนี้)';
-  smlToast(msg, wantEmail ? 'ok' : 'warn');
+  const parts = [];
+  if(wantEmail && withEmail.length) parts.push(`เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง ${withEmail.length} คน` + (withoutEmail.length ? ` (${withoutEmail.length} คนไม่มีอีเมล)` : ''));
+  if(lineResult){
+    parts.push(lineResult.sent ? `ส่ง LINE สำเร็จ ${lineResult.sent} คน` : `ส่ง LINE ไม่สำเร็จ — ${lineResult.reason}`);
+  }
+  if(!parts.length) parts.push('ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน');
+  smlToast(parts.join(' · '), (wantEmail&&withEmail.length) || (lineResult&&lineResult.sent) ? 'ok' : 'warn');
+  if(typeof appendAuditLog==='function') appendAuditLog('reminder','ส่ง Reminder', document.getElementById('rm_target')?.value||'pending', parts.join(' · '));
 }
 function closeM(){document.querySelectorAll('.ov').forEach(o=>o.classList.remove('on'))}
 document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM();});
@@ -7008,7 +7040,9 @@ const EMPLOYEE_SETTINGS_TABLE = 'EmployeeSettings';
    เงียบตอน login ค่าว่างในแถว Excel จะไม่ไปเขียนทับของเดิมในเครื่อง (กันกรณีบางคนยังไม่เคย push)
    EvalExempt ('1'/'0') เขียนแบบ explicit เสมอตอน push จึงใช้ "ค่าเท่ากับ '1' หรือ '0' เป๊ะ" เป็นตัวบอก
    ว่าคอลัมน์นี้มีจริงในแถว — ถ้าตารางยังไม่มีคอลัมน์ EvalExempt เลย (ยังไม่อัปเดต Excel) ค่าจะว่าง/undefined
-   แล้วจะไม่ไปทับค่าที่ตั้งไว้ในเครื่องนี้ */
+   แล้วจะไม่ไปทับค่าที่ตั้งไว้ในเครื่องนี้ (#147: เพิ่มคอลัมน์ที่ 6 LineUserId ด้วยกฎเดียวกัน —
+   ค่าว่างแปลว่าตาราง Excel ยังไม่มีคอลัมน์นี้หรือยังไม่เคย push รหัสนี้ ไม่ใช่ "ลบ LINE User ID
+   ที่ตั้งไว้ในเครื่องนี้ทิ้ง") */
 function applyEmployeeSettingsRows(rows){
   let applied = 0;
   rows.forEach(r=>{
@@ -7019,19 +7053,22 @@ function applyEmployeeSettingsRows(rows){
     const pinHash = String(r[1]||'').trim();
     const evalLevel = String(r[2]||'').trim();
     const evalExempt = String(r[4]!==undefined && r[4]!==null ? r[4] : '').trim();
+    const lineUserId = String(r[5]||'').trim();
     if(pinHash) emp[17] = pinHash;
     if(evalLevel) emp[18] = evalLevel;
     if(evalExempt==='1' || evalExempt==='0') emp[20] = evalExempt==='1' ? '1' : '';
+    if(lineUserId) emp[21] = lineUserId;
     applied++;
   });
   return applied;
 }
 
-/* Push PIN hash + แบบฟอร์มประเมิน + สถานะยกเว้นประเมินของพนักงานทุกคนที่มีค่าตั้งไว้ในเครื่องนี้ ขึ้น
-   Excel จริง ใช้ upsert (คีย์ = รหัสพนักงาน) กันแถวซ้ำเวลากด push หลายรอบ (เหมือน ms365PushAttendance) */
+/* Push PIN hash + แบบฟอร์มประเมิน + สถานะยกเว้นประเมิน + LINE User ID ของพนักงานทุกคนที่มีค่าตั้งไว้
+   ในเครื่องนี้ ขึ้น Excel จริง ใช้ upsert (คีย์ = รหัสพนักงาน) กันแถวซ้ำเวลากด push หลายรอบ
+   (เหมือน ms365PushAttendance) */
 async function ms365PushEmployeeSettings(){
-  const rows = MASTER_USERS.filter(u => u[17] || u[18] || u[20]==='1');
-  if(!rows.length){ smlToast('ยังไม่มีข้อมูล PIN/แบบฟอร์มประเมิน/ยกเว้นประเมินที่ตั้งไว้ในเครื่องนี้ให้ Push','warn'); return; }
+  const rows = MASTER_USERS.filter(u => u[17] || u[18] || u[20]==='1' || u[21]);
+  if(!rows.length){ smlToast('ยังไม่มีข้อมูล PIN/แบบฟอร์มประเมิน/ยกเว้นประเมิน/LINE User ID ที่ตั้งไว้ในเครื่องนี้ให้ Push','warn'); return; }
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
     smlToast('ยังไม่ได้ตั้งค่า MS365 — ข้อมูลจะยังอยู่แค่ในเครื่องนี้เท่านั้น','warn');
@@ -7040,13 +7077,13 @@ async function ms365PushEmployeeSettings(){
   }
   let ok=0, fail=0;
   for(const u of rows){
-    try{ await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, u[0], [u[0], u[17]||'', u[18]||'', new Date().toISOString(), u[20]==='1'?'1':'0']); ok++; }
+    try{ await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, u[0], [u[0], u[17]||'', u[18]||'', new Date().toISOString(), u[20]==='1'?'1':'0', u[21]||'']); ok++; }
     catch(e){ fail++; }
   }
   updateMs365Status(fail?'warn':'ok', fail?'บาง Push ไม่สำเร็จ':'Connected');
-  smlToast(`Push การตั้งค่าพนักงาน (PIN/แบบฟอร์ม/ยกเว้นประเมิน) เข้า Excel สำเร็จ ${ok} คน` + (fail?` · ล้มเหลว ${fail} คน — ตรวจสอบว่ามีตาราง "${EMPLOYEE_SETTINGS_TABLE}" คอลัมน์ EvalExempt ในไฟล์ Excel แล้วหรือยัง`:''), fail?'warn':'ok');
+  smlToast(`Push การตั้งค่าพนักงาน (PIN/แบบฟอร์ม/ยกเว้นประเมิน/LINE User ID) เข้า Excel สำเร็จ ${ok} คน` + (fail?` · ล้มเหลว ${fail} คน — ตรวจสอบว่ามีตาราง "${EMPLOYEE_SETTINGS_TABLE}" คอลัมน์ EvalExempt/LineUserId ในไฟล์ Excel แล้วหรือยัง`:''), fail?'warn':'ok');
   appendSyncLog(`Push การตั้งค่าพนักงาน: สำเร็จ ${ok} คน${fail?' · ล้มเหลว '+fail:''}`, fail===0);
-  if(ok){ markSystemUpdated(`Push การตั้งค่าพนักงาน ${ok} คนเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push PIN/แบบฟอร์มประเมิน/ยกเว้นประเมินเข้า Excel', EMPLOYEE_SETTINGS_TABLE, ok+' คนสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
+  if(ok){ markSystemUpdated(`Push การตั้งค่าพนักงาน ${ok} คนเข้า Excel`); if(typeof appendAuditLog==='function') appendAuditLog('ms365','Push PIN/แบบฟอร์มประเมิน/ยกเว้นประเมิน/LINE User ID เข้า Excel', EMPLOYEE_SETTINGS_TABLE, ok+' คนสำเร็จ'+(fail?' · '+fail+' ล้มเหลว':'')); }
 }
 
 /* ดึง PIN/แบบฟอร์มประเมินล่าสุดจาก Excel มาไว้ในเครื่องนี้ — โหมดกดเอง (Admin ตั้งใจกด ยอมให้เด้ง
@@ -10880,6 +10917,14 @@ document.addEventListener('input',e=>{
           <option value="low">ต่ำ</option>
         </select>
         <div style="font-size:10.5px;color:#64748b;margin-top:2px">ใช้คำนวณ 9-Box Grid (ศักยภาพ vs ผลงาน) — ถ้าไม่ระบุจะไม่ถูกนับใน 9-Box</div>
+      </div>
+      <div class="fg">
+        <label>LINE User ID</label>
+        <input type="text" id="mu_lineid" placeholder="เช่น U4af4980629...">
+        <div style="font-size:10.5px;color:#64748b;margin-top:2px">ใช้สำหรับส่งการแจ้งเตือนผ่าน LINE OA — <b>ไม่ใช่</b> LINE ID/เบอร์โทรที่พนักงานตั้งเอง เป็นรหัสที่ LINE
+          สร้างให้อัตโนมัติเมื่อพนักงานกดเพิ่มเพื่อนกับ LINE OA ของบริษัทแล้วส่งข้อความอะไรก็ได้มา 1 ครั้ง
+          (เช่น พิมพ์รหัสพนักงานของตัวเองส่งมา) — IT/Admin ต้องไปดึงค่านี้จาก Log ของ LINE Developers Console
+          หรือระบบ Webhook ที่เชื่อมกับ LINE OA มาใส่ที่นี่เอง ระบบนี้ไม่มีทางรู้/เดาค่านี้เองได้</div>
       </div>
     </div>
 
