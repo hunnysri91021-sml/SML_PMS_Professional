@@ -3267,6 +3267,18 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="saveCycleFromModal()">💾 บันทึก</button></div>
 </div></div>
 
+<div class="ov" id="mCycleParticipants"><div class="md" style="max-width:640px">
+  <div class="md-h"><h3 id="mCycleParticipantsTitle">👥 รายชื่อผู้เข้าร่วมประเมิน</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-b">
+    <div class="al al-i"><span>ℹ️</span><div>เรียงตามลำดับสายบังคับบัญชา: พนักงาน → หัวหน้าหน่วย (L1) → หัวหน้าแผนก (L2) → ผู้จัดการส่วน (L3) → GM (L4) · รวม <b id="cycleParticipantsCount">0 คน</b></div></div>
+    <div class="tw" style="max-height:420px;overflow:auto"><table>
+      <thead><tr><th>ชื่อ-รหัส</th><th>บทบาท</th><th>แผนก/ส่วน</th><th>สถานะในรอบนี้</th></tr></thead>
+      <tbody id="cycleParticipantsRows"></tbody>
+    </table></div>
+  </div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button></div>
+</div></div>
+
 <div class="ov" id="mRule"><div class="md" style="max-width:520px">
   <div class="md-h"><h3>⚙️ เพิ่มเกณฑ์หักคะแนน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
@@ -10552,8 +10564,57 @@ function renderCyclesTable(){
       <td>${total || '—'}</td>
       <td style="width:150px"><div class="pg"><i class="${pct>=100?'ok':''}" style="width:${Math.min(pct,100)}%"></i></div><small style="font-size:11px;color:#94a3b8">${pct}%</small></td>
       <td>${CYCLE_STATUS_BADGE[c.status]||c.status}</td>
-      <td><button class="btn btn-sm" onclick="editCycleFromList('${c.id}')">${actionLabel}</button></td></tr>`;
+      <td><button class="btn btn-sm" onclick="openCycleParticipantsModal('${c.id}')" title="ดูรายชื่อผู้เข้าร่วมประเมินในรอบนี้">👥 รายชื่อ</button>
+          <button class="btn btn-sm" onclick="editCycleFromList('${c.id}')">${actionLabel}</button></td></tr>`;
   }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีรอบการประเมิน — กด "+ สร้างรอบใหม่"</td></tr>';
+}
+/* #146: "ผู้เข้าร่วม" บนตารางด้านบนเป็นแค่ตัวเลขนับจาก getEvalParticipants() (ของจริง, คำนวณสด) —
+   แต่ไม่มีที่ไหนให้ดู "รายชื่อจริง" ของคนในรอบนั้นเลย ผู้ใช้ขอให้มีรายชื่อ + เรียงตามลำดับชั้นบังคับ
+   บัญชา (หัวหน้าหน่วย L1 → หัวหน้าแผนก L2 → ผจก.ส่วน L3 → GM L4, ตามแบบ #70/#88) ปุ่ม "👥 รายชื่อ"
+   เปิดโมดัล mCycleParticipants ซึ่งดึงจาก getEvalParticipants() จริงตัวเดียวกับที่ตัวเลขด้านบนใช้
+   (ไม่ใช่ query แยกที่อาจเพี้ยนไปจากตัวเลข, ตามบทเรียน #126/#127/#138) และต่อสถานะจริงของแต่ละคนใน
+   รอบนี้จาก getDrafts() ด้วย draftKey ตัวเดียวกับทุกจุดในไฟล์นี้ — ยังไม่มี draft ให้แสดง "ยังไม่ส่ง"
+   ตรงๆ ไม่เดาค่า (#14) หน้านี้เป็น admin-only (data-role="admin") จึงไม่ต้อง scope เพิ่ม — admin เห็น
+   company-wide อยู่แล้วตามที่ getMyScopedEmpCodes() คืน null ให้ role นี้ (#45) */
+const CYCLE_PARTICIPANT_ROLE_RANK = {emp:0, unit:1, l1:2, l2:3, gm:4, exec:5, admin:6, sysadmin:6};
+const CYCLE_PARTICIPANT_STATUS_TH = {
+  Draft:'<span style="color:#94a3b8">ยังไม่ส่งแบบประเมิน</span>',
+  Submitted:'ส่งแบบประเมินแล้ว — รอหัวหน้าหน่วย/แผนกสอบทาน',
+  L1Reviewed:'ผ่านสอบทานหัวหน้าแผนก (L2) แล้ว',
+  L2Reviewed:'ผ่านสอบทานผู้จัดการส่วน (L3) แล้ว',
+  GMApproved:'ผ่านอนุมัติ GM (L4) แล้ว',
+  Acknowledged:'พนักงานรับทราบผลแล้ว',
+  Calibrated:'ผ่าน Calibration แล้ว',
+  Approved:'<b style="color:#16a34a">อนุมัติเสร็จสิ้น</b>'
+};
+function openCycleParticipantsModal(cycleId){
+  const c = cyclesList.find(x=>x.id===cycleId);
+  if(!c){ smlToast('ไม่พบรอบการประเมินนี้ในระบบ','warn'); return; }
+  const title = document.getElementById('mCycleParticipantsTitle');
+  if(title) title.textContent = '👥 รายชื่อผู้เข้าร่วมประเมิน — '+c.name;
+  renderCycleParticipantsList(c);
+  openM('mCycleParticipants');
+}
+function renderCycleParticipantsList(c){
+  const tbody = document.getElementById('cycleParticipantsRows');
+  const cnt = document.getElementById('cycleParticipantsCount');
+  if(!tbody) return;
+  const participants = (typeof getEvalParticipants==='function') ? getEvalParticipants() : [];
+  const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  const rows = participants.map(u=>{
+    const draft = drafts.find(d=>d[0]===u[0] && d[2]===c.year);
+    const status = draft ? (CYCLE_PARTICIPANT_STATUS_TH[draft[draft.length-1]] || draft[draft.length-1]) : CYCLE_PARTICIPANT_STATUS_TH.Draft;
+    return { u, rank: CYCLE_PARTICIPANT_ROLE_RANK[u[2]] ?? 0, status };
+  }).sort((a,b)=> a.rank - b.rank || (a.u[1]||'').localeCompare(b.u[1]||'', 'th'));
+  if(cnt) cnt.textContent = rows.length+' คน';
+  tbody.innerHTML = rows.length ? rows.map(r=>{
+    const u = r.u;
+    const dept = [u[4],u[6]].filter(Boolean).join(' / ') || '—';
+    return `<tr><td>${u[1]} <span style="color:#94a3b8">(${u[0]})</span></td>
+      <td>${NAV_ROLE_LABEL[u[2]]||u[2]}</td>
+      <td>${dept}</td>
+      <td>${r.status}</td></tr>`;
+  }).join('') : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีผู้เข้าร่วมที่เข้าเกณฑ์ในรอบนี้</td></tr>';
 }
 
 let editingCycleId = null;

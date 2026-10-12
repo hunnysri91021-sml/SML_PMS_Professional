@@ -6639,6 +6639,74 @@ touches employee/attendance/evaluation data.
     reviewer-identity check trusts) can diverge silently and only the
     second one explains a "the filter dropdown has nobody in it" report.
 
+146. **User asked for the "รอบประเมิน" (Cycle History) page's "ผู้เข้าร่วม"
+    column to "update ข้อมูลและเรียงลำดับหัวหน้าด้วย," confirmed via a
+    clarifying question to mean: the real list of names participating in
+    that cycle, sorted by chain-of-command order (L1→L2→L3→L4 per #70/
+    #88's convention), not the bare number already there.** Investigated
+    first: `renderCyclesTable()`'s "ผู้เข้าร่วม" column already computed a
+    real, live count from `getEvalParticipants()` (correct, never
+    hardcoded) — but there was no way anywhere on this page to see *who*
+    those people actually are, only the count. Added a "👥 รายชื่อ"
+    button per cycle row opening a new `mCycleParticipants` modal
+    (`openCycleParticipantsModal(cycleId)`/`renderCycleParticipantsList(c)`):
+    pulls from the exact same `getEvalParticipants()` call the count
+    itself is computed from (never a second, independent query that
+    could silently disagree with the number right next to it — the
+    #126/#127/#138 discipline), looks up each participant's real draft
+    for that cycle's year via `getDrafts().find(d=>d[0]===u[0] &&
+    d[2]===c.year)` (the same `draftKey()` fields every other lookup in
+    this file uses) to show their actual real status in this cycle
+    (`CYCLE_PARTICIPANT_STATUS_TH`, an honest "ยังไม่ส่งแบบประเมิน" when
+    no draft exists yet — never a guessed status, per CLAUDE.md #14),
+    and sorts by `CYCLE_PARTICIPANT_ROLE_RANK` (`emp:0, unit:1, l1:2,
+    l2:3, gm:4, exec:5, admin/sysadmin:6`) ascending — emp(no tier)
+    first, then หัวหน้าหน่วย(L1)→หัวหน้าแผนก(L2)→ผจก.ส่วน(L3)→GM(L4),
+    matching the user's own stated reading order rather than the
+    reverse top-down order `NAV_ROLE_LABEL` happens to use elsewhere
+    (#79) — then alphabetically by real name within the same rank.
+    Reused `NAV_ROLE_LABEL` for the role column text (never a new label
+    set) and left the page's own nav gating (`data-role="admin"`)
+    unscoped inside the modal, same as the rest of this admin-only page
+    — `getEvalParticipants()` already returns `null`-scope/company-wide
+    for admin per #45, so no additional filtering was needed or added.
+    **Deliberately did NOT touch** the separate "กำหนดการขั้นตอน —
+    FY2026-ANNUAL" table on the same page — noticed while reading this
+    section that it's itself a pure CLAUDE.md #16 mock table (hardcoded
+    step statuses/responsible-person text, a literally hardcoded
+    "FY2026-ANNUAL" title that never reflects the real selected cycle),
+    but the user's request was specifically about the participant list,
+    not that table — flagging it here rather than fixing or silently
+    leaving it implying it's fine, since a future "the step timeline
+    doesn't update either" report would be this exact table. Verified
+    with a test that seeds a real 4-tier chain (unit→l1→l2→gm) plus one
+    employee with a real `Approved` draft this cycle, confirms the
+    rendered row order matches `emp→unit→l1→l2→gm` exactly (not just
+    "roughly sorted"), and confirms the employee's real `Approved`
+    status renders as "อนุมัติเสร็จสิ้น" rather than a placeholder — plus
+    the standard click-sweep (`nav pages clicked: 22 errors: []`).
+    **Second half of the same message — "การตั้งการแจ้งเตือนทำยังไง"
+    (how do you set up notifications) — confirmed via the same
+    clarifying round to mean the existing "📢 ส่ง Reminder" button
+    (#10/#90) — answered directly, no code change needed**: this button
+    (Dashboard header, admin/sysadmin-only per #90's role gate) is a
+    manual, one-shot send, not a recurring/scheduled notification —
+    there is no "set up" step beyond clicking it each time reminders are
+    needed, because this app has no server to run a schedule on (the
+    same honest architectural limit CLAUDE.md #8/#33 already state).
+    Clicking it opens `mReminder`, where Admin picks a real target group
+    (`getReminderTargets()`: "ยังไม่ส่งแบบประเมิน" / "หัวหน้าระดับ 1
+    ทั้งหมด" / "ทุกคนที่ Active," each a real live count/list from
+    `MASTER_USERS`/`getDrafts()`, never hardcoded), optionally edits the
+    message text, and clicks "ส่งทันที" — `sendReminder()` opens a real
+    `mailto:` link BCC'ing every real email address on file for that
+    target group (the honest, server-less channel CLAUDE.md #10
+    established — the in-system/LINE checkboxes next to it are visibly
+    `disabled` with the real reason printed beside them, never a fake
+    "sent" claim), which hands off to the Admin's own email client to
+    actually send. Told the user this plainly rather than building an
+    unasked-for scheduling feature on a guess.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
