@@ -396,10 +396,25 @@ async function handleLineWebhook(request, env) {
       });
     }
   } catch (e) {
-    // ปัญหาฝั่ง MS365/Graph (token/site ตั้งค่าไม่ถูก ฯลฯ) ไม่ควรทำให้ LINE คิดว่า webhook พัง
-    // และส่งซ้ำรัวๆ — ตอบ 200 ไปตามปกติ แต่ไม่ได้เขียนอะไรจริง (จะไม่มีการตอบกลับยืนยันในแชทด้วย)
-    // ยัง console.error ไว้ให้เห็นใน Cloudflare Logs เสมอ ไม่ใช่กลืนเงียบแบบไม่มีร่องรอยเลย (#66)
+    // ปัญหาฝั่ง MS365/Graph เอง (TENANT_ID/CLIENT_ID/CLIENT_SECRET/SITE_URL/FILE_PATH ตั้งค่า
+    // ไม่ถูก, token หมดอายุ, หา site/ไฟล์ไม่เจอ ฯลฯ) — เกิด "ก่อน" ที่ handleLineEvent() แม้แต่
+    // รายการเดียวจะได้ทำงานเลย เพราะ getAppToken()/resolveSite() พังตั้งแต่ขั้นแรก เดิมโค้ดจุดนี้
+    // แค่ console.error() แล้วเงียบไปทั้งหมด (ไม่มีการตอบกลับ LINE เลยสักข้อความ แม้จะพิมพ์รหัส
+    // พนักงานที่มีอยู่จริง) — เป็นช่องโหว่แบบเดียวกับที่ #149 เพิ่งปิดไปใน handleLineEvent() เอง
+    // แค่คนละชั้น (ชั้นนี้ยังไม่ทันได้รู้ด้วยซ้ำว่าใครพิมพ์อะไรมา เพราะยังไม่ได้ resolve พนักงาน)
+    // ตอบ 200 กลับ LINE เสมอเหมือนเดิม (กัน retry storm) แต่ตอนนี้ยังพยายามตอบข้อความ error
+    // จริงกลับไปในแชทให้ทุก event ที่เป็นข้อความตัวอักษรด้วย — ใช้ LINE_CHANNEL_ACCESS_TOKEN
+    // ได้ตามปกติ เพราะการส่งข้อความ LINE ไม่ได้พึ่ง Microsoft Graph เลยแม้แต่น้อย
     console.error('handleLineWebhook outer MS365/Graph setup failed:', (e && e.message) || e);
+    for (const ev of events) {
+      if (ev && ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken) {
+        await replyLine(
+          env.LINE_CHANNEL_ACCESS_TOKEN,
+          ev.replyToken,
+          '⚠️ ระบบเชื่อมต่อข้อมูลขัดข้องชั่วคราว ไม่สามารถตรวจสอบรหัสพนักงานได้ในขณะนี้ กรุณาลองพิมพ์รหัสพนักงานส่งใหม่อีกครั้งในภายหลัง หรือแจ้ง Admin ให้ตรวจสอบ Log ของ Worker'
+        ).catch(() => {});
+      }
+    }
   }
   return new Response('OK', { status: 200 });
 }

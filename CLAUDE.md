@@ -6983,6 +6983,76 @@ touches employee/attendance/evaluation data.
     before considering it finished, the same way #69's own mechanical
     pass should have been re-run here from the start.
 
+150. **Follow-up to #149: user applied the fix (and presumably created the
+    real `EmployeeSettings` table in Excel per the earlier diagnosis) and
+    reported "เพิ่มแล้วไม่มีอะไรเกิดขึ้น" (added it, nothing happened) —
+    still zero reply from LINE for a real employee code.** Re-read
+    `handleLineWebhook()`'s own structure rather than guessing a second
+    time: #149 only wrapped the `EmployeeSettings` read/upsert/reply
+    block inside `handleLineEvent()` with a try/catch that replies
+    honestly on failure — but `handleLineEvent()` is only ever reached
+    from *inside* the outer `try { const token = await getAppToken(env);
+    const {driveId,itemId} = await resolveSite(env,token); for (const ev
+    of events) ... }` block. If `getAppToken()`/`resolveSite()` itself
+    throws (wrong `TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`, an expired/
+    misconfigured app registration, `SITE_URL`/`FILE_PATH` not matching
+    the real SharePoint site) — the exact same class of failure #68/#69
+    already found breaks pushes elsewhere in this file — the whole `for`
+    loop never runs at all, so `handleLineEvent()` (and therefore #149's
+    own new error-reply) never even gets called. The outer `catch` block
+    at that point only had `console.error()`, with **zero reply to
+    LINE** — a different, one-layer-earlier instance of the exact same
+    #149/#66/#68/#69 shape of bug: a real failure path with no honest
+    user-facing signal, just silence, living one function higher up than
+    the one #149 just fixed. This explains why the symptom looked
+    identical before and after #149's fix — the user's real failure
+    point was never inside `handleLineEvent()` at all, it was in the
+    Graph token/site setup one level above it, which #149's fix never
+    touched. Fixed by replying to every real text-message event in the
+    outer `catch` too — `env.LINE_CHANNEL_ACCESS_TOKEN`-based
+    `replyLine()` calls need zero Microsoft Graph connectivity at all,
+    so they work independently of whatever broke `getAppToken()`/
+    `resolveSite()` — with an honest "⚠️ ระบบเชื่อมต่อข้อมูลขัดข้องชั่วคราว
+    ไม่สามารถตรวจสอบรหัสพนักงานได้ในขณะนี้ ... หรือแจ้ง Admin ให้ตรวจสอบ
+    Log" message, plus the existing `console.error()` kept for Cloudflare
+    Logs visibility. Verified with a 6th test case added to the webhook
+    suite — deliberately imported the Worker module **fresh** via a
+    cache-busting query string (`...worker.js?case6`) rather than reusing
+    the same module instance every other test case shares, since
+    `getAppToken()`/`resolveSite()` memoize their results in module-level
+    `cachedToken`/`cachedSite` variables; reusing the already-successful
+    worker instance from case 1 onward would have silently skipped this
+    whole failure path (the cached token/site from an earlier case's
+    success would just be returned, never hitting the mocked failing
+    `fetch` at all) and the test would have falsely passed without
+    actually exercising the bug. The fresh-import test mocks
+    `login.microsoftonline.com` to fail with a realistic
+    `invalid_client` error and confirms: the webhook still returns `200`
+    to LINE, a real honest error reply is sent in chat (not silence),
+    and the real error text is captured via `console.error` — plus
+    re-ran all 5 of #148/#149's existing cases with zero regressions.
+    **Told the user plainly, since this fix alone may still not resolve
+    their report**: if the real underlying cause is genuinely a Graph/
+    MS365 connectivity problem (wrong secret, misconfigured site), the
+    user will now at minimum *see* a real error message in LINE chat
+    instead of silence, which is a different, better failure mode but
+    not a fix for the connectivity problem itself — the next real
+    diagnostic step is the same as #149 already stated: check Cloudflare
+    Logs after redeploying and resending a real code, and report back
+    the exact error text that appears (now guaranteed to appear in *two*
+    places — chat and Logs — however deep in the request the real
+    failure happens to be). General lesson sharper than #149's own
+    conclusion: when a silent-failure fix is applied to one function and
+    the symptom doesn't change, don't assume the fix itself is broken —
+    check whether the *call site* that was supposed to reach the fixed
+    code is actually guaranteed to run; a `try/catch` wrapped a few
+    layers further out, wrapping the exact call path that leads to the
+    newly-fixed code, can just as easily swallow the failure before it
+    ever gets there — the "never let a fire-and-forget call go silent"
+    rule from #149 applies recursively to every layer of a nested
+    try/catch chain, not just the innermost one that happened to be
+    fixed first.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
