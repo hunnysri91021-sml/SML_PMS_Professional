@@ -7313,6 +7313,111 @@ touches employee/attendance/evaluation data.
     forEach doesn't explicitly know to carry forward, regardless of how
     correct the field's own dedicated pull/push functions are.
 
+155. **User asked "วินัยคืออะไร เกรดจะเปลี่ยนไหม" then sent the company's
+    real `.doc` ระเบียบปฏิบัติ "การประเมินผลการปฏิบัติงานประจำปี" and
+    confirmed: the real policy (ข้อ 6.7) grades A/B/C/D/E by **relative
+    rank within the same org unit** (10/20/40/20/10%), not the flat
+    absolute-threshold `gradeFromX()` (x≥90→A, x≥80→B, …) this file had
+    used since its very first version — the Dashboard's old fixed
+    10/20/40/20/10 mock chart (CLAUDE.md #16) happened to show the same
+    numbers as a *display* bug years before this real forced-distribution
+    *grading* requirement ever came up; the two were coincidentally
+    identical digits describing two completely different things, worth
+    noting since re-reading #16 could easily be mistaken for "this was
+    already built." Asked 4 clarifying questions before touching any
+    grading code, given the blast radius (every employee's final grade):
+    which org field is the smallest comparison unit (confirmed: `group`,
+    `MASTER_USERS[3]`, with `section`[4]/`division`[5]/`department`[6]
+    available to escalate to), when to escalate (confirmed: a real
+    `<select>` the HR doing Calibration picks per run — never an
+    automatic size threshold), whether to rank mixed roles together or
+    split by form level first (confirmed: split by `getAssignedEvalLevel()`
+    first, #23/#110's own function, reused rather than re-derived), and
+    what a non-Bell-Curve "ปรับใหม่" case should mean (confirmed: a
+    **per-person Admin override with a mandatory reason**, not a toggle
+    to disable Bell Curve for a whole unit).
+    Implemented entirely at the one real point in the pipeline where HR
+    already sees every eligible employee at once — Calibration
+    (`renderCalibQueue()`/`confirmCalibration()`, #61/#96) — since every
+    earlier stage (self-eval, L1/L2/GM review) only ever sees one person
+    at a time and literally cannot rank anyone against peers. Added
+    `computeBellCurveGrades()`: groups the ready-for-Calibration roster
+    by `(real org-field value chosen via a new `<select id="calibBellCurveField">`,
+    assigned form level)`, sorts each group descending by the **live**
+    `.calib-adj` input value (not the stale draft X — so Bell Curve
+    always ranks against whatever score HR is about to actually save,
+    the same "compute from what will really be committed" discipline
+    CLAUDE.md #101 already established for attendance pushes), and
+    assigns grades via cumulative-percentage boundaries
+    (`Math.round(cumPct/100*n)` per grade, `BELL_CURVE_PCT =
+    [['A',10],['B',20],['C',40],['D',20],['E',10]]`) — pure math with no
+    special-casing for tiny groups (verified: n=1 lands in the middle
+    grade C, n=2 splits B/D, never forcing an A or E that wouldn't be
+    real), matching the user's own choice not to auto-escalate by size.
+    Ties are broken per the real document's ข้อ 6.8 order — Y (nearest
+    available proxy for "คะแนนดิบก่อนแปลงอัตราส่วน," since this app
+    never stored the pre-weighted raw factor sum separately from Y;
+    stated as a known, honest limitation in the code comment rather than
+    implied exact) → Z → seniority via `thaiDateToIso(emp[14])` → start
+    date again → employee code ascending for a final deterministic order.
+    **Never auto-runs** — `renderCalibQueue()` explicitly sets
+    `bellCurveResult = null` on every render (page entry, auto-sync tick,
+    any edit to a `.calib-adj` input via a new `oninput="onCalibScoreInput()"`
+    handler) and `confirmCalibration()`/the "🔒 ยืนยันผล Calibration"
+    button stay disabled until HR explicitly clicks "📊 คำนวณ Bell Curve"
+    against the exact current scores — the identical "must re-confirm
+    after any edit" discipline CLAUDE.md #133 already established for
+    the reviewer-reject-reconfirm flow, applied here to a bulk grading
+    action instead of a single reject. `confirmCalibration()` now writes
+    `bc.grade` (the Bell Curve result) instead of `gradeFromX(newX)` —
+    per the user's explicit "Bell Curve แทนแบบเก่า," the old function is
+    left in the file only as the *provisional* grade shown at every
+    earlier pipeline stage (self-eval save, L1/L2/GM review all still
+    compute `gradeFromX(summary.X)` so there's something to display
+    before Calibration), never as what actually gets saved as final.
+    **Caught by the feature's own Playwright test, not guessed**: the
+    first draft of `confirmCalibration()` called `renderWorkflowPages()`
+    (which re-renders Calibration and immediately nulls the global
+    `bellCurveResult`) *before* finishing a second loop that still read
+    `bellCurveResult.byKey` to build each row's Excel comment — crashed
+    on the real commit path every time. Fixed by snapshotting
+    `bellCurveResult.byKey` into a local `const bcByKey` before calling
+    `renderWorkflowPages()`, the same "don't read a global after
+    something else already invalidated it" lesson as CLAUDE.md #134's
+    push/pull race, just inside one function instead of across two.
+    **Admin override** (`overrideEmployeeGrade(code, cycle)`, new ✏️
+    button next to 🖨️ PDF/🗑️ delete on every Calibration row,
+    `isAdminOrSysadmin()`-gated): two `prompt()`s — grade (validated
+    against A-E, silently aborts with nothing written on an invalid
+    non-blank value) then a **mandatory** reason (aborts if blank,
+    CLAUDE.md #47's "don't guess what wasn't typed" discipline) — writes
+    the grade directly, bumps status to `Calibrated` only if it wasn't
+    already that far, and pushes both to `Appraisals`
+    (`pushDraftRowToExcel`) and `Approvals`
+    (`pushApprovalRecordToExcel`, comment explicitly says "ปรับเกรดเอง
+    (ไม่ใช่ Bell Curve): old → new | เหตุผล: …") plus a distinctly-worded
+    Audit Log entry — so a manual override is always traceable as a
+    deliberate exception, never confused with a normal Bell Curve result
+    in either the Excel history or the Audit Log. Verified end-to-end
+    with a Playwright test seeding 6 synthetic employees in one real
+    `group`, scoring them 95/88/82/75/65/40, confirming the computed
+    ranks land exactly 10/20/40/20/10 (A/B/C/C/D/E for n=6), confirming
+    the confirm button locks after editing a score and unlocks only
+    after recomputing, confirming the real commit writes the Bell Curve
+    grade (not `gradeFromX`) into every draft, and confirming the Admin
+    override correctly overwrites one person's grade with a logged
+    reason — plus the standard click-sweep (`nav pages clicked: 22
+    errors: []`). General lesson: a user-supplied real policy document
+    (even a legacy `.doc` that needs `antiword -x db` instead of
+    LibreOffice to extract readable Thai, per #103's own precedent) can
+    reveal that a long-standing, never-questioned function
+    (`gradeFromX()`, present since this file's first version) was never
+    actually the real grading rule — always re-verify a core calculation
+    against the company's own written policy when a user asks "is this
+    really how it's supposed to work," rather than assuming code that
+    has survived many bug-fix passes unscathed must be correct by virtue
+    of never having been flagged before.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

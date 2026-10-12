@@ -1846,8 +1846,24 @@ tbody tr:hover{background:#f0f6ff!important}
 
   <!-- ========== CALIBRATION (HR) ========== -->
   <section class="page" id="pg-calib">
-    <div class="ph"><div><h2>Calibration — ปรับเทียบคะแนน (ขั้นที่ 6, HR)</h2><p>ปรับเทียบคะแนนของใบประเมินที่พนักงานรับทราบผลแล้ว (สถานะ Acknowledged) ก่อนส่งอนุมัติขั้นสุดท้าย AMD/MD</p></div>
-    <div class="ph-act"><button class="btn btn-ok" onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
+    <div class="ph"><div><h2>Calibration — ปรับเทียบคะแนน (ขั้นที่ 6, HR)</h2><p>ปรับเทียบคะแนนของใบประเมินที่พนักงานรับทราบผลแล้ว (สถานะ Acknowledged) ก่อนส่งอนุมัติขั้นสุดท้าย AMD/MD — เกรดสุดท้ายคำนวณแบบ Bell Curve (A=10% B=20% C=40% D=20% E=10%) ตามระเบียบปฏิบัติข้อ 6.7 ไม่ใช่เกณฑ์ตัดคะแนนสัมบูรณ์แบบเดิม</p></div>
+    <div class="ph-act"><button class="btn btn-ok" id="confirmCalibBtn" disabled onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-h"><h3>⚙️ ตั้งค่า Bell Curve</h3></div>
+      <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="font-size:13px;color:#475569">เทียบกันภายในระดับ:</label>
+        <select id="calibBellCurveField" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px">
+          <option value="group">กลุ่ม (Group)</option>
+          <option value="section">แผนก (Section)</option>
+          <option value="division">ส่วน (Division)</option>
+          <option value="department">ฝ่าย (Department)</option>
+        </select>
+        <button class="btn btn-p" onclick="runBellCurveCalculation()">📊 คำนวณ Bell Curve</button>
+        <span id="calibBellCurveStatus" style="font-size:13px"></span>
+      </div>
+      <div style="padding:0 18px 14px;font-size:12px;color:#94a3b8">แยกจัดอันดับตามระดับฟอร์มประเมิน (ปฏิบัติการ/สำนักงาน/หัวหน้า/ผจก.ส่วน) ภายในหน่วยงานเดียวกันก่อนจัดสัดส่วนเกรด — ถ้าแก้ไข "คะแนนหลังปรับ" ของใครหลังคำนวณแล้ว ต้องกดคำนวณใหม่อีกครั้งก่อนยืนยัน</div>
+    </div>
 
     <div class="card" style="margin-bottom:18px">
       <div class="card-h"><h3>การกระจายเกรด (เฉพาะที่ผ่าน Calibration แล้วในรอบนี้)</h3></div>
@@ -1860,7 +1876,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="card">
       <div class="card-h"><h3>ตารางปรับเทียบรายบุคคล</h3><div class="r"><span class="bd b-y" id="calibCount">รอปรับเทียบ 0 รายการ</span></div></div>
       <div class="tw"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงานรับทราบ (X)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>ใบเตือน / หมายเหตุวินัย (HR)</th><th></th></tr></thead>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงานรับทราบ (X)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>เกรด Bell Curve</th><th>ใบเตือน / หมายเหตุวินัย (HR)</th><th></th></tr></thead>
         <tbody id="calibRows"></tbody>
       </table></div>
     </div>
@@ -7171,6 +7187,93 @@ function calcCurrentEvalSummary(){
 
 function gradeFromX(x){ return x>=90?'A':x>=80?'B':x>=70?'C':x>=60?'D':'E'; }
 
+/* ============ BELL CURVE GRADING (ระเบียบปฏิบัติ "การประเมินผลการปฏิบัติงานประจำปี" ข้อ 6.7) ============
+   เอกสารจริงของบริษัทระบุว่าเกรดสุดท้าย (A/B/C/D/E) ต้องมาจาก "สัดส่วนจำนวนพนักงานในหน่วยงาน"
+   (10/20/40/20/10%) เทียบกันภายในหน่วยงานเดียวกัน — ไม่ใช่เกณฑ์ตัดคะแนนสัมบูรณ์แบบ gradeFromX()
+   เดิม ผู้ใช้ยืนยันให้ Bell Curve นี้ "แทนแบบเก่า" ทั้งหมด (ไม่ใช่ใช้คู่กัน) — gradeFromX() จึงยังคง
+   ไว้เป็นเกรด "ชั่วคราว" ที่คำนวณทุกครั้งที่บันทึก/ส่งแบบประเมิน (เพื่อให้มีค่าแสดงผลระหว่างทางก่อนถึง
+   Calibration) แต่เกรดที่ "เป็นทางการ" จริงๆ จะถูกคำนวณใหม่ด้วย Bell Curve ที่ขั้น Calibration เท่านั้น
+   (ดู confirmCalibration()) ซึ่งคือขั้นเดียวที่ HR เห็นคนทั้งหน่วยงานพร้อมกันและจัดอันดับเทียบกันได้จริง */
+const BELL_CURVE_PCT = [['A',10],['B',20],['C',40],['D',20],['E',10]];
+/* ระดับหน่วยงานที่เทียบกัน — ผู้ใช้ยืนยันว่าหน่วยเล็กที่สุดที่เริ่มเทียบคือ "กลุ่ม (Group)" u[3] แล้วไล่
+   ขยับขึ้นเป็น แผนก(Section,u[4])/ส่วน(Division,u[5])/ฝ่าย(Department,u[6]) ได้ตามดุลยพินิจของ HR ที่
+   กำลังทำ Calibration รอบนั้น (ไม่ auto-escalate ตามจำนวนคน ตามที่ผู้ใช้ตอบว่า "ให้มีตัวกรองเลือกได้") */
+const BELL_CURVE_GROUP_FIELDS = { group:3, section:4, division:5, department:6 };
+const BELL_CURVE_GROUP_LABELS = { group:'กลุ่ม (Group)', section:'แผนก (Section)', division:'ส่วน (Division)', department:'ฝ่าย (Department)' };
+const BELL_CURVE_GROUP_KEY = 'smlPmsBellCurveGroupField';
+function loadBellCurveGroupField(){
+  try{ const v = localStorage.getItem(BELL_CURVE_GROUP_KEY); return BELL_CURVE_GROUP_FIELDS[v] ? v : 'group'; }catch(e){ return 'group'; }
+}
+function saveBellCurveGroupField(v){ try{ localStorage.setItem(BELL_CURVE_GROUP_KEY, v); }catch(e){} }
+
+/* ผลคำนวณ Bell Curve ล่าสุด — ต้องคำนวณใหม่ (กดปุ่ม) ก่อนยืนยัน Calibration ได้ทุกครั้งที่มีการแก้ไข
+   คะแนน (X) ในตาราง เหมือนกลไก "ต้องยืนยันซ้ำหลังแก้ไข" ของ CLAUDE.md #133 — ป้องกันการยืนยันเกรด
+   ที่คำนวณจากคะแนนคนละค่ากับที่กำลังจะบันทึกจริง */
+let bellCurveResult = null; // {fieldKey, cycle, byKey: {draftKey: {grade, rank, n, groupLabel}}}
+
+/* เกณฑ์ตัดสินเมื่อคะแนน X เท่ากัน ตามข้อ 6.8 ของระเบียบจริง เรียงลำดับ:
+   1) คะแนนดิบก่อนแปลงอัตราส่วน — ระบบนี้ไม่ได้เก็บคะแนนดิบก่อนคูณน้ำหนักฟอร์มแยกจาก Y ไว้ต่างหาก จึงใช้
+      Y (คะแนนผลการปฏิบัติงานที่ถ่วงน้ำหนักแล้ว) เป็นค่าใกล้เคียงที่สุดที่มีจริง — เป็นข้อจำกัดที่ทราบแล้ว
+   2) คะแนนการมาปฏิบัติงาน (Z)
+   3) อายุงาน (จาก u[14] วันเริ่มงาน — ยิ่งเริ่มงานมาก่อนยิ่งอาวุโสกว่า)
+   4) วันเริ่มงาน (ซ้ำกับข้อ 3 ในทางปฏิบัติ แต่ใส่ไว้ตามระเบียบ)
+   5) รหัสพนักงาน (เรียงจากน้อยไปมาก เพื่อให้ผลลัพธ์กำหนดแน่นอนเสมอ) */
+function compareBellCurveTie(a, b){
+  const dA = a.draft, dB = b.draft;
+  const yA = Number(dA[dA.length-5])||0, yB = Number(dB[dB.length-5])||0;
+  if(yB !== yA) return yB - yA;
+  const zA = Number(dA[dA.length-4])||0, zB = Number(dB[dB.length-4])||0;
+  if(zB !== zA) return zB - zA;
+  const startA = thaiDateToIso(a.emp[14]||''), startB = thaiDateToIso(b.emp[14]||'');
+  if(startA && startB && startA !== startB) return startA < startB ? -1 : 1; // เริ่มงานก่อน = อาวุโสกว่า = มาก่อน
+  return (a.emp[0]||'').localeCompare(b.emp[0]||'');
+}
+
+function getBellCurveGroupValue(emp, fieldKey){
+  const idx = BELL_CURVE_GROUP_FIELDS[fieldKey];
+  return (emp[idx] || '—').trim() || '—';
+}
+
+/* คำนวณเกรดแบบ Bell Curve จากรายชื่อที่พร้อม Calibration (state==='ready') ในขอบเขตปัจจุบัน โดยอ่าน
+   คะแนน X ล่าสุดจากช่อง .calib-adj ที่แสดงอยู่บนหน้า (ไม่ใช่ X เดิมใน draft) เพื่อให้ Bell Curve คิดจาก
+   คะแนนที่กำลังจะถูกบันทึกจริง ไม่ใช่คะแนนก่อนที่ HR แก้ไข — จัดกลุ่มแยกตาม (หน่วยงานที่เลือก, ระดับ
+   ฟอร์มประเมิน) ก่อนจัดอันดับ ตามที่ผู้ใช้ยืนยัน "แยกตามระดับฟอร์มในหน่วยเดียวกัน" */
+function computeBellCurveGrades(){
+  const fieldKey = loadBellCurveGroupField();
+  const cycle = getCurrentEvalCycleYear();
+  const roster = buildTierRoster(null, null, 'Acknowledged', cycle).filter(r=>r.state==='ready');
+  const inputs = {};
+  document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = Number(inp.value)||0; });
+  const groups = {};
+  roster.forEach(r=>{
+    const key = draftKey(r.draft);
+    const X = Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(r.draft[r.draft.length-3])||0;
+    const groupVal = getBellCurveGroupValue(r.emp, fieldKey);
+    const formLevel = getAssignedEvalLevel(r.emp) || r.draft[3] || '—';
+    const gKey = groupVal + '|' + formLevel;
+    if(!groups[gKey]) groups[gKey] = { groupVal, formLevel, rows: [] };
+    groups[gKey].rows.push({ emp:r.emp, draft:r.draft, key, X });
+  });
+  const byKey = {};
+  Object.values(groups).forEach(g=>{
+    const sorted = [...g.rows].sort((a,b)=>{
+      if(b.X !== a.X) return b.X - a.X;
+      return compareBellCurveTie(a, b);
+    });
+    const n = sorted.length;
+    const cumPct = BELL_CURVE_PCT.reduce((acc,[,p],i)=>{ acc.push((acc[i-1]||0)+p); return acc; }, []);
+    const boundaries = cumPct.map(p => Math.round(p/100*n));
+    sorted.forEach((row, idx)=>{
+      const rank = idx+1;
+      let gradeIdx = BELL_CURVE_PCT.length-1;
+      for(let i=0;i<boundaries.length;i++){ if(rank <= boundaries[i]){ gradeIdx = i; break; } }
+      byKey[row.key] = { grade: BELL_CURVE_PCT[gradeIdx][0], rank, n, groupLabel: BELL_CURVE_GROUP_LABELS[fieldKey]+': '+g.groupVal+' ('+g.formLevel+')', X: row.X };
+    });
+  });
+  bellCurveResult = { fieldKey, cycle, byKey };
+  return bellCurveResult;
+}
+
 /* แถวตรงกับคอลัมน์จริงของ sheet "Appraisals" บน SharePoint (ลำดับ A-W):
    EmpID, ชื่อ-สกุล, รอบ, ระดับ, m01..m10, l01..l04, Y, Z, X, เกรด, Status
    Y/X/เกรด คำนวณเองในแอปแล้วส่งเป็นค่าจริง (ไม่ฝากให้สูตร Excel คำนวณ เพราะแถวใหม่ที่เพิ่มผ่าน Graph API
@@ -8558,13 +8661,18 @@ function renderCalibQueue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = 'รอปรับเทียบ '+readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
+  const groupSel = document.getElementById('calibBellCurveField');
+  if(groupSel && !groupSel.dataset.inited){ groupSel.value = loadBellCurveGroupField(); groupSel.dataset.inited='1'; }
+  /* Bell Curve ถูก invalidate ทุกครั้งที่ renderCalibQueue() รันใหม่ (เปิดหน้า/sync อัตโนมัติ/แก้ไข
+     คะแนน) — บังคับให้ HR ต้องกด "คำนวณ Bell Curve" ใหม่เสมอก่อนยืนยัน เหมือนกลไก #133 */
+  bellCurveResult = null;
   tbody.innerHTML = roster.length ? roster.map(r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="5" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="6" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
     const d = r.draft, X = Number(d[d.length-3]), grade = d[d.length-2];
     if(r.state==='done'){
@@ -8572,19 +8680,22 @@ function renderCalibQueue(){
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
         <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-        <td colspan="2" style="text-align:center;color:#16a34a">✓ ผ่าน Calibration แล้ว</td>
-        <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+        <td colspan="3" style="text-align:center;color:#16a34a">✓ ผ่าน Calibration แล้ว</td>
+        <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     const noteKey = code+'|'+d[2];
     const noteVal = (typeof getEvalHrNote==='function' ? getEvalHrNote(noteKey) : '').replace(/"/g,'&quot;');
+    const key = draftKey(d);
     return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><input type="number" step="0.01" class="calib-adj" data-key="${draftKey(d)}" value="${X}" style="width:80px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
+      <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()" style="width:80px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
+      <td class="calib-bc-cell" data-key="${key}" style="text-align:center;color:#94a3b8;font-size:12px">ยังไม่คำนวณ</td>
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)" style="width:220px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
-      <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
+      <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+  }).join('') : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
+  updateCalibConfirmLock();
   if(distBox){
     const calibrated = getDrafts().filter(d=>['Calibrated','Approved'].includes(d[d.length-1])).filter(d=>!scoped || scoped.has(d[0]));
     const counts = {};
@@ -8595,15 +8706,57 @@ function renderCalibQueue(){
       : '<tr><td colspan="2" style="text-align:center;color:#94a3b8;padding:12px">ยังไม่มีรายการที่ผ่าน Calibration ในรอบนี้</td></tr>';
   }
 }
+/* แก้ไขคะแนน (X) ใดๆ ในตาราง ต้อง invalidate ผล Bell Curve ที่คำนวณไว้ก่อนหน้าทันที — ไม่งั้นเกรดที่
+   ยืนยันอาจคำนวณมาจากคะแนนคนละค่ากับที่กำลังจะบันทึกจริง (หลักการเดียวกับ CLAUDE.md #133) */
+function onCalibScoreInput(){ bellCurveResult = null; updateCalibConfirmLock(); }
+function updateCalibConfirmLock(){
+  const btn = document.getElementById('confirmCalibBtn');
+  const status = document.getElementById('calibBellCurveStatus');
+  const hasReady = document.querySelectorAll('.calib-adj').length > 0;
+  const ok = hasReady && bellCurveResult && Object.keys(bellCurveResult.byKey).length === document.querySelectorAll('.calib-adj').length;
+  if(btn) btn.disabled = !ok;
+  if(status){
+    status.innerHTML = !hasReady ? ''
+      : ok ? `✅ คำนวณ Bell Curve แล้ว (เทียบตาม: ${BELL_CURVE_GROUP_LABELS[bellCurveResult.fieldKey]}) — พร้อมยืนยัน`
+      : '⚠️ ยังไม่คำนวณ Bell Curve (หรือมีการแก้ไขคะแนนหลังคำนวณ) — กรุณากด "📊 คำนวณ Bell Curve" ก่อนยืนยัน';
+  }
+}
+function runBellCurveCalculation(){
+  const sel = document.getElementById('calibBellCurveField');
+  const fieldKey = sel ? sel.value : loadBellCurveGroupField();
+  saveBellCurveGroupField(fieldKey);
+  const result = computeBellCurveGrades();
+  const n = Object.keys(result.byKey).length;
+  if(!n){ smlToast('ไม่มีรายการรอ Calibration ให้คำนวณ','warn'); updateCalibConfirmLock(); return; }
+  document.querySelectorAll('.calib-bc-cell').forEach(cell=>{
+    const info = result.byKey[cell.dataset.key];
+    cell.innerHTML = info
+      ? `<span class="grade g${info.grade}">${info.grade}</span><br><small style="color:#64748b">อันดับ ${info.rank}/${info.n}<br>${info.groupLabel}</small>`
+      : '—';
+    cell.style.color = '';
+  });
+  updateCalibConfirmLock();
+  smlToast('คำนวณ Bell Curve แล้ว '+n+' รายการ','ok');
+}
 function confirmCalibration(){
   const inputs=[...document.querySelectorAll('.calib-adj')];
   if(!inputs.length){ smlToast('ไม่มีรายการรอ Calibration','warn'); return; }
+  if(!bellCurveResult || Object.keys(bellCurveResult.byKey).length !== inputs.length){
+    smlToast('กรุณากด "📊 คำนวณ Bell Curve" ให้ตรงกับคะแนนปัจจุบันก่อนยืนยัน','warn');
+    return;
+  }
+  /* เก็บผล Bell Curve ไว้ในตัวแปร local ก่อน — renderWorkflowPages() ด้านล่างจะเรียก
+     renderCalibQueue() ซ้ำซึ่ง invalidate (set เป็น null) ตัวแปร global bellCurveResult ทันทีที่
+     render ใหม่ ถ้าไปอ่าน bellCurveResult.byKey หลังจากนั้นจะพังเปล่าๆ (ครั้งแรกพลาดจุดนี้ ตรวจพบจาก
+     Playwright test ของฟีเจอร์นี้เอง ไม่ใช่สมมติ) */
+  const bcByKey = { ...bellCurveResult.byKey };
   const drafts=getDrafts();
   const changed=[];
   inputs.forEach(inp=>{
     const key=inp.dataset.key, newX=Number(inp.value)||0;
     const d=drafts.find(x=>draftKey(x)===key);
-    if(d){ d[d.length-3]=newX; d[d.length-2]=gradeFromX(newX); d[d.length-1]='Calibrated'; changed.push(d); }
+    const bc = bcByKey[key];
+    if(d && bc){ d[d.length-3]=newX; d[d.length-2]=bc.grade; d[d.length-1]='Calibrated'; changed.push(d); }
   });
   saveDrafts(drafts);
   /* #96: บันทึกใบเตือน/หมายเหตุวินัยที่ HR กรอกไว้คู่กับการยืนยัน Calibration — เก็บแยกจาก draft
@@ -8617,11 +8770,34 @@ function confirmCalibration(){
   inputs.forEach(inp=>{
     const [empCode,cycle]=inp.dataset.key.split('|');
     const note = notesByKey[empCode+'|'+cycle] || '';
-    const comment = 'X='+inp.value + (note.trim() ? ' | หมายเหตุ: '+note.trim() : '');
+    const bc = bcByKey[inp.dataset.key];
+    const comment = 'X='+inp.value+' | เกรด Bell Curve='+(bc?bc.grade:'—')+' (อันดับ '+(bc?bc.rank+'/'+bc.n:'—')+', '+(bc?bc.groupLabel:'—')+')' + (note.trim() ? ' | หมายเหตุ: '+note.trim() : '');
     pushApprovalRecordToExcel(empCode,cycle,'Calibrated',comment);
   });
-  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration', inputs.length+' รายการ', inputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
-  smlToast('ยืนยันผล Calibration แล้ว '+inputs.length+' รายการ','ok');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration (Bell Curve)', inputs.length+' รายการ', inputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
+  smlToast('ยืนยันผล Calibration แล้ว '+inputs.length+' รายการ (เกรดจาก Bell Curve)','ok');
+}
+/* ข้อยกเว้นจากผู้ใช้ (#155): "Admin ปรับเกรดรายคนเองได้ด้วยเหตุผลพิเศษ" — ไม่ใช่ Bell Curve ทั้งหน่วยงาน
+   แต่เป็นการแก้ไขเกรดเฉพาะรายคนเดียว ต้องระบุเหตุผลเสมอ (ห้ามเงียบ) และบันทึกลง Audit Log + Approvals
+   (Excel) แยกจากบันทึก Calibration ปกติ ให้ตรวจสอบย้อนหลังได้ว่าใครปรับ เมื่อไหร่ เพราะอะไร */
+function overrideEmployeeGrade(code, cycle){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ปรับเกรดเองได้','warn'); return; }
+  const grade = (prompt('ระบุเกรดใหม่ (A / B / C / D / E):')||'').trim().toUpperCase();
+  if(!['A','B','C','D','E'].includes(grade)){ if(grade) smlToast('เกรดต้องเป็น A, B, C, D หรือ E เท่านั้น — ไม่บันทึก','err'); return; }
+  const reason = (prompt('ระบุเหตุผลที่ปรับเกรดเอง (บังคับกรอก — จะถูกบันทึกลง Audit Log):')||'').trim();
+  if(!reason){ smlToast('ต้องระบุเหตุผลทุกครั้งที่ปรับเกรดเอง — ไม่บันทึก','warn'); return; }
+  const drafts = getDrafts();
+  const d = drafts.find(x=>x[0]===code && x[2]===cycle);
+  if(!d){ smlToast('ไม่พบใบประเมินของรหัสนี้ในรอบนี้','err'); return; }
+  const oldGrade = d[d.length-2];
+  d[d.length-2] = grade;
+  if(evalStatusRank(d[d.length-1]) < evalStatusRank('Calibrated')) d[d.length-1] = 'Calibrated';
+  saveDrafts(drafts);
+  renderWorkflowPages();
+  pushDraftRowToExcel(d);
+  pushApprovalRecordToExcel(code, cycle, d[d.length-1], 'ปรับเกรดเอง (ไม่ใช่ Bell Curve): '+oldGrade+' → '+grade+' | เหตุผล: '+reason);
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','Admin ปรับเกรดเอง (นอกเหนือ Bell Curve)', oldGrade+' → '+grade+' | เหตุผล: '+reason, code);
+  smlToast('ปรับเกรด '+code+' เป็น '+grade+' แล้ว (บันทึกเหตุผลลง Audit Log)','ok');
 }
 
 function renderApproveQueue(){
