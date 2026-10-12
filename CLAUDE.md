@@ -7418,6 +7418,104 @@ touches employee/attendance/evaluation data.
     has survived many bug-fix passes unscathed must be correct by virtue
     of never having been flagged before.
 
+156. **Follow-up to #155: user asked "พนักงานจะไม่รู้ว่าตนเองได้เกรดอะไร?"
+    after I explained Bell Curve runs at Calibration, after the employee
+    already acknowledges a provisional grade — then asked for three real
+    changes in one message: hide the grade (not the score) from the
+    employee until MD's final approval, add a proper "แจ้งผลประเมิน"
+    notification Admin triggers manually (mail/LINE, like Reminder), and
+    add an Excel export of a manager's own team on "2. ประเมินทีมงาน" for
+    L3 (role `l2`).** Asked 4 clarifying questions first, since each of
+    the three had more than one reasonable shape: confirmed hide **only**
+    the grade letter, not X/Y/Z (so the employee still sees real progress,
+    just not the still-provisional letter); confirmed a genuinely new
+    target ("Approved-but-not-yet-notified"), not folded into the
+    existing Reminder mechanism (different purpose — Reminder nags people
+    to *act*, this *announces a finished result*); confirmed the
+    recipient set is exactly that new target (not "anyone Admin picks
+    freely," which would have needed a different UI); confirmed the
+    export belongs on the team page itself, exporting the currently
+    -displayed name/department/evaluation-status columns.
+    **Grade-hiding**: traced where an employee's grade is actually shown
+    and found `printEvalForm()`/`buildEvalPrintPage()` (#121-123) already
+    gate the grade circle behind `isFinalStatus()` — the only real gap
+    was `renderMyResult()` (the "6. ผลประเมิน" page itself), which showed
+    `latest[latest.length-2]` (the live, possibly-still-provisional
+    grade) unconditionally once `hasVisibleResult()` was true. Fixed by
+    showing `🔒` + "จะแสดงหลัง MD อนุมัติขั้นสุดท้าย" instead of the real
+    letter whenever `isFinalStatus(latestStatus)` is false, and applying
+    the identical per-row check to the history table (each past cycle's
+    grade cell is independently gated by that *row's own* status, not
+    the latest one — an older, already-`Approved` cycle must still show
+    its real grade even while the newest cycle is still mid-pipeline).
+    X/Y/Z stayed untouched, exactly as asked.
+    **Notification**: new `RESULT_NOTIFIED_KEY` (localStorage `Set` of
+    `draftKey()` strings — the exact #42 `PUSHED_APPRAISALS_KEY` pattern:
+    "has this been handled" tracked separately from the record's real
+    workflow `status`, never conflated into it) backs
+    `getResultNotifyTargets()` (`isFinalStatus()` rows not yet in the
+    set). New modal `mResultNotify` (own HTML, own preview function,
+    deliberately **not** a second mode bolted onto `mReminder` — #90's
+    button, `getReminderTargets()`, and `sendReminder()` are left
+    completely untouched) with the same real email/LINE channel pattern
+    #147 already established (`sendLineReminder()` reused directly,
+    never re-implemented) and the same honest "To" fix from #153 (own
+    email in `mailto:`'s address slot, every real recipient in Bcc).
+    `sendResultNotification()` marks every target notified **the moment
+    Admin clicks send**, regardless of per-channel delivery confirmation
+    — the same accepted limitation every `mailto:` send in this file
+    already has (#10/#153: opening the compose window is the only thing
+    the app can ever verify for email), stated in a code comment rather
+    than implied as more reliable than it is. New "📬 แจ้งผลประเมิน"
+    button next to "📢 ส่ง Reminder" on the Dashboard, gated
+    admin/sysadmin-only via the exact same `applySession()` chokepoint
+    #90 already uses for its sibling button (`resultNotifyBtnEl.style.
+    display`), never a nav-level `data-role` (this is a page-header
+    action button, not a nav item, the same shape #90 already warns is
+    easy to leave ungated).
+    **Export**: new `exportTeamListToExcel()` reusing the file's one
+    real CSV-download helper, `downloadCsv()` (#60's established
+    pattern — this file has no real `.xlsx` writer, a UTF-8-BOM CSV that
+    Excel opens natively is the honest equivalent, same as
+    `exportIndividualSummary()`/`exportPayrollData()`). Rather than
+    building a second query for "this manager's team," captures the
+    exact `filtered` array `renderTeamFromMaster()` already computes
+    (after its own status/search filters) into a module-level
+    `_teamExportRows` at the end of that function — the #126/#127/#138
+    "don't build a fourth independent query that can drift from what's
+    on screen" discipline, so exporting always matches exactly what's
+    currently rendered, filters and all. New "📊 Export Excel" button on
+    the team page (`#teamExportBtn`), gated to `role==='l2'` (the real
+    L3/ผจก.ส่วน tier per #70/#145's hierarchy) plus `admin`/`sysadmin`
+    (the standing #45 convention — those two roles always get to preview/
+    verify any per-role feature) — set inside `renderTeamFromMaster()`
+    itself rather than `applySession()`, since visibility here legitimately
+    depends on which page/manager context is active, not just login role.
+    **Caught and fixed by this feature's own click-sweep test, not
+    guessed**: the first draft closed a new HTML comment (right before
+    the `mResultNotify` modal markup) with the JS-style `*/` instead of
+    the real HTML `-->` — the browser's HTML parser then treated
+    *everything after that point in the file* as still inside one open
+    comment, silently swallowing the entire next `<script>` block
+    (540KB+, containing `MASTER_USERS`, `saveDrafts()`, and nearly every
+    function in this file) as inert comment text. `document.scripts`
+    confirmed the huge script element never existed in the DOM at all —
+    no `pageerror` fired (a malformed comment is valid-enough HTML, not
+    a JS exception), so this was invisible to every `node --check`
+    syntax pass already run; only `typeof MASTER_USERS === 'undefined'`
+    in a live browser check surfaced it. Fixed by closing the comment
+    with the real `-->`. General lesson sharper than any prior syntax-
+    check discipline in this file: a hand-written HTML comment mixing
+    conventions from two languages (`<!-- ... */`) is a real, silent
+    failure mode that **no JS syntax checker can ever catch**, since the
+    JS is never malformed — the HTML parser simply never creates the
+    `<script>` element in the first place; when introducing a new raw
+    HTML comment near a `<script>` boundary, always close it with `-->`
+    and verify with a live `document.scripts` count in a real (headless)
+    browser, not just `node --check` on extracted script text, since the
+    extraction itself can share the exact same blind spot the browser
+    has for comment/tag boundaries.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

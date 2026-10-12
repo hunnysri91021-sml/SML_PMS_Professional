@@ -1484,6 +1484,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="ph-act">
         <select class="btn"><option>FY2026 – ประจำปี 2569</option><option>FY2025 – ประจำปี 2568</option></select>
         <button class="btn btn-p" id="reminderBtn" onclick="openM('mReminder')">📢 ส่ง Reminder</button>
+        <button class="btn btn-ok" id="resultNotifyBtn" onclick="openM('mResultNotify')">📬 แจ้งผลประเมิน</button>
       </div>
     </div>
 
@@ -1778,6 +1779,7 @@ tbody tr:hover{background:#f0f6ff!important}
         <option value="pending">รอประเมิน</option>
         <option value="done">ส่งแล้ว</option>
       </select>
+      <button class="btn" id="teamExportBtn" style="display:none" onclick="exportTeamListToExcel()">📊 Export Excel</button>
     </div></div>
 
     <div class="al al-i"><span>🔒</span><div>หน้านี้แสดงเฉพาะผู้ใต้บังคับบัญชาทางตรงของหัวหน้าที่เลือกไว้ด้านบนเท่านั้น (ดึงจากสายบังคับบัญชาจริงในข้อมูลพนักงาน) — ไม่เห็นทีมของหัวหน้าคนอื่น</div></div>
@@ -3334,6 +3336,24 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="sendReminder()">ส่งทันที</button></div>
 </div></div>
 
+<!-- #156: แจ้งผลประเมินหลัง MD อนุมัติขั้นสุดท้ายแล้ว — เป้าหมายใหม่เฉพาะคนที่ Approved จริงแล้วแต่ยัง
+     ไม่เคยถูกแจ้ง (RESULT_NOTIFIED_KEY) ไม่รวมกับ mReminder (ซึ่งเป็นการเตือนให้ "ไปทำ" ไม่ใช่ "แจ้งผล")
+     เพราะเป้าหมาย/ข้อความ/ความถี่ในการใช้ต่างกันโดยสิ้นเชิง -->
+<div class="ov" id="mResultNotify"><div class="md" style="max-width:470px">
+  <div class="md-h"><h3>📬 แจ้งผลการประเมิน (อนุมัติขั้นสุดท้ายแล้ว)</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-b">
+    <div class="fg"><label>ช่องทาง</label>
+      <label style="font-weight:400"><input type="checkbox" id="rn_ch_email" checked style="width:auto;margin-right:5px">อีเมล</label>
+      <label style="font-weight:400;margin-left:14px"><input type="checkbox" id="rn_ch_line" checked style="width:auto;margin-right:5px">LINE <small style="color:#64748b">(เฉพาะคนที่มี LINE User ID บันทึกไว้แล้ว)</small></label>
+    </div>
+    <div class="fg"><label>ข้อความ</label><textarea id="rn_message" rows="4">ผลการประเมินผลการปฏิบัติงานของท่านได้รับการอนุมัติขั้นสุดท้ายแล้ว กรุณาเข้าดูผลที่หน้า "6. ผลประเมิน" ในระบบ SML PMS</textarea></div>
+    <div class="fg"><label>รายชื่อที่ Approved แล้วแต่ยังไม่ได้แจ้ง</label>
+      <div id="rn_preview" style="max-height:160px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
+    </div>
+  </div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="sendResultNotification()">ส่งทันที</button></div>
+</div></div>
+
 <script>
 /* ====== NAVIGATION ====== */
 /* โลโก้ SML จริง (วงกลม Siam Motors Logistics) — ฝังเป็น base64 ในไฟล์เดียวตามธรรมเนียมโปรเจกต์นี้
@@ -4265,6 +4285,8 @@ function applySession(u){
      ทุก role อื่นนอกจาก admin/sysadmin เช่นเดียวกับ roleSel ด้านบน */
   const reminderBtnEl = document.getElementById('reminderBtn');
   if(reminderBtnEl) reminderBtnEl.style.display = ['admin','sysadmin'].includes(u[2]) ? '' : 'none';
+  const resultNotifyBtnEl = document.getElementById('resultNotifyBtn');
+  if(resultNotifyBtnEl) resultNotifyBtnEl.style.display = ['admin','sysadmin'].includes(u[2]) ? '' : 'none';
   if(typeof setRole === 'function') setRole(u[2]);
   const badge = document.getElementById('sessionBadge');
   const nameEl = document.getElementById('sessionName');
@@ -4974,6 +4996,33 @@ function renderTeamFromMaster() {
       scopeNoteEl.style.display='none';
     }
   }
+
+  /* #156: Export หน้านี้เป็น Excel — เก็บแถวที่กำลังแสดงจริง (หลังผ่าน status/search filter แล้ว)
+     ไว้ในตัวแปร module-level เดียว ไม่สร้าง query แยกชุดที่สองที่อาจดริฟท์ออกจากตารางบนจอ (บทเรียน
+     #126/#127/#138) ปุ่ม Export ที่กดจะอ่านจากตัวแปรนี้ตรงๆ เสมอ จึง "export อะไรก็เหมือนที่เห็นบนจอ" */
+  _teamExportRows = filtered.map(({u,wf,X,discipline})=>({
+    code:u[0], name:u[1], position:u[7],
+    dept: u[6]||u[4]||'—',
+    discipline: discipline==null?'':discipline,
+    X: X==null?'':X,
+    statusLabel: stMap[wf][1]
+  }));
+  const teamExportBtnEl = document.getElementById('teamExportBtn');
+  if(teamExportBtnEl) teamExportBtnEl.style.display = (me && ['l2','admin','sysadmin'].includes(me[2])) ? '' : 'none';
+}
+let _teamExportRows = [];
+/* ผู้ใช้ขอปุ่ม Export เป็น Excel สำหรับระดับ L3 (ผจก.ส่วน/role 'l2') บนหน้า "2. ประเมินทีมงาน" โดยเฉพาะ
+   — ให้ admin/sysadmin เห็นด้วยเพื่อตรวจสอบ/พรีวิวฟีเจอร์ได้ (บทเรียนเดียวกับ #45: สองบทบาทนี้มองเห็น
+   ทุกอย่างได้อยู่แล้วโดยไม่ต้องขอเพิ่ม) ไม่ใช้ .xlsx จริง (ไม่มีไลบรารีสร้าง xlsx ในไฟล์นี้) — ใช้
+   downloadCsv() ตัวเดียวกับ exportIndividualSummary()/exportPayrollData() แล้วตั้งนามสกุล .csv ซึ่ง Excel
+   เปิดได้ตรงเหมือนกัน (BOM UTF-8 กัน Thai เพี้ยนเหมือนทุก export อื่นในไฟล์นี้) */
+function exportTeamListToExcel(){
+  if(!_teamExportRows.length){ smlToast('ไม่มีรายชื่อในตารางให้ Export ตอนนี้','warn'); return; }
+  downloadCsv('รายชื่อพนักงานในสังกัด_'+Date.now()+'.csv',
+    ['รหัสพนักงาน','ชื่อ-สกุล','ตำแหน่ง','แผนก/ฝ่าย','สถานะการประเมิน'],
+    _teamExportRows.map(r=>[r.code, r.name, r.position, r.dept, r.statusLabel]));
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','Export รายชื่อพนักงานในสังกัด', _teamExportRows.length+' รายการ', _teamExportRows.map(r=>r.code).join(', '));
+  smlToast('Export รายชื่อแล้ว ('+_teamExportRows.length+' คน)','ok');
 }
 
 /* ==========================================
@@ -5109,8 +5158,14 @@ function renderMyResult(){
   document.getElementById('myResultBannerText').innerHTML = `<b>ผลประเมินรอบ ${latest[2]} ได้รับการอนุมัติจาก GM แล้ว</b>${ackBtn}`;
 
   const Y=Number(latest[latest.length-5])||0, Z=Number(latest[latest.length-4])||0, X=Number(latest[latest.length-3])||0, grade=latest[latest.length-2];
-  set('myResultGrade', grade||'—');
-  set('myResultGradeSub', 'รอบ '+latest[2]+' · ระดับ '+(latest[3]||'—'));
+  /* ผู้ใช้ขอให้พนักงานเห็นคะแนน (X/Y/Z) ได้ทันทีที่ GM อนุมัติ แต่ "เกรด" ตัวอักษร (A-E) ต้องซ่อนไว้
+     จนกว่า MD จะอนุมัติขั้นสุดท้ายจริง (isFinalStatus — status==='Approved' เท่านั้น ไม่ใช่แค่
+     Acknowledged/Calibrated) เพราะเกรดจริงอาจยังถูกปรับจาก Bell Curve ที่ขั้น Calibration อยู่ —
+     printEvalForm()/buildEvalPrintPage() (#121/#123) ซ่อนแบบนี้อยู่แล้วผ่าน allApproved, จุดนี้คือ
+     ที่เดียวที่ยังโชว์เกรดดิบก่อนอนุมัติจริง */
+  const isFinalResult = (typeof isFinalStatus==='function') ? isFinalStatus(latestStatus) : latestStatus==='Approved';
+  set('myResultGrade', isFinalResult ? (grade||'—') : '🔒');
+  set('myResultGradeSub', isFinalResult ? ('รอบ '+latest[2]+' · ระดับ '+(latest[3]||'—')) : 'จะแสดงหลัง MD อนุมัติขั้นสุดท้าย');
   set('myResultX', X.toFixed(2));
 
   const prev = approvedDrafts[1];
@@ -5153,7 +5208,9 @@ function renderMyResult(){
   document.getElementById('myResultHistoryRows').innerHTML = myDrafts.length
     ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>{
         const gx = Number(d[d.length-3])||0, gg = d[d.length-2], gs = d[d.length-1];
-        return `<tr><td><b>รอบ ${d[2]}</b></td><td>${gg? gx.toFixed(2) : '—'}</td><td>${gg?`<span class="grade g${gg}">${gg}</span>`:'—'}</td><td>${gs}</td></tr>`;
+        const rowFinal = (typeof isFinalStatus==='function') ? isFinalStatus(gs) : gs==='Approved';
+        const gradeCell = !gg ? '—' : (rowFinal ? `<span class="grade g${gg}">${gg}</span>` : '<span title="รอ MD อนุมัติขั้นสุดท้าย">🔒</span>');
+        return `<tr><td><b>รอบ ${d[2]}</b></td><td>${gg? gx.toFixed(2) : '—'}</td><td>${gradeCell}</td><td>${gs}</td></tr>`;
       }).join('')
     : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีประวัติ</td></tr>';
 }
@@ -5902,6 +5959,7 @@ function openM(id){
   m.classList.add('on');
   if(id==='mAddUser' && typeof populateOrgSelects==='function') populateOrgSelects();
   if(id==='mReminder' && typeof renderReminderPreview==='function') renderReminderPreview();
+  if(id==='mResultNotify' && typeof renderResultNotifyPreview==='function') renderResultNotifyPreview();
   if(id==='mApprove'){
     const n = getDrafts().filter(d=>d[d.length-1]==='Calibrated').length;
     const el = document.getElementById('mApproveCount'); if(el) el.textContent = n+' ใบ';
@@ -6111,6 +6169,81 @@ async function sendReminder(){
   if(!parts.length) parts.push('ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน');
   smlToast(parts.join(' · '), (wantEmail&&withEmail.length) || (lineResult&&lineResult.sent) ? 'ok' : 'warn');
   if(typeof appendAuditLog==='function') appendAuditLog('reminder','ส่ง Reminder', document.getElementById('rm_target')?.value||'pending', parts.join(' · '));
+}
+
+/* #156: แจ้งผลประเมิน — เป้าหมาย = ใบประเมินที่ isFinalStatus() จริง (MD อนุมัติขั้นสุดท้ายแล้ว) และ
+   ยังไม่เคยถูกมาร์คว่าแจ้งแล้ว (RESULT_NOTIFIED_KEY, คีย์ = draftKey() เดียวกับที่ใช้ทั่วทั้งไฟล์) —
+   เหมือน PUSHED_APPRAISALS_KEY (#42): เก็บ "แจ้งแล้วหรือยัง" แยกจากสถานะจริงของใบประเมิน ไม่ปนกัน
+   เพื่อไม่ให้การ "มาร์คว่าแจ้งแล้ว" ไปกระทบ workflow status จริงโดยไม่ได้ตั้งใจ */
+const RESULT_NOTIFIED_KEY = 'smlPmsResultNotified';
+function loadResultNotified(){
+  try{ return new Set(JSON.parse(localStorage.getItem(RESULT_NOTIFIED_KEY)||'[]')); }catch(e){ return new Set(); }
+}
+function markResultNotified(key){
+  const s = loadResultNotified(); s.add(key);
+  try{ localStorage.setItem(RESULT_NOTIFIED_KEY, JSON.stringify([...s])); }catch(e){}
+}
+function getResultNotifyTargets(){
+  const notified = loadResultNotified();
+  return getDrafts().filter(d=>{
+    if(!(typeof isFinalStatus==='function' ? isFinalStatus(d[d.length-1]) : d[d.length-1]==='Approved')) return false;
+    return !notified.has(draftKey(d));
+  }).map(d=>({ draft:d, emp: MASTER_USERS.find(u=>u[0]===d[0]) })).filter(t=>t.emp);
+}
+function renderResultNotifyPreview(){
+  const box = document.getElementById('rn_preview');
+  if(!box) return;
+  const targets = getResultNotifyTargets();
+  box.innerHTML = targets.length ? targets.map(t=>{
+    const u = t.emp;
+    const hasEmail = !!u[15], hasLine = !!u[21];
+    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f1f5f9">
+      <span>${u[1]} <span style="color:#94a3b8">(${u[0]})</span></span>
+      <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมล'}${hasLine ? ' · 💬 LINE' : ''}</span>
+    </div>`;
+  }).join('') : '<div style="color:#94a3b8">ไม่มีใบประเมินที่อนุมัติขั้นสุดท้ายแล้วและยังไม่ได้แจ้ง</div>';
+}
+async function sendResultNotification(){
+  const targets = getResultNotifyTargets();
+  const message = document.getElementById('rn_message')?.value || '';
+  const wantEmail = document.getElementById('rn_ch_email')?.checked;
+  const wantLine = document.getElementById('rn_ch_line')?.checked;
+  if(!targets.length){ smlToast('ไม่มีใบประเมินที่ Approved แล้วและยังไม่ได้แจ้ง','warn'); return; }
+  if(!wantEmail && !wantLine){ smlToast('กรุณาเลือกช่องทางที่จะส่งอย่างน้อย 1 ช่องทาง','warn'); return; }
+
+  const emps = targets.map(t=>t.emp);
+  const withEmail = emps.filter(u=>u[15]);
+  const withoutEmail = emps.filter(u=>!u[15]);
+
+  let lineResult = null;
+  if(wantLine) lineResult = await sendLineReminder(emps, message);
+
+  if(wantEmail && withEmail.length){
+    const toSelf = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[15]) ? CURRENT_SESSION_USER[15] : withEmail[0][15];
+    const bcc = withEmail.map(u=>u[15]).join(',');
+    const subject = encodeURIComponent('แจ้งผลการประเมินผลการปฏิบัติงาน — อนุมัติขั้นสุดท้ายแล้ว');
+    const body = encodeURIComponent(message);
+    window.location.href = `mailto:${encodeURIComponent(toSelf)}?bcc=${bcc}&subject=${subject}&body=${body}`;
+  } else if(wantEmail && !withEmail.length){
+    smlToast('ไม่มีใครในกลุ่มนี้มีอีเมลในระบบ','warn');
+  }
+
+  /* มาร์คว่า "แจ้งแล้ว" ทันทีที่ Admin กดส่ง — ข้อจำกัดเดียวกับ mailto: ทั่วทั้งไฟล์ (#10/#153):
+     เปิดโปรแกรมอีเมลให้แล้วคือสิ่งเดียวที่ระบบยืนยันได้จริงสำหรับอีเมล ไม่สามารถยืนยัน "กดส่งจริง" ได้
+     ส่วน LINE ยืนยันผลจริงจาก Worker ได้ (lineResult.sent/.failed) แต่ยังมาร์คแจ้งแล้วเหมือนกันทั้งกลุ่ม
+     เพื่อไม่ให้รายการเดิมค้างวนซ้ำไปเรื่อยๆ ในปุ่มนี้ — ถ้าต้องส่งซ้ำเฉพาะคนที่ LINE ส่งไม่สำเร็จจริง
+     ต้องแก้ไข lineUserId/ตั้งค่า Worker แล้วใช้ปุ่ม "ส่ง Reminder" ปกติแทน */
+  targets.forEach(t=>markResultNotified(draftKey(t.draft)));
+  if(typeof renderWorkflowPages==='function') renderWorkflowPages();
+  closeM();
+  const parts = [];
+  if(wantEmail && withEmail.length) parts.push(`เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง ${withEmail.length} คน` + (withoutEmail.length ? ` (${withoutEmail.length} คนไม่มีอีเมล)` : ''));
+  if(lineResult){
+    parts.push(lineResult.sent ? `ส่ง LINE สำเร็จ ${lineResult.sent} คน` : `ส่ง LINE ไม่สำเร็จ — ${lineResult.reason}`);
+  }
+  if(!parts.length) parts.push('ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน');
+  smlToast(`แจ้งผลแล้ว ${targets.length} คน · ` + parts.join(' · '), (wantEmail&&withEmail.length) || (lineResult&&lineResult.sent) ? 'ok' : 'warn');
+  if(typeof appendAuditLog==='function') appendAuditLog('reminder','แจ้งผลการประเมิน', targets.length+' รายการ', targets.map(t=>t.draft[0]).join(', '));
 }
 function closeM(){document.querySelectorAll('.ov').forEach(o=>o.classList.remove('on'))}
 document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM();});
