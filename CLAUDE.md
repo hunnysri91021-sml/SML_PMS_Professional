@@ -7053,6 +7053,90 @@ touches employee/attendance/evaluation data.
     try/catch chain, not just the innermost one that happened to be
     fixed first.
 
+151. **Follow-up to #150: after both silent-failure fixes, real Cloudflare
+    Logs finally showed up (`POST /webhook/line`, "0 Errors") — but the
+    employee still received zero reply in LINE chat.** Confirmed via
+    screenshots this was *not* a reachability problem: Webhook toggle ON,
+    Chat mode OFF (correct bot routing), the registered Webhook URL
+    matched the Worker's real route exactly, and Cloudflare Logs showed
+    the POST actually arriving and completing with no error. That
+    combination — request logged, zero errors, no reply sent — pointed at
+    one specific remaining gap: `replyLine()` (the function that actually
+    sends the reply message back to LINE) called `fetch()` to LINE's
+    `/v2/bot/message/reply` endpoint and **never checked the response**
+    at all — unlike its sibling `sendLineMulticast()` a few lines above
+    it, which already correctly checks `res.ok` and throws. If LINE
+    rejected the reply for any real reason (an expired or already-used
+    `replyToken` — very plausible after several rounds of repeated manual
+    testing in this exact conversation, since a reply token is single-use
+    and short-lived; or a bad/expired `LINE_CHANNEL_ACCESS_TOKEN`), the
+    fetch would "succeed" as a JS promise (no network error) while LINE's
+    own API response said no — and the code, never reading that response,
+    carried on as if the message had gone out. This is the identical
+    CLAUDE.md #66/#68/#69/#149/#150 shape of bug (a fire-and-forget call
+    whose real outcome is never checked) found for a *third* time in the
+    same LINE webhook feature, one layer deeper again: #149 fixed the
+    Excel-write step going silent, #150 fixed the Graph-auth step going
+    silent, and this is the reply-send step itself going silent — the
+    exact kind of step CLAUDE.md #149/#150 already worried might still be
+    hiding one level further in, now confirmed.
+    Fixed `replyLine()` to check `res.ok` and throw a real `Error` (with
+    the actual HTTP status and LINE's own error body text) on failure —
+    matching `sendLineMulticast()`'s existing pattern exactly, so the two
+    sibling functions can no longer disagree on whether an unchecked LINE
+    API response is safe to ignore. **Also restructured `handleLineEvent()`
+    to separate the EmployeeSettings write from the reply send into two
+    independent try/catch blocks** rather than one shared block: the old
+    code wrapped both the real data write (`upsertRow`) and the
+    confirmation `replyLine()` call in a single try/catch, so if the
+    write succeeded but only the *reply* failed (exactly this bug), the
+    catch block would have wrongly logged "บันทึกข้อมูลไม่สำเร็จ" (save
+    failed) and sent a second, misleading reply telling the employee to
+    try again — even though their LINE User ID had already been written
+    correctly. Now `saveOk` tracks the write's real outcome independently,
+    the success/failure reply text is chosen from that real flag, and the
+    reply-send itself has its own try/catch logging a distinct
+    `'replyLine failed'` error — so a future Sync-Log-style read of
+    Cloudflare Logs can always tell which of the two genuinely different
+    failures happened, never conflating one for the other.
+    Verified with a new test case (case 7) added to the existing LINE
+    webhook test suite: mocks the LINE reply API to fail with a realistic
+    `400 Invalid reply token` while every other call (Employees lookup,
+    EmployeeSettings upsert) succeeds normally — confirms the employee's
+    real LINE User ID **is** correctly saved to `EmployeeSettings` despite
+    the failure, confirms no reply is ever actually sent (matching the
+    real-world symptom exactly), confirms a distinct `'replyLine failed'`
+    + the real `'Invalid reply token'` text is logged, and explicitly
+    confirms the old misleading `'EmployeeSettings save failed'` message
+    is **not** logged for this case — plus re-ran all 6 of #148/#149/
+    #150's existing cases with zero regressions (their mocked LINE reply
+    responses already returned `ok: true`, so the new check doesn't
+    affect them). **Told the user the real next step is operational, not
+    code**: since this bug most plausibly explains every "zero reply"
+    test so far in this exact debugging session (each retest reused a
+    `replyToken` value from LINE's real single-use, short-lived tokens —
+    though a single click in the real LINE app always generates a fresh
+    one, so this diagnosis will be confirmed or ruled out by the *next*
+    genuinely fresh message after redeploying this fix, not by replaying
+    an old test) — redeploy the Worker, then send one brand-new message
+    (not a repeat/retry of an old one) and check both LINE chat for a
+    reply and Cloudflare Logs for either a success or a newly-specific
+    `'replyLine failed: ...'` error naming the real reason if it still
+    fails. General lesson sharper than #150's own conclusion: when a
+    "never let a fire-and-forget call go silent" audit has already fixed
+    two layers of the same call chain (#149's Excel write, #150's Graph
+    auth) and the symptom still doesn't change even after logs start
+    showing real traffic with "0 errors," the next place to check is not
+    another layer of try/catch around the same calls — it's whether the
+    *terminal* action itself (the actual external API call whose success
+    is the whole point, here `fetch()` to LINE's reply endpoint) ever
+    checks its own response at all; "0 Errors" in a logging dashboard
+    only means nothing *thrown* was caught — a bare, unchecked `fetch()`
+    call that resolves normally even on a non-2xx HTTP response (true of
+    the Fetch API by design) will never throw on its own, so it can sit
+    at the very end of an otherwise fully-logged chain and still fail
+    completely invisibly unless its `response.ok` is explicitly checked.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -269,14 +269,22 @@ async function sendLineMulticast(token, userIds, text) {
 }
 
 /* ตอบกลับข้อความเดียวในแชท LINE ของคนที่เพิ่งส่งมา (ใช้ replyToken จาก event นั้นๆ เท่านั้น ใช้ได้
-   ครั้งเดียวและมีอายุสั้นมาก — ต่างจาก sendLineMulticast ด้านบนที่ส่งแบบ broadcast ไปหลายคน) */
+   ครั้งเดียวและมีอายุสั้นมาก — ต่างจาก sendLineMulticast ด้านบนที่ส่งแบบ broadcast ไปหลายคน)
+   สำคัญ: ต้องเช็ค res.ok แล้วโยน error ถ้าพัง — เดิมฟังก์ชันนี้ fetch() เฉยๆไม่เช็คผลลัพธ์เลย ถ้า LINE
+   ปฏิเสธ (เช่น replyToken หมดอายุ/ถูกใช้ซ้ำจากการทดสอบหลายรอบ, LINE_CHANNEL_ACCESS_TOKEN ผิด/หมดอายุ)
+   โค้ดจะคิดว่าสำเร็จเงียบๆ — Cloudflare Logs จะขึ้น "0 Errors" ทั้งที่พนักงานไม่ได้รับข้อความจริง
+   เป็นบั๊กรูปแบบเดียวกับ #149/#150 แค่อยู่ลึกลงไปอีกชั้น (ชั้นส่งข้อความเอง ไม่ใช่ชั้นเขียน Excel) */
 async function replyLine(accessToken, replyToken, text) {
-  if (!accessToken || !replyToken) return;
-  await fetch('https://api.line.me/v2/bot/message/reply', {
+  if (!accessToken || !replyToken) throw new Error('replyLine: missing accessToken/replyToken');
+  const res = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
     body: JSON.stringify({ replyToken, messages: [{ type: 'text', text }] }),
   });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('LINE reply failed: ' + res.status + ' ' + errText);
+  }
 }
 
 function arrayBufferToBase64(buf) {
@@ -332,10 +340,12 @@ async function handleLineEvent(ev, env, token, driveId, itemId) {
   const empName = String(emp[1] || '').trim();
 
   /* หาตัวพนักงานได้แล้ว (ผ่านมาถึงนี่คือ listRows('Employees')/getAppToken/resolveSite ทำงานถูก
-     ทั้งหมด) — ถ้าพังต่อจากนี้ (ตาราง EmployeeSettings ไม่มี/ชื่อไม่ตรง, upsertRow พัง ฯลฯ) ต้อง
-     ไม่เงียบแบบเดิมอีก: ต้อง (1) console.error ค่าจริงไว้ให้เห็นใน Cloudflare Logs และ (2) ตอบกลับ
-     ในแชทตรงๆว่ามีปัญหา — ไม่ใช่ปล่อยให้คนพิมพ์รหัสถูกแล้วไม่ได้รับอะไรกลับเลย ตรงตาม CLAUDE.md
-     #10/#14/#66 ของเว็บ (ห้ามดูเหมือนทำงานสำเร็จ/เงียบทั้งที่จริงมีปัญหา) */
+     ทั้งหมด) — แยก 2 ขั้นตอนออกจากกันชัดเจน: (1) บันทึกลง EmployeeSettings (2) ตอบกลับในแชท
+     เพราะถ้ารวมไว้ใน try/catch เดียวกันเหมือนเดิม แล้ว replyLine() พังเอง (เช่น replyToken หมดอายุ
+     จากการทดสอบซ้ำ) จะถูกเข้าใจผิดว่า "บันทึกข้อมูลไม่สำเร็จ" ทั้งที่จริงบันทึกสำเร็จแล้ว แค่ตอบกลับ
+     ไม่สำเร็จเท่านั้น — ทั้งสองความล้มเหลวต้อง console.error ค่าจริงแยกกันให้เห็นใน Cloudflare Logs
+     เสมอ ไม่เงียบแบบเดิม ตรงตาม CLAUDE.md #10/#14/#66 ของเว็บ */
+  let saveOk = false;
   try {
     const settingsRows = await listRows(token, driveId, itemId, 'EmployeeSettings');
     const existing = settingsRows.find((r) => String(r[0] || '').trim() === empCode);
@@ -351,19 +361,27 @@ async function handleLineEvent(ev, env, token, driveId, itemId) {
       evalExempt,
       userId,
     ]);
-
-    await replyLine(
-      env.LINE_CHANNEL_ACCESS_TOKEN,
-      replyToken,
-      `✅ ลงทะเบียนรับการแจ้งเตือนทาง LINE สำเร็จ สำหรับ: ${empName} (${empCode})\nต่อไปนี้จะได้รับการแจ้งเตือนเรื่องการประเมินผลผ่าน LINE นี้`
-    );
+    saveOk = true;
   } catch (e) {
-    console.error('handleLineEvent registration failed for', empCode, ':', (e && e.message) || e);
-    await replyLine(
-      env.LINE_CHANNEL_ACCESS_TOKEN,
-      replyToken,
-      `⚠️ พบรหัสพนักงาน ${empName} (${empCode}) แล้ว แต่บันทึกข้อมูลไม่สำเร็จ (ระบบขัดข้องชั่วคราว) กรุณาแจ้ง Admin ให้ตรวจสอบ Log ของ Worker หรือลองพิมพ์รหัสส่งใหม่อีกครั้งในภายหลัง`
-    );
+    console.error('handleLineEvent: EmployeeSettings save failed for', empCode, ':', (e && e.message) || e);
+  }
+
+  try {
+    if (saveOk) {
+      await replyLine(
+        env.LINE_CHANNEL_ACCESS_TOKEN,
+        replyToken,
+        `✅ ลงทะเบียนรับการแจ้งเตือนทาง LINE สำเร็จ สำหรับ: ${empName} (${empCode})\nต่อไปนี้จะได้รับการแจ้งเตือนเรื่องการประเมินผลผ่าน LINE นี้`
+      );
+    } else {
+      await replyLine(
+        env.LINE_CHANNEL_ACCESS_TOKEN,
+        replyToken,
+        `⚠️ พบรหัสพนักงาน ${empName} (${empCode}) แล้ว แต่บันทึกข้อมูลไม่สำเร็จ (ระบบขัดข้องชั่วคราว) กรุณาแจ้ง Admin ให้ตรวจสอบ Log ของ Worker หรือลองพิมพ์รหัสส่งใหม่อีกครั้งในภายหลัง`
+      );
+    }
+  } catch (e) {
+    console.error('handleLineEvent: replyLine failed for', empCode, ':', (e && e.message) || e);
   }
 }
 
