@@ -7516,6 +7516,48 @@ touches employee/attendance/evaluation data.
     extraction itself can share the exact same blind spot the browser
     has for comment/tag boundaries.
 
+157. **Follow-up to #156: user asked "ที่ Export excel หน้ารายงาน ให้เพิ่ม
+    คะแนนดิบผลประเมิน กับ คะแนน attendance ด้วย" (on the Report page's
+    Excel export, also add the raw evaluation score and the attendance
+    score) — a different export than #156's new team-page one.**
+    `getReportData()` (the shared base for the "รายงาน" page's table and
+    its `exportIndividualSummary()` CSV) already resolved `X`/`grade`/
+    `status` from each employee's matching draft by the same positional
+    convention every other function in this file uses
+    (`d[d.length-3]`/`d[d.length-2]`/`d[d.length-1]`), but never read
+    `Y` (`d[d.length-5]`, the real performance/factor-score sum) or `Z`
+    (`d[d.length-4]`, the real attendance-derived score) — so the export
+    already had attendance *input counts* (late/early/sick/personal/
+    absent days, via `getAttendanceFor()`) but never the actual computed
+    Z score those counts produce, and never Y at all. Added `Y`/`Z` to
+    `getReportData()`'s returned object (reading the same two positional
+    fields `renderMyResult()`/`openReviewerForm()`/`buildEvalPrintPage()`
+    already read for the identical purpose, never a new derivation) and
+    two new CSV columns — "คะแนนผลงาน (Y)"/"คะแนนเวลาทำงาน (Z)" — inserted
+    right before the existing "คะแนนรวม (X)" column in
+    `exportIndividualSummary()`, matching the natural Y+Z=X reading order
+    used everywhere else in the file (`renderMyResult()`'s own tile
+    order, `openReviewerForm()`'s locked tiles). Purely additive to
+    `getReportData()`'s return shape — the two other real callers
+    (`renderReportRows()`, the dashboard 9-Box data at line ~9665) both
+    destructure only the specific fields they use, so adding two new
+    keys needed no changes there. Verified with a test that seeds a real
+    `Approved` draft with distinct Y/Z/X values, intercepts the real
+    array passed to `downloadCsv()` by `exportIndividualSummary()`, and
+    confirms both new columns contain the exact real numbers at the
+    correct header-matched index — plus the standard click-sweep (`nav
+    pages clicked: 22 errors: []`). General lesson, a smaller case of
+    #60's own established pattern: when an export already has a
+    *related* number (attendance day-counts) but a request asks for the
+    actual *score* derived from it, check whether the draft record
+    already stores that computed value positionally (nearly everything
+    in this file's evaluation pipeline does, per the Y/Z/X/grade/status
+    convention stated at the top of every recent fix) before computing
+    it again — reading `d[d.length-5]`/`d[d.length-4]` directly is
+    always preferable to re-deriving Y/Z from attendance counts a second
+    time, which would risk disagreeing with whatever score the real
+    workflow actually saved.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

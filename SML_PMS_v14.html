@@ -9394,6 +9394,8 @@ function getReportData(){
     const d = drafts.find(x=>x[0]===u[0]);
     return {
       code:u[0], name:u[1], group:u[3], dept:u[6]||u[4]||'—',
+      Y: d ? Number(d[d.length-5]) : null,
+      Z: d ? Number(d[d.length-4]) : null,
       X: d ? Number(d[d.length-3]) : null,
       grade: d ? d[d.length-2] : null,
       status: d ? d[d.length-1] : 'ยังไม่ประเมิน'
@@ -9406,10 +9408,10 @@ function exportIndividualSummary(){
   const rows = getReportData();
   if(!rows.some(r=>r.X!==null)){ smlToast('ยังไม่มีผลประเมินในระบบให้ Export','warn'); return; }
   downloadCsv('สรุปผลประเมินรายบุคคล_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนรวม (X)','เกรด','สถานะ','มาสาย(ครั้ง)','กลับก่อน(ครั้ง)','ลาป่วย(วัน)','ลากิจ(วัน)','ขาดงาน(วัน)'],
+    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนผลงาน (Y)','คะแนนเวลาทำงาน (Z)','คะแนนรวม (X)','เกรด','สถานะ','มาสาย(ครั้ง)','กลับก่อน(ครั้ง)','ลาป่วย(วัน)','ลากิจ(วัน)','ขาดงาน(วัน)'],
     rows.map(r=>{
       const att = (typeof getAttendanceFor==='function') ? getAttendanceFor(r.code) : {};
-      return [r.code,r.name,r.group,r.dept, r.X??'', r.grade??'', r.status, att.lateCount||0, att.earlyCount||0, att.sickDay||0, att.personalDay||0, att.absentDay||0];
+      return [r.code,r.name,r.group,r.dept, r.Y??'', r.Z??'', r.X??'', r.grade??'', r.status, att.lateCount||0, att.earlyCount||0, att.sickDay||0, att.personalDay||0, att.absentDay||0];
     }));
   smlToast('Export สรุปผลรายบุคคลแล้ว ('+rows.length+' คน)','ok');
 }
