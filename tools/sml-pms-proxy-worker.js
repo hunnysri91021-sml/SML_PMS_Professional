@@ -14,7 +14,7 @@
  * วิธี deploy (Cloudflare, ฟรี):
  *   1. สร้างบัญชี Cloudflare (ฟรี) → Workers & Pages → Create Worker
  *   2. วางโค้ดไฟล์นี้ทั้งหมดแทนโค้ดตัวอย่าง แล้วกด Deploy
- *   3. ไปที่ Settings → Variables → เพิ่ม Secret (encrypted) ทั้ง 8 ตัว:
+ *   3. ไปที่ Settings → Variables → เพิ่ม Secret (encrypted) ทั้ง 9 ตัว:
  *        TENANT_ID       = Azure AD Tenant ID
  *        CLIENT_ID       = Azure AD App (client) ID ที่ขอสิทธิ์ Application แล้ว
  *        CLIENT_SECRET   = Client secret ที่สร้างไว้ใน Azure AD (เห็นครั้งเดียวตอนสร้าง)
@@ -26,21 +26,31 @@
  *                          ที่มีอยู่ในองค์กร ไม่ใช่ที่อยู่ลอยๆ
  *        LINE_CHANNEL_ACCESS_TOKEN = Channel access token (long-lived) ของ LINE Official Account
  *                          ที่บริษัทใช้ (LINE Developers Console → ช่อง Messaging API ของ OA นั้น
- *                          → ออก token) ใช้สำหรับปุ่ม "ส่ง Reminder" ช่องทาง LINE เท่านั้น — ไม่
- *                          เกี่ยวกับ Microsoft/Azure เลย เป็นความลับคนละชุดกับ CLIENT_SECRET
+ *                          → ออก token) ใช้สำหรับปุ่ม "ส่ง Reminder" ช่องทาง LINE และสำหรับตอบกลับ
+ *                          ข้อความใน webhook ด้านล่าง — ไม่เกี่ยวกับ Microsoft/Azure เลย เป็นความลับ
+ *                          คนละชุดกับ CLIENT_SECRET
+ *        LINE_CHANNEL_SECRET = Channel secret (คนละตัวกับ ACCESS_TOKEN ด้านบน — อยู่ในหน้า
+ *                          "Basic settings" ของ Messaging API channel เดียวกันใน LINE Developers
+ *                          Console) ใช้ตรวจลายเซ็น x-line-signature ของ webhook ด้านล่าง เพื่อ
+ *                          พิสูจน์ว่าคำขอมาจาก LINE จริง ไม่ใช่ใครก็ได้ยิงมาปลอมๆ
  *   4. คัดลอก URL ของ Worker (เช่น https://sml-pms-proxy.<ชื่อบัญชี>.workers.dev) ไปกรอกที่
  *      หน้า "เชื่อมต่อ MS365 Excel" → แท็บ "ขั้นตอนตั้งค่า" ช่อง "Proxy URL" / "Proxy API Key"
  *      (ช่องเดียวกันนี้ยังเป็นที่เว็บเรียก /send-line ผ่าน ไม่มีหน้าตั้งค่าแยกสำหรับ LINE)
+ *   5. ไปที่ LINE Developers Console → Messaging API channel ของ OA บริษัท → แท็บ "Messaging API"
+ *      → ช่อง "Webhook URL" ใส่ `<Worker URL ข้อ 4>/webhook/line` แล้วกด "Verify" (ต้องเจอ 200 OK)
+ *      → เปิด "Use webhook" เป็น ON → แนะนำปิด "Auto-reply messages"/"Greeting messages" ของ OA
+ *      (ในแท็บ "Response settings") ไม่งั้นพนักงานจะเห็นทั้งข้อความทักทายอัตโนมัติของ LINE OA เอง
+ *      ปนกับข้อความตอบกลับจริงจาก Worker นี้ สับสนว่าลงทะเบียนสำเร็จหรือไม่
  *
- * วิธีได้ LINE User ID ของพนักงานแต่ละคน (ข้อจำกัดที่ต้องทำความเข้าใจก่อนใช้ช่องทาง LINE):
- *   ระบบนี้ "เดา" LINE User ID ของใครไม่ได้เลย — ค่านี้มีอยู่จริงก็ต่อเมื่อพนักงานคนนั้นเพิ่มเพื่อนกับ
- *   LINE OA ของบริษัทแล้วส่งข้อความ/สติกเกอร์อะไรก็ได้มาที่ OA อย่างน้อย 1 ครั้ง (เช่น ให้พิมพ์รหัส
- *   พนักงานของตัวเองส่งมา) ซึ่งจะทำให้เกิด webhook event ฝั่ง LINE ที่มี userId จริงอยู่ในนั้น — Worker
- *   นี้ **ไม่ได้ทำหน้าที่รับ webhook จาก LINE** (เป็นคนละเรื่องกับการส่งข้อความออก) ดังนั้นตอนนี้ IT/Admin
- *   ต้องไปดูค่า userId จาก LINE Official Account Manager (chat log) หรือสร้างตัวรับ webhook แยกเอง
- *   แล้วพิมพ์ค่านั้นเข้าช่อง "LINE User ID" ในหน้าแก้ไขพนักงานของเว็บด้วยมือทีละคน ถ้าต้องการให้ระบบนี้
- *   รับ LINE User ID ได้เองอัตโนมัติ (ไม่ต้องพิมพ์มือ) ต้องเพิ่ม endpoint รับ webhook ไว้ใน Worker นี้
- *   อีกชุดหนึ่ง (ยังไม่ได้ทำ — เป็นงานแยกที่ใหญ่กว่าการส่งข้อความออกเฉยๆ)
+ * วิธีได้ LINE User ID ของพนักงานแต่ละคน (อัตโนมัติ ผ่าน webhook — แนะนำ):
+ *   พนักงานเพิ่มเพื่อนกับ LINE OA ของบริษัท แล้วพิมพ์ "รหัสพนักงาน" ของตัวเอง (เช่น SML-001) ส่งไปที่
+ *   OA ข้อความธรรมดา 1 ข้อความ — LINE จะยิง webhook event มาที่ /webhook/line ด้านล่าง ซึ่งจะ:
+ *   ตรวจลายเซ็นก่อนว่ามาจาก LINE จริง → ค้นหารหัสที่พิมพ์มาในตาราง Employees จริง (ตัดช่องว่าง/ไม่
+ *   สนตัวเล็ก-ใหญ่) → ถ้าเจอ จะบันทึก userId จริงของ LINE เข้าตาราง EmployeeSettings ให้พนักงานคนนั้น
+ *   ทันที (คงค่า PinHash/EvalLevel/EvalExempt เดิมไว้ ไม่แตะ) แล้วตอบกลับยืนยันชื่อ-รหัสพนักงานที่จับคู่
+ *   ได้ในแชท LINE — ถ้าพิมพ์รหัสผิด/ไม่พบ จะตอบกลับบอกตรงๆ ว่าไม่พบ ไม่เงียบ ไม่ทำอะไรลวกๆ ต่อให้
+ *   อัตโนมัติแล้ว IT/Admin ยังสามารถพิมพ์ LINE User ID เข้าช่องในหน้าแก้ไขพนักงานของเว็บด้วยมือได้เสมอ
+ *   (เช่น กรณีพนักงานพิมพ์ผ่าน OA ไม่ได้ด้วยเหตุผลใดก็ตาม) — สองทางนี้เขียนลงที่เดิม ไม่ชนกัน
  *
  * ข้อกำหนดฝั่ง Azure AD ที่ทีม IT/แอดมิน M365 ต้องทำ (ใครก็ตามที่มี Global/Application
  * Administrator หรือสิทธิ์เทียบเท่า):
@@ -68,6 +78,14 @@ export default {
       'Access-Control-Allow-Headers': 'Content-Type, X-Api-Key',
     };
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+
+    /* /webhook/line: LINE platform เป็นคนยิงเข้ามาตรง ไม่ใช่เบราว์เซอร์ของเว็บ SML PMS ที่ตั้งค่า
+       X-Api-Key ไว้ — LINE ไม่มีทางส่ง header นั้นมา ใช้ x-line-signature (HMAC-SHA256 ของ body
+       ด้วย LINE_CHANNEL_SECRET) เป็นตัวพิสูจน์ตัวตนของ route นี้เองแทน จึงต้องเช็คเส้นทางนี้ก่อน
+       ผ่าน PROXY_API_KEY gate ด้านล่างไปเลย ไม่งั้นจะถูกตีกลับ 401 ก่อนได้ตรวจลายเซ็นจริงด้วยซ้ำ */
+    if (url.pathname === '/webhook/line' && request.method === 'POST') {
+      return handleLineWebhook(request, env);
+    }
 
     const apiKey = request.headers.get('X-Api-Key');
     if (!env.PROXY_API_KEY || apiKey !== env.PROXY_API_KEY) {
@@ -248,6 +266,124 @@ async function sendLineMulticast(token, userIds, text) {
       throw new Error('LINE multicast failed: ' + res.status + ' ' + errText);
     }
   }
+}
+
+/* ตอบกลับข้อความเดียวในแชท LINE ของคนที่เพิ่งส่งมา (ใช้ replyToken จาก event นั้นๆ เท่านั้น ใช้ได้
+   ครั้งเดียวและมีอายุสั้นมาก — ต่างจาก sendLineMulticast ด้านบนที่ส่งแบบ broadcast ไปหลายคน) */
+async function replyLine(accessToken, replyToken, text) {
+  if (!accessToken || !replyToken) return;
+  await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ replyToken, messages: [{ type: 'text', text }] }),
+  });
+}
+
+function arrayBufferToBase64(buf) {
+  let binary = '';
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+/* ตรวจว่า body จริงๆมาจาก LINE หรือไม่ — LINE เซ็น HMAC-SHA256 ของ raw request body ด้วย
+   Channel secret แล้วส่งมาเป็น Base64 ใน header x-line-signature เราคำนวณซ้ำด้วย secret เดียวกัน
+   แล้วเทียบว่าตรงกันทุกตัวอักษร (ไม่ใช่แค่ความยาว/ขึ้นต้นเหมือนกัน) ก่อนเชื่อ body นี้เลย */
+async function verifyLineSignature(channelSecret, rawBody, signatureHeader) {
+  if (!signatureHeader) return false;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(channelSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuf = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody));
+  return arrayBufferToBase64(sigBuf) === signatureHeader;
+}
+
+/* รับ webhook event จาก LINE จริง 1 event — สนใจแค่ "ข้อความตัวอักษรธรรมดา" เท่านั้น (ไม่สน
+   sticker/รูป/follow event อื่นๆ) เนื้อข้อความที่คาดหวังคือรหัสพนักงาน (เช่น SML-001) เทียบกับ
+   ตาราง Employees จริงแบบตัดช่องว่าง+ไม่สนตัวเล็ก-ใหญ่ (ไม่ใช่เทียบชื่อ/เดา — เทียบรหัสตรงๆเท่านั้น
+   ตาม CLAUDE.md #1 ของเว็บ) ถ้าเจอ จะเขียน userId จริงเข้า EmployeeSettings โดยคงค่า
+   PinHash/EvalLevel/EvalExempt เดิมไว้ทุกประการ (ไม่แตะ ไม่เดา ไม่ล้าง) แล้วตอบกลับยืนยันในแชท —
+   ถ้าไม่เจอรหัส ตอบกลับบอกตรงๆว่าไม่พบ ไม่เงียบ (ตาม CLAUDE.md #10/#14 ของเว็บ — ห้ามดูเหมือน
+   ทำงานสำเร็จทั้งที่ไม่ได้เขียนอะไรจริง) ความผิดพลาดใดๆที่เกิดขึ้น (Graph ล่ม ฯลฯ) จะถูกจับโดย
+   handleLineWebhook ด้านล่าง ไม่ทำให้ event อื่นในชุดเดียวกันพังตามไปด้วย */
+async function handleLineEvent(ev, env, token, driveId, itemId) {
+  if (!ev || ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
+  const userId = ev.source && ev.source.userId;
+  const replyToken = ev.replyToken;
+  if (!userId || !replyToken) return;
+  const text = String(ev.message.text || '').trim();
+  if (!text) return;
+
+  const empRows = await listRows(token, driveId, itemId, 'Employees');
+  const emp = empRows.find((r) => String(r[0] || '').trim().toLowerCase() === text.toLowerCase());
+  if (!emp) {
+    await replyLine(
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+      replyToken,
+      `ไม่พบรหัสพนักงาน "${text}" ในระบบ กรุณาพิมพ์รหัสพนักงานของตัวเองให้ถูกต้อง (เช่น SML-001) แล้วส่งมาใหม่`
+    );
+    return;
+  }
+  const empCode = String(emp[0]).trim();
+  const empName = String(emp[1] || '').trim();
+
+  const settingsRows = await listRows(token, driveId, itemId, 'EmployeeSettings');
+  const existing = settingsRows.find((r) => String(r[0] || '').trim() === empCode);
+  const pinHash = existing ? existing[1] || '' : '';
+  const evalLevel = existing ? existing[2] || '' : '';
+  const evalExempt = existing ? existing[4] || '0' : '0';
+
+  await upsertRow(token, driveId, itemId, 'EmployeeSettings', 0, empCode, [
+    empCode,
+    pinHash,
+    evalLevel,
+    new Date().toISOString(),
+    evalExempt,
+    userId,
+  ]);
+
+  await replyLine(
+    env.LINE_CHANNEL_ACCESS_TOKEN,
+    replyToken,
+    `✅ ลงทะเบียนรับการแจ้งเตือนทาง LINE สำเร็จ สำหรับ: ${empName} (${empCode})\nต่อไปนี้จะได้รับการแจ้งเตือนเรื่องการประเมินผลผ่าน LINE นี้`
+  );
+}
+
+/* จุดเข้า webhook จริง — ต้องตอบ 200 กลับ LINE เสมอไม่ว่าข้างในจะสำเร็จหรือพังยังไง (ไม่งั้น LINE
+   จะเข้าใจว่า endpoint นี้ล่ม แล้วส่ง event ซ้ำๆมาเรื่อยๆ) ยกเว้นกรณีลายเซ็นไม่ถูกต้อง/ไม่ได้ตั้งค่า
+   secret เลย ซึ่งต้องปฏิเสธจริงๆ (403/500) ไม่ใช่ปลอมว่า 200 แล้วไม่ทำอะไร */
+async function handleLineWebhook(request, env) {
+  const rawBody = await request.text();
+  if (!env.LINE_CHANNEL_SECRET) {
+    return new Response('LINE_CHANNEL_SECRET not configured on Worker', { status: 500 });
+  }
+  const signature = request.headers.get('x-line-signature');
+  const valid = await verifyLineSignature(env.LINE_CHANNEL_SECRET, rawBody, signature);
+  if (!valid) return new Response('invalid signature', { status: 403 });
+
+  let payload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch (e) {
+    return new Response('bad json', { status: 400 });
+  }
+  const events = Array.isArray(payload.events) ? payload.events : [];
+
+  try {
+    const token = await getAppToken(env);
+    const { driveId, itemId } = await resolveSite(env, token);
+    for (const ev of events) {
+      await handleLineEvent(ev, env, token, driveId, itemId).catch(() => {});
+    }
+  } catch (e) {
+    // ปัญหาฝั่ง MS365/Graph (token/site ตั้งค่าไม่ถูก ฯลฯ) ไม่ควรทำให้ LINE คิดว่า webhook พัง
+    // และส่งซ้ำรัวๆ — ตอบ 200 ไปตามปกติ แต่ไม่ได้เขียนอะไรจริง (จะไม่มีการตอบกลับยืนยันในแชทด้วย)
+  }
+  return new Response('OK', { status: 200 });
 }
 
 async function listRows(token, driveId, itemId, table) {

@@ -6819,6 +6819,108 @@ touches employee/attendance/evaluation data.
     than quietly building a webhook receiver nobody asked for just to
     make the feature feel more "finished."
 
+148. **Follow-up to #147: user said "เพิ่ม webhook" (add a webhook) —
+    directly asking to close the exact gap #147 itself flagged as not
+    built: a real way to capture an employee's LINE User ID
+    automatically instead of IT/Admin typing it in by hand.** Added a
+    `/webhook/line` route to `tools/sml-pms-proxy-worker.js`, checked
+    **before** the existing `X-Api-Key` gate (line ~72) rather than
+    after it — LINE's own platform calls this endpoint directly, and it
+    will never carry our `X-Api-Key` header; its own `x-line-signature`
+    header (an HMAC-SHA256 of the raw request body, keyed with a new
+    Worker secret `LINE_CHANNEL_SECRET` — deliberately a **different**
+    secret from `LINE_CHANNEL_ACCESS_TOKEN`, since one proves "this
+    request really came from LINE" and the other authorizes "send a
+    message as this OA," two unrelated LINE credentials) is the real
+    auth mechanism for this one route, computed via Cloudflare's native
+    Web Crypto API (`crypto.subtle.importKey`/`sign`, no library needed)
+    and compared byte-for-byte against the header, never a prefix/length
+    check. **Real flow built**: an employee adds the company's LINE OA
+    as a friend and sends their own employee code (e.g. "SML-001") as a
+    plain text message → `handleLineWebhook()` verifies the signature →
+    for each event, `handleLineEvent()` filters to real text messages
+    only (ignores stickers/images/follow events), looks up the typed
+    code against the real `Employees` Excel table (trimmed, case-
+    insensitive — never trusted blindly, per CLAUDE.md #1's "resolve by
+    code, never guess" rule) → if found, reads the employee's *existing*
+    `EmployeeSettings` row (if any) and carries `PinHash`/`EvalLevel`/
+    `EvalExempt` through unchanged, writing only the real `userId` from
+    `event.source.userId` into the new 6th column — never blanking the
+    other three local-only fields a LINE registration has no business
+    touching (the same "re-merge, don't wipe" discipline #17/#6/#143
+    already established for this exact table) → upserts via the
+    existing `upsertRow()` helper (never a second write path) → replies
+    in the same chat (LINE's `/v2/bot/message/reply`, using the event's
+    one-time `replyToken`) confirming the real matched name+code. **If
+    the code doesn't match any real employee, replies honestly saying
+    so** rather than silently doing nothing or guessing — the same
+    CLAUDE.md #10/#14 "never look like it worked when it didn't" rule.
+    `handleLineWebhook()` itself always returns a real `200 OK` to LINE
+    once past signature verification (even if the Graph/MS365 side
+    throws — caught and swallowed only at that outer layer, never inside
+    `handleLineEvent()` itself, so one event's write failure can't crash
+    the loop for the rest of a batch) since LINE aggressively retries any
+    endpoint that doesn't return 200, but a genuinely invalid signature
+    or a missing `LINE_CHANNEL_SECRET` still returns a real 403/500 —
+    "always ack LINE" and "never pretend a security check passed" are
+    different rules and this keeps them separate. Rewrote the Worker's
+    own top doc comment (the secrets list, now 9 — added
+    `LINE_CHANNEL_SECRET` with real deploy steps: set the Webhook URL in
+    LINE Developers Console to `<worker-url>/webhook/line`, click
+    "Verify," turn "Use webhook" on, and turn the OA's own auto-reply/
+    greeting off so employees don't see two conflicting responses) and
+    replaced the paragraph #147 had explicitly left admitting "ยังไม่ได้
+    ทำ" (not yet done) with one describing the real, now-built self-
+    registration flow — per this project's own #34/#49/#67/#97
+    discipline, a doc claim that goes stale the moment the gap it
+    described gets closed must be rewritten in the same change, not
+    left to drift. Updated the client-side `mu_lineid` help text (Add/
+    Edit Employee) to lead with the new real self-registration path
+    (message your code to the OA) while keeping manual entry as the
+    documented fallback — never silently making the fallback instructions
+    sound like the only option once a better one exists.
+    **Verified with a standalone Node script** (not Playwright — this is
+    server-only Worker code LINE calls directly over HTTP, with no
+    browser UI path to click through) that `import()`s the Worker module
+    and calls its real `fetch()` handler with a hand-built `Request`
+    (a real HMAC-SHA256 signature computed with the same test
+    `LINE_CHANNEL_SECRET`) against a mocked `global.fetch` intercepting
+    every downstream Graph/LINE call: (1) a valid-signature request with
+    a real matching employee code correctly upserts `EmployeeSettings`
+    with the new `userId`, preserves the existing `PinHash`/`EvalExempt`
+    untouched, and sends a reply naming the real matched employee; (2) an
+    invalid signature is rejected with 403 and makes **zero** downstream
+    Graph/LINE calls at all (confirmed by asserting the mock's call log
+    is empty, not just checking the response code); (3) a code matching
+    no real employee writes nothing and replies with the honest "not
+    found" message; (4) a Worker with no `LINE_CHANNEL_SECRET` configured
+    at all fails closed with a real 500, never silently accepting an
+    unverifiable request. One mock-shape bug was caught and fixed during
+    this process, not a real Worker bug: the first draft of the test's
+    mocked Graph `/rows` GET response omitted the `index` field each row
+    object needs (the real Graph API always includes it) — `upsertRow()`'s
+    own `rows[idx].index !== undefined` check then correctly fell through
+    to "no match, add a new row" instead of "match found, PATCH it,"
+    which is exactly the defensive behavior CLAUDE.md #30/#97 already
+    established (an ambiguous/incomplete match should never risk
+    corrupting an existing row) — worth remembering as the first thing to
+    check if a future Worker-mocking test shows an unexpected "added"
+    instead of "updated" result. **Real remaining deploy steps, stated
+    plainly rather than implied automatic**: none of this takes effect
+    until the Worker is redeployed (same as every other Worker-side fix
+    in this file, #41/#106 et al.) with the new `LINE_CHANNEL_SECRET`
+    secret added, and until the company's real LINE Developers Console
+    is pointed at the real deployed Worker URL with webhooks turned on —
+    told the user this directly rather than claiming the feature is live
+    the moment the code is pushed. General lesson combining #76/#147: a
+    gap explicitly flagged as "a separate, bigger task" in one fix is
+    exactly the kind of thing a user will come back and ask for by name
+    once they've had time to feel the manual workaround's real cost — when
+    they do, the earlier flag's own write-up is usually most of the real
+    design already done, so implementing it is a matter of building
+    exactly what was already described, not re-deriving scope from
+    scratch.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
