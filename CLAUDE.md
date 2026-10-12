@@ -7137,6 +7137,85 @@ touches employee/attendance/evaluation data.
     at the very end of an otherwise fully-logged chain and still fail
     completely invisibly unless its `response.ok` is explicitly checked.
 
+152. **Follow-up to #151: even after `replyLine()` started checking its
+    own response, real tests still produced zero reply in LINE — the
+    `/webhook/line` request in Cloudflare Logs itself held the real
+    answer, buried in a field nobody had looked at yet.** Expanding one
+    real request's full JSON (`$workers.event.outcome`) showed
+    `"outcome": "canceled"` with `"wallTimeMs": 1960` against
+    `"cpuTimeMs": 11` — the request was *cancelled mid-flight*, not
+    errored, and nearly all 2 seconds of wall time was spent waiting on
+    network, not computing. `handleLineWebhook()` had always `await`ed
+    the *entire* real chain — `getAppToken()` → `resolveSite()` →
+    `listRows('Employees')` → `listRows('EmployeeSettings')` →
+    `upsertRow()` → `replyLine()` — before ever sending LINE its 200 OK
+    response. LINE's platform expects a webhook to acknowledge within a
+    short window; a chain of 5+ sequential Microsoft Graph round-trips
+    plus a LINE API call comfortably exceeds that, so LINE gave up and
+    closed the connection before our response ever left the Worker —
+    which is exactly what Cloudflare's `"canceled"` outcome records.
+    This explains every earlier observation at once: LINE's own
+    "Verify" button sends an empty `events: []` array (no Graph calls
+    at all, trivially fast) so it always succeeded; a real employee's
+    message always needed the full chain, so it never got a chance to
+    finish before being cut off — and because nothing in that chain
+    actually *threw*, there was nothing for #149/#150/#151's new
+    `console.error()` calls to ever catch, which is why Cloudflare kept
+    showing "0 Errors" even once logging was fixed for every failure
+    *that could occur*. The real failure mode here isn't a JS exception
+    at all — it's an external cancellation of the whole execution
+    before the code ever got a chance to fail or succeed on its own
+    terms, which no amount of try/catch inside the handler can detect
+    or log, since the runtime tears the invocation down from outside.
+    Fixed by restructuring `handleLineWebhook()` to **answer LINE
+    immediately** (`200 OK`) the moment the signature is verified and
+    the body is parsed, and run the real work — the whole Graph chain,
+    the Excel write, and the reply send — in the background via
+    `ctx.waitUntil(processEvents())`, the standard Cloudflare Workers
+    mechanism for continuing async work after a response has already
+    been returned (this is also LINE's own documented recommendation
+    for webhooks that can't finish instantly). `fetch(request, env)` was
+    widened to `fetch(request, env, ctx)` to receive the real
+    `ExecutionContext`, threaded through to `handleLineWebhook(request,
+    env, ctx)`. A guard (`if (ctx && typeof ctx.waitUntil ===
+    'function')`) falls back to a plain `await processEvents()` when no
+    `ctx` is supplied — the exact case every existing Node test in
+    `test_line_webhook.js` hits, since they call `worker.fetch(req,
+    ENV)` with only two arguments — so none of #148/#149/#150/#151's
+    existing test cases needed any change at all; they keep exercising
+    the sequential-await path with identical observable results.
+    Verified with a new test case (case 8) that mocks a slow (gated,
+    never-resolving-until-released) `login.microsoftonline.com` call
+    and a fake `ctx` object capturing whatever promise is passed to
+    `waitUntil()`: confirms the HTTP response comes back in well under
+    500ms *while the mocked Graph call is still deliberately hanging*
+    (proving the response genuinely doesn't wait on it), then releases
+    the gate and explicitly awaits the captured background promise,
+    confirming the real `EmployeeSettings` write and the real LINE
+    reply both still complete correctly once given the chance to finish
+    — so the fix provably trades "blocks the response" for "still does
+    the real work," not for "silently drops the real work." Re-ran all
+    7 of #148–#151's existing cases with zero regressions. **Told the
+    user the next step is the same redeploy-and-send-a-fresh-message
+    test as before** — this is a genuine architecture-level fix (an
+    `ExecutionContext` is something only the real Cloudflare Workers
+    runtime provides, impossible to exercise end-to-end outside a real
+    deployment), so while the Node test suite proves the *logic* is
+    correct, only a real redeploy and a real LINE message can confirm
+    LINE itself now receives the 200 fast enough to stop disconnecting
+    early. General lesson sharper than #150's own conclusion: once a
+    "never let a fire-and-forget call go silent" audit has closed every
+    reachable `try/catch`/`.catch()` gap in a call chain and the real
+    Cloudflare Logs entry for the failing request still shows "0
+    Errors," the next place to look is not inside the handler's own
+    control flow at all — it's the platform-level `outcome` field
+    Cloudflare itself records for that invocation (`ok` vs `canceled`
+    vs `exceededCpu` etc.), which can reveal the execution was cut off
+    from *outside* the code, a failure mode no amount of internal
+    error-checking can ever catch or log, and whose real fix is
+    architectural (ack fast, defer the slow work) rather than another
+    layer of exception handling.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

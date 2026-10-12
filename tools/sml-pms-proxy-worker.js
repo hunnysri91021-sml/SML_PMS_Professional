@@ -70,7 +70,7 @@
  */
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const cors = {
       'Access-Control-Allow-Origin': '*',
@@ -84,7 +84,7 @@ export default {
        ด้วย LINE_CHANNEL_SECRET) เป็นตัวพิสูจน์ตัวตนของ route นี้เองแทน จึงต้องเช็คเส้นทางนี้ก่อน
        ผ่าน PROXY_API_KEY gate ด้านล่างไปเลย ไม่งั้นจะถูกตีกลับ 401 ก่อนได้ตรวจลายเซ็นจริงด้วยซ้ำ */
     if (url.pathname === '/webhook/line' && request.method === 'POST') {
-      return handleLineWebhook(request, env);
+      return handleLineWebhook(request, env, ctx);
     }
 
     const apiKey = request.headers.get('X-Api-Key');
@@ -387,8 +387,20 @@ async function handleLineEvent(ev, env, token, driveId, itemId) {
 
 /* จุดเข้า webhook จริง — ต้องตอบ 200 กลับ LINE เสมอไม่ว่าข้างในจะสำเร็จหรือพังยังไง (ไม่งั้น LINE
    จะเข้าใจว่า endpoint นี้ล่ม แล้วส่ง event ซ้ำๆมาเรื่อยๆ) ยกเว้นกรณีลายเซ็นไม่ถูกต้อง/ไม่ได้ตั้งค่า
-   secret เลย ซึ่งต้องปฏิเสธจริงๆ (403/500) ไม่ใช่ปลอมว่า 200 แล้วไม่ทำอะไร */
-async function handleLineWebhook(request, env) {
+   secret เลย ซึ่งต้องปฏิเสธจริงๆ (403/500) ไม่ใช่ปลอมว่า 200 แล้วไม่ทำอะไร
+
+   สำคัญมาก (เจอจาก Cloudflare Logs จริง — "outcome":"canceled"): เดิมฟังก์ชันนี้ await ทุกขั้นตอน
+   (getAppToken→resolveSite→listRows Employees→listRows/upsertRow EmployeeSettings→replyLine)
+   ให้เสร็จ "ก่อน" ถึงจะส่ง Response 200 กลับ — ทั้งที่ LINE คาดหวังให้ webhook ตอบกลับเร็วมาก (ไม่กี่
+   วินาที) ถ้า chain เรียก Microsoft Graph หลายรอบใช้เวลารวมนานเกินไป (วัดได้จริง ~2 วินาทีในเคส
+   ที่เจอ) LINE จะตัดการเชื่อมต่อไปก่อนที่เราจะตอบทัน — Cloudflare เห็น request มาถึงจริง (log ขึ้น)
+   และ Worker ไม่ error เลย (เพราะยังไม่ถึงจุดที่จะ error) แต่ "outcome" จะเป็น "canceled" แทนที่จะ
+   เป็น "ok" และผลคือพนักงานไม่ได้รับการตอบกลับเลย ทั้งที่ Worker ถูกต้องทุกอย่าง แค่ตอบช้าเกินไป
+   แก้โดยตอบ LINE ว่า 200 OK "ทันที" หลังตรวจลายเซ็นผ่านเท่านั้น แล้วค่อยประมวลผลจริง (เรียก Graph/
+   บันทึก Excel/ตอบกลับแชท) แบบเบื้องหลังผ่าน ctx.waitUntil() — มาตรฐานที่ LINE เองแนะนำสำหรับ
+   webhook ที่ทำงานช้า ctx อาจไม่มีในสภาพแวดล้อมทดสอบ (unit test เรียก worker.fetch(req, env) ตรงๆ
+   ไม่ผ่าน runtime จริง) จึง fallback เป็น await ตรงๆ แทนในกรณีนั้น เพื่อให้ผลการทดสอบยังคงเดิม */
+async function handleLineWebhook(request, env, ctx) {
   const rawBody = await request.text();
   if (!env.LINE_CHANNEL_SECRET) {
     return new Response('LINE_CHANNEL_SECRET not configured on Worker', { status: 500 });
@@ -405,34 +417,40 @@ async function handleLineWebhook(request, env) {
   }
   const events = Array.isArray(payload.events) ? payload.events : [];
 
-  try {
-    const token = await getAppToken(env);
-    const { driveId, itemId } = await resolveSite(env, token);
-    for (const ev of events) {
-      await handleLineEvent(ev, env, token, driveId, itemId).catch((e) => {
-        console.error('handleLineEvent threw unexpectedly:', (e && e.message) || e);
-      });
-    }
-  } catch (e) {
-    // ปัญหาฝั่ง MS365/Graph เอง (TENANT_ID/CLIENT_ID/CLIENT_SECRET/SITE_URL/FILE_PATH ตั้งค่า
-    // ไม่ถูก, token หมดอายุ, หา site/ไฟล์ไม่เจอ ฯลฯ) — เกิด "ก่อน" ที่ handleLineEvent() แม้แต่
-    // รายการเดียวจะได้ทำงานเลย เพราะ getAppToken()/resolveSite() พังตั้งแต่ขั้นแรก เดิมโค้ดจุดนี้
-    // แค่ console.error() แล้วเงียบไปทั้งหมด (ไม่มีการตอบกลับ LINE เลยสักข้อความ แม้จะพิมพ์รหัส
-    // พนักงานที่มีอยู่จริง) — เป็นช่องโหว่แบบเดียวกับที่ #149 เพิ่งปิดไปใน handleLineEvent() เอง
-    // แค่คนละชั้น (ชั้นนี้ยังไม่ทันได้รู้ด้วยซ้ำว่าใครพิมพ์อะไรมา เพราะยังไม่ได้ resolve พนักงาน)
-    // ตอบ 200 กลับ LINE เสมอเหมือนเดิม (กัน retry storm) แต่ตอนนี้ยังพยายามตอบข้อความ error
-    // จริงกลับไปในแชทให้ทุก event ที่เป็นข้อความตัวอักษรด้วย — ใช้ LINE_CHANNEL_ACCESS_TOKEN
-    // ได้ตามปกติ เพราะการส่งข้อความ LINE ไม่ได้พึ่ง Microsoft Graph เลยแม้แต่น้อย
-    console.error('handleLineWebhook outer MS365/Graph setup failed:', (e && e.message) || e);
-    for (const ev of events) {
-      if (ev && ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken) {
-        await replyLine(
-          env.LINE_CHANNEL_ACCESS_TOKEN,
-          ev.replyToken,
-          '⚠️ ระบบเชื่อมต่อข้อมูลขัดข้องชั่วคราว ไม่สามารถตรวจสอบรหัสพนักงานได้ในขณะนี้ กรุณาลองพิมพ์รหัสพนักงานส่งใหม่อีกครั้งในภายหลัง หรือแจ้ง Admin ให้ตรวจสอบ Log ของ Worker'
-        ).catch(() => {});
+  const processEvents = async () => {
+    try {
+      const token = await getAppToken(env);
+      const { driveId, itemId } = await resolveSite(env, token);
+      for (const ev of events) {
+        await handleLineEvent(ev, env, token, driveId, itemId).catch((e) => {
+          console.error('handleLineEvent threw unexpectedly:', (e && e.message) || e);
+        });
+      }
+    } catch (e) {
+      // ปัญหาฝั่ง MS365/Graph เอง (TENANT_ID/CLIENT_ID/CLIENT_SECRET/SITE_URL/FILE_PATH ตั้งค่า
+      // ไม่ถูก, token หมดอายุ, หา site/ไฟล์ไม่เจอ ฯลฯ) — เกิด "ก่อน" ที่ handleLineEvent() แม้แต่
+      // รายการเดียวจะได้ทำงานเลย เพราะ getAppToken()/resolveSite() พังตั้งแต่ขั้นแรก ไม่เงียบไป
+      // ทั้งหมดเหมือนเดิม (#150): ยังพยายามตอบข้อความ error จริงกลับไปในแชทให้ทุก event ที่เป็น
+      // ข้อความตัวอักษรด้วย — ใช้ LINE_CHANNEL_ACCESS_TOKEN ได้ตามปกติ เพราะการส่งข้อความ LINE
+      // ไม่ได้พึ่ง Microsoft Graph เลยแม้แต่น้อย (ตอน LINE ได้รับ 200 ไปแล้วตั้งแต่ก่อนหน้านี้ จึง
+      // ไม่มี retry storm ให้กังวลอีกต่อไปในจุดนี้)
+      console.error('handleLineWebhook outer MS365/Graph setup failed:', (e && e.message) || e);
+      for (const ev of events) {
+        if (ev && ev.type === 'message' && ev.message && ev.message.type === 'text' && ev.replyToken) {
+          await replyLine(
+            env.LINE_CHANNEL_ACCESS_TOKEN,
+            ev.replyToken,
+            '⚠️ ระบบเชื่อมต่อข้อมูลขัดข้องชั่วคราว ไม่สามารถตรวจสอบรหัสพนักงานได้ในขณะนี้ กรุณาลองพิมพ์รหัสพนักงานส่งใหม่อีกครั้งในภายหลัง หรือแจ้ง Admin ให้ตรวจสอบ Log ของ Worker'
+          ).catch((e2) => console.error('handleLineWebhook: fallback replyLine also failed:', (e2 && e2.message) || e2));
+        }
       }
     }
+  };
+
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(processEvents());
+  } else {
+    await processEvents();
   }
   return new Response('OK', { status: 200 });
 }
