@@ -4883,8 +4883,12 @@ function populateTeamManagerSelect(){
    เคยพบแล้วตั้งใจเลื่อนไว้ก่อน (teamPending เดิมไม่กรอง evalExempt, u[20]==='1') ไปด้วยในคราวนี้ */
 function countTeamPending(scopedCodes){
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  /* #162: findCurrentCycleDraft() แทน drafts.find(x=>x[0]===u[0]) เดิม — ป้องกัน draft เก่าค้างคนละ
+     composite key (เช่น level ผิดจากบั๊กก่อน #110) ไม่ให้ทำให้คนที่จริงๆ ก้าวหน้าไปแล้วยังถูกนับเป็น
+     "รอประเมิน" ที่ badge (ดูเหตุผลเต็มที่ renderTeamFromMaster()) */
+  const cycleNow = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   return MASTER_USERS.filter(u=>u[2]==='emp' && u[12]==='active' && u[20]!=='1' && (!scopedCodes || scopedCodes.has(u[0]))).filter(u=>{
-    const d = drafts.find(x=>x[0]===u[0]);
+    const d = findCurrentCycleDraft(drafts, u[0], cycleNow);
     return !d || d[d.length-1]==='Draft';
   }).length;
 }
@@ -4943,8 +4947,19 @@ function renderTeamFromMaster() {
     : MASTER_USERS.filter(u => u[12]==='active' && (u[9]||'').trim()===managerName.trim());
   const stMap = {pending:['b-y','⏳ รอประเมิน'],done:['b-g','✓ ส่งแล้ว']};
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
+  /* #162: ผู้ใช้รายงาน "ไม่ดึงข้อมูลที่ประเมินผลแล้วมาแสดง" ซ้ำอีกครั้งหลัง #161 — สืบจนถึงต้นตอจริงแล้วพบ
+     ว่า drafts.find(x=>x[0]===u[0]) เดิมหาแค่ "รายการแรกที่รหัสพนักงานตรง" โดยไม่สนรอบ/ระดับเลย — ถ้า
+     localStorage มี draft เก่าค้างอยู่ตั้งแต่ก่อนการแก้ไขหลายรอบก่อนหน้านี้ (เช่น ก่อน #110 ที่เคยเดา level
+     ผิดจาก inferLevelFromPosition() แทนที่จะใช้ getAssignedEvalLevel() จริง — draft ที่บันทึกตอนนั้นจะถูก
+     เก็บไว้ด้วย level ผิด คนละ composite key กับ draft ที่ sync มาใหม่ถูกต้อง ทำให้ไม่ถูก merge รวมเป็น
+     รายการเดียวกันเลย ยังค้างอยู่ทั้งคู่ใน getDrafts()) แล้ว draft เก่าที่ค้างนั้นดันถูกเก็บไว้ก่อนใน array
+     (มาจาก local ก่อน remote merge เข้า) .find() ก็จะเลือกตัวเก่าที่สถานะยังเป็น Draft/Submitted ทั้งที่
+     ตัวจริงที่ถูกต้องก้าวหน้าไปไกลกว่านั้นมากแล้ว — ใช้ findCurrentCycleDraft() กลาง (กรองเฉพาะรอบปัจจุบัน
+     จริง กันผลรอบเก่ามาปน แล้วเลือกตัวที่สถานะก้าวหน้าที่สุดในบรรดาที่ตรงรอบเดียวกัน) แทนการหยิบตัวแรกที่
+     เจอแบบสุ่มลำดับ */
+  const cycleNow = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   const withStatus = allDirectReports.map(u => {
-    const d = drafts.find(x=>x[0]===u[0]);
+    const d = findCurrentCycleDraft(drafts, u[0], cycleNow);
     const status = d ? d[d.length-1] : 'Draft';
     const wf = status==='Draft' ? 'pending' : 'done';
     const X = d ? Number(d[d.length-3]) : null;
@@ -8148,6 +8163,17 @@ function getDrafts(){
 }
 function saveDrafts(drafts){ localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(drafts)); }
 function draftKey(d){ return d[0]+'|'+d[2]+'|'+d[3]; }
+/* #162: หาฟังก์ชันค้นหา draft ของพนักงานคนหนึ่งแบบไม่ปลอดภัยซ้ำ 3 จุดในไฟล์นี้ — countTeamPending()/
+   renderTeamFromMaster()/getReportData() เดิมใช้ drafts.find(x=>x[0]===empCode) ทั้งหมด หาแค่ "รายการ
+   แรกที่รหัสพนักงานตรง" โดยไม่สนรอบ/ระดับ ถ้ามี draft เก่าค้างอยู่คนละ composite key (เช่น level ผิด
+   จากบั๊กเก่าก่อน #110) การ merge จะไม่รวมเป็นรายการเดียว ทำให้ .find() อาจหยิบตัวเก่าสถานะต่ำกว่าแทน
+   ตัวจริงที่ก้าวหน้าไปแล้ว — ใช้ฟังก์ชันกลางนี้ทุกจุดแทน: กรองเฉพาะรอบปัจจุบันจริงก่อน (กันผลรอบเก่ามาปน)
+   แล้วเลือกตัวที่ evalStatusRank สูงสุดในบรรดาที่ตรงรอบเดียวกัน ไม่ใช่ตัวแรกที่เจอตามลำดับ array */
+function findCurrentCycleDraft(drafts, empCode, cycle){
+  const matches = drafts.filter(x=>x[0]===empCode && x[2]===cycle);
+  if(!matches.length) return null;
+  return matches.reduce((best,cur)=> evalStatusRank(cur[cur.length-1]) > evalStatusRank(best[best.length-1]) ? cur : best);
+}
 /* #113: ลบใบประเมินทั้งใบ (กรณีกรอกคนผิด/ข้อมูลผิด) ตามที่ผู้ใช้ขอ — ลบได้เฉพาะ admin/sysadmin
    (ปุ่มถูกซ่อนทั้งหมดสำหรับ role อื่นที่ render จุดเรียกใช้ ไม่ใช่แค่ disabled ตามแบบ #72/#90)
    ข้อจำกัดจริงที่ต้องบอกตรงๆ ไม่ปิดบัง (ตาม CLAUDE.md #39): ฟังก์ชันนี้ลบได้แค่ record ใน
@@ -9450,8 +9476,12 @@ function downloadCsv(filename, headers, rows){
 function getReportData(){
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
   const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
+  /* #162: findCurrentCycleDraft() แทน drafts.find(x=>x[0]===u[0]) เดิม — เหตุผลเดียวกับ
+     renderTeamFromMaster()/countTeamPending() ด้านบน กันรายงานแสดงผลเก่า/ต่ำกว่าจริงจาก draft
+     ค้างคนละ composite key */
+  const cycleNow = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   return MASTER_USERS.filter(u=>u[12]==='active' && u[20]!=='1').filter(u=>!scoped || scoped.has(u[0])).map(u=>{
-    const d = drafts.find(x=>x[0]===u[0]);
+    const d = findCurrentCycleDraft(drafts, u[0], cycleNow);
     return {
       code:u[0], name:u[1], group:u[3], dept:u[6]||u[4]||'—',
       Y: d ? Number(d[d.length-5]) : null,

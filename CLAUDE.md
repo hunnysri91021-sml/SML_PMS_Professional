@@ -7869,6 +7869,92 @@ touches employee/attendance/evaluation data.
     migration step and no risk of a "did the migration run" question
     ever coming up again.
 
+162. **Follow-up to #161: user reported the identical "ไม่ดึงข้อมูลที่
+    ประเมินแล้วมาแสดง" symptom again, on the exact same page (#161's own
+    screenshot — the "2. ประเมินทีมงาน" page's `__noL1__` bucket, real L2
+    login, all 5 people still showing "⏳ รอประเมิน") even after the #161
+    fix, a hard refresh, and a confirmed-successful Sync Log entry.**
+    Asked for the real Appraisals Excel data for one named employee
+    (90526) before touching code again — the screenshot showed **two
+    rows per employee**, same EmpID/รอบ(2569)/ระดับ(of), but two
+    different statuses each (e.g. "L2Reviewed" + "Submitted" for 90526,
+    "GMApproved" + "L1Reviewed" for 90354) — leftover duplicate rows from
+    before #41's composite-key upsert existed, never cleaned up since
+    there's no `graphDeleteTableRow()` anywhere in this file (#39's own
+    stated limit). Built a faithful Playwright reproduction seeding this
+    *exact* real data shape (two Excel rows, same composite key, through
+    the real `ms365SyncAppraisals()` → `getDrafts()` → `renderTeamFromMaster()`
+    chain) — it rendered correctly ("✓ ส่งแล้ว ดูแบบฟอร์ม"), proving the
+    *data layer* (merge, dedup-by-composite-key, status rank comparison)
+    was already fully correct. (Caught two of my own test-authoring
+    mistakes along the way, both worth remembering: seeding a
+    `MASTER_USERS` row with a value at the wrong array index — `u[19]`
+    is the L2-field the real resolver reads per #145, not `u[17]` — and
+    assigning `window.CURRENT_SESSION_USER = …` instead of the bare
+    `CURRENT_SESSION_USER = …`, since the variable is declared with
+    `let` at module scope and therefore never becomes a `window`
+    property — assigning through `window.` silently creates an unrelated
+    global that the real lexically-scoped functions never read. Both are
+    exactly the kind of mistake CLAUDE.md #130/#144 already warn a test's
+    own seed data can introduce — re-verify a reproduction actually
+    reaches the real code path before trusting its result either way.)
+    With the merge logic exonerated a second time, the real remaining
+    suspect was `renderTeamFromMaster()`'s own lookup:
+    `drafts.find(x=>x[0]===u[0])` — picks the **first** `getDrafts()`
+    entry matching only the employee code, with **zero regard for cycle
+    or level**. This is safe only if `getDrafts()` genuinely holds at
+    most one entry per employee — true after a clean merge, but **not**
+    guaranteed to stay true forever: any draft written under a different
+    composite key for the *same real evaluation* (e.g. a stale local
+    entry cached under the wrong `level` from before #110's
+    `getAssignedEvalLevel()` fix, when the team page still guessed the
+    level from job-title keywords and could save a draft under `'op'`
+    instead of the real `'of'`) would never collide with — and therefore
+    never get overwritten by — the correctly-keyed entry `ms365SyncAppraisals()`
+    later merges in; both would coexist in `getDrafts()` forever, and
+    `.find()`'s first-match-wins behavior could silently return the old,
+    low-rank one depending on array insertion order. Built a second
+    Playwright test seeding exactly this scenario — a stale local
+    `['90526',...,'2569','op',...,'Draft']` entry already in
+    `localStorage`, then a real sync pulling the correct
+    `['90526',...,'2569','of',...,'L2Reviewed']` row — and confirmed it
+    reproduced the user's exact symptom (`.find()` returned the stale
+    `Draft` entry) before the fix, and the real expected result
+    (`✓ ส่งแล้ว`) after it. Fixed by replacing the blind `.find()` with:
+    filter `drafts` to entries matching both `u[0]` **and** the real
+    current cycle (`getCurrentEvalCycleYear()` — deliberately scoped to
+    *this* cycle, not just the employee code, so an older cycle's already-
+    `Approved` record can never be mistaken for this cycle's progress),
+    then reduce to the entry with the highest `evalStatusRank()` among
+    whatever matches — so a leftover wrong-level duplicate from any past
+    bug can never again hide a real, more-advanced status, regardless of
+    which array position it happens to occupy. Verified with both new
+    tests (the faithful real-data reproduction, now passing cleanly, and
+    the stale-wrong-level-duplicate scenario, now correctly showing
+    "ดูแบบฟอร์ม" instead of "ประเมิน") plus re-ran #160/#161's own tests
+    and the standard click-sweep (`nav pages clicked: 22 errors: []`)
+    with zero regressions. **This is a real, defensible hardening
+    regardless of whether it is the exact cause in this user's live
+    browser** — I cannot inspect their actual `localStorage`, so the
+    specific stale entry's origin (which past level-guessing bug wrote
+    it, and when) can't be confirmed from here; the fix closes the whole
+    *class* of "a `.find()` by employee-code-only can return a stale
+    duplicate instead of the real current one" risk, the same way #161
+    closed the cycle-type class rather than one specific record. General
+    lesson sharper than #136/#138's own "reuse one roster-building
+    function" discipline: `buildTierRoster()` (#136) already does the
+    right thing here — it filters by `cycle` before comparing rank — but
+    `renderTeamFromMaster()`'s own, older, independent lookup was never
+    brought in line with that same discipline when #136 shipped, because
+    the team page predates `buildTierRoster()` and was never migrated
+    onto it (it has its own bucket logic — `__noL1__`/`__noL1L2__` —
+    `buildTierRoster()` doesn't cover). Whenever a "pick the matching
+    draft" pattern is hardened in one function, grep the whole file for
+    every *other* independent `drafts.find(x=>x[0]===...)`-shaped lookup
+    that was never updated to match, the same way #126/#127/#138 already
+    taught for scoping and counting functions, not just this file's one
+    canonical roster builder.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
