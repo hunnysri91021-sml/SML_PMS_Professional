@@ -7798,6 +7798,77 @@ touches employee/attendance/evaluation data.
     one turn earlier is worth re-deriving from scratch via the Sync Log
     before assuming the previous fix simply didn't take effect.
 
+161. **Follow-up to #160: user sent another screenshot — the "2.
+    ประเมินทีมงาน (L1 รอบแรก)" page's "พนักงานไม่มีหัวหน้า L1" bucket (#130)
+    still showed the same 5 employees as "⏳ รอประเมิน" with a plain
+    "ประเมิน" button (not "ดูแบบฟอร์ม"), even though their real Excel
+    `Appraisals` rows already carried advanced statuses and the #160 fix
+    was already deployed and confirmed working by the Sync Log. User
+    asked directly: "ต้องประเมินใหม่เหรอ" (do I need to evaluate them
+    again?).** Read `getDrafts()` (line 8132) itself — confirmed it was a
+    bare `JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY)||'[]')`
+    with **zero** normalization — and re-read `ms365SyncAppraisals()`'s
+    merge condition: `if(!existing || evalStatusRank(r[...]) >
+    evalStatusRank(existing[...])){ byKey.set(key,r); }` — overwrites a
+    local draft only when the **remote rank is strictly greater**, never
+    on a tie. #160 fixed `normalizeAppraisalRow()` so every *newly*
+    pulled row gets a real string `d[2]`/`d[3]` — but any draft that was
+    already sitting in `localStorage` from a sync that ran *before* #160
+    shipped, whose real-world status simply hasn't advanced any further
+    since, would never hit the "remote rank > local rank" branch — it
+    would tie, `existing` would be kept untouched, and its numeric
+    `d[2]` would persist in `localStorage` indefinitely. Every `d[2]===
+    cycle` strict comparison reading that stale entry (`buildTierRoster()`
+    at minimum, which the `__noL1__` bucket is built from) would then
+    silently find "no draft this cycle" and classify the person as
+    never-evaluated — exactly the screenshot. (`byKey`/`draftKey()`'s own
+    matching was never broken by this, since both build their key via
+    `+` string concatenation, which coerces a number to its string form
+    automatically — only *strict* `===` reads downstream of `getDrafts()`
+    were ever at risk, the same distinction #117/#160 already drew.)
+    Fixed at the one real read boundary — `getDrafts()` itself — rather
+    than patching every downstream `===` site again: after the existing
+    `JSON.parse`, loop every returned draft and coerce `d[2]`/`d[3]` to
+    `String(...).trim()` in place before returning, so **every** draft is
+    normalized on **every** read regardless of when it was originally
+    cached — a draft written before #160 existed, one written by #160's
+    own fixed ingestion path, and one written by a completely different
+    local save path (`saveEvaluationLocal()`, `confirmCalibration()`,
+    etc., none of which ever had the type bug in the first place since
+    they build the cycle from `getCurrentEvalCycleYear()`, always a
+    string) all come out normalized the same way, with zero data loss
+    and no forced resync required. Verified with a Playwright test that
+    writes a stale draft **directly into `localStorage`** under the real
+    `MS365_LOCAL_DRAFT_KEY` with `cycle` as a real JS number — simulating
+    exactly what a pre-#160 sync would have left behind, never going
+    through any sync function at all — then calls the real `getDrafts()`
+    and confirms the returned entry's cycle is now a `string`, and that
+    `buildTierRoster()` correctly classifies it as `'ready'` (not
+    `'pending'`/not-found) — plus the standard click-sweep (`nav pages
+    clicked: 22 errors: []`). **Answered the user's actual question
+    plainly**: no, the real evaluation data was never lost — the 5
+    people's real scores/statuses have been sitting correctly in Excel
+    the whole time; this was purely a local-device display bug reading
+    an old cached copy with the wrong field type, now fixed with no
+    re-work needed on their part — a page reload (which re-reads
+    `localStorage` through the now-fixed `getDrafts()`) is all that's
+    required, not re-evaluating anyone. General lesson sharper than
+    #160's own conclusion: fixing a type-coercion bug at the *ingestion*
+    point (where new data enters) stops the bug from recurring, but does
+    **not** retroactively repair data that was already written to
+    persistent local storage by the *old*, buggy code — especially when
+    the data store in question has a merge rule that only overwrites on
+    improvement, never on a tie, which is exactly the shape of rule that
+    lets stale, incorrectly-typed entries survive indefinitely with no
+    further sync ever correcting them. When a persistent local cache
+    (`localStorage`, here) can hold data written by several different
+    versions of the same ingestion code over time, normalize defensively
+    at the **read** function itself (`getDrafts()`), not only at the
+    write/ingestion point — a read-side normalization self-heals every
+    already-cached record the moment it's next loaded, with no explicit
+    migration step and no risk of a "did the migration run" question
+    ever coming up again.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

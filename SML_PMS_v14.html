@@ -8130,7 +8130,21 @@ function renderPendingList(){
    โครงสร้างแถว: [empCode,empName,cycle,level, ...m(10), ...l(4), Y, Z, X, grade, status]
    ดังนั้น: length-5=Y, length-4=Z, length-3=X, length-2=grade, length-1=status */
 function getDrafts(){
-  try{ return JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ return []; }
+  /* #161: getDrafts() เดิมคืนค่าดิบจาก JSON.parse ไม่มีการปรับชนิดข้อมูลเลย — ถ้า draft ที่เคย sync เข้า
+     localStorage ไว้ "ก่อน" fix #160 (ตอนนั้น normalizeAppraisalRow() ยังไม่บังคับ d[2]/d[3] เป็น string)
+     แล้วสถานะจริงบน Excel ไม่ได้เปลี่ยนต่อจากตอนนั้นอีก (remote rank == local rank พอดี) draft ตัวนั้นจะ
+     ไม่ถูก merge ทับด้วย ms365SyncAppraisals() เลย (merge ทับแค่ตอน remote rank > local rank เท่านั้น ไม่ทับ
+     ตอนเท่ากัน — ดูเหตุผลที่ #134) ทำให้ d[2] ยังเป็นตัวเลขค้างอยู่ถาวร แล้วทุกจุดที่เทียบ d[2]===cycle
+     แบบ strict (buildTierRoster() ฯลฯ) จะหาไม่เจอ มองว่า "ยังไม่ประเมิน" ทั้งที่ข้อมูลจริงมีอยู่แล้ว —
+     แก้ที่จุดอ่านนี้จุดเดียว บังคับ d[2]/d[3] เป็น string ทุกครั้งที่อ่าน ไม่ว่า draft จะถูก cache มาตั้งแต่
+     ก่อนหรือหลัง fix #160 ก็ตาม โดยไม่ต้องรอ sync รอบใหม่หรือเสียข้อมูลเดิม */
+  let drafts;
+  try{ drafts = JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ return []; }
+  drafts.forEach(d=>{
+    if(d[2]!==null && d[2]!==undefined) d[2]=String(d[2]).trim();
+    if(d[3]!==null && d[3]!==undefined) d[3]=String(d[3]).trim();
+  });
+  return drafts;
 }
 function saveDrafts(drafts){ localStorage.setItem(MS365_LOCAL_DRAFT_KEY, JSON.stringify(drafts)); }
 function draftKey(d){ return d[0]+'|'+d[2]+'|'+d[3]; }
