@@ -7716,6 +7716,88 @@ touches employee/attendance/evaluation data.
     the sync's own merge/scoping logic must be where a "missing data"
     report's real cause lives.
 
+160. **Follow-up to #159: user reported the identical "ไม่ดึงข้อมูล Excel
+    มาแสดง" symptom again — this time a specific review queue page
+    showing all 5 scoped employees as "⏳ รอผลประเมิน" even though their
+    real Appraisals Excel rows (confirmed via the user's own screenshot
+    one turn earlier) already carried real, advanced statuses like
+    `L2Reviewed`/`GMApproved`. Ruled out #159's own pagination fix as the
+    cause first — confirmed via 3 targeted clarifying questions that the
+    Worker had genuinely been redeployed with the pagination code, the
+    real cycle code (`cycleYearSetup`) matched the Excel data's "2569"
+    exactly, and the Sync Log's latest "Sync คิวประเมิน" entry still
+    showed a real success — "✓ ... ดึงข้อมูล 10 แถวจาก Excel (auto)" —
+    confirming the pull itself was genuinely complete this time (the
+    real table turned out to be exactly 10 rows: 5 employees × 2
+    duplicate rows each, matching the earlier screenshot).**
+    With the pull side fully exonerated, read `buildTierRoster()` (#136)
+    directly: `const draft = getDrafts().find(d=>d[0]===emp[0] &&
+    d[2]===cycle) || null;` — a **strict** `===` comparison between the
+    draft's stored cycle field (`d[2]`) and the queried cycle
+    (`getCurrentEvalCycleYear()`, which always returns a real `string`
+    per its own `String(data.year).trim()`/`'2569'` fallback). Traced
+    `normalizeAppraisalRow()` (#117) — the one real ingestion point every
+    pulled `Appraisals` row passes through before merging into local
+    `getDrafts()` — and found it **only** coerces array positions 4–20
+    (the `m`/`l`/`Y`/`Z`/`X` numeric score fields) to `Number()`; position
+    2 (รอบ/cycle) and position 3 (ระดับ/level) were never touched, on the
+    unstated assumption they'd always already be text. If the real Excel
+    "รอบ" column is formatted as a **Number** cell (extremely plausible —
+    "2569" reads exactly like a year, which Excel defaults to numeric
+    formatting for unless someone deliberately sets it to Text, unlike
+    "ระดับ"'s clearly non-numeric values like "of"), Graph returns that
+    cell's value as a real JS `number` (`2569`), not the string
+    `"2569"` — so every synced draft's `d[2]` silently became a number
+    while every query site's `cycle` argument stayed a string, and
+    `d[2]===cycle` failed on every single comparison, everywhere in the
+    file, even though both sides "looked" identical when printed. This
+    is the exact #117 shape of bug (an external-table value surviving as
+    the wrong JS type past a strict-equality comparison) recurring in the
+    two fields #117's own fix deliberately left untouched — grepped
+    `\[2\]===cycle` and `d\[2\]===` across the whole file and found this
+    single comparison pattern repeated at **12 separate call sites**
+    (`buildTierRoster()` itself, `printEvalForm()`'s live-draft lookup,
+    `openReviewerForm()`'s restore lookup, `acknowledgeMyResult()`,
+    `confirmCalibration()`'s dup-check, `saveEvaluationToMs365()`'s
+    existing-draft check, `renderMyResult()`, `submitReviewerForm()`
+    ×2, `openSubmitConfirmModal()`, and the Cycle History page's
+    participant-count/status lookups) — every one of them would have
+    silently found "no draft" for any employee whose Excel-synced record
+    carried a numeric cycle, system-wide, not just on the one queue page
+    the screenshot happened to show.
+    Fixed at the single real ingestion point rather than patching all 12
+    read sites individually (the same "fix the one place data enters,
+    not every place it's read" discipline #117 itself already
+    established): `normalizeAppraisalRow()` now also does
+    `out[2]=String(out[2]).trim(); out[3]=String(out[3]).trim();`
+    whenever each is non-null/non-undefined — forcing both fields to a
+    real string the instant a row is pulled, so every one of the 12
+    downstream `===` comparisons becomes correct automatically with zero
+    changes needed at any of them. Verified with a Playwright test that
+    mocks `workerFetch`'s `/rows?table=Appraisals` response to return the
+    cycle field as a real JS **number** `2569` (reproducing the exact
+    real-world Excel-cell-type shape, not a string literal that would
+    hide the bug), runs it through the real `ms365SyncAppraisals()` →
+    `normalizeAppraisalRow()` chain, confirms the merged local draft's
+    `d[2]` is now `typeof === 'string'`, and confirms `buildTierRoster()`
+    — called with the real string `getCurrentEvalCycleYear()` — correctly
+    finds and classifies that employee's row as `'ready'` (matching the
+    draft's real status) instead of silently treating them as having no
+    draft at all — plus the standard click-sweep (`nav pages clicked: 22
+    errors: []`). General lesson sharper than #117's own conclusion:
+    when a type-coercion fix is applied to "the numeric fields" of an
+    ingested external row, explicitly audit every *other* field in that
+    same row for the identical risk before considering the ingestion
+    point fully hardened — a field that "looks like it should always be
+    text" (a cycle/year code, a level string) can still arrive as a
+    number if the external spreadsheet's own cell formatting disagrees,
+    and the only way to know for certain is to check the real external
+    file's cell types (per #78's own established "verify the real shape,
+    don't assume" discipline) rather than inferring from the field's
+    human meaning; a report that looks identical to a bug already fixed
+    one turn earlier is worth re-deriving from scratch via the Sync Log
+    before assuming the previous fix simply didn't take effect.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

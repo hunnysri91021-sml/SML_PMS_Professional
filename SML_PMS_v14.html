@@ -8306,6 +8306,15 @@ function skipEmptyReviewStages(empCode, cycle, level){
 function normalizeAppraisalRow(r){
   const out = r.slice();
   for(let i=4;i<=20;i++){ if(out[i]!==null && out[i]!==undefined && out[i]!=='') out[i]=Number(out[i]); }
+  /* #160: out[2] (รอบ)/out[3] (ระดับ) ไม่เคยถูกบังคับชนิดข้อมูลมาก่อน — ถ้าคอลัมน์ "รอบ" ใน Excel จริง
+     ถูกจัดรูปแบบเป็นตัวเลข (เช่น 2569 ดูเหมือนปีจึง Excel มักตั้งเป็น Number cell โดยอัตโนมัติ ไม่ใช่
+     Text cell) Graph จะส่ง out[2] กลับมาเป็น number จริง (2569) ไม่ใช่ string "2569" — ทุกจุดในไฟล์นี้
+     ที่เทียบ d[2]===cycle (buildTierRoster/printEvalForm/getCurrentEvalCycleYear ฯลฯ — getCurrentEvalCycleYear()
+     คืนค่าเป็น string เสมอ) จะ strict-compare number กับ string แล้วไม่ตรงกันเงียบๆ ทุกครั้ง ทำให้ draft
+     ที่ sync มาจาก Excel จริงๆ แล้ว หาไม่เจอเลยสักที่ (เหมือนข้อมูลหายทั้งที่ Sync Log บอกว่าสำเร็จ) —
+     บังคับแปลงเป็น string ตั้งแต่จุดกิน (ingestion) เดียวกับ #117 แทนที่จะแก้ทุกจุดอ่านปลายทาง */
+  if(out[2]!==null && out[2]!==undefined) out[2]=String(out[2]).trim();
+  if(out[3]!==null && out[3]!==undefined) out[3]=String(out[3]).trim();
   return out;
 }
 async function ms365SyncAppraisals(silent=true){
