@@ -455,10 +455,19 @@ async function handleLineWebhook(request, env, ctx) {
   return new Response('OK', { status: 200 });
 }
 
+// #159: ตารางที่มีแถวจำนวนมาก Graph อาจแบ่งหน้าด้วย @odata.nextLink — ต้องวนอ่านจนครบทุกหน้า
+// ไม่ใช่แค่หน้าแรก มิฉะนั้น sync จะดึงข้อมูลที่ประเมินไปแล้วมาได้ไม่ครบ (เฉพาะกลุ่มแรกของตาราง)
 async function listRows(token, driveId, itemId, table) {
-  const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
-  const data = await graphGet(token, base);
-  return (data.value || []).map((r) => (r.values && r.values[0]) || []);
+  let url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
+  let rows = [];
+  let guard = 0;
+  while (url && guard < 200) {
+    const data = await graphGet(token, url);
+    rows = rows.concat((data.value || []).map((r) => (r.values && r.values[0]) || []));
+    url = data['@odata.nextLink'] || null;
+    guard++;
+  }
+  return rows;
 }
 async function addRow(token, driveId, itemId, table, values) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows/add`;

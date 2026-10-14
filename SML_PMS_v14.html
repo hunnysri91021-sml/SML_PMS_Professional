@@ -7036,6 +7036,11 @@ async function workerFetch(cfg, path, options={}){
   return data;
 }
 
+/* #159: ตาราง Excel จริงที่มีแถวจำนวนมาก (เช่น Appraisals ที่สะสมทุกรอบ/ทุกคน) Graph API อาจตอบ
+   กลับมาเป็นหน้าๆ (@odata.nextLink) ไม่ส่งมาครบในครั้งเดียว — โค้ดเดิมอ่านแค่หน้าแรกแล้วคืนค่าทันที
+   ทำให้ sync ดึงมาได้เฉพาะแถวกลุ่มแรกของตาราง (เช่น Sync Log ขึ้น "10 แถว" ทั้งที่ตารางจริงมีมากกว่า
+   นั้น) ข้อมูลที่ประเมินไปแล้วของคนที่ไม่ได้อยู่ในหน้าแรกจึงไม่ถูกดึงมาที่เว็บเลย ต้องวนตาม
+   @odata.nextLink จนกว่าจะไม่มีหน้าต่อไปแล้วค่อยคืนค่าทั้งหมด */
 async function graphListTableRows(tableName){
   const cfg = loadMs365Config();
   if(isWorkerConfigured(cfg)){
@@ -7043,9 +7048,17 @@ async function graphListTableRows(tableName){
     return data.rows || [];
   }
   const { driveId, itemId } = await resolveMs365Site();
-  const data = await graphFetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
-    "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows");
-  return (data.value || []).map(r => (r.values && r.values[0]) || []);
+  let url = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+    "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows";
+  let rows = [];
+  let guard = 0;
+  while(url && guard < 200){
+    const data = await graphFetch(url);
+    rows = rows.concat((data.value || []).map(r => (r.values && r.values[0]) || []));
+    url = data['@odata.nextLink'] || null;
+    guard++;
+  }
+  return rows;
 }
 
 async function graphAddTableRow(tableName, rowValues){

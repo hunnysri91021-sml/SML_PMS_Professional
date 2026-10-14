@@ -7635,6 +7635,87 @@ touches employee/attendance/evaluation data.
     chokepoint, the same pattern #72/#90 already established for other
     per-person nav/button visibility exceptions.
 
+159. **User asked "ทำไมพอเข้าระบบใหม่ แล้ว ไม่ดึงข้อมูลที่ประเมินผลแล้วจาก
+    Excel" (why, on a fresh login, doesn't it pull the already-evaluated
+    data from Excel) — confirmed via two clarifying questions that this
+    was the same previously-used device/browser (not a brand-new one),
+    and that the Sync Log panel itself already showed a real success
+    entry: "[...] ✓ Sync คิวประเมิน: ดึงข้อมูล 10 แถวจาก Excel (auto)."**
+    Read `ms365SyncAppraisals()`'s full body, `doLogin()`'s sync-chain
+    ordering, and `DEFAULT_MS365_CONFIG.evaluationTable` — all correct,
+    ruling out a silent-failure/mis-wiring bug of the #66/#68/#69 shape;
+    the sync genuinely ran and genuinely pulled 10 rows. The suspiciously
+    round number pointed at the one thing never checked: whether
+    `graphListTableRows()` (client, delegated path) and the Worker's own
+    `listRows()` (used whenever the Worker is configured, which per #31
+    is the default for every device) ever follow Microsoft Graph's
+    `@odata.nextLink` for a collection response. **Confirmed they never
+    did** — both made exactly one GET request to the table's `/rows`
+    endpoint and returned whatever came back in that single response,
+    with no loop and no check for `@odata.nextLink` anywhere in the file
+    (grepped for `nextLink`/`\$top` file-wide — zero matches other than
+    the function declaration itself). Microsoft Graph's workbook-table-
+    rows endpoint, like most Graph collection endpoints, pages a large
+    result set across multiple responses — so a real `Appraisals` table
+    with more real evaluation rows than fit in one page would silently
+    hand back only its first page, forever, on every sync — exactly
+    explaining "already-evaluated data doesn't show up" for whichever
+    employees' rows happened to land past page 1, while the Sync Log
+    kept reporting a false "success" every time (it only ever logged
+    `rows.length` of whatever it was actually given, never knowing a
+    `@odata.nextLink` existed). This is the same general shape as every
+    `.catch(()=>{})` silent-failure bug this file has repeatedly found
+    (#66/#68/#69/#149-#152), just one layer further out: not a *thrown*
+    error being swallowed, but a *successful, correctly-shaped* Graph
+    response being accepted as complete when it explicitly said (via its
+    own `@odata.nextLink` field) that it wasn't.
+    Fixed both `graphListTableRows()` (client) and `listRows()` (Worker)
+    identically: loop fetching the current page, concatenate its rows,
+    and follow `data['@odata.nextLink']` to the next page until the
+    field is absent — capped at a 200-page safety guard (a table would
+    need tens of thousands of rows to ever hit that, purely defensive
+    against an unexpected infinite-pagination response). This is the
+    one function every single Excel pull in the whole file funnels
+    through (`ms365SyncEmployees`/`...Attendance`/`...KpiGoals`/
+    `...CycleSetup`/`...CyclesList`/`...FormWeights`/`...Idp`/
+    `...AuditLog`/`...OrgMaster`/`...Appraisals`/`...ApprovalSignatures`/
+    `...HrNotes`/`...EvalComments`/`EmployeeSettings` — every one of
+    them calls `graphListTableRows()`, never a second parallel reader),
+    so this single fix closes the identical "only ever get page 1" risk
+    for every one of those tables at once, not just `Appraisals` — any
+    one of them could in principle have grown past a single page's size
+    as this deployment's real data accumulates over time, even if
+    `Appraisals` happened to be the one that hit it first and got
+    reported. **This changes the Worker's own code** (`listRows()`), so
+    per CLAUDE.md #41/#106/#147's own precedent it needs a real redeploy
+    before this fix has any live effect for any device routing through
+    the Worker (which, per #31, is every device by default) — the
+    client-side `graphListTableRows()` fix goes live the moment GitHub
+    Pages updates, same as any other purely-client fix in this file.
+    Verified with two separate tests mirroring each other: a Playwright
+    test mocking `graphFetch()` to return 3 chained pages (2+2+1 rows,
+    `@odata.nextLink` on the first two, none on the last) and confirming
+    `graphListTableRows()` makes exactly 3 calls and returns all 5 rows,
+    not just the first page's 2; and a Node-only test importing the real
+    Worker module, mocking `global.fetch` for the full real auth/site-
+    resolution chain plus the same 3-page `/rows` response shape, and
+    confirming the Worker's `/rows` HTTP endpoint itself returns all 5
+    rows in one JSON response to the client — plus the standard click-
+    sweep (`nav pages clicked: 22 errors: []`). General lesson sharper
+    than #66/#68/#69's own conclusion: those fixes closed every place a
+    *failed* Graph/Worker call went silent; this is the case where the
+    call *succeeds* exactly as asked and is still incomplete, because a
+    paginated collection response says so in a field nothing ever read —
+    any function that calls a Microsoft Graph (or any other paginated
+    REST API) collection endpoint and returns `data.value` directly,
+    without checking for a continuation token/link field, is reporting
+    "fewer rows than are actually there" as a quiet, successful result
+    rather than an error — and a suspiciously round row count in a
+    success log (10, 20, 50 — common default page sizes) is a strong
+    diagnostic signal for exactly this, worth checking before assuming
+    the sync's own merge/scoping logic must be where a "missing data"
+    report's real cause lives.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
