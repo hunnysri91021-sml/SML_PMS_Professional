@@ -8152,6 +8152,24 @@ touches employee/attendance/evaluation data.
     but "stop forcing data that isn't the same *kind* of information
     (6 raw inputs vs. 1 final answer) into one undifferentiated grid
     built for the other shape."
+    **Immediate follow-up, same request's real target**: user's next
+    screenshot pointed specifically at the employee-info tiles
+    (ชื่อ-สกุล/รหัสพนักงาน/ตำแหน่ง/รอบประเมิน) asking for them "ให้เห็น
+    ชัดเจน ใหญ่กว่านี้" (bigger, clearer) — `.review-employee-grid`'s
+    value text (`b`) was still only `11px`, the original pre-#171 size,
+    since that earlier pass only added uppercase/letter-spacing to the
+    *labels*, never touched the actual value font size. Bumped
+    `.review-employee-grid b` to `17px`/`font-weight:800` (matching the
+    `.review-z-highlight` result numbers' own prominence one section
+    below), gave each tile more breathing room (`padding:13px 15px`,
+    white background, a subtle shadow) instead of the cramped `9px 11px`
+    on a slightly off-white `#fbfcfe` background. Verified the real
+    computed style via `getComputedStyle()` first (`fontSize:"17px"`)
+    before re-screenshotting, since a stale screenshot file from a
+    previous run can look unchanged purely from file-caching confusion
+    even when the CSS itself is already correct — re-ran with a fresh
+    output path to confirm visually. Re-ran the same full regression
+    suite + click-sweep, zero regressions.
 
 ## Verification checklist for any change to this file
 
