@@ -4973,7 +4973,7 @@ function renderTeamFromMaster() {
        L1 "รอบแรก" คือแก้ไข/ยืนยันคะแนนเดิมทับ ไม่ใช่คะแนนชุดที่สอง) จึงไม่มีข้อมูลจริงให้แสดงตรงนี้ */
     const disciplineRaw = d ? Number(d[10]) : 0;
     const discipline = disciplineRaw > 0 ? disciplineRaw : null;
-    return { u, wf, X, discipline };
+    return { u, wf, X, discipline, d };
   });
 
   const filtered = withStatus.filter(r =>
@@ -4981,14 +4981,24 @@ function renderTeamFromMaster() {
     (!q || r.u[0].toLowerCase().includes(q) || r.u[1].toLowerCase().includes(q))
   );
 
-  el.innerHTML = filtered.length ? filtered.map(({u,wf,X,discipline}) => {
+  el.innerHTML = filtered.length ? filtered.map(({u,wf,X,discipline,d}) => {
     const st = stMap[wf];
     /* เดิมใช้ inferLevelFromPosition(u[7]) เดา "ระดับฟอร์ม" จากคำในตำแหน่งงานเสมอ — ถ้าคนนี้เคยมีร่าง/
        ส่งแบบประเมินไว้จริงแล้วภายใต้ระดับจริงที่ Admin กำหนด (emp[18], ดู CLAUDE.md #23) ซึ่งอาจไม่ตรง
        กับที่เดาจากตำแหน่ง เปิดฟอร์มมาก็จะหาแบบร่างไม่เจอ (เทียบ lv ผิด) ทำให้ restoreReviewerFormFromDraft()
        (#109) คืนค่าว่างเปล่าเหมือนไม่เคยให้คะแนนมาก่อน ทั้งที่มีจริง — ใช้ระดับจริงที่ Admin กำหนดก่อนเสมอ
        (getAssignedEvalLevel, #23) เดาจากตำแหน่งเฉพาะกรณีที่ยังไม่เคยกำหนดไว้เท่านั้น */
-    const realLevel = (typeof getAssignedEvalLevel==='function' ? getAssignedEvalLevel(u) : '') || inferLevelFromPosition(u[7]);
+    /* #164: ผู้ใช้รายงาน "ดึง comment มาแต่ไม่ได้ดึงคะแนนประเมินมา" — สืบพบว่า realLevel ด้านบนคำนวณ
+       จากระดับที่ Admin กำหนด "ปัจจุบัน" ทุกครั้งที่ render ใหม่ โดยไม่สนว่า draft จริงที่มีอยู่แล้ว (d)
+       ถูกบันทึกไว้ด้วย level อะไรจริงๆ — ถ้า Admin เปลี่ยน evalLevel ของคนนี้ "หลังจาก" draft ถูกสร้างไว้
+       แล้ว (หรือ realLevel เคยถูกเดาผิดตอนสร้าง draft ครั้งแรกก่อน #110) ปุ่มนี้จะเปิดฟอร์มด้วย level ที่
+       ไม่ตรงกับ draft จริง — restoreReviewerFormFromDraft()'s exact match d[3]===lv (บรรทัด ~10712)
+       จะหาไม่เจอเลย คะแนนทุกข้อจึงว่างเปล่า ขณะที่ buildPrevCommentsHtml() อ่านแค่ empCode+cycle (ไม่สน
+       level) จึงยังดึง comment ได้ปกติ — อาการนี้เองที่ทำให้ "ดึง comment มาแต่คะแนนไม่มา" ดูขัดแย้งกัน
+       ทั้งที่จริงเป็นบั๊กเดียว (level ผิด) ที่ส่งผลแค่ครึ่งเดียวของฟอร์ม แก้โดยใช้ level จริงจาก draft เอง
+       (d[3]) เป็นอันดับแรกเสมอเมื่อมี draft อยู่แล้ว — ข้อมูลที่บันทึกไว้จริงย่อมน่าเชื่อถือกว่าการคำนวณ
+       ใหม่ทุกครั้ง ส่วน realLevel (คำนวณสด) ใช้เฉพาะตอนยังไม่เคยมี draft เลยเท่านั้น */
+    const openLevel = d ? d[3] : ((typeof getAssignedEvalLevel==='function' ? getAssignedEvalLevel(u) : '') || inferLevelFromPosition(u[7]));
     return `<tr>
       <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>
         <div><b>${u[1]}</b><small>${u[0]}</small></div></div></td>
@@ -4998,7 +5008,7 @@ function renderTeamFromMaster() {
       <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
       <td><span class="bd ${st[0]}">${st[1]}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
-        onclick="openReviewerForm('${realLevel}','${u[1]}','${u[0]}','${u[7]}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'),${wf==='done'})">
+        onclick="openReviewerForm('${openLevel}','${u[1]}','${u[0]}','${u[7]}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'),${wf==='done'})">
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
       </button></td>
     </tr>`;

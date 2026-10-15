@@ -8052,3 +8052,72 @@ Before considering a change to `SML_PMS_v14.html` done:
     since the two bugs lived in genuinely different functions that both
     happened to produce the identical visible symptom on different
     pages of the same workflow.
+
+164. **User's screenshot of a reviewer form opened from "2. ประเมินทีมงาน"
+    showed the previous evaluator's real comment correctly pulled in
+    ("ผู้ประเมินรอบแรก" with real strength/development text), but every
+    factor row unscored — "รวมคะแนนดิบ 0 / 100", Y=0.00, X=30.00 (Z
+    only) — "ยังเหมือนเดิมระบบดึง comment มา แต่ไม่ได้ดึงคะแนนประเมินมา"
+    (still the same — the system pulls the comment but not the score).**
+    Traced `restoreReviewerFormFromDraft(lv, empCode, cycle)` (#109):
+    its lookup is `getDrafts().find(d => d[0]===empCode && d[2]===cycle
+    && d[3]===lv)` — matching the **full** composite key including
+    level, which is inherently safe per #163's own stated exemption
+    ("every `drafts.find` matching the full composite key needs no
+    fix"). That exemption was correct about the *lookup itself* — the
+    real bug was one layer earlier, in what `lv` the call site actually
+    passed in. `renderTeamFromMaster()`'s row button computed
+    `realLevel = getAssignedEvalLevel(u) || inferLevelFromPosition(u[7])`
+    **fresh on every render**, with zero regard for what level the
+    employee's *already-saved* draft (`d`, the very record this exact
+    row was already matched to a few lines above for its status column)
+    was actually stored under. If Admin's assigned `evalLevel` changed
+    *after* the draft was first created — or the draft was created
+    before #110's own fix, back when the team page still guessed the
+    level from job-title keywords — `realLevel` and the real `d[3]`
+    silently diverge, and `restoreReviewerFormFromDraft()`'s exact-match
+    lookup finds nothing. `buildPrevCommentsHtml()` (#131), by contrast,
+    keys only by `empCode|cycle` with no level component at all, so it
+    kept working regardless — explaining exactly why the comment showed
+    up while every score stayed blank, which read as two unrelated bugs
+    but was one: a level mismatch that only breaks the *level-keyed*
+    half of the form.
+    Fixed by preferring the already-saved draft's own real level over a
+    freshly recomputed one: `withStatus`'s mapped objects now also carry
+    `d` (previously dropped after computing `status`/`X`/`discipline`),
+    and the row button computes `openLevel = d ? d[3] :
+    (getAssignedEvalLevel(u) || inferLevelFromPosition(u[7]))` — real
+    stored data wins whenever a draft already exists; the live-computed
+    guess is only used for an employee who has never been evaluated at
+    all yet, the one case where there's no stored level to defer to.
+    Reproduced the exact symptom with a Playwright test that assigns an
+    employee's *current* `evalLevel` as `'of'` while seeding a real
+    saved draft under level `'op'` (simulating an assignment changed
+    after the fact) — confirmed the pre-fix code opens the form with
+    `'of'` (the wrong, freshly-guessed level) and the post-fix code
+    opens with `'op'` (the real stored level, matching the draft) — plus
+    a second end-to-end test clicking the real row button and confirming
+    `#reviewRaw`/`#reviewY`/`#reviewX` all populate with real nonzero
+    numbers after the fix, where the identical test against the pre-fix
+    code (via `git stash`) reproduces `raw=0, Y=0.00` exactly matching
+    the screenshot — plus the standard click-sweep (`nav pages clicked:
+    22 errors: []`) and a full re-run of #162/#163's own tests with zero
+    regressions. **Deliberately left every other `openReviewerForm()`
+    call site unchanged** — the 5 queue-page call sites (L1/L2/GM/
+    Calibration/Approve, `buildTierRoster()`'s own roster rows) already
+    pass `${d[3]}` straight from the matched draft object itself, never
+    recomputing a level independently, so they were never at risk of
+    this exact mismatch; only the team page's own row (which computes a
+    level from the employee's *current* assignment rather than reading
+    it off the row's own already-looked-up draft) had the gap. General
+    lesson sharper than #163's own "every `drafts.find` matching the
+    full composite key is inherently safe" conclusion: that's true for
+    the *lookup function itself*, but a composite-key lookup is only as
+    good as the key it's given — when a *call site* recomputes one part
+    of that key (here, `lv`) independently of a record it already has
+    sitting right next to it in scope, the lookup can fail with zero
+    error even though its own logic is completely correct; whenever two
+    different pieces of a form (a level-keyed half and a level-agnostic
+    half) show inconsistent restore behavior, suspect a key-construction
+    mismatch at the *caller*, not a bug in the restore function both
+    halves nominally share.
