@@ -3404,6 +3404,23 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='orgmaster' && typeof renderOrgMasterLists==='function') renderOrgMasterLists();
   if(p==='orgmaster' && typeof ms365SyncOrgMaster==='function') ms365SyncOrgMaster(true);
   if(p==='evaleligibility' && typeof renderEvalEligibilityPage==='function') renderEvalEligibilityPage();
+  /* #166: ผู้ใช้ (ล็อกอินจริงเป็น L2) รายงาน "ทำไมเห็นของทีมอื่นด้วย ผลประเมินไม่มีการดึงข้อมูลจาก Excel
+     มาแสดง" บนหน้าผังองค์กร — สืบพบว่า renderOrg(MASTER_USERS) (ที่ #73 ใส่ scope ผ่าน
+     getMyScopedEmpCodes() ไว้แล้วจริง) ถูกเรียกแค่ครั้งเดียวตอน init (setTimeout 150ms ตอนเปิดหน้าเว็บ
+     ครั้งแรก) — ตอนนั้น CURRENT_SESSION_USER ยังเป็น null (ยังไม่ login) ทำให้ scope คืน null
+     (unrestricted) และ MASTER_USERS ก็ยังเป็น baseline ตัวอย่างในโค้ด ยังไม่ทันถูก sync จาก Excel จริง
+     เลยด้วยซ้ำ (silent sync ที่ doLogin()/tryRestoreSession() เรียกยังทำงานไม่เสร็จตอนนั้น) — ไม่มี
+     จุดไหนเรียก renderOrg() ซ้ำอีกเลยตอน navigate เข้าหน้านี้ภายหลัง (ต่างจากหน้าอื่นๆ ที่มี dispatch
+     ตรงนี้ครบ) ตารางที่เห็นจึงเป็น snapshot ค้างตั้งแต่ก่อน login+ก่อน sync ตลอดไป ไม่ว่าจะ login เป็นใคร
+     ก็ตาม อธิบายทั้ง 2 อาการพร้อมกัน: เห็นข้อมูลทั้งบริษัท (scope ว่างตอน render) และข้อมูลไม่ตรงกับ Excel
+     จริง (sync ยังไม่เสร็จตอน render) — แก้โดยเรียก renderOrg(MASTER_USERS)/checkHierarchyIssues() ใหม่
+     ทุกครั้งที่ navigate เข้าหน้านี้ เหมือนหน้าอื่นๆ ที่มี dispatch entry ของตัวเอง — จะได้ scope จริง
+     ของผู้ล็อกอินปัจจุบันเสมอ (renderOrg() เอง filter ผ่าน getMyScopedEmpCodes() อยู่แล้ว) และข้อมูล
+     ที่ sync ล่าสุดจาก Excel เสมอ ไม่ใช่ snapshot ค้างจากตอนเปิดเว็บครั้งแรก */
+  if(p==='org'){
+    if(typeof renderOrg==='function') renderOrg(MASTER_USERS);
+    if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
+  }
 });
 
 /* ====== ROLE SWITCH ====== */

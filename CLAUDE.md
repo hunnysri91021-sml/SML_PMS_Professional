@@ -8189,3 +8189,69 @@ Before considering a change to `SML_PMS_v14.html` done:
     the fastest real progress comes from the next report carrying actual
     evidence (specific numbers, specific mismatches) instead of another
     "still the same" with no new information to narrow the search.
+
+166. **User's screenshot of "ผังองค์กร & พนักงาน" — logged in with her own
+    real PIN as an L2 (confirmed via one clarifying question, ruling out
+    the #72 Demo-UI-preview distinction) — showed 47 company-wide
+    employees including AGM/MD and other divisions entirely outside her
+    team: "ทำไมเห็นของทีมอื่นด้วย ผลประเมินไม่มีการดึงข้อมูลจาก Excel มา
+    แสดง" (why do I see other teams too, and the results aren't pulled
+    from Excel to show).** Confirmed `renderOrg()` itself was NOT the
+    problem — it already correctly filters through `getMyScopedEmpCodes()`
+    since #73. Traced the one real chokepoint every other page-specific
+    render function in this file funnels through — the `.nav-item`
+    click dispatcher (the same `if(p==='...')` list #58/#85/#92/#128
+    have all extended before) — and found **no `p==='org'` entry at
+    all**. `renderOrg(MASTER_USERS)` is only ever called once, from the
+    page-init `setTimeout(...,150)` that fires immediately on script
+    load — **before** `CURRENT_SESSION_USER` is set (so
+    `getMyScopedEmpCodes()` returns `null`/unrestricted at that exact
+    moment) and **before** the silent MS365 sync chain
+    (`doLogin()`/`tryRestoreSession()`, #32/#33) has pulled real Excel
+    data into `MASTER_USERS` at all — meaning the table is a permanent,
+    unscoped snapshot of the hardcoded demo baseline, frozen from before
+    anyone logs in, regardless of who later navigates to the page or
+    what role they have. This explains **both** halves of the one
+    report at once: "เห็นของทีมอื่น" (the stale snapshot was rendered
+    with scope `null`, since nobody was logged in yet) and "ไม่ดึงจาก
+    Excel" (the stale snapshot predates the real sync too — the rows
+    shown are literally the file's own built-in demo employees, never
+    real synced data). The nav item itself is hardcoded `data-role=
+    "admin"` (#51's original scope), but this specific deployment's
+    Admin had evidently broadened `NAV_PERMS['org']` via the nav-
+    permission editor (#64) to also let `l2` reach it — a real, en-
+    route-normal admin customization that nonetheless exposed a latent
+    bug nobody had hit yet, since every *previous* visitor to this page
+    was admin/sysadmin/exec, for whom "unscoped" was already the
+    correct answer regardless of when the stale render happened, which
+    is exactly why this specific gap survived #73's own scoping fix
+    undetected until a real non-admin role could actually open the page.
+    Fixed by adding the missing dispatch entry — `if(p==='org'){
+    renderOrg(MASTER_USERS); checkHierarchyIssues(false); }` — the same
+    pattern every other page-specific render in this list already uses,
+    so navigating to the page always re-renders from the real, current
+    `MASTER_USERS` (post-sync) through the real, current
+    `getMyScopedEmpCodes()` (post-login), instead of showing whatever
+    was true 150ms after the page first loaded. Verified by simulating
+    the real-world condition (widened `NAV_PERMS['org']` to include
+    `l2`, matching what this deployment evidently already has) and
+    clicking the real nav item: pre-fix shows all 18 demo-baseline
+    employees unscoped (reproducing the exact symptom — company-wide
+    data, visibly not the real synced data); post-fix shows exactly the
+    logged-in L2 and her one real direct report — plus full re-runs of
+    #163-#165's own tests and the standard click-sweep (`nav pages
+    clicked: 22 errors: []`) with zero regressions. General lesson
+    sharper than #73's own conclusion: a scoping fix inside a shared
+    render function (`renderOrg()`) is only as good as how often that
+    function actually re-runs — if its *only* call site is a one-time
+    page-init render that fires before login/sync ever complete, the
+    scoping logic can be perfectly correct and still produce a
+    permanently wrong result, because it never gets a second chance to
+    run with real data in scope; whenever a nav-gated page's default
+    `data-role` gets broadened to a new role via the admin-configurable
+    `NAV_PERMS` system (#64), check whether that page's own render
+    function is wired into the nav-click dispatcher at all — a page
+    that was previously safe to leave un-dispatched (because only
+    always-unrestricted roles could ever reach it) stops being safe the
+    moment any restricted role gains access to it through that same
+    configurable permission system.
