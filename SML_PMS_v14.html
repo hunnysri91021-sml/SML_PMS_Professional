@@ -2506,6 +2506,8 @@ tbody tr:hover{background:#f0f6ff!important}
             <div class="fg"><label>Proxy API Key</label><input id="ms365WorkerApiKey" type="password" placeholder="กุญแจที่ตั้งไว้ตอน deploy Worker"></div>
           </div>
           <div style="font-size:11px;color:#94a3b8;margin:4px 0 10px">เว้นว่างทั้งสองช่องนี้ = กลับไปใช้โหมด login MS365 รายคนตามปกติ (ค่าเริ่มต้น) กรอกทั้งคู่แล้วบันทึก = ทุกการอ่าน/เขียน Excel ในเว็บนี้ (พนักงาน, เวลา/วันลา, PIN/แบบฟอร์มประเมิน, ผลประเมิน) จะวิ่งผ่าน Proxy อัตโนมัติ ไม่ต้อง login MS365 อีกต่อไป</div>
+          <div class="fg"><label>ลิงก์เว็บแอป SML PMS (สำหรับใส่ในข้อความ LINE แจ้งผลประเมิน)</label><input id="ms365AppUrl" placeholder="เช่น https://hunnysri91021-sml.github.io/SML_PMS_Professional/SML_PMS_v14.html"></div>
+          <div style="font-size:11px;color:#94a3b8;margin:4px 0 10px">ใส่ URL จริงที่พนักงานเปิดเว็บนี้ตามปกติ (ที่อยู่บน GitHub Pages หรือโดเมนที่บริษัทใช้จริง) — ถ้าเว้นว่าง ข้อความ LINE แจ้งผลจะมีแค่ปุ่มกดรับทราบในแชท ไม่มีปุ่มลิงก์ไปดูผลเต็มที่หน้าเว็บ (เพราะระบบไม่รู้ URL จริงเอง ต้องให้ Admin กรอกเองครั้งเดียว)</div>
           <button class="btn btn-p" onclick="saveMs365Config()">💾 บันทึก Config</button>
         </div>
       </div>
@@ -4368,6 +4370,19 @@ function applySession(u){
     evalCodeGateEl.value = u[0];
     if(typeof onEvalCodeGateChange === 'function') onEvalCodeGateChange();
   }
+  /* #175: ลิงก์จาก LINE/อีเมลแจ้งผลประเมิน (notifyEmployeeOfApproval()) พก ?ackCode=&ackCycle= มาด้วย
+     เพื่อพาพนักงานไปหน้า "6. ผลประเมิน" ให้อัตโนมัติทันทีที่ login สำเร็จ — ตรวจรหัสที่ login จริง
+     (u[0]) ต้องตรงกับ ackCode ในลิงก์เท่านั้น ไม่ใช่เชื่อพารามิเตอร์ใน URL เฉยๆ (คนอื่นอาจเปิดลิงก์ของ
+     เพื่อนแล้ว login เป็นตัวเอง — ต้องไม่ถูกพาไปดูผลของคนอื่น) ยังต้องกรอก PIN จริงเหมือนเดิมทุกครั้ง
+     ลิงก์นี้ไม่ได้ข้าม PIN แค่ช่วย prefill รหัสพนักงาน (ดู onLoginCodeInput()) และพาไปหน้าที่ถูกต้อง
+     หลัง login สำเร็จเท่านั้น */
+  try{
+    const qp = new URLSearchParams(location.search);
+    const ackCode = qp.get('ackCode');
+    if(ackCode && ackCode === u[0]){
+      setTimeout(()=>{ document.querySelector('.nav-item[data-pg="myresult"]')?.click(); }, 0);
+    }
+  }catch(e){}
 }
 
 /* แสดง/ซ่อนหน้าจอ "ระบบกำลังโหลด" ระหว่างที่ doLogin()/tryRestoreSession() กำลังรอ sync
@@ -6900,7 +6915,13 @@ const DEFAULT_MS365_CONFIG = {
      แม้ตอนที่ต้องกรอกเอง) ความปลอดภัยจริงมาจาก SharePoint Application Access Policy ฝั่ง Worker
      ไม่ใช่ตัว Key เอง ฝังไว้ตรงนี้จึงไม่ได้ลดความปลอดภัยลงกว่าที่เป็นอยู่ */
   workerUrl: 'https://smlpmsms365proxy.hunnysri91021.workers.dev',
-  workerApiKey: 'Tingtang1'
+  workerApiKey: 'Tingtang1',
+  /* #175: URL จริงที่พนักงานเปิดเว็บแอปนี้ — ไม่ฝังเป็นค่าเริ่มต้นเหมือน workerUrl ด้านบน เพราะไม่มี
+     ทางรู้แน่ชัดว่า URL จริงที่ deploy อยู่คืออะไร (GitHub Pages path, custom domain, ฯลฯ) การเดา/
+     ฝังเองจะเป็นการ "fabricate ค่าที่ไม่แน่ใจ" ตาม CLAUDE.md #14 — Admin ต้องกรอกเองครั้งเดียวที่หน้า
+     ตั้งค่า MS365 Proxy ถ้าเว้นว่างไว้ ปุ่มลิงก์ไปดูผลเต็มในข้อความ LINE จะไม่แสดง (แต่ปุ่มกดรับทราบ
+     ในแชทยังทำงานตามปกติ) */
+  appUrl: ''
 };
 
 let msalInstance = null;
@@ -6915,7 +6936,8 @@ function getMs365ConfigFromForm(){
     employeeTable: (document.getElementById('ms365EmployeeTable')?.value || 'Employees').trim(),
     evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'Appraisals').trim(),
     workerUrl: (document.getElementById('ms365WorkerUrl')?.value || '').trim().replace(/\/+$/,''),
-    workerApiKey: (document.getElementById('ms365WorkerApiKey')?.value || '').trim()
+    workerApiKey: (document.getElementById('ms365WorkerApiKey')?.value || '').trim(),
+    appUrl: (document.getElementById('ms365AppUrl')?.value || '').trim().replace(/\/+$/,'')
   };
 }
 
@@ -6929,6 +6951,7 @@ function applyMs365ConfigToForm(cfg){
   set('ms365EvaluationTable', cfg.evaluationTable || 'Appraisals');
   set('ms365WorkerUrl', cfg.workerUrl);
   set('ms365WorkerApiKey', cfg.workerApiKey);
+  set('ms365AppUrl', cfg.appUrl);
   const configured = !!(cfg.tenantId && cfg.clientId && cfg.siteUrl);
   const workerOn = isWorkerConfigured(cfg);
   updateMs365Status(configured ? 'warn' : '', configured ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า');
@@ -7687,11 +7710,16 @@ async function notifyEmployeeOfApproval(empCode, empName, cycle, Y, Z, X){
   }
   const hasScore = Y!=null && Z!=null && X!=null;
   const scoreLine = hasScore ? `คะแนนผลงาน (Y) = ${Number(Y).toFixed(2)}, คะแนนเวลาทำงาน (Z) = ${Number(Z).toFixed(2)}, คะแนนรวม (X) = ${Number(X).toFixed(2)}` : '';
+  /* #175: ลิงก์เข้าเว็บแอปจริง พร้อม prefill รหัสพนักงาน (?ackCode=&ackCycle=) ให้พนักงานกดจาก LINE/
+     อีเมลได้เลย — ไม่ใช่การข้าม PIN (ยังต้องกรอก PIN จริงเหมือนเดิม ความปลอดภัยเดิมไม่เปลี่ยน) แค่
+     ช่วยกรอกรหัสให้ และหลัง login สำเร็จแล้วรหัสตรงกับคนที่ login จริง จะพาไปหน้า "6. ผลประเมิน"
+     ให้อัตโนมัติ (ดู applySession()) — ไม่มี appUrl ตั้งไว้ = ไม่ใส่ลิงก์เลย (ไม่เดา URL เอง ตาม #14) */
+  const ackLink = cfg.appUrl ? `${cfg.appUrl}?ackCode=${encodeURIComponent(empCode)}&ackCycle=${encodeURIComponent(cycle)}` : '';
   if(!emp[15]){
     result.email = { sent:false, reason:'พนักงานไม่มีอีเมลบันทึกไว้ในระบบ' };
   } else {
     const subject = `[SML PMS] ผลการประเมินของท่านได้รับการอนุมัติแล้ว — รอบ ${cycle}`;
-    const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว\n${scoreLine ? 'ผลคะแนนของท่าน: '+scoreLine+'\n(หมายเหตุ: เกรดจะแสดงหลังผ่านขั้นตอน Calibration และอนุมัติขั้นสุดท้ายจาก MD)\n' : ''}\nกรุณาเข้าสู่ระบบ SML PMS ที่หน้า "6. ผลประเมิน" เพื่อดูผลโดยละเอียดและกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
+    const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว\n${scoreLine ? 'ผลคะแนนของท่าน: '+scoreLine+'\n(หมายเหตุ: เกรดจะแสดงหลังผ่านขั้นตอน Calibration และอนุมัติขั้นสุดท้ายจาก MD)\n' : ''}\nกรุณาเข้าสู่ระบบ SML PMS${ackLink ? ' ('+ackLink+')' : ''} ที่หน้า "6. ผลประเมิน" เพื่อดูผลโดยละเอียด ดาวน์โหลด PDF และกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
     try{
       await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: emp[15], toName: emp[1], subject, body }) });
       result.email = { sent:true };
@@ -7701,7 +7729,7 @@ async function notifyEmployeeOfApproval(empCode, empName, cycle, Y, Z, X){
     result.line = { sent:false, reason:'พนักงานไม่มี LINE User ID บันทึกไว้ในระบบ' };
   } else {
     try{
-      await workerFetch(cfg, '/send-line-ack', { method:'POST', body: JSON.stringify({ userId: emp[21], empCode, empName, cycle, Y, Z, X }) });
+      await workerFetch(cfg, '/send-line-ack', { method:'POST', body: JSON.stringify({ userId: emp[21], empCode, empName, cycle, Y, Z, X, ackLink }) });
       result.line = { sent:true };
     }catch(e){ result.line = { sent:false, reason:e.message }; }
   }
@@ -11848,6 +11876,19 @@ document.addEventListener('input',e=>{
   }else{
     tryRestoreSession();
   }
+})();
+
+/* #175: ลิงก์จาก LINE/อีเมลแจ้งผลประเมิน (?ackCode=) ช่วย prefill ช่อง "รหัสพนักงาน" ที่หน้า login
+   ให้พนักงานไม่ต้องพิมพ์เอง — ยังต้องกรอก PIN จริงอยู่เสมอ (ไม่ข้ามความปลอดภัยเดิม) */
+(function(){
+  try{
+    const qp = new URLSearchParams(location.search);
+    const ackCode = qp.get('ackCode');
+    if(ackCode){
+      const codeEl = document.getElementById('loginCode');
+      if(codeEl){ codeEl.value = ackCode; if(typeof onLoginCodeInput==='function') onLoginCodeInput(); }
+    }
+  }catch(e){}
 })();
 </script>
 

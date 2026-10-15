@@ -8830,3 +8830,94 @@ Before considering a change to `SML_PMS_v14.html` done:
     action's own mechanics, and is exactly the kind of thing a user
     testing the brand-new feature catches within one message of it
     shipping.
+
+175. **Follow-up to #174: user asked for even more — "แก้อยากให้พนักงานเห็น
+    ผลการประเมินตนเอง ส่งแนบ pdf หรือ link ให้ดูและกดรับทราบ" (want the
+    employee to see their own result — send either a PDF attachment or a
+    link to view it, then acknowledge).** Asked one clarifying question
+    first, since "ส่งแนบ PDF" isn't actually possible as stated: LINE's
+    Messaging API has no message type for a bot to push an arbitrary file
+    (PDF) to a user — only text/image/video/audio/template/flex — so a
+    real PDF attachment was never on the table; the only honest option is
+    a **link**. Confirmed with the user that the link should point
+    "ลิงก์พิมพ์ PDF ตรงจากเว็บ" (straight to the web app's print page),
+    which raised a real security question: a direct deep-link that opens
+    someone's printed evaluation with no login at all would leak personal
+    score data to anyone who forwards/screenshots the LINE message (LINE
+    push messages are not access-controlled once sent). Resolved this by
+    keeping the PIN gate fully intact — the link opens the real web app
+    with the employee's code **prefilled** (never bypassing the PIN
+    itself) and, only once a real PIN login succeeds *for that exact
+    employee*, auto-navigates straight to "6. ผลประเมิน" (which already
+    has the real Y/Z/X breakdown, the #173 download-PDF button, and the
+    acknowledge button all on one page) — this satisfies "ลิงก์พิมพ์ PDF
+    ตรงจากเว็บ" in spirit (one tap from the link to seeing/printing the
+    real result) without the security regression a true unauthenticated
+    deep-link would introduce.
+    **New admin-configurable `appUrl` field** (`DEFAULT_MS365_CONFIG`,
+    MS365 Proxy settings page, `ms365AppUrl` input) — deliberately left
+    **empty** by default, unlike `workerUrl`/`workerApiKey`/`tenantId`/
+    `clientId` which are safely baked in (#31): this app genuinely has no
+    way to know its own real deployed URL (GitHub Pages path, a custom
+    domain, Pages possibly not even enabled) — guessing one would be
+    exactly the CLAUDE.md #14 "don't fabricate a value you can't be sure
+    of" mistake, so Admin must type the real URL in once. When left
+    blank, the LINE message simply omits the link button entirely (same
+    "visibly work without the piece that's missing" honesty as #10/#105)
+    — the existing in-chat postback acknowledge button (#173/#174) still
+    works regardless.
+    **Link construction**: `notifyEmployeeOfApproval()` builds
+    `ackLink = cfg.appUrl + '?ackCode=' + empCode + '&ackCycle=' + cycle`
+    (URL-encoded) and forwards it into **both** channels — the email body
+    (previously only said "go check the web page," now includes the real
+    clickable link) and the `/send-line-ack` Worker call's body. The
+    Worker adds a second Buttons Template action (`type:'uri'`) alongside
+    the existing postback button only when `ackLink` is a real `http(s)`
+    URL (never trusts an arbitrary scheme like `javascript:` blindly —
+    checked with a real regex before adding it as a clickable action).
+    **Client-side wiring, two new pieces**: (1) a page-load script reads
+    `?ackCode=` from `location.search` and prefills `#loginCode` (calling
+    the existing `onLoginCodeInput()` so the datalist/autocomplete
+    behaves exactly as if the employee had typed it) — PIN entry is
+    completely untouched, still required every time; (2)
+    `applySession()` (the one real chokepoint every successful login
+    already funnels through, #32/#72/#90/#158) checks whether `?ackCode=`
+    matches the **actually logged-in** user's own real code
+    (`u[0]===ackCode`, not just "a param exists in the URL") before
+    auto-navigating to the myresult page — a link meant for one employee
+    opened by a different person who logs in as themselves never jumps
+    to anyone else's result, closing the exact "a forwarded link exposes
+    someone's score to the wrong viewer" risk this whole design was
+    built around avoiding. Verified with a Node test against the real
+    Worker endpoint confirming the uri action is added only with a real
+    `http(s)` ackLink and omitted for none/garbage input, a Playwright
+    test confirming `notifyEmployeeOfApproval()` builds and forwards the
+    real link into both the LINE call and the email body when `appUrl`
+    is configured (and sends a genuinely empty link, never a guessed
+    one, when it isn't), and — the security-critical case — that opening
+    the link's URL prefills the code field, that logging in as the
+    *matching* employee auto-navigates to "6. ผลประเมิน", and that
+    logging in as a **different** employee (link opened by the wrong
+    person, who then logs in as themselves) never auto-navigates there
+    at all — plus full re-runs of #173/#174's own existing tests and the
+    standard click-sweep (`nav pages clicked: 22 errors: []`), all with
+    zero regressions. **This changes the Worker's own code** (the new
+    `uri` action branch in `/send-line-ack`), so per CLAUDE.md #41/#106/
+    #147/#148/#173/#174's own established precedent it needs a real
+    redeploy before the link button appears in LINE; the client-side
+    `appUrl` field, email-body link, and login-page auto-navigation go
+    live the moment GitHub Pages updates. **Told the user plainly**: she
+    needs to type the real web app URL into the new "ลิงก์เว็บแอป SML
+    PMS" field on the MS365 Proxy settings page and save it once — until
+    she does, the LINE message still works exactly as before (#174's
+    score-in-text + postback acknowledge), just without the extra "view
+    full result" link button. General lesson: a feature request phrased
+    as "send X" can turn out to describe something the underlying
+    platform genuinely cannot do (LINE can't push files) — say so plainly
+    and ask which of the real alternatives the user wants, rather than
+    silently substituting one without asking; and when the chosen
+    alternative is a deep-link into an authenticated app, the fix must
+    preserve the authentication boundary (still require the real PIN,
+    still verify the logged-in identity matches who the link was for)
+    rather than treating "convenience" and "security" as a tradeoff to
+    pick one side of.

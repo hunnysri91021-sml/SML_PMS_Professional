@@ -64,6 +64,13 @@
  *   ข้อมูลอื่นๆ ที่ sync จาก Excel ทุกจุดในเว็บ) ไม่ต้องตั้งค่า Secret เพิ่มจากที่มีอยู่แล้ว (ใช้
  *   LINE_CHANNEL_ACCESS_TOKEN/LINE_CHANNEL_SECRET ชุดเดิม)
  *
+ *   #175: LINE Bot ส่งไฟล์ PDF แนบจริงให้ผู้ใช้ไม่ได้เลย (ข้อจำกัดจริงของ LINE Messaging API — ไม่มี
+ *   message type สำหรับไฟล์ทั่วไปจาก bot ถึงผู้ใช้) จึงเพิ่มปุ่มที่สอง (type: uri) ใน Buttons Template
+ *   เดียวกัน พาไปเปิดเว็บแอปจริงแทน — รับ ackLink (URL เว็บพร้อม ?ackCode=&ackCycle= สำหรับ prefill
+ *   ช่อง login) มาจากเว็บไคลเอนต์ใน request body เดียวกับ Y/Z/X ถ้า Admin ไม่ได้ตั้งค่า "ลิงก์เว็บแอป"
+ *   ไว้ที่หน้า MS365 Proxy (ackLink จะเป็นค่าว่าง) ปุ่มนี้จะไม่ถูกเพิ่มเลย — ไม่เดา URL จริงเอง
+ *   (CLAUDE.md #14) ปุ่ม postback เดิมยังทำงานเหมือนเดิมทุกประการ ไม่กระทบกัน
+ *
  * ข้อกำหนดฝั่ง Azure AD ที่ทีม IT/แอดมิน M365 ต้องทำ (ใครก็ตามที่มี Global/Application
  * Administrator หรือสิทธิ์เทียบเท่า):
  *   - App registrations → เพิ่ม API permission (Application, ไม่ใช่ Delegated):
@@ -123,7 +130,7 @@ export default {
          ไม่ผ่านเว็บไคลเอนต์เลย — ดูคอมเมนต์ที่ handleLineEvent() ด้านล่าง) เหตุผลเดียวกับ /send-line:
          ไม่เกี่ยวกับ Microsoft/Azure เลย วางไว้ก่อน getAppToken() */
       if (url.pathname === '/send-line-ack' && request.method === 'POST') {
-        const { userId, empCode, empName, cycle, Y, Z, X } = await request.json();
+        const { userId, empCode, empName, cycle, Y, Z, X, ackLink } = await request.json();
         if (!userId || !empCode || !cycle) return json({ error: 'missing userId/empCode/cycle' }, 400, cors);
         if (!env.LINE_CHANNEL_ACCESS_TOKEN) return json({ error: 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN ใน Worker' }, 500, cors);
         /* #174: พนักงานต้องเห็นผลประเมินของตนเอง (Y/Z/X) ก่อนกดปุ่มรับทราบ — ไม่ใช่กดรับทราบ
@@ -136,15 +143,25 @@ export default {
           : '';
         let bodyText = `ผลการประเมินของคุณรอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว${scorePart}\nกดปุ่มด้านล่างเพื่อรับทราบผลได้ทันที`;
         if (bodyText.length > 160) bodyText = bodyText.slice(0, 157) + '...';
+        /* #175: LINE Bot ส่งไฟล์ PDF แนบจริงๆให้ผู้ใช้ไม่ได้ (Messaging API ไม่รองรับการส่งไฟล์ชนิดนี้
+           จาก bot) — ทำได้แค่ส่ง "ลิงก์" ปุ่ม uri พาไปเปิดเว็บแอปจริง (ackLink มาจากเว็บไคลเอนต์ ซึ่ง
+           Admin ต้องตั้งค่า "ลิงก์เว็บแอป" ไว้ก่อน ไม่งั้น ackLink จะเป็นค่าว่าง — ไม่เดา URL เอง ตาม #14)
+           ปุ่มนี้พาไปหน้า login พร้อม prefill รหัสพนักงาน แล้วหลัง login ด้วย PIN จริงสำเร็จจะพาไปหน้า
+           "6. ผลประเมิน" ที่มีทั้งคะแนนจริง ปุ่มดาวน์โหลด PDF และปุ่มรับทราบ ให้อัตโนมัติ — ไม่ได้ข้าม
+           PIN เลย แค่ช่วยพาไปหน้าที่ถูกต้อง (ดู applySession() ฝั่งเว็บ) */
+        const actions = [
+          { type: 'postback', label: '✅ รับทราบผลการประเมิน', data: `action=ack&code=${encodeURIComponent(empCode)}&cycle=${encodeURIComponent(cycle)}`, displayText: '✅ รับทราบผลการประเมิน' },
+        ];
+        if (ackLink && /^https?:\/\//.test(ackLink)) {
+          actions.push({ type: 'uri', label: '📄 ดูผลเต็ม/ดาวน์โหลด PDF', uri: ackLink });
+        }
         const message = {
           type: 'template',
           altText: `ผลการประเมินของคุณ ${empName || empCode} รอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว — กรุณารับทราบในแชทนี้`,
           template: {
             type: 'buttons',
             text: bodyText,
-            actions: [
-              { type: 'postback', label: '✅ รับทราบผลการประเมิน', data: `action=ack&code=${encodeURIComponent(empCode)}&cycle=${encodeURIComponent(cycle)}`, displayText: '✅ รับทราบผลการประเมิน' },
-            ],
+            actions,
           },
         };
         await pushLineMessage(env.LINE_CHANNEL_ACCESS_TOKEN, userId, [message]);
