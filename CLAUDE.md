@@ -8024,6 +8024,79 @@ touches employee/attendance/evaluation data.
     real result into whatever diagnostic is already on screen, not just
     the state the action was meant to refresh.
 
+170. **Follow-up to #169: user's screenshot of the new diagnostic banner
+    showed the exact concrete evidence it was built to surface — "Sync
+    สำเร็จ ดึงข้อมูลทั้งตาราง Appraisals มาได้ 10 แถว แต่ไม่มีแถวไหนตรง
+    กับรหัส 90526 · รอบ 2569 · ระดับ of เลย" — and that finding alone was
+    enough to pin the real cause, since #162's own earlier investigation
+    had already confirmed this exact employee's real Excel rows genuinely
+    exist at cycle 2569/level 'of'. If the sync pulled 10 real rows and
+    still found zero matches for a person already known to be in there,
+    the mismatch had to be in how a match is decided, not in the data.**
+    Re-read `normalizeAppraisalRow()` (#117/#160) and `getDrafts()`
+    (#161): both already coerce `out[2]`/`out[3]` (รอบ/ระดับ) to a real
+    `String` at ingestion and at read time, closing the exact "Excel cell
+    formatted as Number instead of Text, so Graph hands back a JS number
+    that silently fails every strict `===` comparison against a string"
+    bug twice already — but **`out[0]`/`d[0]` (EmpID, the employee code
+    itself) was never touched by either fix**. If the real Excel sheet's
+    EmpID column is Number-formatted (entirely plausible — "90526" reads
+    exactly like a number, the same reasoning #160 already gave for why
+    "รอบ" ends up Number-formatted too), Graph returns it as a real JS
+    `number`, and every strict-equality lookup against it
+    (`findCurrentCycleDraft()`/`restoreReviewerFormFromDraft()`'s own
+    `d[0]===empCode`, where `empCode` is always a real string sourced
+    from `MASTER_USERS`/a code-entry field) silently fails — explaining
+    both halves of the banner's own wording at once: "ไม่มีแถวไหนตรงกับ
+    รหัส 90526" (the strict-equality draft lookup found nothing) and the
+    earlier layer's own "ไม่พบรหัสพนักงานนี้ใน local เครื่องนี้เลยแม้แต่
+    รายการเดียว" (the `sameCodeOtherDrafts` filter, built on the exact
+    same `d[0]===empCode` comparison, found nothing either, even though
+    the row had just been merged into local storage moments earlier by
+    the very sync that reported 10 rows pulled).
+    Fixed at both the same two layers #160/#161 already established for
+    this exact bug shape — never patch only the ingestion point or only
+    the read point, since a record already cached before the fix needs
+    the read-side self-heal and a freshly-synced record needs the
+    ingestion-side fix: `normalizeAppraisalRow()` now also coerces
+    `out[0]=String(out[0]).trim()` alongside its existing `out[2]`/
+    `out[3]` handling, and `getDrafts()` now also coerces `d[0]` the same
+    way it already self-heals `d[2]`/`d[3]` for any draft cached before
+    this fix shipped — so an already-stale local entry with a numeric
+    empCode corrects itself the next time anything reads `getDrafts()`,
+    with no forced resync needed. Verified with a 4-case Playwright test:
+    ingestion correctly coerces a numeric EmpID to a string; a full real
+    sync with a mocked Excel row carrying a numeric EmpID now correctly
+    merges and becomes findable by the real string code
+    (`findCurrentCycleDraft()` now returns the real `'Submitted'` row,
+    not nothing); an already-cached stale entry written with a numeric
+    empCode (simulating data synced before this fix existed) self-heals
+    on the next `getDrafts()` read; and the reviewer form's own banner —
+    the exact UI the user's screenshot showed — now correctly clears and
+    restores all 10 real factor scores instead of showing the not-found
+    banner. Confirmed each case genuinely reproduces the reported bug
+    first: ran the identical test against the pre-fix code via
+    `git stash`, and all 4 assertions failed exactly as the user's
+    screenshot showed (banner stays, raw score reads `0`) before the fix
+    and pass cleanly after — plus full re-runs of #165/#167/#168/#169's
+    own existing tests and the standard click-sweep (`nav pages clicked:
+    22 errors: []`), all with zero regressions. General lesson sharper
+    than #160/#161's own conclusion: when a "coerce this field's type at
+    ingestion + self-heal at read" fix is applied to *some* fields of a
+    multi-field external row (here, คอลัมน์ 2 and 3 of an Appraisals row),
+    always check every *other* field in that same row for the identical
+    risk, not just the ones the original report happened to point at —
+    `normalizeAppraisalRow()`'s own code comment for #160 already stated
+    the general mechanism ("a column that looks like a number gets
+    Number-formatted in Excel, Graph returns it as a real number"), which
+    applies with exactly equal force to `empCode` as it does to `cycle`;
+    the fact that #117/#160/#161 all fixed *other* fields first and left
+    this one is not evidence `empCode` was safe, only that nobody had
+    checked it yet — and this time, the #169 diagnostic banner itself
+    (built specifically so a report would carry real evidence instead of
+    another guess) is what made the real cause identifiable from a single
+    screenshot instead of a sixth round of speculation.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

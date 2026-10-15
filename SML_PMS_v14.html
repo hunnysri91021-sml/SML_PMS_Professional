@@ -8183,7 +8183,12 @@ function getDrafts(){
      ก่อนหรือหลัง fix #160 ก็ตาม โดยไม่ต้องรอ sync รอบใหม่หรือเสียข้อมูลเดิม */
   let drafts;
   try{ drafts = JSON.parse(localStorage.getItem(MS365_LOCAL_DRAFT_KEY) || '[]'); }catch(e){ return []; }
+  /* #169ข: เหมือน #161 เป๊ะ แต่สำหรับ d[0] (รหัสพนักงาน) — draft ที่ sync เข้ามา "ก่อน" fix #169ข ด้านบน
+     (ตอน normalizeAppraisalRow() ยังไม่บังคับ out[0] เป็น string) อาจยังค้างเป็น number อยู่ใน localStorage
+     เดิม แก้ที่จุดกิน (ingestion) อย่างเดียวไม่ช่วย draft ที่ cache ไว้แล้ว ต้องบังคับที่จุดอ่านนี้ด้วยเหมือน
+     #161 ทำกับ d[2]/d[3] เพื่อ self-heal ของเก่าโดยไม่ต้องรอ sync รอบใหม่ */
   drafts.forEach(d=>{
+    if(d[0]!==null && d[0]!==undefined) d[0]=String(d[0]).trim();
     if(d[2]!==null && d[2]!==undefined) d[2]=String(d[2]).trim();
     if(d[3]!==null && d[3]!==undefined) d[3]=String(d[3]).trim();
   });
@@ -8383,6 +8388,14 @@ function normalizeAppraisalRow(r){
      บังคับแปลงเป็น string ตั้งแต่จุดกิน (ingestion) เดียวกับ #117 แทนที่จะแก้ทุกจุดอ่านปลายทาง */
   if(out[2]!==null && out[2]!==undefined) out[2]=String(out[2]).trim();
   if(out[3]!==null && out[3]!==undefined) out[3]=String(out[3]).trim();
+  /* #169ข: ผู้ใช้ยืนยันแบนเนอร์ #169 เอง — "Sync สำเร็จ ดึงมาได้ 10 แถว แต่ไม่มีแถวไหนตรงกับรหัส 90526
+     เลย" ทั้งที่รู้อยู่แล้วว่า Excel จริงมีแถวของคนนี้ (ดู #162) — out[0] (EmpID) เป็นช่องเดียวที่ #117/#160
+     ไม่เคยบังคับชนิดข้อมูลเลย ถ้าคอลัมน์ EmpID ใน Excel ถูกจัดเป็น Number cell (เช่น "90526" ดูเหมือนตัวเลข
+     ล้วน Excel ก็ตั้งเป็น Number ได้เหมือนคอลัมน์ "รอบ") Graph จะคืน out[0] เป็น number จริง — ทุกจุดที่เทียบ
+     d[0]===empCode (findCurrentCycleDraft/restoreReviewerFormFromDraft ฯลฯ — empCode ที่ส่งเข้ามาเป็น string
+     เสมอ จาก MASTER_USERS/ช่องกรอกรหัส) จะ strict-compare number กับ string ไม่ตรงกันเงียบๆ เหมือนกันทุก
+     ประการกับ #160 เป๊ะ แค่คนละช่อง — บังคับ string ที่จุดกินเดียวกันนี้ด้วย */
+  if(out[0]!==null && out[0]!==undefined) out[0]=String(out[0]).trim();
   return out;
 }
 async function ms365SyncAppraisals(silent=true){
