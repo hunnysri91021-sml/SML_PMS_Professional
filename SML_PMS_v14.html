@@ -10707,7 +10707,14 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
      จะว่างเปล่าแบบไม่มีคำอธิบายเหมือนก่อนหน้านี้ */
   document.getElementById('reviewerRestoreDiag')?.remove();
   if(restoreDiag.found===false && restoreDiag.lv){
-    area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ไม่พบใบประเมินที่บันทึกไว้ตรงกับเงื่อนไข (รหัส ${code} · รอบ ${restoreDiag.cycle} · ระดับ ${restoreDiag.lv}) — ถ้าเคยกรอก/ส่งไว้แล้วจริง แปลว่าใบนั้นถูกบันทึกไว้คนละรอบ/ระดับ กรุณาแจ้ง Admin พร้อมค่านี้เพื่อตรวจสอบเพิ่มเติม</div></div>`);
+    /* #167: ผู้ใช้ยืนยันว่ามีใน Excel จริง แต่แบนเนอร์ #165 บอก "ไม่พบ" — เพิ่มชั้นที่สอง: ถ้าหารหัส
+       พนักงานนี้เจอใน local ด้วย cycle/level อื่น ให้โชว์ค่าจริงที่เจอ (จะได้รู้ว่า sync ดึงมาแล้วแต่คนละ
+       คีย์ vs. ยังไม่เคย sync มาที่เครื่องนี้เลย สองสาเหตุนี้แก้ไม่เหมือนกัน) */
+    const others = restoreDiag.sameCodeOtherDrafts || [];
+    const othersHtml = others.length
+      ? `พบรหัสพนักงานนี้ใน local เครื่องนี้ ${others.length} รายการ แต่คนละรอบ/ระดับ: ${others.map(o=>`[รอบ ${o.cycle} · ระดับ ${o.level} · สถานะ ${o.status}]`).join(' ')}`
+      : `ไม่พบรหัสพนักงานนี้ใน local เครื่องนี้เลยแม้แต่รายการเดียว — แปลว่าเครื่องนี้ยังไม่เคย sync ข้อมูลของคนนี้มาจาก Excel เลย ลองกด "🔄 ดึงจากทุกเครื่อง"/sync คิวประเมิน แล้วเปิดใหม่อีกครั้ง`;
+    area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ไม่พบใบประเมินที่บันทึกไว้ตรงกับเงื่อนไขที่เปิดอยู่นี้ (รหัส ${code} · รอบ ${restoreDiag.cycle} · ระดับ ${restoreDiag.lv}) — ${othersHtml} กรุณาแจ้ง Admin พร้อมข้อความนี้เพื่อตรวจสอบ</div></div>`);
   } else if(restoreDiag.found && restoreDiag.total>0 && restoreDiag.matched < restoreDiag.total){
     const detail = (restoreDiag.mismatches||[]).map(m=>`${m.factor}: ${m.reason}`).join(' · ');
     area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ดึงคะแนนคืนได้ ${restoreDiag.matched}/${restoreDiag.total} ข้อ — ส่วนที่เหลือดึงไม่ได้เพราะ: ${detail || 'ไม่ทราบสาเหตุ'}. ค่าดิบที่บันทึกไว้จริง: [${(restoreDiag.draftRaw||[]).join(', ')}] กรุณาแจ้ง Admin พร้อมข้อความนี้เพื่อตรวจสอบ</div></div>`);
@@ -10753,8 +10760,18 @@ function restoreReviewerFormFromDraft(lv, empCode, cycle){
      บอกเหตุผลที่แท้จริงตรงๆ บนหน้าจอ (แนวทางเดียวกับ #129/#142 — เมื่อเดาไม่ออกจากโค้ดอย่างเดียว ให้
      สร้างการวินิจฉัยขึ้นมาบนหน้าเองแทนที่จะเดาซ้ำที่ 4) */
   if(!lv || !empCode || !cycle || typeof getDrafts!=='function') return {found:false};
-  const draft = getDrafts().find(d => d[0]===empCode && d[2]===cycle && d[3]===lv);
-  if(!draft) return {found:false, lv, empCode, cycle};
+  const allDrafts = getDrafts();
+  const draft = allDrafts.find(d => d[0]===empCode && d[2]===cycle && d[3]===lv);
+  if(!draft){
+    /* #167: ผู้ใช้ยืนยันว่า "มีใน Excel จริง" (เคยส่งภาพให้ดูแล้ว) แต่แบนเนอร์ #165 ยังบอกว่าหาไม่เจอ —
+       ไม่รู้ว่า sync ยังไม่ได้ดึงมาที่เครื่องนี้เลย หรือดึงมาแล้วแต่เก็บไว้คนละ cycle/level จริงๆ โดยไม่
+       รู้ตัว (ข้อมูลใน Excel อาจมีมากกว่า 1 แถวต่อคน ตามที่ #162 เคยเจอมาก่อน) — ขยายการวินิจฉัยอีกชั้น:
+       หา draft อื่นๆ ของรหัสพนักงานเดียวกันไม่ว่าจะคนละ cycle/level อะไรก็ตาม แล้วโชว์ค่าจริงที่เจอ
+       (หรือบอกตรงๆ ว่าไม่เจอรหัสนี้ใน local เลยสักรายการ — แปลว่า sync ยังไม่เคยดึงคนนี้มาที่เครื่องนี้) */
+    const sameCodeOtherDrafts = allDrafts.filter(d => d[0]===empCode)
+      .map(d => ({cycle:d[2], level:d[3], status:d[d.length-1]}));
+    return {found:false, lv, empCode, cycle, sameCodeOtherDrafts};
+  }
   const cfg = LEVEL_CONFIG[lv];
   const smCfg = SML_FORMS[lv];
   const table = document.querySelector('#reviewerFormArea .reviewer-table');

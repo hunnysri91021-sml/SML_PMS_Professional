@@ -8255,3 +8255,56 @@ Before considering a change to `SML_PMS_v14.html` done:
     always-unrestricted roles could ever reach it) stops being safe the
     moment any restricted role gains access to it through that same
     configurable permission system.
+
+167. **User's screenshot showed #165's own "not found" banner working
+    exactly as designed — "ไม่พบใบประเมินที่บันทึกไว้ตรงกับเงื่อนไข (รหัส
+    90526 · รอบ 2569 · ระดับ of)" — then replied "แต่มีใน Excel ตามที่
+    เคยส่งให้ดู" (but it's in Excel, as I already showed you).** This
+    confirmed the real composite key the banner reports (code/cycle/
+    level) matches what the real Excel data for this employee has always
+    had, per #162's own earlier investigation of this exact person's
+    real duplicate rows — so the banner correctly identified *that*
+    nothing matches locally, but not yet *why*: whether this device's
+    local copy (1) genuinely has zero record for this employee at all
+    (sync never reached this device/session), or (2) has a record, just
+    filed under a different cycle/level than expected (a residual
+    leftover of the exact shape #162/#163 already found and partially
+    hardened against). These two causes need different real next steps
+    (re-run a sync, vs. report the specific stale key found) — the
+    original #165 banner couldn't distinguish them. Extended
+    `restoreReviewerFormFromDraft()`'s diagnostic one layer further:
+    when the exact composite-key lookup finds nothing, it now also
+    searches `getDrafts()` for **any** record matching just the employee
+    code (ignoring cycle/level) and returns the real cycle/level/status
+    of every match found. `openReviewerForm()`'s banner now reports
+    either the real list of what *was* found locally under which
+    cycle/level/status (so a genuine stale-key mismatch is immediately
+    visible and comparable against the real Excel row), or an explicit
+    "ไม่พบรหัสพนักงานนี้ใน local เครื่องนี้เลยแม้แต่รายการเดียว" (zero
+    records at all for this code) with a direct suggestion to re-run the
+    sync — the same "diagnose, don't guess a fifth time" discipline
+    #129/#142/#165 already established, pushed one more concrete step
+    toward a real, actionable answer rather than stopping at "not
+    found." Verified with two Playwright cases: one seeding a real local
+    draft for the test employee under a deliberately different cycle/
+    level (reproducing exactly the #162-shaped "stale local key" cause)
+    confirms the banner reports the real cycle/level/status that *was*
+    found; one with zero local drafts for the code at all confirms the
+    banner reports the "never synced to this device" case distinctly —
+    plus full re-runs of #163-#166's own tests and the standard
+    click-sweep (`nav pages clicked: 22 errors: []`) with zero
+    regressions. **Still not a claimed fix** — exactly like #165, this
+    converts one more layer of "invisible" into "visible, specific
+    evidence"; the real next step is reading what this expanded banner
+    now actually says for the real record on the user's own screen
+    (zero local records at all, vs. a specific stale cycle/level that
+    was found) and acting on whichever of the two it turns out to be.
+    General lesson sharper than #165's own conclusion: a first
+    diagnostic pass that correctly narrows "found vs. not found" is not
+    automatically specific enough to act on — when the "not found"
+    branch itself still has more than one real underlying cause (sync
+    never ran, vs. sync ran but under a different key), keep extending
+    the same diagnostic rather than guessing which of the remaining
+    causes is more likely; each layer of real, on-screen evidence moves
+    the next report closer to something directly actionable instead of
+    another round of "still the same."
