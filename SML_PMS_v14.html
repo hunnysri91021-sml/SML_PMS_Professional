@@ -4442,6 +4442,9 @@ async function doLogin(){
   if(typeof ms365SyncEvalComments === 'function'){
     try{ await ms365SyncEvalComments(true); }catch(e){}
   }
+  if(typeof ms365SyncAckChannel === 'function'){
+    try{ await ms365SyncAckChannel(true); }catch(e){}
+  }
   const u = MASTER_USERS.find(x => x[0] === code);
   if(!u || u[12] === 'resigned'){
     setLoginLoading(false);
@@ -5174,12 +5177,16 @@ function _lbl(sc,w){
    จึงลบ EVAL_STS ทิ้งทั้งก้อน (โค้ดที่รู้แน่ว่าไม่ได้ใช้จริง — ตามธรรมเนียมไฟล์นี้) และรับชื่อ/วันที่
    ลงนามจริงเป็นพารามิเตอร์ตรงจาก caller แทน — เรียกว่า "ลงนามแล้ว" (ok) จริงเมื่อสถานะ draft จริง
    เดินผ่านขั้นของบทบาทนั้นไปแล้ว ไม่ใช่ flag ที่ไม่มีทางเป็น true */
-function _sign(roleTh, officialTitle, ok, signedName, signedDate) {
+/* #173: channelLabel (ว่าง/"เว็บ"/"LINE") — เฉพาะการรับทราบของ "ผู้ถูกประเมิน" เท่านั้นที่มีแนวคิด
+   "ช่องทาง" จริง (L1/L2/ผู้อนุมัติไม่มี) ให้ caller ส่งมาเฉพาะช่องนั้น ช่องอื่นปล่อยว่าง/ไม่ส่งพารามิเตอร์
+   นี้ตามเดิม — ใบที่รับทราบไว้ก่อนฟีเจอร์นี้มีจริง (channelLabel ว่าง) จะไม่ขึ้นวงเล็บต่อท้ายเลย ไม่ใช่
+   ขึ้น "()" ว่างๆ หรือเดาว่าเป็นช่องไหน (CLAUDE.md #14) */
+function _sign(roleTh, officialTitle, ok, signedName, signedDate, channelLabel) {
   return `<div class="F-sign">
     <div class="sg-role">${roleTh}</div>
     <div class="sg-blank">${ok?`<div class="sg-name">${signedName||officialTitle||''}</div>`:'&nbsp;'}</div>
     <div class="sg-date">${ok?(signedDate||''):'&nbsp;'}</div>
-    <span class="sg-chip ${ok?'sg-ok':'sg-wait'}">${ok?'✓ ยืนยันแล้ว':'⏳ กำลังประเมิน'}</span>
+    <span class="sg-chip ${ok?'sg-ok':'sg-wait'}">${ok?('✓ ยืนยันแล้ว'+(channelLabel?` (${channelLabel})`:'')):'⏳ กำลังประเมิน'}</span>
     <div class="sg-title">( ${ok?(signedName||officialTitle||''):(officialTitle||'')} )</div>
   </div>`;
 }
@@ -5249,7 +5256,11 @@ function renderMyResult(){
   const ackBtn = latestStatus==='GMApproved'
     ? ` <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="acknowledgeMyResult('${latest[0]}','${latest[2]}')">✅ รับทราบผลการประเมิน</button>`
     : (evalStatusRank(latestStatus) >= evalStatusRank('Acknowledged') ? ` <span class="bd b-g" style="margin-left:8px">✓ รับทราบแล้ว</span>` : '');
-  document.getElementById('myResultBannerText').innerHTML = `<b>ผลประเมินรอบ ${latest[2]} ได้รับการอนุมัติจาก GM แล้ว</b>${ackBtn}`;
+  /* #173: พนักงานขอ "save เก็บข้อมูลไว้เอง" — ใช้ printSingleDraft()/buildEvalPrintPage() ตัวเดียวกับทุก
+     จุดที่พิมพ์ PDF ในไฟล์นี้อยู่แล้ว (ไม่สร้างทางพิมพ์ที่สอง) window.print() ให้เลือก "บันทึกเป็น PDF"
+     ได้ตรงในกล่องพิมพ์ของเบราว์เซอร์เอง — แสดงได้ตั้งแต่ hasVisibleResult() จริงแล้ว (ถึงจุดนี้แปลว่าใช่) */
+  const saveBtn = ` <button class="btn btn-sm" style="margin-left:8px" onclick="printSingleDraft('${latest[0]}','${latest[2]}','${latest[3]}')">📄 ดาวน์โหลดใบประเมิน PDF</button>`;
+  document.getElementById('myResultBannerText').innerHTML = `<b>ผลประเมินรอบ ${latest[2]} ได้รับการอนุมัติจาก GM แล้ว</b>${ackBtn}${saveBtn}`;
 
   const Y=Number(latest[latest.length-5])||0, Z=Number(latest[latest.length-4])||0, X=Number(latest[latest.length-3])||0, grade=latest[latest.length-2];
   /* ผู้ใช้ขอให้พนักงานเห็นคะแนน (X/Y/Z) ได้ทันทีที่ GM อนุมัติ แต่ "เกรด" ตัวอักษร (A-E) ต้องซ่อนไว้
@@ -5566,7 +5577,7 @@ function printEvalForm() {
          จริงที่ #61 ส่ง) และพนักงานกดรับทราบเองที่หน้า "6. ผลประเมิน" ทำให้สถานะขยับเป็น Acknowledged
          (acknowledgeMyResult(), #60/#61) — ผู้ใช้ขอให้ลงชื่อพนักงานเฉพาะตอนที่ส่งให้รับทราบแล้วจริงๆ
          จึงเปลี่ยนเงื่อนไขเป็น liveRank>=evalStatusRank('Acknowledged') ตรงตามความหมายของป้ายเอง */
-    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=evalStatusRank('Acknowledged'), empName, '')}
+    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=evalStatusRank('Acknowledged'), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(empCode+'|'+printCycle):'')}
     ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, liveRank>=2, empL1, '')}
     ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, liveRank>=3, empL2, '')}
     ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, liveSig?liveSig.signedBy:empExec, liveSig?new Date(liveSig.signedAt).toLocaleDateString('th-TH'):'')}
@@ -7652,17 +7663,42 @@ async function notifyPrevEvaluatorOfEdit(payload, prevActor){
    แล้วให้พนักงานเป็นคนกดรับทราบเองในระบบ ไม่ใช่ถือว่า "อนุมัติแล้ว = จบ" ทันที ใช้กลไกความซื่อสัตย์
    เดียวกับอีเมลอื่นๆ ในไฟล์นี้ (#26/#40/#58): best-effort ต่อคน, ต้องตั้งค่า Worker ไว้และพนักงานต้องมี
    อีเมลจริง ไม่งั้น return เหตุผลจริงแทนที่จะเงียบแล้วสันนิษฐานว่าส่งสำเร็จ */
+/* #173: เพิ่มช่อง LINE ให้เป็น 2 ช่องทางจริงเหมือนอีเมล (ผู้ใช้ยืนยัน "เป็น 2 ระบบ Email และ Line")
+   LINE ส่งเป็น Buttons Template ที่มีปุ่ม postback ฝัง code+cycle ไว้ในตัว — พนักงานกดปุ่มนั้นในแชท
+   LINE ได้โดยตรง ไม่ต้องเปิดเว็บแอป (ผู้ใช้เลือกแบบนี้แทนแบบลิงก์เปิดเว็บ) ฝั่ง Worker's
+   handleLineEvent() จะรับ postback event นั้นแล้วอัปเดต Appraisals/Approvals ตรงๆ โดยไม่ผ่านเว็บ
+   ไคลเอนต์เลย (ดู tools/sml-pms-proxy-worker.js) — สองช่องทางเป็น best-effort ของตัวเองเหมือนกันทั้งคู่
+   (ช่องหนึ่งพังไม่กระทบอีกช่อง) ช่องที่ขาดเงื่อนไข (ไม่มีอีเมล/ไม่มี LINE User ID) จะไม่เงียบแต่ return
+   เหตุผลจริงแยกกันให้ caller เลือกรายงานได้ */
 async function notifyEmployeeOfApproval(empCode, empName, cycle){
   const cfg = loadMs365Config();
-  if(!isWorkerConfigured(cfg)) return { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
   const emp = MASTER_USERS.find(u=>u[0]===empCode);
-  if(!emp || !emp[15]) return { sent:false, reason:'พนักงานไม่มีอีเมลบันทึกไว้ในระบบ' };
-  const subject = `[SML PMS] ผลการประเมินของท่านได้รับการอนุมัติแล้ว — รอบ ${cycle}`;
-  const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติขั้นสุดท้ายเรียบร้อยแล้ว\n\nกรุณาเข้าสู่ระบบ SML PMS ที่หน้า "6. ผลประเมิน" เพื่อดูผลและกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
-  try{
-    await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: emp[15], toName: emp[1], subject, body }) });
-    return { sent:true };
-  }catch(e){ return { sent:false, reason:e.message }; }
+  const result = { email:{sent:false,reason:'ไม่พบข้อมูลพนักงาน'}, line:{sent:false,reason:'ไม่พบข้อมูลพนักงาน'} };
+  if(!emp) return result;
+  if(!isWorkerConfigured(cfg)){
+    result.email = { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
+    result.line = { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
+    return result;
+  }
+  if(!emp[15]){
+    result.email = { sent:false, reason:'พนักงานไม่มีอีเมลบันทึกไว้ในระบบ' };
+  } else {
+    const subject = `[SML PMS] ผลการประเมินของท่านได้รับการอนุมัติแล้ว — รอบ ${cycle}`;
+    const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติขั้นสุดท้ายเรียบร้อยแล้ว\n\nกรุณาเข้าสู่ระบบ SML PMS ที่หน้า "6. ผลประเมิน" เพื่อดูผลและกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
+    try{
+      await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: emp[15], toName: emp[1], subject, body }) });
+      result.email = { sent:true };
+    }catch(e){ result.email = { sent:false, reason:e.message }; }
+  }
+  if(!emp[21]){
+    result.line = { sent:false, reason:'พนักงานไม่มี LINE User ID บันทึกไว้ในระบบ' };
+  } else {
+    try{
+      await workerFetch(cfg, '/send-line-ack', { method:'POST', body: JSON.stringify({ userId: emp[21], empCode, empName, cycle }) });
+      result.line = { sent:true };
+    }catch(e){ result.line = { sent:false, reason:e.message }; }
+  }
+  return result;
 }
 /* พนักงานกด "รับทราบผลการประเมิน" เองที่หน้าผลประเมิน — ขยับสถานะจาก GMApproved ไปเป็น Acknowledged
    (กลาง EVAL_STATUS_ORDER, ก่อน Calibration/อนุมัติขั้นสุดท้าย ตามลำดับจริงที่ HR ยืนยัน — ดู #61)
@@ -7677,8 +7713,11 @@ async function acknowledgeMyResult(empCode, cycle){
   if(!d || d[d.length-1]!=='GMApproved'){ smlToast('ไม่พบผลประเมินที่ GM อนุมัติแล้วให้รับทราบ','warn'); return; }
   d[d.length-1] = 'Acknowledged';
   saveDrafts(drafts);
+  /* #173: บันทึกช่องทางทันทีที่กดเอง — ไม่ต้องรอ sync กลับจาก Excel เหมือนการรับทราบผ่าน LINE
+     (ซึ่งเกิดฝั่ง Worker ล้วนๆ, เครื่องนี้ไม่มีทางรู้ได้ทันทีอยู่แล้ว) */
+  if(typeof setAckChannel==='function') setAckChannel(empCode+'|'+cycle, 'web');
   if(typeof renderMyResult==='function') renderMyResult();
-  if(typeof pushApprovalRecordToExcel==='function') pushApprovalRecordToExcel(empCode, cycle, 'Acknowledged', 'รับทราบผลการประเมินโดยพนักงานเอง');
+  if(typeof pushApprovalRecordToExcel==='function') pushApprovalRecordToExcel(empCode, cycle, 'Acknowledged', 'รับทราบผลการประเมินโดยพนักงานเอง (ผ่านเว็บ)');
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','รับทราบผลการประเมิน', empCode, (CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||d[1]);
   const cfg = loadMs365Config();
   if(isMs365Configured(cfg)){
@@ -8923,12 +8962,18 @@ async function approveGmSelected(){
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'GMApproved',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติ GM', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
-  let notifSent = 0;
+  /* #173: notifyEmployeeOfApproval() ตอนนี้คืนผลทั้ง 2 ช่องทาง (email/line) แยกกัน — นับแต่ละช่อง
+     อิสระ ไม่ใช่ถือว่า "แจ้งแล้ว" ถ้าช่องใดช่องหนึ่งสำเร็จ */
+  let emailSent = 0, lineSent = 0;
   for(const d of rows){
-    const r = await notifyEmployeeOfApproval(d[0], d[1], d[2]).catch(()=>({sent:false}));
-    if(r.sent) notifSent++;
+    const r = await notifyEmployeeOfApproval(d[0], d[1], d[2]).catch(()=>({email:{sent:false},line:{sent:false}}));
+    if(r.email?.sent) emailSent++;
+    if(r.line?.sent) lineSent++;
   }
-  const notifNote = notifSent ? ` · แจ้งอีเมลพนักงานแล้ว ${notifSent}/${rows.length} คน` : '';
+  const notifParts = [];
+  if(emailSent) notifParts.push(`อีเมล ${emailSent}/${rows.length} คน`);
+  if(lineSent) notifParts.push(`LINE ${lineSent}/${rows.length} คน`);
+  const notifNote = notifParts.length ? ` · แจ้งพนักงานแล้ว (${notifParts.join(' · ')})` : '';
   smlToast('อนุมัติ GM แล้ว '+keys.length+' รายการ — แจ้งพนักงานรับทราบต่อไป'+notifNote,'ok');
 }
 function rejectGmSelected(){
@@ -9331,6 +9376,49 @@ async function ms365SyncApprovalSignatures(silent=true){
     if(!silent) smlToast('ดึงลายเซ็นอนุมัติไม่สำเร็จ: '+e.message,'warn');
   }
 }
+/* #173: ผู้ใช้ขอให้พนักงานรับทราบผลได้ 2 ช่องทาง (เว็บ/LINE ปุ่มในแชทโดยตรง) แล้วให้ใบพิมพ์/ช่องลงนาม
+   บอกด้วยว่า "รับทราบทางไหน" — เก็บแยกจาก draft array เหมือน APPROVAL_SIGNATURE_KEY/EVAL_HR_NOTE_KEY
+   ด้านบนทุกประการ (คีย์ empCode|cycle, ไม่ต่อท้าย array) acknowledgeMyResult() (เว็บ) ตั้งค่านี้ทันทีที่
+   กดเอง ไม่ต้องรอ sync กลับ — ส่วนการรับทราบผ่าน LINE เกิดฝั่ง Worker ล้วนๆ (handleLineEvent's postback
+   handler ใน tools/sml-pms-proxy-worker.js เขียนตรงเข้า Excel โดยไม่ผ่านเว็บไคลเอนต์เลย) เครื่องเว็บจะ
+   รู้ช่องทางได้ก็ต่อเมื่อ sync กลับมาจากตาราง Approvals เหมือนลายเซ็น/หมายเหตุ HR — comment คอลัมน์ G
+   ของแถว step==='Acknowledged' มีคำว่า "ผ่าน LINE" หรือ "ผ่านเว็บ" ฝังอยู่ชัดเจน (ไม่ใช่ prefix รูปแบบ
+   เดียวกับ #96/#131 เพราะ step นี้ไม่มีข้อความอื่นมาปนในคอลัมน์เดียวกัน ไม่ต้องกันชนกัน) */
+const ACK_CHANNEL_KEY = 'smlPmsAckChannel';
+function setAckChannel(key, channel){
+  let m={};
+  try{ m=JSON.parse(localStorage.getItem(ACK_CHANNEL_KEY)||'{}'); }catch(e){ m={}; }
+  m[key] = channel;
+  localStorage.setItem(ACK_CHANNEL_KEY, JSON.stringify(m));
+}
+function getAckChannel(key){
+  try{ return JSON.parse(localStorage.getItem(ACK_CHANNEL_KEY)||'{}')[key] || ''; }catch(e){ return ''; }
+}
+function ackChannelLabel(key){
+  const ch = getAckChannel(key);
+  return ch==='line' ? 'LINE' : (ch==='web' ? 'เว็บ' : '');
+}
+async function ms365SyncAckChannel(silent=true){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncAckChannel: ยังไม่ได้ตั้งค่า MS365', false); return; }
+  try{
+    const rows = await graphListTableRows('Approvals');
+    if(!rows.length) return;
+    let m={};
+    try{ m=JSON.parse(localStorage.getItem(ACK_CHANNEL_KEY)||'{}'); }catch(e){ m={}; }
+    rows.forEach(r=>{
+      const empCode=String(r[0]??'').trim(), cycle=String(r[2]??'').trim(), step=String(r[3]??'').trim();
+      if(step!=='Acknowledged' || !empCode || !cycle) return;
+      const comment=String(r[6]??'');
+      if(comment.includes('ผ่าน LINE')) m[empCode+'|'+cycle]='line';
+      else if(comment.includes('ผ่านเว็บ')) m[empCode+'|'+cycle]='web';
+    });
+    localStorage.setItem(ACK_CHANNEL_KEY, JSON.stringify(m));
+    if(!silent) smlToast('ดึงช่องทางรับทราบผลจาก Excel แล้ว','ok');
+  }catch(e){
+    if(!silent) smlToast('ดึงช่องทางรับทราบผลไม่สำเร็จ: '+e.message,'warn');
+  }
+}
 /* อนุมัติขั้นสุดท้ายโดย AMD/MD — เกิด *หลัง* Calibration และ *หลัง* พนักงานรับทราบผลไปแล้ว (#61)
    จึงไม่ต้องแจ้งอีเมลพนักงานอีกรอบตรงนี้ (ย้ายไปแจ้งตอน GM อนุมัติแล้ว — ดู approveGmSelected())
    ขั้นนี้คือจุดที่ผลถือว่า "จบกระบวนการจริง" พร้อม Export เข้า Payroll (isFinalStatus()) */
@@ -9704,7 +9792,7 @@ function buildEvalPrintPage(d, printDate){
      แก้ตามที่ผู้ใช้ชี้ว่า printEvalForm()'s ตัวเดียวกันนี้เพิ่งแก้ผิดเงื่อนไขไปตอน #122 */
   const sigFinal = getApprovalSignature(code+'|'+cycle);
   const sigLines = [
-    _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=evalStatusRank('Acknowledged'), empName, ''),
+    _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=evalStatusRank('Acknowledged'), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):''),
     _sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, empL1, ''),
     _sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, empL2, ''),
     _sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')
@@ -11736,6 +11824,7 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncApprovalSignatures === 'function'){ try{ await ms365SyncApprovalSignatures(true); }catch(e){} }
       if(typeof ms365SyncHrNotes === 'function'){ try{ await ms365SyncHrNotes(true); }catch(e){} }
       if(typeof ms365SyncEvalComments === 'function'){ try{ await ms365SyncEvalComments(true); }catch(e){} }
+      if(typeof ms365SyncAckChannel === 'function'){ try{ await ms365SyncAckChannel(true); }catch(e){} }
       if(typeof ms365SyncAuditLog === 'function'){ try{ await ms365SyncAuditLog(true); }catch(e){} }
       if(typeof ms365SyncOrgMaster === 'function'){ try{ await ms365SyncOrgMaster(true); }catch(e){} }
       if(typeof ms365SyncAppraisals === 'function'){ try{ await ms365SyncAppraisals(true); }catch(e){} }

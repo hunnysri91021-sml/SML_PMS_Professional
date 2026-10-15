@@ -52,6 +52,18 @@
  *   อัตโนมัติแล้ว IT/Admin ยังสามารถพิมพ์ LINE User ID เข้าช่องในหน้าแก้ไขพนักงานของเว็บด้วยมือได้เสมอ
  *   (เช่น กรณีพนักงานพิมพ์ผ่าน OA ไม่ได้ด้วยเหตุผลใดก็ตาม) — สองทางนี้เขียนลงที่เดิม ไม่ชนกัน
  *
+ * การรับทราบผลประเมินผ่าน LINE โดยตรง (ไม่ต้องเปิดเว็บ):
+ *   เมื่อ GM อนุมัติผลประเมินของพนักงานคนหนึ่ง เว็บจะเรียก POST /send-line-ack (userId/empCode/
+ *   empName/cycle) ให้ Worker ส่งข้อความ LINE แบบ Buttons Template ที่มีปุ่ม "✅ รับทราบผลการ
+ *   ประเมิน" ฝัง code/cycle ของคนนั้นไว้ในตัว (postback data) — พนักงานกดปุ่มในแชทได้เลย LINE จะยิง
+ *   webhook event ชนิด postback กลับมาที่ /webhook/line เดียวกับข้างบน handleLineEvent() จะแยกไป
+ *   เรียก handleLineAckPostback() ซึ่งตรวจว่า LINE User ID ที่กดจริงตรงกับที่ลงทะเบียนไว้สำหรับ
+ *   รหัสพนักงานนั้นหรือไม่ แล้วอัปเดตสถานะใบประเมินเป็น Acknowledged ตรงเข้า Excel ทั้งตาราง
+ *   Appraisals (สถานะปัจจุบัน) และ Approvals (ประวัติ, คอมเมนต์ระบุ "ผ่าน LINE" ชัดเจน) ทันที — ทั้งหมด
+ *   นี้เกิดฝั่ง Worker ล้วนๆ ไม่ผ่านเว็บไคลเอนต์เลย เว็บจะเห็นผลก็ต่อเมื่อ sync กลับมาภายหลัง (เหมือน
+ *   ข้อมูลอื่นๆ ที่ sync จาก Excel ทุกจุดในเว็บ) ไม่ต้องตั้งค่า Secret เพิ่มจากที่มีอยู่แล้ว (ใช้
+ *   LINE_CHANNEL_ACCESS_TOKEN/LINE_CHANNEL_SECRET ชุดเดิม)
+ *
  * ข้อกำหนดฝั่ง Azure AD ที่ทีม IT/แอดมิน M365 ต้องทำ (ใครก็ตามที่มี Global/Application
  * Administrator หรือสิทธิ์เทียบเท่า):
  *   - App registrations → เพิ่ม API permission (Application, ไม่ใช่ Delegated):
@@ -102,6 +114,31 @@ export default {
         if (!env.LINE_CHANNEL_ACCESS_TOKEN) return json({ error: 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN ใน Worker' }, 500, cors);
         await sendLineMulticast(env.LINE_CHANNEL_ACCESS_TOKEN, userIds, message);
         return json({ ok: true, count: userIds.length }, 200, cors);
+      }
+
+      /* #173: ผู้ใช้ขอให้พนักงานกดรับทราบผลได้ตรงในแชท LINE เอง (ไม่ต้องเปิดเว็บ) — ส่ง Buttons
+         Template ให้คนเดียวจริง (ไม่ใช่ multicast แบบ /send-line ด้านบน เพราะข้อความนี้ฝัง
+         code/cycle เฉพาะของคนนั้นไว้ในปุ่ม postback) ปุ่มที่กดจะยิง postback event กลับมาที่
+         /webhook/line → handleLineEvent() จัดการ (อัปเดต Appraisals/Approvals ตรงๆ ฝั่ง Worker
+         ไม่ผ่านเว็บไคลเอนต์เลย — ดูคอมเมนต์ที่ handleLineEvent() ด้านล่าง) เหตุผลเดียวกับ /send-line:
+         ไม่เกี่ยวกับ Microsoft/Azure เลย วางไว้ก่อน getAppToken() */
+      if (url.pathname === '/send-line-ack' && request.method === 'POST') {
+        const { userId, empCode, empName, cycle } = await request.json();
+        if (!userId || !empCode || !cycle) return json({ error: 'missing userId/empCode/cycle' }, 400, cors);
+        if (!env.LINE_CHANNEL_ACCESS_TOKEN) return json({ error: 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN ใน Worker' }, 500, cors);
+        const message = {
+          type: 'template',
+          altText: `ผลการประเมินของคุณ ${empName || empCode} รอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว — กรุณารับทราบในแชทนี้`,
+          template: {
+            type: 'buttons',
+            text: `ผลการประเมินของคุณรอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว\nกดปุ่มด้านล่างเพื่อรับทราบผลได้ทันที`,
+            actions: [
+              { type: 'postback', label: '✅ รับทราบผลการประเมิน', data: `action=ack&code=${encodeURIComponent(empCode)}&cycle=${encodeURIComponent(cycle)}`, displayText: '✅ รับทราบผลการประเมิน' },
+            ],
+          },
+        };
+        await pushLineMessage(env.LINE_CHANNEL_ACCESS_TOKEN, userId, [message]);
+        return json({ ok: true }, 200, cors);
       }
 
       const token = await getAppToken(env);
@@ -268,6 +305,23 @@ async function sendLineMulticast(token, userIds, text) {
   }
 }
 
+/* ส่งข้อความ LINE ให้คนเดียวจริง (ต่าง sendLineMulticast ด้านบนตรงที่ไม่ broadcast ไปหลายคน) ผ่าน
+   /v2/bot/message/push — ใช้กับ /send-line-ack ที่ต้องฝังข้อมูลเฉพาะของคนนั้น (code/cycle ใน
+   ปุ่ม postback) ซึ่งทำผ่าน multicast ไม่ได้เพราะเนื้อข้อความต้องต่างกันต่อคน messages เป็นอาร์เรย์
+   ของ LINE message object ใดก็ได้ (text/template/flex ฯลฯ) ไม่ใช่แค่ string ธรรมดาแบบ
+   sendLineMulticast — ให้ /send-line-ack ด้านบนประกอบ message object เองตามชนิดที่ต้องการ */
+async function pushLineMessage(token, userId, messages) {
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to: userId, messages }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('LINE push failed: ' + res.status + ' ' + errText);
+  }
+}
+
 /* ตอบกลับข้อความเดียวในแชท LINE ของคนที่เพิ่งส่งมา (ใช้ replyToken จาก event นั้นๆ เท่านั้น ใช้ได้
    ครั้งเดียวและมีอายุสั้นมาก — ต่างจาก sendLineMulticast ด้านบนที่ส่งแบบ broadcast ไปหลายคน)
    สำคัญ: ต้องเช็ค res.ok แล้วโยน error ถ้าพัง — เดิมฟังก์ชันนี้ fetch() เฉยๆไม่เช็คผลลัพธ์เลย ถ้า LINE
@@ -310,6 +364,113 @@ async function verifyLineSignature(channelSecret, rawBody, signatureHeader) {
   return arrayBufferToBase64(sigBuf) === signatureHeader;
 }
 
+/* ลำดับสถานะจริงของใบประเมิน — ต้องตรงกับ EVAL_STATUS_ORDER ใน SML_PMS_v14.html ทุกตัวอักษร
+   (CLAUDE.md #41's precedent: client/Worker คนละที่ แชร์โค้ดกันไม่ได้ ต้องคัดลอกให้ตรงกันเองแล้ว
+   แก้คู่กันเสมอถ้าฝั่งใดฝั่งหนึ่งเปลี่ยน) ใช้แค่เพื่อแยก "สถานะยังไม่ถึง GMApproved" (จริงๆ ไม่ควรเกิด
+   เพราะปุ่มนี้ส่งหลัง GM อนุมัติเท่านั้น) ออกจาก "ผ่าน GMApproved ไปแล้ว" (รับทราบไปแล้วก่อนหน้านี้) */
+const EVAL_STATUS_ORDER = ['Draft', 'Submitted', 'L1Reviewed', 'L2Reviewed', 'GMApproved', 'Acknowledged', 'Calibrated', 'Approved'];
+function evalStatusRank(status) {
+  const i = EVAL_STATUS_ORDER.indexOf(status);
+  return i < 0 ? -1 : i;
+}
+
+/* #173: จัดการปุ่ม "✅ รับทราบผลการประเมิน" ที่พนักงานกดตรงในแชท LINE (postback, ไม่ใช่ข้อความ
+   ตัวอักษร) — ผู้ใช้เลือกแบบนี้แทนแบบ "ส่งลิงก์ให้เปิดเว็บ" เพื่อให้รับทราบได้จบในแชทเดียว ทำงานฝั่ง
+   Worker ล้วนๆ โดยไม่ผ่านเว็บไคลเอนต์เลย (เว็บจะรู้ผลก็ต่อเมื่อ sync กลับมาจากตาราง Approvals/
+   Appraisals ภายหลัง — ดู ms365SyncAppraisals()/ms365SyncAckChannel() ในเว็บ) ขั้นตอน:
+   1) ตรวจว่า userId ที่กดจริงตรงกับ LineUserId ที่ลงทะเบียนไว้สำหรับรหัสพนักงานใน postback data
+      หรือไม่ (ปุ่มถูกส่งถึง userId เดียวตอน push อยู่แล้ว แต่ตรวจซ้ำกันคนแชร์ข้อความ/ส่งต่อปุ่มกัน)
+   2) อ่านแถว Appraisals จริงของ code+cycle นั้น ต้องมีสถานะ GMApproved พอดี (เงื่อนไขเดียวกับที่
+      acknowledgeMyResult() ฝั่งเว็บใช้) — ถ้าผ่านไปไกลกว่านั้นแล้ว (Acknowledged ขึ้นไป) แปลว่ารับทราบ
+      ไปแล้วก่อนหน้า ไม่ใช่ error แค่ไม่มีอะไรให้ทำซ้ำ
+   3) อัปเดตสถานะเป็น Acknowledged (upsertRow ทั้งแถว คอลัมน์อื่นคงเดิมทุกตัว) + push แถว log ใหม่เข้า
+      Approvals (append-only เหมือนทุก step อื่น — pushApprovalRecordToExcel() ฝั่งเว็บ) comment
+      ระบุ "ผ่าน LINE" ชัดเจน ให้ ms365SyncAckChannel() ฝั่งเว็บอ่านช่องทางกลับไปแสดงในใบพิมพ์ได้
+   แยกทุกขั้นเป็น try/catch ของตัวเอง + console.error ค่าจริงเสมอ (CLAUDE.md #10/#14/#66/#149/#150/#151
+   ของเว็บ — ไม่เงียบ ไม่กลืน error) และตอบกลับในแชทเสมอไม่ว่าสำเร็จหรือไม่ (ไม่ใช่แค่เขียน log เฉยๆ) */
+async function handleLineAckPostback(ev, env, token, driveId, itemId) {
+  const userId = ev.source && ev.source.userId;
+  const replyToken = ev.replyToken;
+  const data = (ev.postback && ev.postback.data) || '';
+  if (!userId || !replyToken) return;
+  const params = new URLSearchParams(data);
+  if (params.get('action') !== 'ack') return;
+  const code = String(params.get('code') || '').trim();
+  const cycle = String(params.get('cycle') || '').trim();
+  if (!code || !cycle) return;
+
+  let empName = code;
+  try {
+    const settingsRows = await listRows(token, driveId, itemId, 'EmployeeSettings');
+    const existing = settingsRows.find((r) => String(r[0] || '').trim() === code);
+    const registeredUserId = existing ? existing[5] || '' : '';
+    if (!registeredUserId || registeredUserId !== userId) {
+      await replyLine(
+        env.LINE_CHANNEL_ACCESS_TOKEN,
+        replyToken,
+        '⚠️ ไม่สามารถยืนยันการรับทราบได้ — บัญชี LINE นี้ไม่ตรงกับที่ลงทะเบียนไว้สำหรับรหัสพนักงานนี้ กรุณารับทราบผ่านเว็บแทน หรือติดต่อ Admin'
+      );
+      return;
+    }
+  } catch (e) {
+    console.error('handleLineAckPostback: EmployeeSettings lookup failed for', code, ':', (e && e.message) || e);
+    await replyLine(
+      env.LINE_CHANNEL_ACCESS_TOKEN,
+      replyToken,
+      '⚠️ ระบบขัดข้องชั่วคราว ไม่สามารถยืนยันการรับทราบได้ตอนนี้ กรุณาลองใหม่อีกครั้ง หรือกดรับทราบที่เว็บแทน'
+    ).catch((e2) => console.error('handleLineAckPostback: fallback replyLine also failed:', (e2 && e2.message) || e2));
+    return;
+  }
+
+  try {
+    const empRows = await listRows(token, driveId, itemId, 'Employees');
+    const emp = empRows.find((r) => String(r[0] || '').trim() === code);
+    if (emp) empName = String(emp[1] || code).trim();
+  } catch (e) {
+    console.error('handleLineAckPostback: Employees lookup failed for', code, ':', (e && e.message) || e);
+  }
+
+  let outcome = 'error'; // 'saved' | 'already' | 'notfound' | 'error'
+  try {
+    const appraisalRows = await listRows(token, driveId, itemId, 'Appraisals');
+    const row = appraisalRows.find((r) => String(r[0] || '').trim() === code && String(r[2] || '').trim() === cycle);
+    if (!row) {
+      outcome = 'notfound';
+    } else {
+      const status = String(row[row.length - 1] || '').trim();
+      if (status === 'GMApproved') {
+        const level = String(row[3] || '').trim();
+        const updated = row.slice();
+        updated[updated.length - 1] = 'Acknowledged';
+        await upsertRow(token, driveId, itemId, 'Appraisals', [0, 2, 3], [code, cycle, level], updated);
+        await addRow(token, driveId, itemId, 'Approvals', [code, empName, cycle, 'Acknowledged', empName, new Date().toISOString(), 'รับทราบผลการประเมินผ่าน LINE']);
+        outcome = 'saved';
+      } else if (evalStatusRank(status) > evalStatusRank('GMApproved')) {
+        outcome = 'already';
+      } else {
+        outcome = 'notfound'; // สถานะยังไม่ถึง GMApproved เลย (ไม่ควรเกิดจริง เพราะปุ่มส่งหลัง GM อนุมัติเท่านั้น)
+      }
+    }
+  } catch (e) {
+    console.error('handleLineAckPostback: Appraisals update failed for', code, cycle, ':', (e && e.message) || e);
+    outcome = 'error';
+  }
+
+  try {
+    const msg =
+      outcome === 'saved'
+        ? `✅ บันทึกการรับทราบผลประเมินของคุณ ${empName} รอบ ${cycle} เรียบร้อยแล้วครับ`
+        : outcome === 'already'
+        ? `คุณ ${empName} ได้กดรับทราบผลประเมินรอบ ${cycle} ไปแล้วก่อนหน้านี้ครับ`
+        : outcome === 'notfound'
+        ? `⚠️ ไม่พบผลประเมินของ ${empName} รอบ ${cycle} ที่รออนุมัติจาก GM อยู่ในขณะนี้ — กรุณารับทราบผ่านเว็บแทน หรือติดต่อ Admin`
+        : `⚠️ ไม่สามารถบันทึกการรับทราบของ ${empName} รอบ ${cycle} ได้ในขณะนี้ (ระบบขัดข้องชั่วคราว) กรุณาลองใหม่อีกครั้ง หรือกดรับทราบที่เว็บแทน`;
+    await replyLine(env.LINE_CHANNEL_ACCESS_TOKEN, replyToken, msg);
+  } catch (e) {
+    console.error('handleLineAckPostback: replyLine failed for', code, ':', (e && e.message) || e);
+  }
+}
+
 /* รับ webhook event จาก LINE จริง 1 event — สนใจแค่ "ข้อความตัวอักษรธรรมดา" เท่านั้น (ไม่สน
    sticker/รูป/follow event อื่นๆ) เนื้อข้อความที่คาดหวังคือรหัสพนักงาน (เช่น SML-001) เทียบกับ
    ตาราง Employees จริงแบบตัดช่องว่าง+ไม่สนตัวเล็ก-ใหญ่ (ไม่ใช่เทียบชื่อ/เดา — เทียบรหัสตรงๆเท่านั้น
@@ -319,6 +480,10 @@ async function verifyLineSignature(channelSecret, rawBody, signatureHeader) {
    ทำงานสำเร็จทั้งที่ไม่ได้เขียนอะไรจริง) ความผิดพลาดใดๆที่เกิดขึ้น (Graph ล่ม ฯลฯ) จะถูกจับโดย
    handleLineWebhook ด้านล่าง ไม่ทำให้ event อื่นในชุดเดียวกันพังตามไปด้วย */
 async function handleLineEvent(ev, env, token, driveId, itemId) {
+  /* #173: postback event (ปุ่ม "✅ รับทราบผลการประเมิน" ที่ /send-line-ack ส่งไป, ดูด้านบน) แยกไปอีก
+     ฟังก์ชันหนึ่งโดยเฉพาะ — ไม่ใช่ "ข้อความตัวอักษร" แบบ flow เดิมด้านล่าง (ซึ่งยังคงทำงานเหมือนเดิม
+     ทุกประการสำหรับการลงทะเบียน LINE User ID) */
+  if (ev && ev.type === 'postback') { await handleLineAckPostback(ev, env, token, driveId, itemId); return; }
   if (!ev || ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
   const userId = ev.source && ev.source.userId;
   const replyToken = ev.replyToken;

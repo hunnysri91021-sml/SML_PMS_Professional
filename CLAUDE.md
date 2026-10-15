@@ -8638,3 +8638,127 @@ Before considering a change to `SML_PMS_v14.html` done:
     before implementing, since "hide" and "label clearly" solve the same
     complaint with very different costs to the people who still need
     the information.
+
+173. **User asked for three things in one message: let employees acknowledge
+    their GM-approved result via LINE too (not just the web app), show which
+    channel (web/LINE) they used right on the printed signature line, and
+    let employees download their own evaluation PDF to keep. Asked three
+    clarifying questions first, since each had more than one reasonable
+    shape: confirmed LINE acknowledgment should work as a real button
+    tapped directly inside the LINE chat (not a link that opens the web
+    app), confirmed the channel should show on the printed signature line
+    plus Audit Log only (not a separate UI badge), and confirmed "save" means
+    downloading the existing printed-PDF flow, not a new export format.**
+    **LINE in-chat acknowledge**: `notifyEmployeeOfApproval()` (fired
+    automatically from `approveGmSelected()`, #61) now sends LINE alongside
+    email, independently best-effort (same honesty rules as every other
+    email in this file, #26/#40/#58 — its return shape changed from a flat
+    `{sent,reason}` to `{email:{...}, line:{...}}`, with
+    `approveGmSelected()` updated to count each channel separately rather
+    than conflating them into one "notified" number). The LINE message is a
+    real Buttons Template (`POST /send-line-ack`, a new Worker endpoint —
+    deliberately **not** reused through the existing `/send-line` endpoint,
+    since that one is a true multicast broadcasting the *same* text to many
+    people, while this needs one personalized message per employee with
+    their own `empCode`/`cycle` embedded in a `postback` button's `data`)
+    sent via a new `pushLineMessage()` (LINE's single-recipient `/v2/bot/
+    message/push`, distinct from `sendLineMulticast()`'s `/multicast`).
+    Tapping the button fires a real LINE `postback` event back to
+    `/webhook/line` — `handleLineEvent()` now dispatches `ev.type==='postback'`
+    to a new `handleLineAckPostback()`, entirely separate from the existing
+    text-message registration flow (#148), which: (1) verifies the real
+    LINE `userId` that tapped the button matches the `LineUserId` already
+    registered for that `empCode` in `EmployeeSettings` (never trusts the
+    postback data alone — someone forwarding/screenshotting a button could
+    otherwise fake an ack for someone else), (2) reads the real `Appraisals`
+    row for that `empCode`+`cycle`, requires it to be exactly `'GMApproved'`
+    (same guard `acknowledgeMyResult()` uses client-side) before writing
+    `'Acknowledged'` back via `upsertRow()` (full-row PATCH, every other
+    column untouched), (3) appends a real `Approvals` log row via `addRow()`
+    with the comment `'รับทราบผลการประเมินผ่าน LINE'` — the honest marker
+    the web side later parses to know the channel — and (4) always replies
+    in the same chat with a real outcome (saved / already-acknowledged /
+    not-found / error), never silence, following this file's own
+    #149/#150/#151 "never let a fire-and-forget webhook step swallow its
+    own failure" discipline from the start rather than needing a follow-up
+    fix. A local `EVAL_STATUS_ORDER` + `evalStatusRank()` were added to the
+    **Worker** file too, explicitly commented as needing to stay
+    byte-for-byte in sync with the client's own array — the same
+    CLAUDE.md #41 "two copies in two files that can't share code" caution
+    `rowMatchesUpsertKey()` already established, now applied to a status
+    ordering instead of a key-matching function. All of this happens
+    entirely server-side — the web client has no way to know it happened
+    until the next sync.
+    **Channel tracking**: new `ACK_CHANNEL_KEY` local store (same
+    `empCode|cycle` key shape as `APPROVAL_SIGNATURE_KEY`/`EVAL_HR_NOTE_KEY`,
+    #39/#96 — never appended to the draft array itself, since `d[d.length-1]`
+    etc. are positional and load-bearing everywhere). `acknowledgeMyResult()`
+    (the web button) now sets it to `'web'` immediately — no need to wait
+    for a sync, since it's the same device — and its own `Approvals` push
+    comment changed from `'รับทราบผลการประเมินโดยพนักงานเอง'` to add
+    `'(ผ่านเว็บ)'`, giving the two channels distinct, greppable markers in
+    the same Comment column (`'ผ่าน LINE'` vs `'ผ่านเว็บ'`) with no prefix
+    collision against #96/#131/#39's own existing markers in that same
+    column. New `ms365SyncAckChannel(silent)` mirrors
+    `ms365SyncApprovalSignatures()`/`ms365SyncHrNotes()` structurally —
+    reads `Approvals`, filters `step==='Acknowledged'`, checks the comment
+    for either marker — wired into both silent-sync groups right next to
+    its siblings. `_sign()` (the shared signature-box renderer behind both
+    `printEvalForm()`'s and `buildEvalPrintPage()`'s "ส่วนที่ 4 ลงนามผล"
+    grid, #121/#122/#123) gained an optional 6th `channelLabel` parameter —
+    appends `" (เว็บ)"`/`" (LINE)"` to the existing "✓ ยืนยันแล้ว" chip only
+    for the employee-acknowledge row (the only one of the 4 signature lines
+    with a real channel concept at all — L1/L2/final-approver never pass
+    this param, so they're completely unaffected), and omits the
+    parenthetical entirely — never a blank `"()"` or a guessed channel —
+    for any record acknowledged before this feature existed, where no
+    channel was ever recorded (CLAUDE.md #14's honest-empty-state rule).
+    **Download PDF**: added a `📄 ดาวน์โหลดใบประเมิน PDF` button directly
+    in `renderMyResult()`'s own banner (next to the existing "✅ รับทราบผล
+    การประเมิน" button) calling the exact same `printSingleDraft(code,
+    cycle, level)` every other PDF button in this file already uses (#120/
+    #121) — no second print path, `window.print()`'s own "Save as PDF"
+    destination is the honest save mechanism (this app has no server to
+    generate/host a real downloadable file, same architectural limit
+    CLAUDE.md #8/#25 already state for everything else). Shown any time the
+    page has a real visible result (`hasVisibleResult()`, same gate the
+    banner itself is already behind), not just once acknowledged.
+    Verified with a Node test mocking the full Worker Graph-auth/site/rows
+    chain plus the LINE API, covering the real `/send-line-ack` endpoint
+    (confirms it builds a genuine Buttons Template with the real employee's
+    `code`/`cycle` embedded in the postback `data`, addressed to the one
+    real `userId`, not a multicast) and the postback webhook path (a real
+    `GMApproved`→`Acknowledged` update with the Approvals log row carrying
+    the real "ผ่าน LINE" marker and a correct success reply; a mismatched
+    LINE `userId` is refused with zero write; an already-acknowledged
+    record replies honestly without re-patching) — plus a Playwright test
+    confirming `acknowledgeMyResult()` sets the local channel to `'web'`
+    and the draft really advances, `_sign()` renders the channel
+    parenthetical correctly (and omits it correctly when there's no
+    channel on file), `ms365SyncAckChannel()` correctly parses a mocked
+    `"ผ่าน LINE"` comment, the real download-PDF button renders with the
+    correct `printSingleDraft()` arguments, and `notifyEmployeeOfApproval()`
+    genuinely calls both `/send-mail` and `/send-line-ack` independently
+    and returns the new per-channel result shape — plus the standard
+    click-sweep (`nav pages clicked: 22 errors: []`) and re-runs of
+    `test_line_webhook.js`'s existing 8 cases (unaffected — the postback
+    dispatch is a brand-new branch, the existing text-message registration
+    flow is untouched) and `test_empcode_type.js`/`test_provisional_grade.js`
+    with zero regressions. **This changes the Worker's own code** (the new
+    `/send-line-ack` endpoint, `pushLineMessage()`, `handleLineAckPostback()`,
+    the postback dispatch in `handleLineEvent()`) — per CLAUDE.md #41/#106/
+    #147/#148's own established precedent, **it needs a real redeploy**
+    before any of the LINE-acknowledge flow has live effect; the channel-
+    tracking and download-PDF pieces are purely client-side and go live
+    the moment GitHub Pages updates, same as any other client-only fix in
+    this file. General lesson combining #96/#131/#147/#148: when a request
+    bundles "add a second channel for an existing action" with "and track
+    which channel was used," the channel marker belongs in whichever
+    shared log/comment column the action already writes to (reuse the
+    established `Approvals`-comment-marker pattern), not a new Excel table
+    — and a server-side action (a LINE postback handled entirely inside
+    the Worker, with no client involved at all) still needs the exact same
+    identity-verification and silent-failure discipline this file already
+    demands of every client-side write, just implemented once more in a
+    second language-adjacent codebase that can't share functions with the
+    first.
