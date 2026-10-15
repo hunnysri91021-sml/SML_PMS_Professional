@@ -8121,3 +8121,71 @@ Before considering a change to `SML_PMS_v14.html` done:
     half) show inconsistent restore behavior, suspect a key-construction
     mismatch at the *caller*, not a bug in the restore function both
     halves nominally share.
+
+165. **Follow-up to #164: user reported "ยังเหมือนเดิม" (still the same)
+    on the identical symptom — comment restores, scores don't — even
+    after the level-mismatch fix was deployed. Re-verified from scratch
+    rather than guess a 4th time blind (per #100/#149-152's own
+    established discipline): confirmed the real subtitle text on the
+    user's screenshot, "พนักงานปฏิบัติการ — งานสำนักงาน," is the exact
+    `label` string for `SML_FORMS.of` (checked directly against the
+    source), and "รวมคะแนนดิบ 20" matches `of`'s real default
+    (unoverridden) total weight (3+3+3+2+2+2+2+1+1+1=20) — proving the
+    level genuinely *was* already `'of'` with no mismatch for this
+    specific record, meaning #164's fix, while a real and separately
+    valid fix, was never the actual cause of this particular report.**
+    Read `restoreReviewerFormFromDraft()` line by line for any remaining
+    logic bug (button-matching substring collisions, a wrong `LEVEL_CONFIG`
+    reference, a possible `loadFormOverrides()` weight drift) — found
+    nothing conclusively wrong in the code itself, and confirmed via
+    test that the exact same restore path works correctly end-to-end
+    with realistic `'of'`-level data under default weights. With no
+    further code-reading able to pin down the cause and no access to the
+    user's actual live `localStorage`/Excel data to inspect directly,
+    guessing a specific root cause a fourth time risked repeating the
+    exact same "ship a fix, still broken" cycle this conversation was
+    already three rounds into. Took the diagnostic-by-design approach
+    this file has already proven out twice (#129's banner-wording fix,
+    #142's `diagnoseResolverGaps()`): rather than silently failing when
+    nothing restores, `restoreReviewerFormFromDraft()` now returns a
+    real diagnostic object (`{found, matched, total, mismatches,
+    draftRaw}`) instead of nothing, and `openReviewerForm()` renders a
+    visible `al-w` warning banner at the top of the form whenever
+    restoration is incomplete, distinguishing the two genuinely
+    different real causes a blank form can have: (1) **no matching
+    draft at all** for the exact `empCode|cycle|level` the form opened
+    with — states the real code/cycle/level values used, so a mismatch
+    against what the user sees in Excel is immediately checkable; (2)
+    **a draft was found, but one or more factor's raw value doesn't fit
+    any grade for that factor's *current* weight** — states, per factor,
+    the real stored raw number against the real current weight's valid
+    score range (e.g. "ค่าดิบ 999 ไม่ตรงกับช่วงคะแนนของน้ำหนัก 3 ที่ใช้
+    อยู่ตอนนี้ (15/14/13/12/11)"), plus the complete raw array as stored,
+    so the exact real numbers are visible on screen without needing
+    DevTools or a screen-share — directly actionable evidence for either
+    this agent's next diagnosis or HR's own report to Admin. Verified
+    with a Playwright test covering all three states: a clean, fully-
+    matching draft shows **no** banner at all (never alarms when nothing
+    is wrong — #129's own "don't overstate severity" rule applies here
+    too); a draft with values that don't fit any grade for their factor's
+    weight shows the mismatch banner naming the real raw values and
+    weight ranges; no draft at all shows the not-found banner naming the
+    real code/cycle/level that was searched for — plus full re-runs of
+    #163/#164's own tests and the standard click-sweep (`nav pages
+    clicked: 22 errors: []`) with zero regressions. **This does not
+    claim to have found or fixed the user's actual root cause** — it
+    converts an invisible failure into a visible, specific diagnosis;
+    the next real step is reading whatever this banner now says on the
+    user's own screen (a wrong level/cycle value, or specific raw-vs-
+    weight mismatches per factor) and using *that* real evidence —
+    rather than another round of code-reading speculation — to fix
+    whatever it actually names, the same honest escalation #142 already
+    took for the review-filter dropdown's empty-list reports. General
+    lesson sharper than #142's own conclusion: when a report survives a
+    second genuinely-reasoned fix attempt with the identical symptom,
+    and further code-only investigation stops turning up new candidate
+    causes, the responsible move is not a third guess — it's making the
+    failure diagnosable *in the user's own hands*, since at that point
+    the fastest real progress comes from the next report carrying actual
+    evidence (specific numbers, specific mismatches) instead of another
+    "still the same" with no new information to narrow the search.

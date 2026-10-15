@@ -10683,7 +10683,18 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
     <div class="review-section-title">ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea id="reviewStrength" rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea id="reviewDev" rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
     <div class="review-approval-flow"><span>ผู้ประเมิน</span><i>→</i><span>ผู้บังคับบัญชาระดับสูง</span><i>→</i><span>ผู้จัดการทั่วไปฝ่าย</span><i>→</i><span>MD-SML</span></div>`;
-  if(typeof restoreReviewerFormFromDraft==='function') restoreReviewerFormFromDraft(lv, code, currentReviewerCycle);
+  const restoreDiag = (typeof restoreReviewerFormFromDraft==='function') ? restoreReviewerFormFromDraft(lv, code, currentReviewerCycle) : {found:false};
+  /* #165: แสดงแบนเนอร์วินิจฉัยจริง เมื่อมีใบประเมินเดิมอยู่แต่คะแนนดึงคืนไม่ครบ (หรือไม่ได้เลย) — ไม่ใช่
+     สันนิษฐาน แต่บอกเหตุผลจริงจาก restoreReviewerFormFromDraft() ด้านบน (ค่าดิบไม่ตรงน้ำหนักปัจจุบัน,
+     ไม่พบใบประเมินด้วย level/cycle ที่ใช้เปิดอยู่นี้ ฯลฯ) ให้ผู้ใช้เห็น/ก็อปไปรายงานกลับได้ตรงจุด แทนที่
+     จะว่างเปล่าแบบไม่มีคำอธิบายเหมือนก่อนหน้านี้ */
+  document.getElementById('reviewerRestoreDiag')?.remove();
+  if(restoreDiag.found===false && restoreDiag.lv){
+    area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ไม่พบใบประเมินที่บันทึกไว้ตรงกับเงื่อนไข (รหัส ${code} · รอบ ${restoreDiag.cycle} · ระดับ ${restoreDiag.lv}) — ถ้าเคยกรอก/ส่งไว้แล้วจริง แปลว่าใบนั้นถูกบันทึกไว้คนละรอบ/ระดับ กรุณาแจ้ง Admin พร้อมค่านี้เพื่อตรวจสอบเพิ่มเติม</div></div>`);
+  } else if(restoreDiag.found && restoreDiag.total>0 && restoreDiag.matched < restoreDiag.total){
+    const detail = (restoreDiag.mismatches||[]).map(m=>`${m.factor}: ${m.reason}`).join(' · ');
+    area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ดึงคะแนนคืนได้ ${restoreDiag.matched}/${restoreDiag.total} ข้อ — ส่วนที่เหลือดึงไม่ได้เพราะ: ${detail || 'ไม่ทราบสาเหตุ'}. ค่าดิบที่บันทึกไว้จริง: [${(restoreDiag.draftRaw||[]).join(', ')}] กรุณาแจ้ง Admin พร้อมข้อความนี้เพื่อตรวจสอบ</div></div>`);
+  }
   /* ผู้ใช้ยืนยัน: ถ้าใบนี้เพิ่งถูกตีกลับ คะแนนเดิมยังติ๊กไว้ให้ (ด้านบน) แต่ต้องกดยืนยัน/แก้ไขก่อนส่งซ้ำ —
      ดู markNeedsReconfirm()/unlockReviewerSubmit() ด้านบน */
   const reconfirmKey = code+'|'+currentReviewerCycle+'|'+lv;
@@ -10718,30 +10729,43 @@ function confirmReviewerReconfirm(){
    คะแนนไว้แล้วในรอบ/ระดับเดียวกัน (ไม่ว่าจะเพิ่งส่งเอง, ผ่านสอบทานหัวหน้าแผนกมาแล้ว ฯลฯ) ต้องติ๊ก
    ปุ่มเกรดที่เคยเลือกไว้กลับมาให้เห็น ไม่ใช่ให้ดูว่างเปล่าทุกครั้งที่เปิด */
 function restoreReviewerFormFromDraft(lv, empCode, cycle){
-  if(!lv || !empCode || !cycle || typeof getDrafts!=='function') return;
+  /* #165: ผู้ใช้รายงานซ้ำว่า comment ดึงมาได้แต่คะแนนไม่มา หลัง #164 — ตรวจแล้วพบว่า level ไม่ได้ผิด
+     (ตรงกับ draft จริง, 'of') แล้ว แต่ยังมองไม่เห็นว่าทำไมยังไม่ขึ้นคะแนน เพราะไม่มีทาง inspect ข้อมูล
+     จริงในเบราว์เซอร์ของผู้ใช้ได้ — แทนที่จะเดาสาเหตุต่อ (น้ำหนักปัจจัยถูกแก้ทับ, คอลัมน์ Excel เลื่อน,
+     ฯลฯ) เปลี่ยนให้ฟังก์ชันนี้คืนค่า diagnostic object จริงกลับไป แล้วให้ openReviewerForm() แสดงแบนเนอร์
+     บอกเหตุผลที่แท้จริงตรงๆ บนหน้าจอ (แนวทางเดียวกับ #129/#142 — เมื่อเดาไม่ออกจากโค้ดอย่างเดียว ให้
+     สร้างการวินิจฉัยขึ้นมาบนหน้าเองแทนที่จะเดาซ้ำที่ 4) */
+  if(!lv || !empCode || !cycle || typeof getDrafts!=='function') return {found:false};
   const draft = getDrafts().find(d => d[0]===empCode && d[2]===cycle && d[3]===lv);
-  if(!draft) return;
+  if(!draft) return {found:false, lv, empCode, cycle};
   const cfg = LEVEL_CONFIG[lv];
   const smCfg = SML_FORMS[lv];
   const table = document.querySelector('#reviewerFormArea .reviewer-table');
-  if(!table) return;
+  if(!table) return {found:true, matched:0, total:0};
   const rows = [...table.querySelectorAll('tbody tr')];
+  let matched=0, total=0;
+  const mismatches=[];
   const applyFactor = (f, rowIdx, payloadIdx) => {
+    total++;
     /* #117: เช่นเดียวกับ restoreEvalFormFromDraft() — บังคับแปลงเป็น number ก่อนเทียบเสมอ */
     const val = Number(draft[payloadIdx]);
-    if(!val) return;
+    if(!val){ mismatches.push({factor:f[0], reason:'ค่าดิบในใบประเมินเป็น 0/ว่าง', raw:draft[payloadIdx]}); return; }
     const w = f[2];
     const sc = smlScoreByWeight(w);
     const grade = Object.keys(sc).find(g => sc[g] === val);
     const row = rows[rowIdx];
-    if(!grade || !row) return;
+    if(!grade){ mismatches.push({factor:f[0], reason:`ค่าดิบ ${val} ไม่ตรงกับช่วงคะแนนของน้ำหนัก ${w} ที่ใช้อยู่ตอนนี้ (${Object.values(sc).join('/')})`, raw:val, weight:w}); return; }
+    if(!row){ mismatches.push({factor:f[0], reason:'ไม่พบแถวของปัจจัยนี้ในตารางฟอร์ม'}); return; }
     const btn = [...row.querySelectorAll('button')].find(b => b.getAttribute('onclick').includes(`'${grade}'`));
-    if(btn) selectReviewScore(btn, grade, val, true);
+    if(!btn){ mismatches.push({factor:f[0], reason:'ไม่พบปุ่มเกรดที่ตรงกันในฟอร์ม'}); return; }
+    selectReviewScore(btn, grade, val, true);
+    matched++;
   };
   smCfg.factors.slice(0,10).forEach((f,fi) => applyFactor(f, fi, 4+fi));
   if(cfg.leaderShow){
     smCfg.factors.slice(10).forEach((f,fi) => applyFactor(f, 10+fi, 14+fi));
   }
+  return {found:true, matched, total, mismatches, draftRaw:draft.slice(4,14)};
 }
 function selectReviewScore(btn,grade,score,isRestore){
   const row=btn.closest('tr'); if(!row)return;
