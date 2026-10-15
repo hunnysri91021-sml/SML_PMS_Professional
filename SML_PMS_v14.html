@@ -7670,7 +7670,12 @@ async function notifyPrevEvaluatorOfEdit(payload, prevActor){
    ไคลเอนต์เลย (ดู tools/sml-pms-proxy-worker.js) — สองช่องทางเป็น best-effort ของตัวเองเหมือนกันทั้งคู่
    (ช่องหนึ่งพังไม่กระทบอีกช่อง) ช่องที่ขาดเงื่อนไข (ไม่มีอีเมล/ไม่มี LINE User ID) จะไม่เงียบแต่ return
    เหตุผลจริงแยกกันให้ caller เลือกรายงานได้ */
-async function notifyEmployeeOfApproval(empCode, empName, cycle){
+/* #174: ก่อนพนักงานกดรับทราบ พนักงานต้องเห็นผลประเมินของตนเองก่อน (Y/Z/X — ไม่ใช่เกรด ซึ่งยังถูกล็อก
+   ไว้จนกว่า MD อนุมัติขั้นสุดท้าย ตาม CLAUDE.md #156/#161) ฝั่งเว็บ renderMyResult() แสดงตัวเลขจริงอยู่
+   แล้วบนหน้าเดียวกับปุ่มรับทราบ แต่ฝั่ง LINE (ปุ่มกดรับทราบในแชทโดยตรง ตาม #173) เดิมส่งแค่ข้อความทั่วไป
+   ไม่มีตัวเลขเลย — พนักงานกดรับทราบผ่าน LINE ได้โดยไม่เคยเห็นผลจริงเลย รับ Y/Z/X มาจาก draft จริง
+   (ผู้เรียก approveGmSelected() ส่งมาจาก d[d.length-5]/-4/-3) แล้วใส่ทั้งในอีเมลและข้อความ LINE */
+async function notifyEmployeeOfApproval(empCode, empName, cycle, Y, Z, X){
   const cfg = loadMs365Config();
   const emp = MASTER_USERS.find(u=>u[0]===empCode);
   const result = { email:{sent:false,reason:'ไม่พบข้อมูลพนักงาน'}, line:{sent:false,reason:'ไม่พบข้อมูลพนักงาน'} };
@@ -7680,11 +7685,13 @@ async function notifyEmployeeOfApproval(empCode, empName, cycle){
     result.line = { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
     return result;
   }
+  const hasScore = Y!=null && Z!=null && X!=null;
+  const scoreLine = hasScore ? `คะแนนผลงาน (Y) = ${Number(Y).toFixed(2)}, คะแนนเวลาทำงาน (Z) = ${Number(Z).toFixed(2)}, คะแนนรวม (X) = ${Number(X).toFixed(2)}` : '';
   if(!emp[15]){
     result.email = { sent:false, reason:'พนักงานไม่มีอีเมลบันทึกไว้ในระบบ' };
   } else {
     const subject = `[SML PMS] ผลการประเมินของท่านได้รับการอนุมัติแล้ว — รอบ ${cycle}`;
-    const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติขั้นสุดท้ายเรียบร้อยแล้ว\n\nกรุณาเข้าสู่ระบบ SML PMS ที่หน้า "6. ผลประเมิน" เพื่อดูผลและกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
+    const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว\n${scoreLine ? 'ผลคะแนนของท่าน: '+scoreLine+'\n(หมายเหตุ: เกรดจะแสดงหลังผ่านขั้นตอน Calibration และอนุมัติขั้นสุดท้ายจาก MD)\n' : ''}\nกรุณาเข้าสู่ระบบ SML PMS ที่หน้า "6. ผลประเมิน" เพื่อดูผลโดยละเอียดและกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
     try{
       await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: emp[15], toName: emp[1], subject, body }) });
       result.email = { sent:true };
@@ -7694,7 +7701,7 @@ async function notifyEmployeeOfApproval(empCode, empName, cycle){
     result.line = { sent:false, reason:'พนักงานไม่มี LINE User ID บันทึกไว้ในระบบ' };
   } else {
     try{
-      await workerFetch(cfg, '/send-line-ack', { method:'POST', body: JSON.stringify({ userId: emp[21], empCode, empName, cycle }) });
+      await workerFetch(cfg, '/send-line-ack', { method:'POST', body: JSON.stringify({ userId: emp[21], empCode, empName, cycle, Y, Z, X }) });
       result.line = { sent:true };
     }catch(e){ result.line = { sent:false, reason:e.message }; }
   }
@@ -8966,7 +8973,8 @@ async function approveGmSelected(){
      อิสระ ไม่ใช่ถือว่า "แจ้งแล้ว" ถ้าช่องใดช่องหนึ่งสำเร็จ */
   let emailSent = 0, lineSent = 0;
   for(const d of rows){
-    const r = await notifyEmployeeOfApproval(d[0], d[1], d[2]).catch(()=>({email:{sent:false},line:{sent:false}}));
+    const Y = Number(d[d.length-5])||0, Z = Number(d[d.length-4])||0, X = Number(d[d.length-3])||0;
+    const r = await notifyEmployeeOfApproval(d[0], d[1], d[2], Y, Z, X).catch(()=>({email:{sent:false},line:{sent:false}}));
     if(r.email?.sent) emailSent++;
     if(r.line?.sent) lineSent++;
   }

@@ -8762,3 +8762,71 @@ Before considering a change to `SML_PMS_v14.html` done:
     demands of every client-side write, just implemented once more in a
     second language-adjacent codebase that can't share functions with the
     first.
+
+174. **Follow-up to #173: right after the LINE in-chat acknowledge feature
+    shipped, user flagged a real design gap in it — "ก่อนพนักงานกดรับทราบ
+    พนักงานเหนผลการประเมินตนเองก่อน" (before the employee clicks
+    acknowledge, the employee must see their own evaluation result
+    first).** The web flow already satisfied this correctly —
+    `renderMyResult()` shows the real X/Y/Z breakdown (grade letter still
+    locked per #156/#161) on the same page as the "✅ รับทราบผลการประเมิน"
+    button — but the LINE Buttons Template `/send-line-ack` builds (#173)
+    sent only generic text ("ผลการประเมินของคุณรอบ ... ได้รับการอนุมัติจาก
+    GM แล้ว ... กดปุ่มด้านล่างเพื่อรับทราบ") with zero real score data, so
+    an employee could tap the postback button directly in LINE chat and
+    acknowledge without ever seeing their actual numbers — the one real
+    asymmetry between the two newly-parallel channels.
+    Fixed by threading the real Y/Z/X values all the way from the one
+    place they're already in scope through to the LINE message text:
+    `approveGmSelected()` (the only real call site of
+    `notifyEmployeeOfApproval()`) now extracts `Y=d[d.length-5]`,
+    `Z=d[d.length-4]`, `X=d[d.length-3]` from each real draft `d` — the
+    same positional convention `renderMyResult()`/`getReportData()` already
+    use — and passes them as 3 new parameters.
+    `notifyEmployeeOfApproval(empCode, empName, cycle, Y, Z, X)` forwards
+    them into **both** channels, not just LINE: the email body (previously
+    only said "go check the web page") now states the real
+    Y/Z/X numbers directly too, with an honest note that the grade is
+    still locked until Calibration/MD approval — matching the exact
+    #156/#161 grade-hiding rule rather than contradicting it. The Worker's
+    `/send-line-ack` endpoint now accepts `Y`/`Z`/`X` in its request body
+    and builds the Buttons Template's `text` field as
+    `"ผลการประเมินของคุณรอบ {cycle} ได้รับการอนุมัติจาก GM แล้ว\nY=.. Z=..
+    X=..\n(เกรดจะแสดงหลัง Calibration และอนุมัติขั้นสุดท้ายจาก MD)\nกดปุ่ม
+    ด้านล่างเพื่อรับทราบผลได้ทันที"` — the real numbers are visible in the
+    chat message itself, before the button is ever tapped, with a
+    defensive length-cap (`slice(0,157)+'...'`) respecting LINE's own
+    ~160-character limit on this field; when no score is supplied (an
+    older client, or a genuinely missing value) the score line is simply
+    omitted rather than showing a fabricated `Y=0.00`/etc. (CLAUDE.md
+    #14's "don't fabricate a value you can't be sure of" rule). The
+    postback button's own `data` payload (`action=ack&code=..&cycle=..`)
+    and `handleLineAckPostback()`'s real identity-verification/status-
+    update logic (#173) needed zero changes — this fix only changes what
+    the employee is shown *before* tapping, never what the tap itself
+    does. Verified with a Node test against the real Worker endpoint
+    confirming the message text contains the real Y/Z/X values, never
+    mentions a grade letter, states the grade is still locked, and stays
+    within LINE's character limit — plus a second case confirming no
+    score is fabricated when none is supplied — plus a Playwright test
+    driving the real UI path end-to-end (ticks a real `.gm-chk` checkbox,
+    calls the real `approveGmSelected()`, confirms the real draft's Y/Z/X
+    are the exact values forwarded to the mocked `/send-line-ack` call) —
+    plus full re-runs of #173's own existing tests (channel tracking,
+    postback handling) and the standard click-sweep (`nav pages clicked:
+    22 errors: []`), all with zero regressions. **This changes the
+    Worker's own code**, so per CLAUDE.md #41/#106/#147/#148/#173's own
+    established precedent it needs a real redeploy before the LINE
+    message actually carries the real score in production — the
+    client-side email-body change goes live the moment GitHub Pages
+    updates, same as any other purely-client fix in this file. General
+    lesson sharper than #173's own conclusion: when a feature is built to
+    make two channels (web, LINE) do "the same real action," checking that
+    both channels *perform* the action identically (#173's own identity-
+    verification/status-update parity) is not the same as checking both
+    channels show the *same real information* leading up to that action —
+    a parity gap in what's displayed before an irreversible-feeling action
+    (acknowledging a result) is just as real a bug as a parity gap in the
+    action's own mechanics, and is exactly the kind of thing a user
+    testing the brand-new feature catches within one message of it
+    shipping.

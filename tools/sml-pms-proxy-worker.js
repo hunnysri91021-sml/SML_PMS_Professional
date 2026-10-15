@@ -123,15 +123,25 @@ export default {
          ไม่ผ่านเว็บไคลเอนต์เลย — ดูคอมเมนต์ที่ handleLineEvent() ด้านล่าง) เหตุผลเดียวกับ /send-line:
          ไม่เกี่ยวกับ Microsoft/Azure เลย วางไว้ก่อน getAppToken() */
       if (url.pathname === '/send-line-ack' && request.method === 'POST') {
-        const { userId, empCode, empName, cycle } = await request.json();
+        const { userId, empCode, empName, cycle, Y, Z, X } = await request.json();
         if (!userId || !empCode || !cycle) return json({ error: 'missing userId/empCode/cycle' }, 400, cors);
         if (!env.LINE_CHANNEL_ACCESS_TOKEN) return json({ error: 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN ใน Worker' }, 500, cors);
+        /* #174: พนักงานต้องเห็นผลประเมินของตนเอง (Y/Z/X) ก่อนกดปุ่มรับทราบ — ไม่ใช่กดรับทราบ
+           ข้อความทั่วไปแบบเดิมโดยไม่เห็นตัวเลขจริงเลย เกรดยังไม่ใส่ (ล็อกไว้จนกว่า MD อนุมัติ
+           ขั้นสุดท้าย ตาม CLAUDE.md #156/#161) Buttons Template's `text` field จำกัดความยาวจริง
+           ของ LINE (~160 ตัวอักษร) จึงตัดสำรองไว้ไม่ให้เกิน แม้ตัวเลขจะยาวผิดปกติ */
+        const hasScore = Y != null && Z != null && X != null;
+        const scorePart = hasScore
+          ? `\nY=${Number(Y).toFixed(2)} Z=${Number(Z).toFixed(2)} X=${Number(X).toFixed(2)}\n(เกรดจะแสดงหลัง Calibration และอนุมัติขั้นสุดท้ายจาก MD)`
+          : '';
+        let bodyText = `ผลการประเมินของคุณรอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว${scorePart}\nกดปุ่มด้านล่างเพื่อรับทราบผลได้ทันที`;
+        if (bodyText.length > 160) bodyText = bodyText.slice(0, 157) + '...';
         const message = {
           type: 'template',
           altText: `ผลการประเมินของคุณ ${empName || empCode} รอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว — กรุณารับทราบในแชทนี้`,
           template: {
             type: 'buttons',
-            text: `ผลการประเมินของคุณรอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว\nกดปุ่มด้านล่างเพื่อรับทราบผลได้ทันที`,
+            text: bodyText,
             actions: [
               { type: 'postback', label: '✅ รับทราบผลการประเมิน', data: `action=ack&code=${encodeURIComponent(empCode)}&cycle=${encodeURIComponent(cycle)}`, displayText: '✅ รับทราบผลการประเมิน' },
             ],
