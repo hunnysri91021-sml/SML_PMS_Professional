@@ -10635,6 +10635,12 @@ let currentReviewerLevel=null;
 let currentReviewerZ=0;
 let currentReviewerCode=null;
 let currentReviewerCycle=null;
+/* #169: ผู้ใช้กดปุ่ม "🔄 Sync จาก Excel แล้วลองใหม่" (#168) แล้วแบนเนอร์ขึ้นข้อความเดิมเป๊ะๆ ไม่เปลี่ยน
+   เลย — เดิม retrySyncAndReopenReviewer() แค่เรียก sync แล้วเปิดฟอร์มซ้ำ ไม่ได้บอกเลยว่า sync รอบนั้น
+   จริงๆ เจออะไร (ยังไม่ได้ตั้งค่า MS365 เลย? sync สำเร็จแต่ดึงมาได้ 0 แถวทั้งตาราง? sync สำเร็จดึงมาได้
+   หลายแถวแต่ไม่มีแถวไหนตรงกับรหัส/รอบ/ระดับนี้?) — ผู้ใช้ต้องไปเปิดอีกหน้า (Sync Log) เองเพื่อหาคำตอบ
+   เก็บผลจริงของ sync ครั้งล่าสุดไว้ตรงนี้ แล้วโชว์ในแบนเนอร์เดียวกันทันที ไม่ต้องให้ผู้ใช้ไปหาที่อื่น */
+let lastRetrySyncResult = null;
 /* #93: เดิมช่อง Z ในแบบประเมิน (ผู้สอบทานเห็น) ล็อกไว้ที่ cfg.zmax เสมอ (คะแนนเต็มของฟอร์ม เช่น
    "20.00") ไม่ได้คำนวณจาก ATTENDANCE จริงของพนักงานคนนั้นเลย แม้ computeZScore() ที่คำนวณ Z จริงจาก
    ข้อมูลเวลาทำงานมีอยู่แล้วและใช้จริงในหน้า "ประเมินตนเอง"/พิมพ์แบบฟอร์ม — ผู้สอบทานจึงไม่เคยเห็นค่า Z
@@ -10647,8 +10653,21 @@ let currentReviewerCycle=null;
    Settings เอง */
 async function retrySyncAndReopenReviewer(lv, name, code, position, cycle){
   if(typeof ms365SyncAppraisals!=='function'){ smlToast('ไม่พบฟังก์ชัน sync','err'); return; }
+  const cfg = (typeof loadMs365Config==='function') ? loadMs365Config() : {};
+  const configured = (typeof isMs365Configured==='function') ? isMs365Configured(cfg) : false;
+  if(!configured){
+    /* #169: ก่อนหน้านี้ไม่เช็คเลย ปล่อยให้ ms365SyncAppraisals() คืน 0 เงียบๆ แล้วแบนเนอร์ก็เหมือนเดิม
+       ทุกอย่าง — เช็คแยกเองก่อนเลย จะได้บอกสาเหตุจริงได้ทันทีถ้านี่คือสาเหตุ (เครื่องนี้ไม่ได้ตั้งค่า
+       MS365/Worker ไว้เลย ไม่ใช่เรื่องรหัส/รอบ/ระดับผิด) */
+    lastRetrySyncResult = { configured:false, at:new Date().toLocaleTimeString('th-TH') };
+    smlToast('เครื่องนี้ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถ sync ได้เลย','warn');
+    openReviewerForm(lv, name, code, position, cycle, false);
+    return;
+  }
   smlToast('กำลัง sync คิวประเมินจาก Excel...', 'info');
-  await ms365SyncAppraisals(false);
+  let n = 0, errMsg = null;
+  try{ n = await ms365SyncAppraisals(false); }catch(e){ errMsg = e && e.message || String(e); }
+  lastRetrySyncResult = { configured:true, rowsFromExcel:n, errMsg, at:new Date().toLocaleTimeString('th-TH') };
   if(typeof renderWorkflowPages==='function') renderWorkflowPages();
   openReviewerForm(lv, name, code, position, cycle, false);
 }
@@ -10729,7 +10748,23 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
     const othersHtml = others.length
       ? `พบรหัสพนักงานนี้ใน local เครื่องนี้ ${others.length} รายการ แต่คนละรอบ/ระดับ: ${others.map(o=>`[รอบ ${o.cycle} · ระดับ ${o.level} · สถานะ ${o.status}]`).join(' ')} — ถ้าค่านี้ไม่ตรงกับ Excel จริง กรุณาแจ้ง Admin พร้อมข้อความนี้`
       : `ไม่พบรหัสพนักงานนี้ใน local เครื่องนี้เลยแม้แต่รายการเดียว — แปลว่าเครื่องนี้ยังไม่เคย sync ข้อมูลของคนนี้มาจาก Excel เลย กดปุ่มด้านล่างเพื่อลองดึงใหม่ทันที`;
-    area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ไม่พบใบประเมินที่บันทึกไว้ตรงกับเงื่อนไขที่เปิดอยู่นี้ (รหัส ${code} · รอบ ${restoreDiag.cycle} · ระดับ ${restoreDiag.lv}) — ${othersHtml}<br>${retryBtn}</div></div>`);
+    /* #169: เดิมหลังกดปุ่ม "🔄 Sync จาก Excel แล้วลองใหม่" แบนเนอร์นี้ขึ้นข้อความเดิมเป๊ะๆ ไม่มีร่องรอยว่า
+       sync รอบนั้นเจออะไรจริง — แสดงผลจริงของ sync ครั้งล่าสุด (ถ้ามี) ต่อจากบรรทัดบน เพื่อให้เห็นชัดว่า
+       sync (1) ยังไม่ได้ตั้งค่าเลย (2) สำเร็จแต่ทั้งตาราง Appraisals มี 0 แถว (คนละปัญหา ต้องเช็คที่
+       Excel/Worker) หรือ (3) สำเร็จ ดึงมาได้ N แถวจริง แต่ไม่มีแถวไหนตรงกับรหัส/รอบ/ระดับนี้เลย
+       (แปลว่ารหัส/รอบ/ระดับใน Excel ไม่ตรงกับที่หน้านี้ใช้ค้นหาจริง ๆ) */
+    let syncEvidenceHtml = '';
+    if(lastRetrySyncResult){
+      const r = lastRetrySyncResult;
+      if(r.configured===false){
+        syncEvidenceHtml = `<br><b>ผลการกด Sync ล่าสุด (${r.at}):</b> เครื่องนี้ยังไม่ได้ตั้งค่า MS365/Worker ไว้เลย — sync ไม่ได้เกิดขึ้นจริง ไม่เกี่ยวกับรหัส/รอบ/ระดับ ต้องไปตั้งค่าที่หน้า "ตั้งค่า → MS365 Excel Basic" ก่อน`;
+      } else if(r.errMsg){
+        syncEvidenceHtml = `<br><b>ผลการกด Sync ล่าสุด (${r.at}):</b> Sync ล้มเหลวจริง — ${r.errMsg} (ดูรายละเอียดเพิ่มที่ Sync Log)`;
+      } else {
+        syncEvidenceHtml = `<br><b>ผลการกด Sync ล่าสุด (${r.at}):</b> Sync สำเร็จ ดึงข้อมูลทั้งตาราง Appraisals มาได้ ${r.rowsFromExcel} แถว แต่ไม่มีแถวไหนตรงกับรหัส ${code} · รอบ ${restoreDiag.cycle} · ระดับ ${restoreDiag.lv} เลย${r.rowsFromExcel===0 ? ' (ตารางว่างทั้งหมด — ตรวจว่า Excel ชื่อตาราง "Appraisals" มีข้อมูลจริงหรือไม่)' : ' (แปลว่ารหัส/รอบ/ระดับที่บันทึกไว้จริงใน Excel อาจไม่ตรงกับที่คาดไว้ — กรุณาแจ้ง Admin พร้อมตัวเลขนี้)'}`;
+      }
+    }
+    area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ไม่พบใบประเมินที่บันทึกไว้ตรงกับเงื่อนไขที่เปิดอยู่นี้ (รหัส ${code} · รอบ ${restoreDiag.cycle} · ระดับ ${restoreDiag.lv}) — ${othersHtml}${syncEvidenceHtml}<br>${retryBtn}</div></div>`);
   } else if(restoreDiag.found && restoreDiag.total>0 && restoreDiag.matched < restoreDiag.total){
     const detail = (restoreDiag.mismatches||[]).map(m=>`${m.factor}: ${m.reason}`).join(' · ');
     area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ดึงคะแนนคืนได้ ${restoreDiag.matched}/${restoreDiag.total} ข้อ — ส่วนที่เหลือดึงไม่ได้เพราะ: ${detail || 'ไม่ทราบสาเหตุ'}. ค่าดิบที่บันทึกไว้จริง: [${(restoreDiag.draftRaw||[]).join(', ')}] กรุณาแจ้ง Admin พร้อมข้อความนี้เพื่อตรวจสอบ</div></div>`);

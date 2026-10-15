@@ -7955,6 +7955,75 @@ touches employee/attendance/evaluation data.
     taught for scoping and counting functions, not just this file's one
     canonical roster builder.
 
+169. **Follow-up to #168: user clicked the new "🔄 Sync จาก Excel แล้วลองใหม่"
+    button and reported "ดึงแล้วยังไม่มานะ เป็นปัญหาที่อะไร" (tried syncing,
+    still nothing, what's the problem) — then confirmed via AskUserQuestion
+    that the diagnostic banner shows "ขึ้นข้อความเดิมเป๊ะๆ (ไม่เปลี่ยนเลย)"
+    (the exact same message, completely unchanged) even after the retry.**
+    Read `retrySyncAndReopenReviewer()` (#168) again: it called
+    `ms365SyncAppraisals(false)`, re-rendered, and reopened the same form —
+    but never captured *what that specific sync call actually found*, and
+    `openReviewerForm()`'s not-found banner (#165/#167) only ever reads
+    `getDrafts()`/`restoreReviewerFormFromDraft()`, which has no way to know
+    whether a sync even ran, let alone what it returned — so the banner's
+    text is mechanically identical before and after a retry whenever the
+    sync genuinely finds nothing new to merge, regardless of *why* it found
+    nothing (never configured at all, configured but the real Excel table
+    is empty, or configured and genuinely full of rows but none matching
+    this specific code/cycle/level). "The same text as before" was never
+    evidence the retry button was broken — it was the predictable result of
+    a diagnostic banner that still couldn't see the one new fact the retry
+    action itself produced.
+    Added `lastRetrySyncResult` (module-level, reset on every retry click):
+    `retrySyncAndReopenReviewer()` now checks `isMs365Configured(cfg)`
+    *before* calling `ms365SyncAppraisals()` at all (previously it let that
+    function's own internal check return `0` silently with no trace this
+    banner could use), wraps the real sync call in its own `try/catch` to
+    capture a thrown error message, and records the real outcome — whether
+    MS365/Worker isn't configured on this device at all, the sync threw a
+    real error, or the sync succeeded and returned a real row count — before
+    reopening the form. `openReviewerForm()`'s not-found banner now appends
+    a "ผลการกด Sync ล่าสุด (เวลาจริง): …" line reading this evidence
+    directly: "เครื่องนี้ยังไม่ได้ตั้งค่า MS365/Worker ไว้เลย" (not
+    configured — the real cause is upstream of any Excel data at all, and
+    plainly not a rhodes/cycle/level mismatch), "Sync สำเร็จ ดึงข้อมูลทั้ง
+    ตาราง Appraisals มาได้ 0 แถว…(ตารางว่างทั้งหมด)" (configured and
+    genuinely ran, but the real Excel table itself has zero rows — a
+    completely different, Excel-side problem to check), or "Sync สำเร็จ
+    ดึงข้อมูลมาได้ N แถว แต่ไม่มีแถวไหนตรงกับรหัส/รอบ/ระดับนี้เลย" (the
+    sync genuinely works and the table genuinely has data, but none of it
+    matches this specific employee/cycle/level combination — pointing
+    straight at a real data-entry mismatch in Excel, not a code/sync bug at
+    all) — three previously indistinguishable "still nothing" outcomes
+    turned into three concretely different, independently actionable
+    findings, each naming the real next step instead of leaving the user
+    to re-report the identical symptom a third time. Verified with a
+    Playwright test covering all three outcomes (mocking
+    `isMs365Configured`/`workerFetch` for each) and confirming the banner's
+    text differs correctly for each — plus full re-runs of #165/#167/#168's
+    own existing tests and the standard click-sweep, all with zero
+    regressions. **This still does not claim to have fixed the user's real
+    underlying cause** — it is the next layer of the same #129/#142/#165/
+    #167/#168 "make the failure diagnosable in the user's own hands, don't
+    guess again" discipline: the next report should now carry one of these
+    three concrete findings instead of "still nothing," and whichever one
+    it is determines the real next fix (set up MS365 on this device, check
+    why the real Excel table is empty, or check why this employee's real
+    row's code/cycle/level don't match what the app expects — most likely
+    the same #160-shaped "a field looks like text but is stored as a
+    different type/value in the real sheet" class of issue, now checkable
+    with a real row count instead of a guess). General lesson sharper than
+    #168's own conclusion: a "retry" button is only as useful as the
+    diagnostic sitting next to it — if the retry action produces real,
+    specific information (a row count, a thrown error, a configuration
+    state) that the surrounding UI never captures or displays, a user who
+    clicks it and sees the identical message has no way to tell "the retry
+    did nothing" from "the retry worked exactly as designed and genuinely
+    found nothing new," which read as exactly the same complaint but call
+    for completely different next steps; always thread the action's own
+    real result into whatever diagnostic is already on screen, not just
+    the state the action was meant to refresh.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
