@@ -8308,3 +8308,58 @@ Before considering a change to `SML_PMS_v14.html` done:
     causes is more likely; each layer of real, on-screen evidence moves
     the next report closer to something directly actionable instead of
     another round of "still the same."
+
+168. **User asked two things in one short follow-up: first, a factual
+    question — does reviewer-entered grade data come from the
+    `Appraisals` sheet, and do comments come from `Approvals`? — then
+    "มีวิธีแก้ไขยังไง" (how can this be fixed).** Answered the first
+    directly from code (both confirmed exactly as asked — scores via
+    `saveEvaluationToMs365()`/`submitReviewerForm()`/
+    `confirmCalibration()` push/pull through `cfg.evaluationTable`
+    ='Appraisals'; comments via `pushApprovalRecordToExcel()`/
+    `ms365SyncEvalComments()` folded into the `Approvals` table's
+    Comment column, no separate table) — and pointed out the real
+    operational difference this explains: `Approvals` is append-only
+    (so a prior reviewer's comment always keeps showing even when the
+    current sync hasn't caught up), while `Appraisals` is upsert-keyed
+    (so a missed/stale sync makes the score vanish entirely, exactly
+    the #165-#167 symptom). For "how to fix": #165/#167's diagnostic
+    banners already *named* the real cause (no local record for this
+    employee at all, vs. one found under a different cycle/level) but
+    gave the user no way to actually act on either cause without
+    leaving the page — closed that gap by adding a real "🔄 Sync จาก
+    Excel แล้วลองใหม่" button directly inside the "not found" banner,
+    wired to a new `retrySyncAndReopenReviewer(lv,name,code,position,
+    cycle)`: calls the real `ms365SyncAppraisals(false)` (non-silent,
+    so a genuine success/failure toast shows — #69's own established
+    convention for a user-triggered action, as opposed to the usual
+    silent background sync), re-renders the workflow pages, then
+    re-opens the same reviewer form with the same identity so the
+    result is visible immediately in the same place the diagnosis was
+    shown, with zero navigation required. Deliberately did **not** add
+    a similar button to the "found but values mismatch" banner (#165's
+    second case) — re-syncing can never fix a genuine raw-value/weight
+    mismatch, since the problem there isn't staleness, it's a real data
+    shape disagreement that needs Admin to look at the actual numbers;
+    offering a sync-retry button there would imply a fix that wouldn't
+    actually do anything, the same honesty rule CLAUDE.md #10 already
+    establishes for not offering an action that doesn't work. Verified
+    with a Playwright test that opens the form for an employee with
+    zero local drafts (confirms the retry button renders inside the
+    banner), then mocks a real Excel row becoming available and clicks
+    the actual button: confirms the banner clears and the real scores
+    (raw=88, matching the mocked row) restore correctly in the same
+    modal — plus full re-runs of #163-#167's own tests and the standard
+    click-sweep (`nav pages clicked: 22 errors: []`) with zero
+    regressions. General lesson sharper than #165/#167's own
+    conclusion: a diagnostic banner that correctly names a fixable
+    cause (data just hasn't synced to this device yet) is only half the
+    job — when the fix for that specific cause is a single, safe,
+    already-existing action (re-running a sync function the app already
+    has), wire a real button to it right where the diagnosis is shown,
+    rather than describing the remedy in prose and expecting the user
+    to go find the control themselves on a different page; reserve the
+    prose-only, "report this to Admin" treatment for causes that
+    genuinely have no one-click remedy (a real data mismatch needing
+    human judgment), so a button is never offered for something it
+    can't actually solve.

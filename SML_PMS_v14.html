@@ -10642,6 +10642,16 @@ let currentReviewerCycle=null;
    ประเมิน" แก้โดยเรียก computeZScore(lv, code) จริง (เหมือน renderZStats() ที่หน้าประเมินตนเองใช้)
    แล้วแสดงกล่องรายละเอียด สาย/กลับก่อน/ขาด/ป่วย/กิจ + วันลารวม + คะแนน Z จริง ในแบบประเมินทุกครั้งที่
    เปิด ไม่ใช่แค่ตัวเลขคะแนนเฉยๆ */
+/* #168: ปุ่มจริงในแบนเนอร์วินิจฉัย #165/#167 — sync คิวประเมินจาก Excel ใหม่ (ไม่ silent จะได้เห็น
+   toast จริง) แล้วเปิดฟอร์มเดิมซ้ำทันทีด้วยค่าเดียวกัน ให้เห็นผลจริงในที่เดียว ไม่ต้องออกไปหน้า MS365
+   Settings เอง */
+async function retrySyncAndReopenReviewer(lv, name, code, position, cycle){
+  if(typeof ms365SyncAppraisals!=='function'){ smlToast('ไม่พบฟังก์ชัน sync','err'); return; }
+  smlToast('กำลัง sync คิวประเมินจาก Excel...', 'info');
+  await ms365SyncAppraisals(false);
+  if(typeof renderWorkflowPages==='function') renderWorkflowPages();
+  openReviewerForm(lv, name, code, position, cycle, false);
+}
 function openReviewerForm(lv,name,code,position,cycle,viewOnly){
   const cfg=SML_FORMS[lv]; if(!cfg){smlToast('ไม่พบแบบฟอร์มของระดับนี้','warn');return;}
   currentReviewerLevel=lv;
@@ -10711,10 +10721,15 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
        พนักงานนี้เจอใน local ด้วย cycle/level อื่น ให้โชว์ค่าจริงที่เจอ (จะได้รู้ว่า sync ดึงมาแล้วแต่คนละ
        คีย์ vs. ยังไม่เคย sync มาที่เครื่องนี้เลย สองสาเหตุนี้แก้ไม่เหมือนกัน) */
     const others = restoreDiag.sameCodeOtherDrafts || [];
+    /* #168: ผู้ใช้ถาม "มีวิธีแก้ไขยังไง" — แบนเนอร์ #165/#167 บอกสาเหตุได้แล้ว แต่ยังไม่มีวิธีลงมือแก้
+       ในหน้านี้เลย ต้องออกไปหน้าอื่น/รีเฟรชทั้งหน้าเอง — เพิ่มปุ่มจริงที่ sync Appraisals ใหม่ทันที (ไม่
+       silent จะได้เห็น toast จริงว่าสำเร็จ/ล้มเหลว) แล้วเปิดฟอร์มเดิมซ้ำอัตโนมัติ ปิดช่องว่างระหว่าง "รู้
+       สาเหตุ" กับ "แก้ได้จริงในคลิกเดียว" ตรงจุดเกิดปัญหาเลย ไม่ต้องเดินไปหน้า MS365 Settings เอง */
+    const retryBtn = `<button class="btn btn-sm" style="margin-top:8px" onclick="retrySyncAndReopenReviewer('${lv}','${name.replace(/'/g,"\\'")}','${code}','${(position||'').replace(/'/g,"\\'")}','${currentReviewerCycle}')">🔄 Sync จาก Excel แล้วลองใหม่</button>`;
     const othersHtml = others.length
-      ? `พบรหัสพนักงานนี้ใน local เครื่องนี้ ${others.length} รายการ แต่คนละรอบ/ระดับ: ${others.map(o=>`[รอบ ${o.cycle} · ระดับ ${o.level} · สถานะ ${o.status}]`).join(' ')}`
-      : `ไม่พบรหัสพนักงานนี้ใน local เครื่องนี้เลยแม้แต่รายการเดียว — แปลว่าเครื่องนี้ยังไม่เคย sync ข้อมูลของคนนี้มาจาก Excel เลย ลองกด "🔄 ดึงจากทุกเครื่อง"/sync คิวประเมิน แล้วเปิดใหม่อีกครั้ง`;
-    area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ไม่พบใบประเมินที่บันทึกไว้ตรงกับเงื่อนไขที่เปิดอยู่นี้ (รหัส ${code} · รอบ ${restoreDiag.cycle} · ระดับ ${restoreDiag.lv}) — ${othersHtml} กรุณาแจ้ง Admin พร้อมข้อความนี้เพื่อตรวจสอบ</div></div>`);
+      ? `พบรหัสพนักงานนี้ใน local เครื่องนี้ ${others.length} รายการ แต่คนละรอบ/ระดับ: ${others.map(o=>`[รอบ ${o.cycle} · ระดับ ${o.level} · สถานะ ${o.status}]`).join(' ')} — ถ้าค่านี้ไม่ตรงกับ Excel จริง กรุณาแจ้ง Admin พร้อมข้อความนี้`
+      : `ไม่พบรหัสพนักงานนี้ใน local เครื่องนี้เลยแม้แต่รายการเดียว — แปลว่าเครื่องนี้ยังไม่เคย sync ข้อมูลของคนนี้มาจาก Excel เลย กดปุ่มด้านล่างเพื่อลองดึงใหม่ทันที`;
+    area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ไม่พบใบประเมินที่บันทึกไว้ตรงกับเงื่อนไขที่เปิดอยู่นี้ (รหัส ${code} · รอบ ${restoreDiag.cycle} · ระดับ ${restoreDiag.lv}) — ${othersHtml}<br>${retryBtn}</div></div>`);
   } else if(restoreDiag.found && restoreDiag.total>0 && restoreDiag.matched < restoreDiag.total){
     const detail = (restoreDiag.mismatches||[]).map(m=>`${m.factor}: ${m.reason}`).join(' · ');
     area.insertAdjacentHTML('afterbegin', `<div id="reviewerRestoreDiag" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ดึงคะแนนคืนได้ ${restoreDiag.matched}/${restoreDiag.total} ข้อ — ส่วนที่เหลือดึงไม่ได้เพราะ: ${detail || 'ไม่ทราบสาเหตุ'}. ค่าดิบที่บันทึกไว้จริง: [${(restoreDiag.draftRaw||[]).join(', ')}] กรุณาแจ้ง Admin พร้อมข้อความนี้เพื่อตรวจสอบ</div></div>`);
