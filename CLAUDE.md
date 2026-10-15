@@ -8097,6 +8097,62 @@ touches employee/attendance/evaluation data.
     another guess) is what made the real cause identifiable from a single
     screenshot instead of a sixth round of speculation.
 
+171. **Follow-up to #170 (not a bug report): user confirmed the sync fix
+    resolved the reported data problem, then asked "หน้ารายงานแบบประเมิน
+    ในทุกจุดหรือแถบอื่นที่แสดงแบบนี้ จัดรูปแบบให้อ่านง่าย ชัดเจน เป็น
+    ระเบียบมืออาชีพด้วย" (format the evaluation-report display, wherever
+    it shows like this, to be more readable/professional) — a pure
+    visual-polish request, confirmed via one clarifying question to mean
+    only `openReviewerForm()`'s own modal (the "ดูแบบฟอร์ม/สอบทาน"
+    window), not the self-eval page's separate, already-different `.kv`
+    list-style time-detail panel.** The one genuinely cluttered spot in
+    the screenshot was the "รายละเอียดเวลาทำงาน (Z)" box: it reused the
+    `.review-score-summary` class — built and sized for the *final*
+    4-tile score tally at the bottom of the form (Raw/Y/Z/X) — to hold
+    8 attendance stats instead, producing two uneven rows where a long
+    label ("สาย+กลับก่อน ÷ 8 (ปัดลง)") wrapped awkwardly in a narrow
+    quarter-width tile and the one truly important number (the real Z
+    score) sat visually no different from the 7 raw inputs feeding it.
+    Added two new classes scoped only to this one box —
+    `.review-z-grid` (6 raw attendance stats in a clean 3-column grid)
+    and `.review-z-highlight` (a full-width highlighted bar pulling the
+    two numbers that actually matter — "วันลารวม" and the real "Z คะแนน
+    จริง" — out of the grid and into one visually prominent result,
+    matching how the final score tally already earns its own emphasis)
+    — deliberately **not** touching `.review-score-summary` itself,
+    since it's still correctly used for the genuine 4-tile final tally
+    later in the same form and changing it there would have been an
+    unrelated, unasked-for edit. Added small icon prefixes to
+    `.review-doc-head`'s title and each `.review-section-title` (📋/⏱️/
+    📊/📝) for quick visual scanning, uppercase+letter-spacing on the
+    employee-info tile labels, a subtler gradient header background,
+    and zebra striping + a bolder header row on the factor-scoring
+    table — all small, low-risk CSS additions in a new, clearly-labeled
+    `<style>` block rather than editing the existing "v12 — reviewer
+    modal cleanup" block in place, so the change is easy to isolate or
+    revert on its own. Verified visually with a real rendered screenshot
+    (not just a DOM/class check — CLAUDE.md #15's own "verify styling
+    with an actual rendered screenshot" rule) of both halves of the
+    modal (the Z-detail section and, scrolled down, the factor table +
+    final score tally + comments + approval-flow footer), confirming
+    the new layout reads cleanly and nothing overlaps or breaks at the
+    same viewport this file's other tests already use — plus full
+    re-runs of #165/#167/#168/#169/#170's own existing tests (none of
+    which touch CSS/layout, but all exercise this exact modal's JS
+    logic — restoring scores, showing diagnostic banners, the retry
+    button) and the standard click-sweep (`nav pages clicked: 22 errors:
+    []`), all with zero regressions. General lesson: a pure visual/
+    layout request is still worth one clarifying question when the
+    user's own wording ("ทุกจุดที่แสดงแบบนี้") is ambiguous about scope
+    across genuinely different-looking implementations of a similar
+    idea (here, the reviewer modal's card-grid Z box vs. the self-eval
+    page's unrelated `.kv` list-style one) — guessing the wider scope
+    risks redesigning a page nobody asked to change; and the real fix
+    for "a grid looks cluttered" is often not "make the grid prettier"
+    but "stop forcing data that isn't the same *kind* of information
+    (6 raw inputs vs. 1 final answer) into one undifferentiated grid
+    built for the other shape."
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -916,6 +916,35 @@ input[type="checkbox"]{accent-color:#0b63ce}
 </style>
 
 <style>
+/* #171: ผู้ใช้ขอ "หน้ารายงานแบบประเมิน...จัดรูปแบบให้อ่านง่าย ชัดเจน เป็นระเบียบมืออาชีพ" — ยืนยันขอบเขต
+   เฉพาะหน้าต่าง "ดูแบบฟอร์ม/สอบทาน" (openReviewerForm()) เท่านั้น ไม่รวมหน้า "1. ประเมินตนเอง" ซึ่งใช้
+   รูปแบบ .kv แบบรายการเรียบคนละแบบอยู่แล้ว — จุดที่ดูไม่เป็นระเบียบที่สุดในภาพที่ส่งมาคือกล่อง "รายละเอียด
+   เวลาทำงาน (Z)": เดิมใช้ class .review-score-summary ร่วมกับกล่องสรุปคะแนนท้ายฟอร์ม (ออกแบบมาสำหรับ 4
+   ช่อง) ยัด 8 ช่องเข้าไป กลายเป็น 2 แถวความสูงไม่เท่ากัน ป้ายยาวตัดบรรทัดไม่สวย เพิ่ม class เฉพาะ
+   .review-z-grid (6 สถิติดิบ 3 คอลัมน์) + .review-z-highlight (แถบผลสรุป "วันลารวม → คะแนน Z" เต็มความ
+   กว้าง เด่นชัดแยกจากสถิติย่อย) แทน ไม่แตะ .review-score-summary เดิมเพราะยังใช้กับกล่องสรุปท้ายฟอร์มจริง */
+.review-doc-head{background:linear-gradient(90deg,#eef4ff,#fff)}
+.review-doc-head b{font-size:15px}
+.review-doc-badges span{font-weight:800}
+.review-employee-grid>div{position:relative}
+.review-employee-grid label{text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+.review-section-title{display:flex;align-items:center;gap:7px}
+.review-z-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.review-z-grid>div{padding:10px 11px;border:1px solid #e3eaf2;border-radius:9px;background:#fbfcfe;text-align:center}
+.review-z-grid span{display:block;color:#7b8796;font-size:9.5px;margin-bottom:4px}
+.review-z-grid b{display:block;font-size:14px;color:#0f2748;font-weight:800}
+.review-z-highlight{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:13px 16px;margin-bottom:14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe}
+.review-z-highlight>div{display:flex;align-items:center;gap:8px}
+.review-z-highlight span{font-size:11px;font-weight:700;color:#1d4ed8}
+.review-z-highlight b{font-size:20px;color:#1e3a8a}
+.review-z-highlight .divider{width:1px;align-self:stretch;background:#bfdbfe}
+.reviewer-table thead th{background:#f1f5fb;color:#334155;font-weight:800;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px}
+.reviewer-table tbody tr:nth-child(even){background:#fafbfd}
+@media(max-width:700px){.review-z-grid{grid-template-columns:1fr 1fr}.review-z-highlight{flex-direction:column;align-items:flex-start}.review-z-highlight .divider{display:none}}
+@media(max-width:420px){.review-z-grid{grid-template-columns:1fr}}
+</style>
+
+<style>
 .tpl-preview-md .md-b{background:#f6f9fc}.tpl-preview-banner{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:14px 16px;background:#fff;border-left:5px solid var(--form-color);border-radius:10px;margin-bottom:12px}.tpl-preview-banner b{display:block;font-size:14px}.tpl-preview-banner span{font-size:10.5px;color:#748196}.tpl-pill{display:inline-block!important;background:#f1f5f9;border:1px solid #dbe4ee;border-radius:999px;padding:5px 9px;margin-left:5px!important;color:#42526a!important}.tpl-preview-table{background:#fff;border:1px solid #e1e8f0;border-radius:10px;overflow:auto}.tpl-preview-table table{width:100%;border-collapse:collapse;font-size:11px}.tpl-preview-table th,.tpl-preview-table td{padding:9px 10px;border-bottom:1px solid #edf1f5}.tpl-preview-table th{background:#f7f9fc;white-space:nowrap}.tpl-preview-table .sum{background:#eef6ff;font-weight:700}.tpl-preview-table .z{background:#f0fdf4}.tpl-preview-table .total{background:#f8fafc;font-weight:800}.tpl-preview-notes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.tpl-preview-notes>div{background:#fff;border:1px solid #e1e8f0;border-radius:10px;padding:12px}.tpl-preview-notes b{display:block;font-size:11px;margin-bottom:6px}.tpl-preview-notes textarea{width:100%;min-height:75px;border:1px solid #dce5ef;border-radius:8px;padding:9px;resize:vertical;font-family:inherit}.tpl-preview-md{width:calc(100vw - 40px);max-height:92vh}.tpl-preview-md .md-b{max-height:72vh;overflow:auto}@media(max-width:700px){.tpl-preview-banner,.tpl-preview-notes{grid-template-columns:1fr;flex-direction:column;align-items:flex-start}.tpl-pill{margin:3px 3px 0 0!important}}
 
 
@@ -10714,22 +10743,25 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
       <td><input class="review-comment" placeholder="เหตุผล / ความเห็นประกอบ"></td></tr>`;
   }).join('');
   area.innerHTML=`
-    <div class="review-doc-head"><div><b>SML PMS — แบบประเมินผลการปฏิบัติงานประจำปี</b><span>${cfg.label}</span></div><div class="review-doc-badges"><span>Y ${cfg.ypct}%</span><span>Z ${cfg.zpct}%</span><span>รวม ${cfg.total} หน่วย</span></div></div>
+    <div class="review-doc-head"><div><b>📋 SML PMS — แบบประเมินผลการปฏิบัติงานประจำปี</b><span>${cfg.label}</span></div><div class="review-doc-badges"><span>Y ${cfg.ypct}%</span><span>Z ${cfg.zpct}%</span><span>รวม ${cfg.total} หน่วย</span></div></div>
     <div class="review-employee-grid">
       <div><label>ชื่อ-สกุล</label><b>${name}</b></div><div><label>รหัสพนักงาน</label><b>${code}</b></div><div><label>ตำแหน่ง</label><b>${position}</b></div><div><label>รอบประเมิน</label><b>${currentReviewerCycle}</b></div>
     </div>
-    <div class="review-section-title">รายละเอียดเวลาทำงาน (Z) — จาก Attendance จริงของพนักงานคนนี้</div>
-    <div class="review-score-summary" style="margin-bottom:14px">
+    <div class="review-section-title">⏱️ รายละเอียดเวลาทำงาน (Z) — จาก Attendance จริงของพนักงานคนนี้</div>
+    <div class="review-z-grid">
       <div><span>มาสาย</span><b>${att.lateCount||0} ครั้ง</b></div>
       <div><span>กลับก่อนเวลา</span><b>${att.earlyCount||0} ครั้ง</b></div>
-      <div><span>สาย+กลับก่อน ÷ 8 (ปัดลง)</span><b>${lateEarly} ครั้ง = ${Math.floor(lateEarly/8)} วัน</b></div>
       <div><span>ขาดงาน</span><b>${att.absentDay||0} วัน</b></div>
       <div><span>ลาป่วย</span><b>${att.sickDay||0} วัน</b></div>
       <div><span>ลากิจ</span><b>${att.personalDay||0} วัน</b></div>
-      <div><span>วันลารวม (เทียบเกณฑ์)</span><b>${zr.zDaysExact.toFixed(3)} วัน</b></div>
-      <div class="total"><span>Z (${cfg.zpct}%) · คะแนนจริง</span><b>${zr.score.toFixed(2)}</b></div>
+      <div><span>สาย+กลับก่อน ÷ 8 (ปัดลง)</span><b>${lateEarly} ครั้ง = ${Math.floor(lateEarly/8)} วัน</b></div>
     </div>
-    <div class="review-section-title">ส่วนที่ 1 — ปัจจัยในการพิจารณาประเมิน (${cfg.factors.length} ข้อ)</div>
+    <div class="review-z-highlight">
+      <div><span>วันลารวม (เทียบเกณฑ์)</span><b>${zr.zDaysExact.toFixed(3)} วัน</b></div>
+      <div class="divider"></div>
+      <div><span>Z (${cfg.zpct}%) · คะแนนจริง</span><b>${zr.score.toFixed(2)}</b></div>
+    </div>
+    <div class="review-section-title">📊 ส่วนที่ 1 — ปัจจัยในการพิจารณาประเมิน (${cfg.factors.length} ข้อ)</div>
     <div class="tw reviewer-table-wrap"><table class="reviewer-table"><thead><tr><th>ปัจจัยในการพิจารณาประเมิน</th><th>น้ำหนัก</th><th>ระดับคะแนน</th><th>คะแนน</th><th>ความเห็นผู้ประเมิน</th></tr></thead><tbody>${scoreRows}</tbody>
       <tfoot><tr><td><b>รวมคะแนนดิบ</b></td><td style="text-align:center"><b>${cfg.total}</b></td><td></td><td><b id="reviewRaw">0</b> / ${cfg.maxRaw}</td><td></td></tr></tfoot></table></div>
     <div class="review-score-summary">
@@ -10739,7 +10771,7 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
       <div class="total"><span>X = Y + Z</span><b id="reviewX">${zr.score.toFixed(2)}</b></div>
     </div>
     ${typeof buildPrevCommentsHtml==='function' ? buildPrevCommentsHtml(code, currentReviewerCycle) : ''}
-    <div class="review-section-title">ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
+    <div class="review-section-title">📝 ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea id="reviewStrength" rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea id="reviewDev" rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
     <div class="review-approval-flow"><span>ผู้ประเมิน</span><i>→</i><span>ผู้บังคับบัญชาระดับสูง</span><i>→</i><span>ผู้จัดการทั่วไปฝ่าย</span><i>→</i><span>MD-SML</span></div>`;
   const restoreDiag = (typeof restoreReviewerFormFromDraft==='function') ? restoreReviewerFormFromDraft(lv, code, currentReviewerCycle) : {found:false};
