@@ -7426,6 +7426,12 @@ function calcCurrentEvalSummary(){
 }
 
 function gradeFromX(x){ return x>=90?'A':x>=80?'B':x>=70?'C':x>=60?'D':'E'; }
+/* #172: ป้ายเกรด "ชั่วคราว" (gradeFromX ก่อนถึง Calibration) ให้ผู้สอบทาน L1/L2/GM ยังเห็นระดับ
+   คะแนนได้ แต่ต้องไม่สับสนว่าเป็นเกรดจริง — ใช้จุดเดียวนี้ในทุกคิวสอบทานก่อน Calibration เพื่อไม่ให้
+   คำ/tooltip เพี้ยนไปคนละแบบในแต่ละหน้า */
+function provisionalGradeCell(grade){
+  return `<span class="grade g${grade}" title="เกรดชั่วคราว (คำนวณจากคะแนนสัมบูรณ์เพื่อแสดงผลระหว่างทาง) — เกรดจริงจะคำนวณใหม่ด้วย Bell Curve ที่ขั้น Calibration เท่านั้น">${grade}</span><br><small style="color:#94a3b8;font-size:10px">(ชั่วคราว)</small>`;
+}
 
 /* ============ BELL CURVE GRADING (ระเบียบปฏิบัติ "การประเมินผลการปฏิบัติงานประจำปี" ข้อ 6.7) ============
    เอกสารจริงของบริษัทระบุว่าเกรดสุดท้าย (A/B/C/D/E) ต้องมาจาก "สัดส่วนจำนวนพนักงานในหน่วยงาน"
@@ -8740,14 +8746,14 @@ function renderReviewL1Queue(){
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td style="text-align:center">${provisionalGradeCell(grade)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="reviewl1-chk" value="${draftKey(d)}"></td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+      <td style="text-align:center">${provisionalGradeCell(grade)}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
@@ -8800,14 +8806,14 @@ function renderReviewQueue(){
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td style="text-align:center">${provisionalGradeCell(grade)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}"></td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+      <td style="text-align:center">${provisionalGradeCell(grade)}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('review-chk', checkedKeys);
@@ -8891,14 +8897,14 @@ function renderGmApproveQueue(){
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td style="text-align:center">${provisionalGradeCell(grade)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="gm-chk" value="${draftKey(d)}"></td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+      <td style="text-align:center">${provisionalGradeCell(grade)}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
@@ -8969,7 +8975,7 @@ function renderCalibQueue(){
       return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+        <td style="text-align:center">${provisionalGradeCell(grade)}</td>
         <td colspan="3" style="text-align:center;color:#16a34a">✓ ผ่าน Calibration แล้ว</td>
         <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
@@ -8979,7 +8985,7 @@ function renderCalibQueue(){
     return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
+      <td style="text-align:center">${provisionalGradeCell(grade)}</td>
       <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()" style="width:80px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
       <td class="calib-bc-cell" data-key="${key}" style="text-align:center;color:#94a3b8;font-size:12px">ยังไม่คำนวณ</td>
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)" style="width:220px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>

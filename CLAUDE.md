@@ -8579,3 +8579,62 @@ Before considering a change to `SML_PMS_v14.html` done:
     genuinely have no one-click remedy (a real data mismatch needing
     human judgment), so a button is never offered for something it
     can't actually solve.
+
+172. **User saw the L3 ("สอบทานผู้จัดการส่วน") queue page showing Grade "B"
+    for all 5 rows and asked a design question: "เพื่อไม่ให้พนักงานหรือ
+    หัวหน้า < L3 เข้าใจผิด ควรซ่อนเกรดนี้ไว้ไหม" (to stop employees or
+    supervisors below L3 from misreading this as final, should this grade
+    be hidden). First explained this specific case wasn't a bug at all —
+    the badge is `gradeFromX(X)`, the deliberately-kept "ชั่วคราว"
+    (provisional) absolute-threshold grade #155 already documented as
+    existing purely to give a mid-pipeline display value before the real
+    Bell Curve grade is computed at Calibration; 5 people landing in the
+    same 80-89 band is coincidence, not staleness. Recommended labeling
+    it as provisional rather than hiding it outright — hiding removes a
+    useful at-a-glance signal for the reviewer actually doing the work,
+    while the real risk is only that the same A-E letter looks identical
+    to a final grade to anyone else who happens to see the page. User
+    confirmed the labeled approach.
+    Added one shared helper, `provisionalGradeCell(grade)` (next to
+    `gradeFromX()`), rendering the existing `.grade g${grade}` badge with
+    a `title` tooltip stating plainly it's provisional and naming where
+    the real grade comes from, plus a small "(ชั่วคราว)" caption under it
+    — the same `<span class="grade...">...</span><br><small>...</small>`
+    shape `runBellCurveCalculation()`'s own real-grade-preview cell
+    already uses, so provisional and real grade cells read consistently
+    even though only one of them is actually final. Wired into all 4
+    stages where the value shown is still `gradeFromX()`, never the real
+    Bell Curve result: `renderReviewL1Queue()`, `renderReviewQueue()`
+    (L2/L3), `renderGmApproveQueue()`, and `renderCalibQueue()`'s own
+    per-row cell for a record that hasn't had Bell Curve run on it yet
+    (8 call sites total — each queue has a `ready`-state row and a
+    `done`-state row that both display the same field). **Deliberately
+    left untouched**: `renderApproveQueue()` (AMD/MD's final approve
+    queue, roster built from `'Calibrated'` status) — by that stage
+    `confirmCalibration()` has already overwritten the draft's grade
+    with the real Bell Curve result, so the badge there is genuinely
+    final and labeling it "provisional" would be dishonest in the other
+    direction; `runBellCurveCalculation()`'s own result cell (already
+    the real computed preview, about to be saved verbatim); the Dashboard's
+    grade-distribution bars and IDP table (both filtered to
+    `Calibrated`/`Approved` records only, i.e. already real); and
+    `renderMyResult()` ("6. ผลประเมิน"), which already solved this exact
+    problem for the employee's own page a different way back in #156 —
+    hiding the letter behind a 🔒 until `isFinalStatus()`, since an
+    employee has no reason to see *any* grade, provisional or not,
+    before MD's real sign-off. Verified with a Playwright test driving
+    one real draft through Submitted→L1Reviewed→L2Reviewed→Acknowledged
+    →Calibrated and checking each stage's queue page: the provisional
+    label appears at L1/L2/GM/pre-bell-curve-Calibration, and is
+    correctly absent once the record reaches the real post-Calibration
+    Approve queue (which still shows a real `.grade` badge, just without
+    the "ชั่วคราว" caption) — plus full re-runs of #165/#167/#168/#169/
+    #170/#171's own existing tests and the standard click-sweep (`nav
+    pages clicked: 22 errors: []`), all with zero regressions. General
+    lesson: when a user's own wording offers two options ("should we
+    hide this"), the better fix is sometimes a third option that keeps
+    the useful part of the current behavior while closing the real risk
+    named in the question — confirm the narrower option with the user
+    before implementing, since "hide" and "label clearly" solve the same
+    complaint with very different costs to the people who still need
+    the information.
