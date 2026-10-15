@@ -7971,3 +7971,84 @@ Before considering a change to `SML_PMS_v14.html` done:
   (not by mutating the array directly) and asserts the displayed values
   match the real source of truth.
 - Commit to the feature branch, merge fast-forward into `main`, push both.
+
+163. **Follow-up to #162: user reported the identical "ไม่ดึงข้อมูลที่
+    ประเมินแล้วมาแสดง" symptom again — this time even after trying a
+    completely fresh Private/Incognito window with a fresh login,
+    ruling out ALL browser-side caching. Confirmed the #162 fix itself
+    was genuinely already live (its own commit was ~18 hours old, far
+    past any realistic GitHub Pages propagation delay; `main` and the
+    feature branch were confirmed in sync with zero diff; the real
+    `findCurrentCycleDraft` function was confirmed present in the
+    checked-out file) — so the honest conclusion was that #162's fix,
+    while correct for what it covered, did not cover everything.**
+    #162 fixed the unsafe `drafts.find(x=>x[0]===u[0])` lookup in
+    `renderTeamFromMaster()`/`countTeamPending()`/`getReportData()` —
+    but grepping the whole file for the same shape (`drafts.find(...
+    x[0]===...)` with no, or incomplete, cycle/level scoping) found the
+    identical bug living in **6 more places**, the biggest of which is
+    `buildTierRoster(resolverFn, myCode, inputStatus, cycle)` (#136) —
+    the one shared function behind **all 5 real review/approval
+    queues** (`renderReviewL1Queue`/`renderReviewQueue`/
+    `renderGmApproveQueue`/`renderCalibQueue`/`renderApproveQueue`).
+    Its own lookup, `getDrafts().find(d=>d[0]===emp[0] && d[2]===cycle)
+    || null`, filters by cycle (unlike #162's original bug, which
+    didn't filter by cycle at all) but still takes the **first** match
+    instead of the highest-ranked one — so a stale, lower-rank duplicate
+    draft under a different `level` (the exact kind of leftover #162
+    already diagnosed as coming from historical level-guessing bugs
+    like #110, or simply two Excel rows with the same EmpID/cycle but
+    different levels/history) sitting earlier in the array can still
+    silently hide the real, further-advanced record, reproducing
+    "⏳ รอผลประเมิน" on every queue page even though the real Excel data
+    (and the real draft) already shows an advanced status. Reproduced
+    this exact failure with a Playwright test seeding a real L1
+    (department head) + one employee with a stale `'op'`-level `Draft`
+    row followed by the real `'of'`-level `Submitted` row — confirmed
+    it fails (shows "รอผลประเมิน", `state:'pending'`) on the pre-fix code
+    and passes (shows real action buttons, `state:'ready'`) after the
+    fix, by stashing/unstashing the change and re-running the identical
+    test against both versions.
+    Fixed by routing `buildTierRoster()`'s lookup through the same
+    `findCurrentCycleDraft()` helper #162 already built — one line
+    changed, cascading correctly to every one of the 5 queue pages plus
+    their nav badges/notification counts (#138/#140), since they all
+    call `buildTierRoster()` rather than querying `getDrafts()`
+    independently. Audited and fixed the remaining 5 instances of the
+    same shape found by the same grep: `acknowledgeMyResult()` (the "6.
+    ผลประเมิน" employee-acknowledge action — critical, since it directly
+    *mutates* `d[d.length-1]` in place; picking the wrong stale draft
+    here would have silently corrupted the wrong record),
+    `overrideEmployeeGrade()` (Admin's manual grade override, #155 —
+    same direct-mutation risk), `renderCycleParticipantsList()` (#146's
+    Cycle History participant list, code+cycle only), and two with no
+    cycle filter at all — `getNineBoxData()` (Dashboard 9-Box) and
+    `renderDashboardWorkflowSteps()` (Dashboard step counts) — both
+    widened to also scope by `getCurrentEvalCycleYear()` before picking
+    a draft, not just deduped by rank. `onIdpEmpChange()` (IDP modal's
+    grade-default lookup, code-only, no mutation, cosmetically low
+    stakes) was fixed too for consistency, with a defensive
+    `typeof findCurrentCycleDraft==='function'` fallback since it runs
+    very early in the file before the helper is guaranteed defined.
+    Left every other `drafts.find(...)`/`.find(d=>draftKey(d)===key)`
+    call site unchanged — each of those already matches by the full
+    composite key (code+cycle+level, or `draftKey()` directly), which
+    is inherently safe since `draftKey()`'s three parts together are
+    the real natural key with no ambiguity left to resolve. Verified
+    with the new queue-page reproduction test plus a full re-run of all
+    of #162's own tests (team page, countTeamPending, the original
+    duplicate-Excel-row reproduction) and the standard click-sweep (`nav
+    pages clicked: 22 errors: []`), all passing with zero regressions.
+    General lesson sharper than #162's own conclusion: when a bug
+    pattern (`.find()` picking the wrong draft among same-code
+    duplicates) is found and fixed at one call site, grep the *exact
+    same pattern* — not just the one function the user's screenshot
+    happened to show — across the entire file before considering the
+    class of bug closed; `buildTierRoster()` is this file's single
+    highest-traffic consumer of `getDrafts()` (every review/approval
+    queue funnels through it) and would have kept reproducing the
+    user's exact symptom indefinitely even with #162's own fix fully
+    deployed and even with all browser caching definitively ruled out,
+    since the two bugs lived in genuinely different functions that both
+    happened to produce the identical visible symptom on different
+    pages of the same workflow.

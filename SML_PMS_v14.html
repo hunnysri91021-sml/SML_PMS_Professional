@@ -4066,7 +4066,8 @@ function onIdpEmpChange(){
   const gradeSel = document.getElementById('mIdpGrade');
   if(!code || !gradeSel) return;
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
-  const d = drafts.find(x=>x[0]===code);
+  const cycleNow = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
+  const d = (typeof findCurrentCycleDraft==='function') ? findCurrentCycleDraft(drafts, code, cycleNow) : drafts.find(x=>x[0]===code);
   const grade = d ? d[d.length-2] : null;
   if(grade && ['C','D','E'].includes(grade)) gradeSel.value = grade;
 }
@@ -7609,7 +7610,7 @@ async function notifyEmployeeOfApproval(empCode, empName, cycle){
    (upsert) ตามที่ทั้งไฟล์นี้แยกไว้ตลอด (ดู CLAUDE.md #34) */
 async function acknowledgeMyResult(empCode, cycle){
   const drafts = getDrafts();
-  const d = drafts.find(x=>x[0]===empCode && x[2]===cycle);
+  const d = findCurrentCycleDraft(drafts, empCode, cycle);
   if(!d || d[d.length-1]!=='GMApproved'){ smlToast('ไม่พบผลประเมินที่ GM อนุมัติแล้วให้รับทราบ','warn'); return; }
   d[d.length-1] = 'Acknowledged';
   saveDrafts(drafts);
@@ -8632,7 +8633,7 @@ function buildTierRoster(resolverFn, myCode, inputStatus, cycle){
       const reviewer = resolverFn(emp);
       if(!reviewer || reviewer[0]!==myCode) return null;
     }
-    const draft = getDrafts().find(d=>d[0]===emp[0] && d[2]===cycle) || null;
+    const draft = findCurrentCycleDraft(getDrafts(), emp[0], cycle);
     const rank = draft ? evalStatusRank(draft[draft.length-1]) : 0;
     const state = rank===inputRank ? 'ready' : (rank>inputRank ? 'done' : 'pending');
     return { emp, draft, state };
@@ -9006,7 +9007,7 @@ function overrideEmployeeGrade(code, cycle){
   const reason = (prompt('ระบุเหตุผลที่ปรับเกรดเอง (บังคับกรอก — จะถูกบันทึกลง Audit Log):')||'').trim();
   if(!reason){ smlToast('ต้องระบุเหตุผลทุกครั้งที่ปรับเกรดเอง — ไม่บันทึก','warn'); return; }
   const drafts = getDrafts();
-  const d = drafts.find(x=>x[0]===code && x[2]===cycle);
+  const d = findCurrentCycleDraft(drafts, code, cycle);
   if(!d){ smlToast('ไม่พบใบประเมินของรหัสนี้ในรอบนี้','err'); return; }
   const oldGrade = d[d.length-2];
   d[d.length-2] = grade;
@@ -9847,11 +9848,13 @@ function performanceBand(X){ return X>=85?'high':X>=70?'medium':'low'; }
 function getNineBoxData(participants){
   const list = participants || getEvalParticipants();
   const drafts = getDrafts();
+  const cycleNow = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   const withData = [];
   const missing = [];
   list.forEach(u=>{
     const potential = ['high','medium','low'].includes(u[16]) ? u[16] : '';
-    const d = drafts.find(x=>x[0]===u[0] && x[x.length-2]);
+    const d0 = findCurrentCycleDraft(drafts, u[0], cycleNow);
+    const d = (d0 && d0[d0.length-2]) ? d0 : null;
     if(potential && d){
       withData.push({ code:u[0], name:u[1], potential, performance: performanceBand(Number(d[d.length-3])), X:Number(d[d.length-3]) });
     } else {
@@ -10001,8 +10004,9 @@ function renderDashGradeBars(drafts){
 function renderDashboardWorkflowSteps(participants, drafts){
   const box = document.getElementById('dashWorkflowSteps');
   if(!box) return;
+  const cycleNow = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   const statusOf = (code) => {
-    const d = drafts.find(x=>x[0]===code);
+    const d = findCurrentCycleDraft(drafts, code, cycleNow);
     return d ? d[d.length-1] : 'Draft';
   };
   const total = participants.length;
@@ -11051,7 +11055,7 @@ function renderCycleParticipantsList(c){
   const participants = (typeof getEvalParticipants==='function') ? getEvalParticipants() : [];
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
   const rows = participants.map(u=>{
-    const draft = drafts.find(d=>d[0]===u[0] && d[2]===c.year);
+    const draft = findCurrentCycleDraft(drafts, u[0], String(c.year));
     const status = draft ? (CYCLE_PARTICIPANT_STATUS_TH[draft[draft.length-1]] || draft[draft.length-1]) : CYCLE_PARTICIPANT_STATUS_TH.Draft;
     return { u, rank: CYCLE_PARTICIPANT_ROLE_RANK[u[2]] ?? 0, status };
   }).sort((a,b)=> a.rank - b.rank || (a.u[1]||'').localeCompare(b.u[1]||'', 'th'));
