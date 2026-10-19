@@ -1284,6 +1284,16 @@ input[type="checkbox"]{accent-color:#0b63ce}
   font-size: 7pt; color: #4a5e80;
   text-align: center;
 }
+/* #177: _sign()/.F-sign ถูกปรับขนาดไว้สำหรับหน้า A4 พิมพ์โดยเฉพาะ (6-7pt) — ตอนใช้ซ้ำในหน้าต่าง
+   "ดูแบบฟอร์ม"/"สอบทานแบบฟอร์ม" (openReviewerForm()) บนจอจริง ตัวเล็กเกินไปจนอ่านยาก ขยายขนาดเฉพาะ
+   ภายใน .reviewer-sign-flow (ไม่กระทบใบพิมพ์จริงซึ่งยังใช้ .F-signs เปล่าๆ โดยตรง) */
+.reviewer-sign-flow { margin: 14px 0; }
+.reviewer-sign-flow .F-sign { min-height: 54px; padding: 6px 8px; }
+.reviewer-sign-flow .sg-role { font-size: 11px !important; }
+.reviewer-sign-flow .sg-name { font-size: 13px !important; }
+.reviewer-sign-flow .sg-date { font-size: 10.5px !important; }
+.reviewer-sign-flow .sg-chip { font-size: 11px !important; padding: 2px 9px !important; }
+.reviewer-sign-flow .sg-title { font-size: 11.5px !important; }
 
 /* ===== FOOTER ===== */
 .F-remark-box .rb-line{overflow-wrap:anywhere;white-space:normal;min-height:12px}
@@ -5223,6 +5233,34 @@ function _sign(roleTh, officialTitle, ok, signedName, signedDate, channelLabel, 
     <div class="sg-date">${ok?(signedDate||''):'&nbsp;'}</div>
     <span class="sg-chip ${ok?'sg-ok':'sg-wait'}">${ok?('✓ ยืนยันแล้ว'+(channelLabel?` (${channelLabel})`:'')):'⏳ กำลังประเมิน'}</span>
     <div class="sg-title">( ${ok?(signedName||officialTitle||''):(officialTitle||'')} )</div>
+  </div>`;
+}
+
+/* #177: ผู้ใช้ถาม "ตอนเรียกดูแบบฟอร์มก็เห็นใช่ไหม" หลัง #176 เพิ่มชื่อผู้ลงนามจริงเข้าใบพิมพ์ — คำตอบตรงๆ
+   ตอนนั้นคือ "ยังไม่เห็น": openReviewerForm() (modal "ดูแบบฟอร์ม"/"สอบทานแบบฟอร์ม" ที่เปิดจากทุกคิว
+   สอบทาน/อนุมัติ) ไม่มีส่วนลงนามเลย มีแค่ไดอะแกรมขั้นตอนคงที่ข้อความเดียวกันทุกใบ ("ผู้ประเมิน → ผู้
+   บังคับบัญชาระดับสูง → ผู้จัดการทั่วไปฝ่าย → MD-SML") ไม่มีชื่อ/สถานะจริงใดๆ เลยไม่ว่าใบนั้นจะผ่านขั้น
+   ไหนมาแล้วก็ตาม — ใช้ _sign() ตัวจริงตัวเดียวกับที่ printEvalForm()/buildEvalPrintPage() เพิ่งแก้ไป
+   (#176) แทนที่ไดอะแกรมคงที่เดิม ไม่สร้างกริดลงนามสำรองซ้ำสอง ให้หน้าจอกับใบพิมพ์แสดงสถานะ/ชื่อผู้
+   ลงนามตรงกันเสมอ */
+function buildReviewerSignFlowHtml(code, cycle, lv){
+  const emp = MASTER_USERS.find(u=>u[0]===code) || [];
+  const empName = emp[1] || '';
+  const empL1 = emp[9], empL2 = emp[10], empExec = emp[11];
+  const draft = (typeof getDrafts==='function') ? getDrafts().find(d=>d[0]===code && d[2]===cycle && d[3]===lv) : null;
+  const status = draft ? draft[draft.length-1] : null;
+  const rank = status ? ((typeof evalStatusRank==='function') ? evalStatusRank(status) : 0) : -1;
+  const allApproved = status ? ((typeof isFinalStatus==='function') ? isFinalStatus(status) : false) : false;
+  const l1SignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'L1Reviewed') : null;
+  const l2SignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'L2Reviewed') : null;
+  const l1NoReviewer = (typeof resolveL1Reviewer==='function') && !resolveL1Reviewer(emp);
+  const l2NoReviewer = (typeof resolveL2Reviewer==='function') && !resolveL2Reviewer(emp);
+  const sigFinal = (typeof getApprovalSignature==='function') ? getApprovalSignature(code+'|'+cycle) : null;
+  return `<div class="F-signs s4">
+    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=(typeof evalStatusRank==='function'?evalStatusRank('Acknowledged'):0), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):'')}
+    ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
+    ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
+    ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')}
   </div>`;
 }
 
@@ -10983,7 +11021,10 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
     ${typeof buildPrevCommentsHtml==='function' ? buildPrevCommentsHtml(code, currentReviewerCycle) : ''}
     <div class="review-section-title">📝 ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea id="reviewStrength" rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea id="reviewDev" rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
-    <div class="review-approval-flow"><span>ผู้ประเมิน</span><i>→</i><span>ผู้บังคับบัญชาระดับสูง</span><i>→</i><span>ผู้จัดการทั่วไปฝ่าย</span><i>→</i><span>MD-SML</span></div>`;
+    <div class="review-section-title">✍️ ส่วนที่ 4 — ลงนามผลการประเมิน (สถานะจริง)</div>
+    <div id="reviewerSignFlow" class="reviewer-sign-flow"></div>`;
+  const signFlowEl = document.getElementById('reviewerSignFlow');
+  if(signFlowEl && typeof buildReviewerSignFlowHtml==='function') signFlowEl.innerHTML = buildReviewerSignFlowHtml(code, currentReviewerCycle, lv);
   const restoreDiag = (typeof restoreReviewerFormFromDraft==='function') ? restoreReviewerFormFromDraft(lv, code, currentReviewerCycle) : {found:false};
   /* #165: แสดงแบนเนอร์วินิจฉัยจริง เมื่อมีใบประเมินเดิมอยู่แต่คะแนนดึงคืนไม่ครบ (หรือไม่ได้เลย) — ไม่ใช่
      สันนิษฐาน แต่บอกเหตุผลจริงจาก restoreReviewerFormFromDraft() ด้านบน (ค่าดิบไม่ตรงน้ำหนักปัจจุบัน,

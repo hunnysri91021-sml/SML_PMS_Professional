@@ -8991,3 +8991,48 @@ Before considering a change to `SML_PMS_v14.html` done:
     fix is tracking the real per-stage actor (a field this file already
     resolves correctly everywhere else, #97) rather than patching the
     display to hide a blank value.
+
+177. **Follow-up to #176: user asked "ตอนเรียกดูแบบฟอร์มก็เห็นใช่ไหม" (do
+    we also see it when viewing the form on screen).** Honest answer at
+    that moment was no — #176 only fixed the real signer names on the
+    two *printed* outputs (`printEvalForm()`/`buildEvalPrintPage()`);
+    the on-screen "ดูแบบฟอร์ม"/"สอบทานแบบฟอร์ม" modal (`openReviewerForm()`,
+    #93/#109/#119, opened from every one of the 5 review/approval queues
+    plus the team page) had **no signature section at all** — only a
+    static, identical-on-every-form diagram ("ผู้ประเมิน → ผู้บังคับบัญชา
+    ระดับสูง → ผู้จัดการทั่วไปฝ่าย → MD-SML") with zero real names or
+    status, regardless of how far the record had actually progressed.
+    Added `buildReviewerSignFlowHtml(code, cycle, lv)`, reusing the exact
+    same `_sign()` function #176 just fixed (never a second signature
+    renderer that could drift out of sync — the #30/#97/#121 "one
+    function builds it, every caller goes through it" discipline) with
+    the identical real-data sourcing (`getStageSigner()`,
+    `resolveL1Reviewer()`/`resolveL2Reviewer()`, `getApprovalSignature()`,
+    `ackChannelLabel()`) — so the on-screen modal and the printed PDF now
+    show the exact same real reviewer names/status for the exact same
+    record, never two different answers to "who signed this." Replaced
+    the static approval-flow diagram in `openReviewerForm()`'s template
+    with an empty `#reviewerSignFlow` placeholder, populated right after
+    the modal's `innerHTML` is set (so the real draft/status lookup,
+    identical to what `restoreReviewerFormFromDraft()` does a few lines
+    below for score-restoring, runs once per open). Added a scoped
+    `.reviewer-sign-flow` CSS override bumping `_sign()`'s print-tuned
+    6–7pt font sizes up to a readable 11–13px for on-screen viewing
+    (`!important`, deliberately — the pt-sized print rules have higher
+    specificity and must stay untouched for the real A4 printed output,
+    which still renders `.F-signs` bare with no wrapper class). Verified
+    with a Playwright test that seeds a real L1/L2 chain, performs the
+    real review actions via `pushApprovalRecordToExcel()` (the same
+    chokepoint the actual approve buttons call, never writing the signer
+    store directly), opens the real modal via `openReviewerForm()`, and
+    confirms the on-screen signature grid shows the real L1/L2 reviewer
+    names — plus full re-runs of #176's own print-path tests and the
+    standard click-sweep (`nav pages clicked: 17 errors: []`), zero
+    regressions. General lesson: when a fix adds a new real-data display
+    to one output format of a record (here, the printed PDF), check
+    whether the *same* record has a sibling on-screen view that shows
+    related-but-stale information (the static approval-flow diagram) —
+    a user noticing the fix in one place and asking "does the other
+    place show it too" is exactly the signal that the fix's scope should
+    have been "every place this fact is displayed," not just the one
+    place the original screenshot happened to show.
