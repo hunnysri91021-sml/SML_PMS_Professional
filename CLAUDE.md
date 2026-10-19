@@ -9249,3 +9249,61 @@ Before considering a change to `SML_PMS_v14.html` done:
     two existing policies (visible-to-all vs. locked-until-final), reuse
     the existing per-role permission system (#37) rather than building a
     bespoke visibility toggle — the admin UI for it then comes for free.
+
+181. **User's screenshot of "📬 แจ้งผลการประเมิน (อนุมัติขั้นสุดท้ายแล้ว)"
+    showed an empty "รายชื่อที่ Approved แล้วแต่ยังไม่ได้แจ้ง" list and
+    reported "ส่งไม่ได้" (can't send) — explained the real cause (#156's
+    own design: this modal's target was always `isFinalStatus()`, i.e.
+    the real MD final-approval stage, and nothing had reached it yet, so
+    the button correctly no-ops) and asked whether the user actually had
+    a real MD-approved record missing from the list. User's real answer
+    reframed the whole feature: "อยากให้เมื่อ GM หรือคนที่ได้รับมอบหมาย
+    ให้ทำแทน GM อนุมัติแล้ว ส่งแจ้งไปยังพนักงาน ไม่ใช่ MD" — the manual
+    notify button was simply built against the wrong trigger stage from
+    the start; #156 had asked "hide the grade until MD approval" and
+    "notify once Approved" in the same breath, but the user's real intent
+    for *this specific notification* was always the earlier GM-approval
+    moment, not final MD sign-off.
+    Changed `getResultNotifyTargets()`'s condition from
+    `isFinalStatus(status)` to `hasVisibleResult(status)`
+    (`rank>=evalStatusRank('GMApproved')`, #61) — the exact same
+    threshold #180 just pointed the "ผู้อนุมัติ (GM./AGM./MD)" signature
+    box at, reused rather than re-derived. "คนที่ได้รับมอบหมายให้ทำแทน
+    GM" needed zero extra code: `hasVisibleResult()` only reads the
+    draft's own status rank, and that status only ever reaches
+    `GMApproved` via `approveGmSelected()`, which is already gated by
+    `getMyScopedEmpCodes()`'s `gm`-branch/`resolveGmReviewer()` — #158's
+    own fix already lets any real employee named in u[11] (not just
+    role==='gm') approve at this tier, so "GM or their delegate" was
+    already the real population reaching this status before this request
+    even started. Updated the modal title ("GM อนุมัติแล้ว" instead of
+    "อนุมัติขั้นสุดท้ายแล้ว"), its empty-state text, the default message
+    body, the email subject line, and the `sendResultNotification()`
+    warning toast — all 5 spots that still said "Approved"/"อนุมัติ
+    ขั้นสุดท้าย" would otherwise have kept claiming the old, now-wrong
+    trigger stage, the same CLAUDE.md #34/#49/#67 "keep every UI claim in
+    sync with the code underneath it" discipline. Verified with a test
+    seeding one employee at real status `GMApproved` and a second still
+    at `Submitted`: confirms `getResultNotifyTargets()` includes only the
+    GM-approved one, the modal title reads the new wording, and the
+    preview renders their real email — plus the standard click-sweep
+    (`nav pages clicked: 17 errors: []`), zero regressions. **Told the
+    user plainly, not silently left implied**: `approveGmSelected()`
+    already sends an automatic email/LINE notification the instant GM
+    approves (`notifyEmployeeOfApproval()`, #61/#173/#174) — this manual
+    button now fires at the *same* real trigger stage, so clicking it for
+    a record whose automatic notification already went out sends a
+    second, redundant message to that employee (deduped only against
+    other manual clicks via `RESULT_NOTIFIED_KEY`, never against the
+    separate automatic send). This is intentional as a manual backup
+    (useful if the automatic one failed — e.g. the Worker wasn't
+    configured at the moment of approval) but worth knowing before using
+    it as a matter of habit on every record. General lesson: when a
+    report like "I can't send" turns out to be the feature working
+    exactly as designed, the honest next step is confirming the *design
+    target* itself with the user rather than assuming the empty state is
+    a bug to code around — the user's own answer here didn't just explain
+    the empty list, it reframed which pipeline stage the whole feature
+    was supposed to watch, and an already-existing function built for an
+    unrelated purpose (#180's `hasVisibleResult()`) was exactly the right
+    tool once the real target stage was named.

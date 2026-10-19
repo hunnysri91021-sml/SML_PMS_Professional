@@ -3388,18 +3388,20 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="sendReminder()">ส่งทันที</button></div>
 </div></div>
 
-<!-- #156: แจ้งผลประเมินหลัง MD อนุมัติขั้นสุดท้ายแล้ว — เป้าหมายใหม่เฉพาะคนที่ Approved จริงแล้วแต่ยัง
-     ไม่เคยถูกแจ้ง (RESULT_NOTIFIED_KEY) ไม่รวมกับ mReminder (ซึ่งเป็นการเตือนให้ "ไปทำ" ไม่ใช่ "แจ้งผล")
-     เพราะเป้าหมาย/ข้อความ/ความถี่ในการใช้ต่างกันโดยสิ้นเชิง -->
+<!-- #156/#181: แจ้งผลประเมิน — ผู้ใช้ขอให้ "เมื่อ GM หรือคนที่ได้รับมอบหมายให้ทำแทน GM อนุมัติแล้ว"
+     ส่งแจ้งพนักงานทันที ไม่ใช่รอ MD อนุมัติขั้นสุดท้าย — เปลี่ยนเป้าหมายจาก isFinalStatus() (Approved
+     จริง หลัง Calibration+MD) เป็น hasVisibleResult() (rank>=GMApproved, ฟังก์ชันเดียวกับที่ #180 ใช้
+     กับช่องลายเซ็น GM./AGM./MD) — ยังไม่เคยถูกแจ้ง (RESULT_NOTIFIED_KEY) เหมือนเดิม ไม่รวมกับ mReminder
+     (ซึ่งเป็นการเตือนให้ "ไปทำ" ไม่ใช่ "แจ้งผล") เพราะเป้าหมาย/ข้อความ/ความถี่ในการใช้ต่างกันโดยสิ้นเชิง -->
 <div class="ov" id="mResultNotify"><div class="md" style="max-width:470px">
-  <div class="md-h"><h3>📬 แจ้งผลการประเมิน (อนุมัติขั้นสุดท้ายแล้ว)</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-h"><h3>📬 แจ้งผลการประเมิน (GM อนุมัติแล้ว)</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
     <div class="fg"><label>ช่องทาง</label>
       <label style="font-weight:400"><input type="checkbox" id="rn_ch_email" checked style="width:auto;margin-right:5px">อีเมล</label>
       <label style="font-weight:400;margin-left:14px"><input type="checkbox" id="rn_ch_line" checked style="width:auto;margin-right:5px">LINE <small style="color:#64748b">(เฉพาะคนที่มี LINE User ID บันทึกไว้แล้ว)</small></label>
     </div>
-    <div class="fg"><label>ข้อความ</label><textarea id="rn_message" rows="4">ผลการประเมินผลการปฏิบัติงานของท่านได้รับการอนุมัติขั้นสุดท้ายแล้ว กรุณาเข้าดูผลที่หน้า "6. ผลประเมิน" ในระบบ SML PMS</textarea></div>
-    <div class="fg"><label>รายชื่อที่ Approved แล้วแต่ยังไม่ได้แจ้ง</label>
+    <div class="fg"><label>ข้อความ</label><textarea id="rn_message" rows="4">ผลการประเมินผลการปฏิบัติงานของท่านได้รับการอนุมัติจาก GM แล้ว กรุณาเข้าดูผลที่หน้า "6. ผลประเมิน" ในระบบ SML PMS</textarea></div>
+    <div class="fg"><label>รายชื่อที่ GM อนุมัติแล้วแต่ยังไม่ได้แจ้ง</label>
       <div id="rn_preview" style="max-height:160px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
     </div>
   </div>
@@ -6418,10 +6420,13 @@ async function sendReminder(){
   if(typeof appendAuditLog==='function') appendAuditLog('reminder','ส่ง Reminder', document.getElementById('rm_target')?.value||'pending', parts.join(' · '));
 }
 
-/* #156: แจ้งผลประเมิน — เป้าหมาย = ใบประเมินที่ isFinalStatus() จริง (MD อนุมัติขั้นสุดท้ายแล้ว) และ
-   ยังไม่เคยถูกมาร์คว่าแจ้งแล้ว (RESULT_NOTIFIED_KEY, คีย์ = draftKey() เดียวกับที่ใช้ทั่วทั้งไฟล์) —
-   เหมือน PUSHED_APPRAISALS_KEY (#42): เก็บ "แจ้งแล้วหรือยัง" แยกจากสถานะจริงของใบประเมิน ไม่ปนกัน
-   เพื่อไม่ให้การ "มาร์คว่าแจ้งแล้ว" ไปกระทบ workflow status จริงโดยไม่ได้ตั้งใจ */
+/* #156/#181: แจ้งผลประเมิน — ผู้ใช้ขอให้แจ้งทันทีที่ GM (หรือคนที่ได้รับมอบหมายแทน GM — resolveGmReviewer()
+   #158 ไม่บังคับ role==='gm') อนุมัติแล้ว ไม่ใช่รอ MD อนุมัติขั้นสุดท้าย — เป้าหมาย = ใบประเมินที่
+   hasVisibleResult() จริง (rank>=GMApproved, ฟังก์ชันเดียวกับที่ #180 ใช้กับช่องลายเซ็น GM./AGM./MD —
+   เดิมใช้ isFinalStatus() ซึ่งคือหลัง Calibration+MD อนุมัติ ไกลกว่าที่ผู้ใช้ต้องการมาก) และยังไม่เคยถูก
+   มาร์คว่าแจ้งแล้ว (RESULT_NOTIFIED_KEY, คีย์ = draftKey() เดียวกับที่ใช้ทั่วทั้งไฟล์) — เหมือน
+   PUSHED_APPRAISALS_KEY (#42): เก็บ "แจ้งแล้วหรือยัง" แยกจากสถานะจริงของใบประเมิน ไม่ปนกัน เพื่อไม่ให้
+   การ "มาร์คว่าแจ้งแล้ว" ไปกระทบ workflow status จริงโดยไม่ได้ตั้งใจ */
 const RESULT_NOTIFIED_KEY = 'smlPmsResultNotified';
 function loadResultNotified(){
   try{ return new Set(JSON.parse(localStorage.getItem(RESULT_NOTIFIED_KEY)||'[]')); }catch(e){ return new Set(); }
@@ -6433,7 +6438,7 @@ function markResultNotified(key){
 function getResultNotifyTargets(){
   const notified = loadResultNotified();
   return getDrafts().filter(d=>{
-    if(!(typeof isFinalStatus==='function' ? isFinalStatus(d[d.length-1]) : d[d.length-1]==='Approved')) return false;
+    if(!(typeof hasVisibleResult==='function' ? hasVisibleResult(d[d.length-1]) : false)) return false;
     return !notified.has(draftKey(d));
   }).map(d=>({ draft:d, emp: MASTER_USERS.find(u=>u[0]===d[0]) })).filter(t=>t.emp);
 }
@@ -6448,14 +6453,14 @@ function renderResultNotifyPreview(){
       <span>${u[1]} <span style="color:#94a3b8">(${u[0]})</span></span>
       <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมล'}${hasLine ? ' · 💬 LINE' : ''}</span>
     </div>`;
-  }).join('') : '<div style="color:#94a3b8">ไม่มีใบประเมินที่อนุมัติขั้นสุดท้ายแล้วและยังไม่ได้แจ้ง</div>';
+  }).join('') : '<div style="color:#94a3b8">ไม่มีใบประเมินที่ GM อนุมัติแล้วและยังไม่ได้แจ้ง</div>';
 }
 async function sendResultNotification(){
   const targets = getResultNotifyTargets();
   const message = document.getElementById('rn_message')?.value || '';
   const wantEmail = document.getElementById('rn_ch_email')?.checked;
   const wantLine = document.getElementById('rn_ch_line')?.checked;
-  if(!targets.length){ smlToast('ไม่มีใบประเมินที่ Approved แล้วและยังไม่ได้แจ้ง','warn'); return; }
+  if(!targets.length){ smlToast('ไม่มีใบประเมินที่ GM อนุมัติแล้วและยังไม่ได้แจ้ง','warn'); return; }
   if(!wantEmail && !wantLine){ smlToast('กรุณาเลือกช่องทางที่จะส่งอย่างน้อย 1 ช่องทาง','warn'); return; }
 
   const emps = targets.map(t=>t.emp);
@@ -6468,7 +6473,7 @@ async function sendResultNotification(){
   if(wantEmail && withEmail.length){
     const toSelf = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[15]) ? CURRENT_SESSION_USER[15] : withEmail[0][15];
     const bcc = withEmail.map(u=>u[15]).join(',');
-    const subject = encodeURIComponent('แจ้งผลการประเมินผลการปฏิบัติงาน — อนุมัติขั้นสุดท้ายแล้ว');
+    const subject = encodeURIComponent('แจ้งผลการประเมินผลการปฏิบัติงาน — GM อนุมัติแล้ว');
     const body = encodeURIComponent(message);
     window.location.href = `mailto:${encodeURIComponent(toSelf)}?bcc=${bcc}&subject=${subject}&body=${body}`;
   } else if(wantEmail && !withEmail.length){
