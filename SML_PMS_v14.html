@@ -1295,6 +1295,14 @@ input[type="checkbox"]{accent-color:#0b63ce}
 .reviewer-sign-flow .sg-date { font-size: 10.5px !important; }
 .reviewer-sign-flow .sg-chip { font-size: 11px !important; padding: 2px 9px !important; }
 .reviewer-sign-flow .sg-title { font-size: 11.5px !important; }
+/* ผู้ใช้ขอเพิ่มส่วน "ตัดเกรดหลัง Calibration" ในหน้าจอ openReviewerForm() ด้วย (ใช้ buildCalibGradeSectionHtml()
+   ตัวเดียวกับใบพิมพ์) — ส่วนนี้ reuse คลาส .F-sec/.F-result/.F-grade-circle/.F-score-sub ที่ปรับขนาดไว้
+   สำหรับ A4 พิมพ์โดยเฉพาะ (6-14pt) เหมือน .F-sign เดิม จึงขยายขนาดให้อ่านง่ายบนจอเช่นเดียวกัน */
+.reviewer-sign-flow .F-sec { font-size: 13px !important; padding: 4px 12px !important; }
+.reviewer-sign-flow .F-sec .sec-num { width: 22px; height: 22px; font-size: 12px !important; }
+.reviewer-sign-flow .F-result { padding: 10px 14px !important; }
+.reviewer-sign-flow .F-grade-circle { width: 48px; height: 48px; font-size: 18px !important; }
+.reviewer-sign-flow .F-score-sub { font-size: 12px !important; }
 
 /* ===== FOOTER ===== */
 .F-remark-box .rb-line{overflow-wrap:anywhere;white-space:normal;min-height:12px}
@@ -3543,32 +3551,38 @@ const ROLE_PERMS_KEY = 'smlPmsRolePerms';
 const ROLE_DEFS = [
   {key:'sysadmin', icon:'🛡️', avatarBg:'#fee2e2', avatarColor:'#dc2626', cardClass:'admin', borderColor:'#dc2626',
     name:'Super Admin', desc:'Admin ระบบสูงสุด / System Owner',
-    perms:{selfEval:true, teamEval:true, reviewL1:true, reviewL2:true, gmApprove:true, calibration:true, finalApprove:true, dashTeam:true, dashOrg:true, importTime:true, exportReport:true, adminSettings:true}},
+    perms:{selfEval:true, teamEval:true, reviewL1:true, reviewL2:true, gmApprove:true, calibration:true, finalApprove:true, dashTeam:true, dashOrg:true, importTime:true, exportReport:true, adminSettings:true, viewCalibGrade:true}},
   {key:'admin', icon:'👑', avatarBg:'', avatarColor:'', cardClass:'admin', borderColor:'',
     name:'Admin', desc:'HR & GA',
-    perms:{selfEval:true, teamEval:false, reviewL1:false, reviewL2:false, gmApprove:false, calibration:true, finalApprove:false, dashTeam:true, dashOrg:true, importTime:true, exportReport:true, adminSettings:true}},
+    perms:{selfEval:true, teamEval:false, reviewL1:false, reviewL2:false, gmApprove:false, calibration:true, finalApprove:false, dashTeam:true, dashOrg:true, importTime:true, exportReport:true, adminSettings:true, viewCalibGrade:true}},
   {key:'exec', icon:'💼', avatarBg:'', avatarColor:'', cardClass:'exec', borderColor:'',
     name:'Executive', desc:'AMD / MD / ผู้บริหาร',
-    perms:{selfEval:true, teamEval:false, reviewL1:false, reviewL2:false, gmApprove:true, calibration:true, finalApprove:true, dashTeam:true, dashOrg:true, importTime:false, exportReport:true, adminSettings:false}},
+    perms:{selfEval:true, teamEval:false, reviewL1:false, reviewL2:false, gmApprove:true, calibration:true, finalApprove:true, dashTeam:true, dashOrg:true, importTime:false, exportReport:true, adminSettings:false, viewCalibGrade:true}},
   {key:'gm', icon:'🏢', avatarBg:'', avatarColor:'', cardClass:'exec', borderColor:'',
     name:'General Manager (GM)', desc:'อนุมัติแบบประเมินก่อนส่งให้พนักงานรับทราบ',
-    perms:{selfEval:true, teamEval:false, reviewL1:false, reviewL2:false, gmApprove:true, calibration:false, finalApprove:false, dashTeam:true, dashOrg:true, importTime:false, exportReport:true, adminSettings:false}},
+    perms:{selfEval:true, teamEval:false, reviewL1:false, reviewL2:false, gmApprove:true, calibration:false, finalApprove:false, dashTeam:true, dashOrg:true, importTime:false, exportReport:true, adminSettings:false, viewCalibGrade:true}},
   {key:'l2', icon:'🎯', avatarBg:'', avatarColor:'', cardClass:'manager', borderColor:'',
     name:'Manager (L2)', desc:'ผู้จัดการส่วน',
-    perms:{selfEval:true, teamEval:true, reviewL1:false, reviewL2:true, gmApprove:false, calibration:false, finalApprove:false, dashTeam:true, dashOrg:false, importTime:false, exportReport:true, adminSettings:false}},
+    perms:{selfEval:true, teamEval:true, reviewL1:false, reviewL2:true, gmApprove:false, calibration:false, finalApprove:false, dashTeam:true, dashOrg:false, importTime:false, exportReport:true, adminSettings:false, viewCalibGrade:false}},
   {key:'l1', icon:'👔', avatarBg:'', avatarColor:'', cardClass:'leader', borderColor:'',
     name:'Leader (L1)', desc:'หัวหน้าแผนก / Leader / Engineer',
-    perms:{selfEval:true, teamEval:true, reviewL1:true, reviewL2:false, gmApprove:false, calibration:false, finalApprove:false, dashTeam:true, dashOrg:false, importTime:false, exportReport:false, adminSettings:false}},
+    perms:{selfEval:true, teamEval:true, reviewL1:true, reviewL2:false, gmApprove:false, calibration:false, finalApprove:false, dashTeam:true, dashOrg:false, importTime:false, exportReport:false, adminSettings:false, viewCalibGrade:false}},
   {key:'unit', icon:'🧭', avatarBg:'', avatarColor:'', cardClass:'leader', borderColor:'',
     name:'หัวหน้าหน่วย (Unit Leader)', desc:'คุมทีมย่อยในแผนก — ต่ำกว่าหัวหน้าแผนก (L1)',
-    perms:{selfEval:true, teamEval:true, reviewL1:false, reviewL2:false, gmApprove:false, calibration:false, finalApprove:false, dashTeam:true, dashOrg:false, importTime:false, exportReport:false, adminSettings:false}},
+    perms:{selfEval:true, teamEval:true, reviewL1:false, reviewL2:false, gmApprove:false, calibration:false, finalApprove:false, dashTeam:true, dashOrg:false, importTime:false, exportReport:false, adminSettings:false, viewCalibGrade:false}},
   {key:'emp', icon:'🙋', avatarBg:'', avatarColor:'', cardClass:'employee', borderColor:'',
     name:'Employee', desc:'พนักงานปฏิบัติการ / สำนักงาน',
-    perms:{selfEval:true, teamEval:false, reviewL1:false, reviewL2:false, gmApprove:false, calibration:false, finalApprove:false, dashTeam:false, dashOrg:false, importTime:false, exportReport:false, adminSettings:false}}
+    perms:{selfEval:true, teamEval:false, reviewL1:false, reviewL2:false, gmApprove:false, calibration:false, finalApprove:false, dashTeam:false, dashOrg:false, importTime:false, exportReport:false, adminSettings:false, viewCalibGrade:false}}
 ];
+/* ผู้ใช้ขอ "ให้ตั้งค่าได้โดย admin ว่าใครเห็น 'ส่วนที่ตัดเกรดหลัง Calibration' ในแบบฟอร์มบ้าง" — ใช้ระบบ
+   สิทธิ์ตามบทบาทที่มีอยู่แล้ว (ROLE_PERMS, CLAUDE.md #37) แทนการสร้าง store ใหม่ซ้ำซ้อน เพิ่มสิทธิ์
+   viewCalibGrade หนึ่งตัว ค่าเริ่มต้น: sysadmin/admin/exec/gm เห็น (อยู่ในสายอนุมัติอยู่แล้ว) ส่วน
+   l2/l1/unit/emp ไม่เห็นโดยปริยาย (เกรดยังไม่ผ่านอนุมัติขั้นสุดท้ายจริง) — Admin ปรับได้จากหน้า "ตั้งค่า
+   ผู้ใช้ & บทบาท" เหมือนสิทธิ์อื่นทุกตัว */
 const ROLE_PERM_LABELS = {selfEval:'ประเมินตนเอง', teamEval:'ประเมินลูกน้องทางตรง (L1)', reviewL1:'สอบทานหัวหน้าแผนก (L2)', reviewL2:'สอบทานผู้จัดการส่วน (L3)',
   gmApprove:'อนุมัติ GM', calibration:'Calibration (HR)', finalApprove:'อนุมัติขั้นสุดท้าย (AMD/MD)', dashTeam:'ดู Dashboard ทีม',
-  dashOrg:'ดู Dashboard องค์กร', importTime:'Import ข้อมูลเวลา', exportReport:'Export รายงาน', adminSettings:'ตั้งค่าระบบ (Admin)'};
+  dashOrg:'ดู Dashboard องค์กร', importTime:'Import ข้อมูลเวลา', exportReport:'Export รายงาน', adminSettings:'ตั้งค่าระบบ (Admin)',
+  viewCalibGrade:'เห็นเกรดหลัง Calibration (ก่อนอนุมัติขั้นสุดท้าย)'};
 let ROLE_PERMS = {};
 function loadRolePerms(){
   let saved={};
@@ -5195,6 +5209,32 @@ const Z_TABLE = {
 /* grade color */
 function _gc(g){return{A:'#15803d','A+':'#14532d',B:'#1d4ed8',C:'#b45309',D:'#c2410c',E:'#991b1b'}[g]||'#374151';}
 
+/* ผู้ใช้ขอ (ยืนยันผ่านคำถาม): "ส่วนตัดเกรดหลัง Calibration" ให้ตั้งค่าได้โดย admin ว่าใครเห็น — เช็คสิทธิ์
+   viewCalibGrade ของบทบาทผู้ใช้ที่ล็อกอินจริง (ROLE_PERMS, ด้านบน) sysadmin/admin ผ่านเสมอเหมือนทุก
+   จุดอื่นในไฟล์นี้ (ดูงาน/ตั้งค่าได้ไม่ว่า perms จะตั้งไว้อย่างไร) */
+function canViewCalibGrade(){
+  const role = CURRENT_SESSION_USER ? CURRENT_SESSION_USER[2] : null;
+  if(!role) return false;
+  if(['admin','sysadmin'].includes(role)) return true;
+  const r = ROLE_PERMS[role];
+  return !!(r && r.perms && r.perms.viewCalibGrade);
+}
+/* เกรดจริงหลัง Calibration มาจาก draft[draft.length-2] ซึ่ง confirmCalibration()/overrideEmployeeGrade()
+   (CLAUDE.md #155) เขียนค่าจริงจาก Bell Curve ลงไปตอนสถานะขยับเป็น Calibrated — คนละค่ากับเกรดชั่วคราว
+   ที่คำนวณจาก gradeFromX()/xScore เฉยๆ (แสดงอยู่แล้วในกล่อง "∑ คะแนนรวม" ที่ล็อกไว้จนกว่าจะอนุมัติ
+   ขั้นสุดท้ายจริงตาม #156/#161 — ส่วนนี้เป็นกล่องแยกต่างหาก ไม่แก้เงื่อนไขเดิมของกล่องนั้น) */
+function buildCalibGradeSectionHtml(draft, sectionNum, includeHeader){
+  if(!canViewCalibGrade()) return '';
+  const rank = draft ? evalStatusRank(draft[draft.length-1]) : -1;
+  const calibrated = rank >= evalStatusRank('Calibrated');
+  const grade = calibrated ? draft[draft.length-2] : '';
+  const header = (includeHeader!==false) ? `<div class="F-sec s3b"><span class="sec-num">${sectionNum}</span>ส่วนที่ ${sectionNum} &nbsp; ตัดเกรดหลัง Calibration ( Calibrated )</div>` : '';
+  const body = calibrated
+    ? `<div class="F-result"><div class="F-grade-circle" style="background:${_gc(grade)}">${grade}</div><div><div class="F-score-sub">เกรดจริงจาก Bell Curve หลังผ่าน Calibration แล้ว (รอการอนุมัติขั้นสุดท้ายจาก AMD/MD เพื่อยืนยันอย่างเป็นทางการ)</div></div></div>`
+    : `<div class="F-result"><div class="F-score-sub">⏳ ยังไม่ถึงขั้นตอน Calibration — เกรดยังไม่ถูกตัด</div></div>`;
+  return header + body;
+}
+
 /* score → level label */
 function _lbl(sc,w){
   const t={1:{5:'A+',4:'A',3:'B',2:'C+',1:'C'},2:{10:'A+',9:'A',8:'B',7:'C+',6:'C'},3:{15:'A+',14:'A',13:'B',12:'C+',11:'C'}}[w]||{};
@@ -5251,17 +5291,23 @@ function buildReviewerSignFlowHtml(code, cycle, lv){
   const draft = (typeof getDrafts==='function') ? getDrafts().find(d=>d[0]===code && d[2]===cycle && d[3]===lv) : null;
   const status = draft ? draft[draft.length-1] : null;
   const rank = status ? ((typeof evalStatusRank==='function') ? evalStatusRank(status) : 0) : -1;
-  const allApproved = status ? ((typeof isFinalStatus==='function') ? isFinalStatus(status) : false) : false;
   const l1SignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'L1Reviewed') : null;
   const l2SignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'L2Reviewed') : null;
   const l1NoReviewer = (typeof resolveL1Reviewer==='function') && !resolveL1Reviewer(emp);
   const l2NoReviewer = (typeof resolveL2Reviewer==='function') && !resolveL2Reviewer(emp);
-  const sigFinal = (typeof getApprovalSignature==='function') ? getApprovalSignature(code+'|'+cycle) : null;
+  /* ผู้ใช้ขอ "ปรับให้ช่องนี้ยืนยันแล้วทันทีที่ GM อนุมัติ" — ไม่ต้องรอ Calibration/อนุมัติขั้นสุดท้ายอีก
+     ก่อน ใช้ hasVisibleResult() (rank>=GMApproved, ฟังก์ชันจริงที่มีอยู่แล้ว CLAUDE.md #61) แทน
+     isFinalStatus() เฉพาะช่องนี้ และดึงชื่อผู้อนุมัติ GM ตัวจริงจาก getStageSigner(...,'GMApproved')
+     (บันทึกจริงทุกครั้งที่ approveGmSelected() เรียก pushApprovalRecordToExcel(...,'GMApproved',...))
+     แทนลายเซ็นอนุมัติขั้นสุดท้าย (getApprovalSignature, #39) ซึ่งเป็นคนละขั้นกัน */
+  const gmSignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'GMApproved') : null;
+  const gmNoReviewer = (typeof resolveGmReviewer==='function') && !resolveGmReviewer(emp);
+  const gmVisible = (typeof hasVisibleResult==='function') ? hasVisibleResult(status||'') : rank>=4;
   return `<div class="F-signs s4">
     ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=(typeof evalStatusRank==='function'?evalStatusRank('Acknowledged'):0), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):'')}
     ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
     ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
-    ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')}
+    ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, gmVisible, gmSignerRec?gmSignerRec.name:'', gmSignerRec?new Date(gmSignerRec.at).toLocaleDateString('th-TH'):'', '', gmNoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
   </div>`;
 }
 
@@ -5438,7 +5484,11 @@ function printEvalForm() {
   const liveStatus = liveDraft ? liveDraft[liveDraft.length-1] : null;
   const liveRank = liveStatus ? ((typeof evalStatusRank==='function') ? evalStatusRank(liveStatus) : 0) : -1;
   const allApproved = liveStatus ? isFinalStatus(liveStatus) : false;
-  const liveSig = (typeof getApprovalSignature==='function') ? getApprovalSignature(empCode+'|'+printCycle) : null;
+  /* ผู้ใช้ขอ "ปรับให้ช่องลงนาม GM./AGM./MD ยืนยันแล้วทันทีที่ GM อนุมัติ" — ดูเหตุผล/ฟังก์ชันเดียวกับที่
+     buildReviewerSignFlowHtml() เพิ่งแก้ไว้ด้านบน (hasVisibleResult + getStageSigner(...,'GMApproved')) */
+  const gmSignerRec = (typeof getStageSigner==='function') ? getStageSigner(empCode, printCycle, 'GMApproved') : null;
+  const gmNoReviewer = (typeof resolveGmReviewer==='function') && !resolveGmReviewer(u);
+  const gmVisible = (typeof hasVisibleResult==='function') ? hasVisibleResult(liveStatus||'') : liveRank>=4;
   /* #176: ผู้ใช้ขอให้ใบรายงานแบบฟอร์มที่สอบทานแล้วแต่ละระดับ แสดง "ชื่อจริง" ของผู้ที่ลงนามสอบทาน L1/L2
      ด้วย ไม่ใช่แค่ชิป "✓ ยืนยันแล้ว" เฉยๆ — เดิม signedName ของ 2 แถวนี้ใช้ u[9]/u[10] (ชื่อในช่อง
      สายบังคับบัญชาของพนักงานคนนี้เอง) ซึ่งว่างเปล่าได้จริงถ้าขั้นนั้นถูกข้ามอัตโนมัติ (ไม่มีผู้สอบทาน
@@ -5654,10 +5704,13 @@ function printEvalForm() {
     </div>
   </div>
 
-  <!-- ===== ส่วนที่ 4: ลายเซ็น ===== -->
+  <!-- ===== ส่วนที่ 4: ตัดเกรดหลัง Calibration ===== -->
+  ${buildCalibGradeSectionHtml(liveDraft, 4, true)}
+
+  <!-- ===== ส่วนที่ 5: ลายเซ็น ===== -->
   <div class="F-sec s4">
-    <span class="sec-num">4</span>
-    ส่วนที่ 4 &nbsp; ลงนามผลการประเมิน ( Signature )
+    <span class="sec-num">5</span>
+    ส่วนที่ 5 &nbsp; ลงนามผลการประเมิน ( Signature )
   </div>
   <div class="F-signs ${sigGrid}">
     <!-- เดิมถือว่าพนักงาน "ลงนามรับทราบ" ตั้งแต่ liveRank>=1 (แค่ส่งแบบประเมินของตัวเองเท่านั้น) — ผิด
@@ -5669,7 +5722,7 @@ function printEvalForm() {
     ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=evalStatusRank('Acknowledged'), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(empCode+'|'+printCycle):'')}
     ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, liveRank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
     ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, liveRank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
-    ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, liveSig?liveSig.signedBy:empExec, liveSig?new Date(liveSig.signedAt).toLocaleDateString('th-TH'):'')}
+    ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, gmVisible, gmSignerRec?gmSignerRec.name:'', gmSignerRec?new Date(gmSignerRec.at).toLocaleDateString('th-TH'):'', '', gmNoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
   </div>
 
   <!-- footer -->
@@ -9942,18 +9995,22 @@ function buildEvalPrintPage(d, printDate){
      ก็ต่อเมื่อผลถูกส่งให้พนักงานรับทราบแล้วเท่านั้น (Acknowledged, ตรงตามป้าย "ลงนามรับทราบผลการ
      ประเมิน" เป๊ะๆ) ไม่ใช่แค่ตอนส่งแบบประเมินของตัวเอง (Submitted) ซึ่งพนักงานยังไม่เห็นผลอะไรเลย —
      แก้ตามที่ผู้ใช้ชี้ว่า printEvalForm()'s ตัวเดียวกันนี้เพิ่งแก้ผิดเงื่อนไขไปตอน #122 */
-  const sigFinal = getApprovalSignature(code+'|'+cycle);
   /* #176: เหมือน printEvalForm() เป๊ะ — ดึงชื่อผู้สอบทานจริงของขั้น L1/L2 จาก EVAL_STAGE_SIGNERS_KEY
      แทนชื่อในช่องสายบังคับบัญชาของพนักงาน (ซึ่งว่างได้จริงถ้าขั้นนั้นถูกข้ามอัตโนมัติ — CLAUDE.md #128) */
   const l1SignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'L1Reviewed') : null;
   const l2SignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'L2Reviewed') : null;
   const l1NoReviewer = (typeof resolveL1Reviewer==='function') && !resolveL1Reviewer(emp);
   const l2NoReviewer = (typeof resolveL2Reviewer==='function') && !resolveL2Reviewer(emp);
+  /* ผู้ใช้ขอ "ปรับให้ช่องลงนาม GM./AGM./MD ยืนยันแล้วทันทีที่ GM อนุมัติ" — เหตุผล/ฟังก์ชันเดียวกับ
+     printEvalForm()/buildReviewerSignFlowHtml() ด้านบน */
+  const gmSignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'GMApproved') : null;
+  const gmNoReviewer = (typeof resolveGmReviewer==='function') && !resolveGmReviewer(emp);
+  const gmVisible = (typeof hasVisibleResult==='function') ? hasVisibleResult(status||'') : rank>=4;
   const sigLines = [
     _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=evalStatusRank('Acknowledged'), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):''),
     _sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':''),
     _sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':''),
-    _sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')
+    _sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, gmVisible, gmSignerRec?gmSignerRec.name:'', gmSignerRec?new Date(gmSignerRec.at).toLocaleDateString('th-TH'):'', '', gmNoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')
   ].join('');
 
   return `<div class="F" style="page-break-after:always">
@@ -10021,7 +10078,9 @@ function buildEvalPrintPage(d, printDate){
       </div>
     </div>
 
-    <div class="F-sec s3"><span class="sec-num">3</span> ส่วนที่ 3 &nbsp; ลงนามผลการประเมิน ( Signature )</div>
+    ${buildCalibGradeSectionHtml(d, 3, true)}
+
+    <div class="F-sec s3"><span class="sec-num">4</span> ส่วนที่ 4 &nbsp; ลงนามผลการประเมิน ( Signature )</div>
     <div class="F-signs s4">${sigLines}</div>
 
     <div class="F-footer">
@@ -11027,9 +11086,18 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
     <div class="review-section-title">📝 ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea id="reviewStrength" rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea id="reviewDev" rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
     <div class="review-section-title">✍️ ส่วนที่ 3 — ลงนามผลการประเมิน (สถานะจริง)</div>
-    <div id="reviewerSignFlow" class="reviewer-sign-flow"></div>`;
+    <div id="reviewerSignFlow" class="reviewer-sign-flow"></div>
+    <div class="review-section-title">🏆 ส่วนที่ 4 — ตัดเกรดหลัง Calibration ( Calibrated )</div>
+    <div id="reviewerCalibGrade" class="reviewer-sign-flow"></div>`;
   const signFlowEl = document.getElementById('reviewerSignFlow');
   if(signFlowEl && typeof buildReviewerSignFlowHtml==='function') signFlowEl.innerHTML = buildReviewerSignFlowHtml(code, currentReviewerCycle, lv);
+  const calibGradeEl = document.getElementById('reviewerCalibGrade');
+  if(calibGradeEl && typeof buildCalibGradeSectionHtml==='function'){
+    const calibDraft = (typeof getDrafts==='function') ? getDrafts().find(dd=>dd[0]===code && dd[2]===currentReviewerCycle && dd[3]===lv) : null;
+    const html = buildCalibGradeSectionHtml(calibDraft, 4, false);
+    if(!html){ const titleEl = calibGradeEl.previousElementSibling; if(titleEl) titleEl.style.display='none'; calibGradeEl.style.display='none'; }
+    calibGradeEl.innerHTML = html;
+  }
   const restoreDiag = (typeof restoreReviewerFormFromDraft==='function') ? restoreReviewerFormFromDraft(lv, code, currentReviewerCycle) : {found:false};
   /* #165: แสดงแบนเนอร์วินิจฉัยจริง เมื่อมีใบประเมินเดิมอยู่แต่คะแนนดึงคืนไม่ครบ (หรือไม่ได้เลย) — ไม่ใช่
      สันนิษฐาน แต่บอกเหตุผลจริงจาก restoreReviewerFormFromDraft() ด้านบน (ค่าดิบไม่ตรงน้ำหนักปัจจุบัน,

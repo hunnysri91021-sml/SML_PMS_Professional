@@ -9144,3 +9144,108 @@ Before considering a change to `SML_PMS_v14.html` done:
     each output can have its own genuinely different real section count
     by design, and a numbering bug in one is no indication the others
     are clean — or dirty.
+
+180. **User's screenshot of a real GM-approved record (status GMApproved,
+    confirmed via the previous exchange) still showed the "ผู้อนุมัติ
+    (GM./AGM./MD)" signature box as "⏳ กำลังประเมิน" — my own explanation
+    at the time was correct but not what the user actually wanted: that
+    box has always meant the *final* AMD/MD sign-off (`isFinalStatus()`,
+    #61's real last pipeline stage, after Calibration), not GM approval
+    specifically, even though its label literally says "GM./AGM./MD."
+    User asked directly to change this: make the box fire as soon as GM
+    approves, and add a genuinely new "ส่วนที่ 4 ตัดเกรดหลัง Calibration"
+    section (admin-configurable visibility) to carry the *real* post-
+    Calibration grade that the old box's final-approval gate used to
+    imply. Confirmed scope with 3 clarifying questions before touching
+    the state machine, given the size of a wrong guess here.**
+    Changed the GM/AGM/MD signature condition in all 3 real places it's
+    built (`buildReviewerSignFlowHtml()` — the on-screen modal signature
+    flow, #177; `printEvalForm()`; `buildEvalPrintPage()`) from
+    `isFinalStatus(status)` to `hasVisibleResult(status)` — an existing
+    function (`rank>=evalStatusRank('GMApproved')`, #61) nobody had ever
+    pointed this specific box at — and swapped its signer-name source
+    from `getApprovalSignature()` (#39, the true final AMD/MD signer)
+    to `getStageSigner(code, cycle, 'GMApproved')` (#176's per-stage
+    signer store, already correctly populated by `approveGmSelected()`
+    → `pushApprovalRecordToExcel(...,'GMApproved',...)` → its own
+    internal `recordStageSigner()` call — no new write path needed, the
+    real GM approver's name was already being recorded, just never read
+    back for this box). Kept the existing "⏩ ข้ามขั้นตอน" fallback
+    (`resolveGmReviewer()` returning null, #128/#145/#158) for a record
+    whose GM tier was genuinely auto-skipped, same pattern as the L1/L2
+    rows right above it.
+    Added the real grade section as one shared function,
+    `buildCalibGradeSectionHtml(draft, sectionNum, includeHeader)` — the
+    established "build it once, every caller goes through it" discipline
+    (#30/#97/#121) — reading the real Bell Curve grade from
+    `draft[draft.length-2]` (which `confirmCalibration()`/
+    `overrideEmployeeGrade()` already write, #155) once
+    `evalStatusRank(status) >= evalStatusRank('Calibrated')`, with an
+    honest "⏳ ยังไม่ถึงขั้นตอน Calibration" placeholder before that — never
+    the same gated-until-`isFinalStatus()` provisional grade the "∑
+    คะแนนรวม" box already shows (#156/#161/#172's own box, left
+    completely untouched, still locked until true final approval).
+    Wired into `printEvalForm()` (inserted before the signature section,
+    renumbering it from "ส่วนที่ 4" to "ส่วนที่ 5"), `buildEvalPrintPage()`
+    (inserted before signature, renumbered "ส่วนที่ 3"→"ส่วนที่ 4"), and
+    `openReviewerForm()`'s on-screen modal (appended as a genuinely new
+    "ส่วนที่ 4" after the modal's existing 3 sections — #178's own fixed
+    sequence needed no renumbering there, since this is additive, not a
+    gap-fill). The on-screen modal call passes `includeHeader:false`
+    (it already prints its own `.review-section-title` header, matching
+    how the signature section above it works) and reuses the exact
+    `.F-result`/`.F-grade-circle`/`.F-sec` print-tuned classes — added
+    matching `.reviewer-sign-flow` CSS overrides (the same #177
+    font-bump pattern, just extended to these 3 new classes, which that
+    pass never needed since it only touched `.F-sign`).
+    **Admin-configurable visibility**: reused the existing `ROLE_PERMS`
+    system (#37) instead of inventing a new store — added one new
+    permission key, `viewCalibGrade`, to `ROLE_PERM_LABELS` and every
+    `ROLE_DEFS` entry's `perms` object (default true for
+    sysadmin/admin/exec/gm — all already inside the real approval chain
+    at some stage — false for l2/l1/unit/emp, matching #156/#161's own
+    "a pre-final grade stays hidden from lower roles by default" stance)
+    — `canViewCalibGrade()` checks `CURRENT_SESSION_USER`'s real role
+    against it (sysadmin/admin always pass, same as every other
+    admin-override check in this file, #72/#90/#113), so Admin can widen
+    or narrow exactly who sees this one section from the existing "ตั้ง
+    ค่าผู้ใช้ & บทบาท" page with zero new UI needed — the checkbox for
+    "เห็นเกรดหลัง Calibration (ก่อนอนุมัติขั้นสุดท้าย)" simply appears in
+    that page's existing per-role permission list (#37's `renderRoleCards()`/
+    `editRole()`) automatically, since both already iterate
+    `ROLE_PERM_LABELS` generically. Verified with a Playwright test
+    seeding a real GM-approved record with a real recorded GM signer:
+    confirms the signature box shows "✓ ยืนยันแล้ว" with the real GM's
+    name at GMApproved (not waiting for Calibration/final approval),
+    confirms the new section shows the honest "ยังไม่ถึงขั้นตอน
+    Calibration" placeholder before Calibration and the real Bell Curve
+    grade after it, confirms an `l2`-role viewer sees nothing (empty
+    string, section hidden) while a `gm`-role viewer sees it (matching
+    the new default perms) — plus a second test driving the real
+    `openReviewerForm()` UI end-to-end confirming the on-screen modal's
+    new "ส่วนที่ 4 — ตัดเกรดหลัง Calibration" section renders with the
+    real grade and mentions Bell Curve — plus full re-runs of
+    #176/#177/#178's own existing tests and the standard click-sweep
+    (`nav pages clicked: 17 errors: []`), zero regressions. **One test-
+    authoring mistake caught and fixed during this pass, worth
+    remembering**: a first draft of the Calibration-advance test
+    mutated a `getDrafts()`-returned array in place, then called
+    `saveDrafts(getDrafts())` — since `getDrafts()` always re-parses
+    fresh from `localStorage` on every call (never returns a cached
+    reference), that second call fetched a brand-new, unmutated copy
+    and silently discarded the edit; the real app code (`confirmCalibration()`
+    et al.) already gets this right by capturing one `const drafts =
+    getDrafts()` reference, mutating it, and passing that *same*
+    reference to `saveDrafts()` — a test that doesn't follow that exact
+    pattern can look like it's testing real app behavior while actually
+    testing nothing. General lesson: a signature box's label naming
+    several real titles ("GM./AGM./MD") does not mean any one of them
+    individually triggers it — when a user explicitly asks to change
+    *which* approval stage a shared UI element reacts to, check whether
+    the file already has a named function for exactly that threshold
+    (`hasVisibleResult()` here, built for an unrelated purpose in #61
+    but exactly reusable) before writing a new status comparison from
+    scratch, and when adding a new field whose sensitivity falls between
+    two existing policies (visible-to-all vs. locked-until-final), reuse
+    the existing per-role permission system (#37) rather than building a
+    bespoke visibility toggle — the admin UI for it then comes for free.
