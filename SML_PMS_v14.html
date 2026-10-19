@@ -1276,6 +1276,7 @@ input[type="checkbox"]{accent-color:#0b63ce}
 }
 .F-sign .sg-ok   { background:#dcfce7; color:#14532d; }
 .F-sign .sg-wait { background:#fef3c7; color:#92400e; }
+.F-sign .sg-skip { background:#e2e8f0; color:#475569; }
 .F-sign .sg-title {
   margin-top: auto;
   border-top: 1px solid #c0cde0;
@@ -4451,6 +4452,9 @@ async function doLogin(){
   if(typeof ms365SyncApprovalSignatures === 'function'){
     try{ await ms365SyncApprovalSignatures(true); }catch(e){}
   }
+  if(typeof ms365SyncStageSigners === 'function'){
+    try{ await ms365SyncStageSigners(true); }catch(e){}
+  }
   if(typeof ms365SyncHrNotes === 'function'){
     try{ await ms365SyncHrNotes(true); }catch(e){}
   }
@@ -5196,7 +5200,23 @@ function _lbl(sc,w){
    "ช่องทาง" จริง (L1/L2/ผู้อนุมัติไม่มี) ให้ caller ส่งมาเฉพาะช่องนั้น ช่องอื่นปล่อยว่าง/ไม่ส่งพารามิเตอร์
    นี้ตามเดิม — ใบที่รับทราบไว้ก่อนฟีเจอร์นี้มีจริง (channelLabel ว่าง) จะไม่ขึ้นวงเล็บต่อท้ายเลย ไม่ใช่
    ขึ้น "()" ว่างๆ หรือเดาว่าเป็นช่องไหน (CLAUDE.md #14) */
-function _sign(roleTh, officialTitle, ok, signedName, signedDate, channelLabel) {
+/* #176: skippedNote (7th param, optional, backward-compatible — เดิมเรียกแค่ 6 พารามิเตอร์ ยังทำงาน
+   เหมือนเดิมทุกจุด) — เมื่อ ok=true แต่ไม่มีทั้งชื่อผู้ลงนามจริง (signedName) และชื่อในช่องสายบังคับบัญชา
+   (officialTitle) เลย แปลว่าขั้นนี้ไม่มีผู้สอบทานจริงอยู่เลย (ถูกข้ามอัตโนมัติ ตาม
+   skipEmptyReviewStages()/CLAUDE.md #128) — เดิมจะขึ้น "✓ ยืนยันแล้ว (—)" หลอกว่ามีคนลงนามจริง
+   เปลี่ยนเป็นชิปสีอื่น "⏩ ข้ามขั้นตอน" พร้อมเหตุผลจริงแทน ไม่โชว์ชื่อ/วันที่ปลอม */
+function _sign(roleTh, officialTitle, ok, signedName, signedDate, channelLabel, skippedNote) {
+  const hasRealSigner = !!(signedName && signedName!=='—');
+  const hasChainName = !!(officialTitle && officialTitle!=='—');
+  if(ok && !hasRealSigner && !hasChainName && skippedNote){
+    return `<div class="F-sign">
+      <div class="sg-role">${roleTh}</div>
+      <div class="sg-blank">&nbsp;</div>
+      <div class="sg-date">&nbsp;</div>
+      <span class="sg-chip sg-skip">⏩ ข้ามขั้นตอน</span>
+      <div class="sg-title">( ${skippedNote} )</div>
+    </div>`;
+  }
   return `<div class="F-sign">
     <div class="sg-role">${roleTh}</div>
     <div class="sg-blank">${ok?`<div class="sg-name">${signedName||officialTitle||''}</div>`:'&nbsp;'}</div>
@@ -5380,6 +5400,17 @@ function printEvalForm() {
   const liveRank = liveStatus ? ((typeof evalStatusRank==='function') ? evalStatusRank(liveStatus) : 0) : -1;
   const allApproved = liveStatus ? isFinalStatus(liveStatus) : false;
   const liveSig = (typeof getApprovalSignature==='function') ? getApprovalSignature(empCode+'|'+printCycle) : null;
+  /* #176: ผู้ใช้ขอให้ใบรายงานแบบฟอร์มที่สอบทานแล้วแต่ละระดับ แสดง "ชื่อจริง" ของผู้ที่ลงนามสอบทาน L1/L2
+     ด้วย ไม่ใช่แค่ชิป "✓ ยืนยันแล้ว" เฉยๆ — เดิม signedName ของ 2 แถวนี้ใช้ u[9]/u[10] (ชื่อในช่อง
+     สายบังคับบัญชาของพนักงานคนนี้เอง) ซึ่งว่างเปล่าได้จริงถ้าขั้นนั้นถูกข้ามอัตโนมัติ (ไม่มีผู้สอบทาน
+     จริง ตาม skipEmptyReviewStages()/CLAUDE.md #128) ทำให้ขึ้น "✓ ยืนยันแล้ว (—)" ซึ่งหลอกว่ามีคนจริง
+     ลงนามทั้งที่ไม่มี — ดึงชื่อผู้สอบทานจริงจาก EVAL_STAGE_SIGNERS_KEY แทน (บันทึกทุกครั้งที่มีการสอบทาน
+     จริงผ่าน pushApprovalRecordToExcel() — ดู recordStageSigner() ด้านล่าง) ถ้าไม่มีผู้สอบทานจริงเลย
+     (resolveL1Reviewer()/resolveL2Reviewer() คืน null) ให้ขึ้น "⏩ ข้ามขั้นตอน" แทนการแสร้งว่ามีคนยืนยัน */
+  const l1SignerRec = (typeof getStageSigner==='function') ? getStageSigner(empCode, printCycle, 'L1Reviewed') : null;
+  const l2SignerRec = (typeof getStageSigner==='function') ? getStageSigner(empCode, printCycle, 'L2Reviewed') : null;
+  const l1NoReviewer = (typeof resolveL1Reviewer==='function') && !resolveL1Reviewer(u);
+  const l2NoReviewer = (typeof resolveL2Reviewer==='function') && !resolveL2Reviewer(u);
 
   /* ===== ตาราง factor ===== */
   const factorRows = cfg.factors.map((f,fi)=>{
@@ -5593,8 +5624,8 @@ function printEvalForm() {
          (acknowledgeMyResult(), #60/#61) — ผู้ใช้ขอให้ลงชื่อพนักงานเฉพาะตอนที่ส่งให้รับทราบแล้วจริงๆ
          จึงเปลี่ยนเงื่อนไขเป็น liveRank>=evalStatusRank('Acknowledged') ตรงตามความหมายของป้ายเอง */
     ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=evalStatusRank('Acknowledged'), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(empCode+'|'+printCycle):'')}
-    ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, liveRank>=2, empL1, '')}
-    ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, liveRank>=3, empL2, '')}
+    ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, liveRank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
+    ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, liveRank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
     ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, liveSig?liveSig.signedBy:empExec, liveSig?new Date(liveSig.signedAt).toLocaleDateString('th-TH'):'')}
   </div>
 
@@ -8569,6 +8600,47 @@ function recordEvalActor(empCode, cycle, step, code, name){
 function getEvalLastActor(empCode, cycle){
   try{ return JSON.parse(localStorage.getItem(EVAL_LAST_ACTOR_KEY)||'{}')[empCode+'|'+cycle] || null; }catch(e){ return null; }
 }
+/* #176: ต่างจาก EVAL_LAST_ACTOR_KEY ตรงที่เก็บผู้ลงนามแยก "ทุกขั้น" ไม่ใช่แค่ขั้นล่าสุด — ผู้ใช้ขอให้
+   ใบรายงาน (printEvalForm()/buildEvalPrintPage()'s ส่วนที่ 4) แสดงชื่อจริงของผู้สอบทาน L1/L2 ที่ยัง
+   คงอยู่แม้มีขั้นถัดไปดำเนินการไปแล้ว (เช่น L2 สอบทานผ่านไปแล้ว ก็ยังต้องโชว์ชื่อ L1 ตัวจริงที่สอบทาน
+   ไปก่อนหน้านี้ด้วย ไม่ใช่ถูกเขียนทับด้วยชื่อ L2) key = empCode|cycle|step เพื่อแยกแต่ละขั้นจริง */
+const EVAL_STAGE_SIGNERS_KEY = 'smlPmsEvalStageSigners';
+function recordStageSigner(empCode, cycle, step, code, name){
+  let store={};
+  try{ store=JSON.parse(localStorage.getItem(EVAL_STAGE_SIGNERS_KEY)||'{}'); }catch(e){ store={}; }
+  store[empCode+'|'+cycle+'|'+step] = { code, name, at:new Date().toISOString() };
+  localStorage.setItem(EVAL_STAGE_SIGNERS_KEY, JSON.stringify(store));
+}
+function getStageSigner(empCode, cycle, step){
+  try{ return JSON.parse(localStorage.getItem(EVAL_STAGE_SIGNERS_KEY)||'{}')[empCode+'|'+cycle+'|'+step] || null; }catch(e){ return null; }
+}
+/* ดึงผู้ลงนามจริงของแต่ละขั้นกลับจากตาราง Approvals (ตารางเดียวกับที่ pushApprovalRecordToExcel()
+   เขียนลงไปอยู่แล้ว — ไม่ต้องสร้างตารางใหม่ เหมือน #39/#96/#131 ที่ใช้ตารางนี้ตัวเดียวกันมาตลอด)
+   merge โดยยึดแถวที่เวลาใหม่ล่าสุดต่อ (empCode|cycle|step) ไม่ทับข้อมูลเครื่องนี้เองด้วยข้อมูลเก่ากว่า */
+async function ms365SyncStageSigners(silent=true){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncStageSigners: ยังไม่ได้ตั้งค่า MS365', false); return; }
+  try{
+    const rows = await graphListTableRows('Approvals');
+    if(!rows.length) return;
+    let store={};
+    try{ store=JSON.parse(localStorage.getItem(EVAL_STAGE_SIGNERS_KEY)||'{}'); }catch(e){ store={}; }
+    rows.forEach(r=>{
+      const empCode=String(r[0]??'').trim(), cycle=String(r[2]??'').trim(), step=String(r[3]??'').trim();
+      const approvedBy=String(r[4]??''), at=String(r[5]??'');
+      if(!empCode || !cycle || !step || !approvedBy || !at) return;
+      const key = empCode+'|'+cycle+'|'+step;
+      const existing = store[key];
+      if(!existing || new Date(at) > new Date(existing.at)){
+        store[key] = { code:'', name:approvedBy, at };
+      }
+    });
+    localStorage.setItem(EVAL_STAGE_SIGNERS_KEY, JSON.stringify(store));
+    if(!silent && typeof smlToast==='function') smlToast('ดึงรายชื่อผู้ลงนามสอบทานจาก Excel แล้ว','ok');
+  }catch(e){
+    if(!silent && typeof smlToast==='function') smlToast('ดึงรายชื่อผู้ลงนามสอบทานไม่สำเร็จ: '+e.message,'warn');
+  }
+}
 /* ผู้ใช้รายงาน "ถ้ามีการตีกลับแบบฟอร์ม คนที่รับต่อจะต้องประเมินใหม่ โดยข้อมูลยังแสดงผลเดิม" —
    restoreReviewerFormFromDraft() (CLAUDE.md #109) ติ๊กคะแนนเดิมกลับให้เสมอตอนเปิดฟอร์ม รวมถึงกรณีใบ
    เพิ่งถูกตีกลับมา ถ้าไม่แก้อะไรเลยแล้วกด "✓ บันทึกและส่งต่อ" ก็ส่งคะแนนชุดเดิมที่เพิ่งถูกตีกลับกลับขึ้น
@@ -8909,6 +8981,7 @@ function pushApprovalRecordToExcel(empCode, cycle, step, comment){
   /* จำผู้ดำเนินการไว้เสมอ (local, ไม่ผูกกับ isMs365Configured) เพื่อใช้แจ้งอีเมลย้อนกลับภายหลังถ้าใบ
      ประเมินนี้ถูกแก้ไข แม้ตอนนี้ยังไม่ได้ตั้งค่า MS365 ก็ควรจำไว้ก่อน เผื่อตั้งค่าทีหลัง */
   if(typeof recordEvalActor==='function') recordEvalActor(empCode, cycle, step, approvedByCode, approvedBy);
+  if(typeof recordStageSigner==='function') recordStageSigner(empCode, cycle, step, approvedByCode, approvedBy);
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushApprovalRecordToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   const empName = (MASTER_USERS.find(u=>u[0]===empCode)||[])[1] || '';
@@ -9827,10 +9900,16 @@ function buildEvalPrintPage(d, printDate){
      ประเมิน" เป๊ะๆ) ไม่ใช่แค่ตอนส่งแบบประเมินของตัวเอง (Submitted) ซึ่งพนักงานยังไม่เห็นผลอะไรเลย —
      แก้ตามที่ผู้ใช้ชี้ว่า printEvalForm()'s ตัวเดียวกันนี้เพิ่งแก้ผิดเงื่อนไขไปตอน #122 */
   const sigFinal = getApprovalSignature(code+'|'+cycle);
+  /* #176: เหมือน printEvalForm() เป๊ะ — ดึงชื่อผู้สอบทานจริงของขั้น L1/L2 จาก EVAL_STAGE_SIGNERS_KEY
+     แทนชื่อในช่องสายบังคับบัญชาของพนักงาน (ซึ่งว่างได้จริงถ้าขั้นนั้นถูกข้ามอัตโนมัติ — CLAUDE.md #128) */
+  const l1SignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'L1Reviewed') : null;
+  const l2SignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'L2Reviewed') : null;
+  const l1NoReviewer = (typeof resolveL1Reviewer==='function') && !resolveL1Reviewer(emp);
+  const l2NoReviewer = (typeof resolveL2Reviewer==='function') && !resolveL2Reviewer(emp);
   const sigLines = [
     _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=evalStatusRank('Acknowledged'), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):''),
-    _sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, empL1, ''),
-    _sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, empL2, ''),
+    _sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':''),
+    _sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':''),
     _sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, allApproved, sigFinal?sigFinal.signedBy:empExec, sigFinal?new Date(sigFinal.signedAt).toLocaleDateString('th-TH'):'')
   ].join('');
 
@@ -11858,6 +11937,7 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncFormWeights === 'function'){ try{ await ms365SyncFormWeights(true); }catch(e){} }
       if(typeof ms365SyncIdp === 'function'){ try{ await ms365SyncIdp(true); }catch(e){} }
       if(typeof ms365SyncApprovalSignatures === 'function'){ try{ await ms365SyncApprovalSignatures(true); }catch(e){} }
+      if(typeof ms365SyncStageSigners === 'function'){ try{ await ms365SyncStageSigners(true); }catch(e){} }
       if(typeof ms365SyncHrNotes === 'function'){ try{ await ms365SyncHrNotes(true); }catch(e){} }
       if(typeof ms365SyncEvalComments === 'function'){ try{ await ms365SyncEvalComments(true); }catch(e){} }
       if(typeof ms365SyncAckChannel === 'function'){ try{ await ms365SyncAckChannel(true); }catch(e){} }

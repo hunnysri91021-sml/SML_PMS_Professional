@@ -8921,3 +8921,73 @@ Before considering a change to `SML_PMS_v14.html` done:
     still verify the logged-in identity matches who the link was for)
     rather than treating "convenience" and "security" as a tradeoff to
     pick one side of.
+
+176. **User's screenshot of a printed evaluation form's "ส่วนที่ 4 ลงนาม
+    ผลการประเมิน" showed "ผู้ประเมิน (ผู้บังคับบัญชาโดยตรง)" and "ผู้ยืนยัน
+    ผลการประเมิน (MGR.)" both correctly tagged "✓ ยืนยันแล้ว" — but with
+    the signer's name underneath showing the literal placeholder "(—)"
+    instead of a real name. Asked for: "รายงานแบบฟอร์มประเมินในแต่ละ
+    ระดับที่ประเมินแล้ว ... ให้เพิ่มรายชื่อผู้ที่ลงนามประเมินแล้วด้วย"
+    (for a form already reviewed at each level, add the real name of
+    whoever signed).** Traced `_sign()`'s two L1/L2 call sites in both
+    `printEvalForm()` and `buildEvalPrintPage()`: `signedName` was passed
+    as `empL1`/`empL2` — `MASTER_USERS[9]`/`[10]`, the employee's own
+    *org-chart chain field* naming who their supervisor generically is —
+    never the actual person who clicked approve on this specific record.
+    When that chain field is empty (a real, common case: #128's
+    `skipEmptyReviewStages()` auto-skips a tier entirely when the
+    employee has no real reviewer assigned there), `_sign()`'s own
+    fallback (`signedName||officialTitle||''`) had nothing left to fall
+    back to, so it rendered the chip "✓ ยืนยันแล้ว" (implying a real
+    human confirmed it) right next to a blank "(—)" name — dishonest in
+    two directions at once: claiming a signoff happened when the stage
+    was really auto-skipped, and never showing the real name even on
+    records where an actual person *did* review (since the chain-field
+    name is a generic org fact, not "who actually did this review").
+    **Built a real per-stage signer record**, the missing piece: added
+    `EVAL_STAGE_SIGNERS_KEY` (key `empCode|cycle|step`, distinct from
+    `EVAL_LAST_ACTOR_KEY` (#58) which only remembers the *most recent*
+    actor and would be overwritten the moment a later stage runs — this
+    new store keeps one entry per stage so an already-advanced record
+    still shows who did L1Reviewed even after L2Reviewed has happened).
+    `recordStageSigner()` is called from the one real chokepoint every
+    stage transition already goes through, `pushApprovalRecordToExcel()`
+    (right alongside the existing `recordEvalActor()` call — same real
+    actor, same moment, zero new call sites to wire). `ms365SyncStageSigners(silent)`
+    pulls the real signer back out of the *same* `Approvals` Excel table
+    #39/#96/#131 already read/write (never a new table — a signer's name
+    per stage is exactly the "ผู้อนุมัติ" column CLAUDE.md #97's fix
+    already resolves honestly by employee code, just never read back for
+    this purpose before), merging by keeping whichever row's real
+    timestamp is newest per `(empCode|cycle|step)` — wired into both
+    silent-sync groups (`doLogin()`/`tryRestoreSession()`) right next to
+    `ms365SyncApprovalSignatures()`.
+    `_sign()` gained an optional 7th `skippedNote` parameter
+    (backward-compatible — every existing call without it behaves
+    identically): when `ok` is true but there is neither a real recorded
+    signer **nor** a chain-field name at all, it now renders a distinct
+    "⏩ ข้ามขั้นตอน" chip with the real reason ("ไม่มีผู้สอบทานระดับนี้
+    สำหรับพนักงานคนนี้") instead of the dishonest "✓ ยืนยันแล้ว (—)" —
+    computed per call site from `resolveL1Reviewer(emp)`/
+    `resolveL2Reviewer(emp)` (#128's own resolvers, reused rather than a
+    fourth independent "does this person have a real reviewer" check per
+    #126/#127/#130/#141's established discipline) returning `null`.
+    Verified with a Playwright test driving the real UI path (seeds a
+    real L1/L2 chain, logs in as each reviewer in turn, calls the real
+    `pushApprovalRecordToExcel()` the same way the actual approve buttons
+    do, never writes the signer store directly) confirming both
+    `printEvalForm()` and `buildEvalPrintPage()` now show the real
+    reviewer names on the printed signature grid, and a second case
+    seeding an employee with zero real reviewers at any tier confirming
+    the honest "⏩ ข้ามขั้นตอน" chip renders instead of a fake confirmed
+    signoff — plus the standard click-sweep (`nav pages clicked: 17
+    errors: []`), zero regressions. General lesson sharper than #39's
+    own precedent: a signature line's "✓ confirmed" chip and its
+    "(name)" title are two separate claims that must both be backed by
+    real data — reusing a generic org-chart field as a stand-in for "who
+    actually signed this specific record" works only until the chain
+    field happens to be empty (which #128's own auto-skip feature made a
+    normal, frequent case, not an edge case), at which point the honest
+    fix is tracking the real per-stage actor (a field this file already
+    resolves correctly everywhere else, #97) rather than patching the
+    display to hide a blank value.
