@@ -1091,6 +1091,7 @@ input[type="checkbox"]{accent-color:#0b63ce}
 .F-sec.s1b{ background:#1e4fa0; color:#fff; }
 .F-sec.s2 { background:#064e3b; color:#fff; }
 .F-sec.s3 { background:#1e3a5f; color:#fff; }
+.F-sec.s3b { background:#1e3a5f; color:#fff; }
 .F-sec.s4 { background:#3b1f6e; color:#fff; }
 .F-sec .sec-num {
   background: rgba(255,255,255,0.22);
@@ -5626,10 +5627,14 @@ function printEvalForm() {
     </div>
   </div>
 
-  <!-- ===== ส่วนที่ 3 (ความคิดเห็น / Training) ===== -->
+  <!-- ===== ส่วนที่ 3: ความคิดเห็น / Training (รวมเป็นหนึ่งส่วน ตรงกับหน้าจอ) ===== -->
+  <div class="F-sec s3b">
+    <span class="sec-num">3</span>
+    ส่วนที่ 3 &nbsp; ความคิดเห็นและแผนพัฒนา
+  </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px">
     <div>
-      <div style="font-size:7.5pt;font-weight:800;color:#0f2f6a;margin-bottom:2px">ส่วนที่ 2  ความคิดเห็นเพิ่มเติม</div>
+      <div style="font-size:7.5pt;font-weight:800;color:#0f2f6a;margin-bottom:2px">ความคิดเห็นเพิ่มเติม</div>
       <div class="F-remark-grid">
         <div class="F-remark-box">
           <div class="rb-title">จุดเด่น / จุดแข็ง (Strength)</div>
@@ -5642,7 +5647,7 @@ function printEvalForm() {
       </div>
     </div>
     <div>
-      <div style="font-size:7.5pt;font-weight:800;color:#0f2f6a;margin-bottom:2px">ส่วนที่ 3  การอบรมพัฒนาบุคลากร (Training Needs)</div>
+      <div style="font-size:7.5pt;font-weight:800;color:#0f2f6a;margin-bottom:2px">การอบรมพัฒนาบุคลากร (Training Needs)</div>
       <div class="F-remark-box" style="min-height:44px">
         <div class="rb-lines"><div class="rb-line">${training || '&nbsp;'}</div><div class="rb-line">${career || '&nbsp;'}</div><div class="rb-line">&nbsp;</div></div>
       </div>
@@ -10016,7 +10021,7 @@ function buildEvalPrintPage(d, printDate){
       </div>
     </div>
 
-    <div class="F-sec s4"><span class="sec-num">4</span> ส่วนที่ 4 &nbsp; ลงนามผลการประเมิน ( Signature )</div>
+    <div class="F-sec s3"><span class="sec-num">3</span> ส่วนที่ 3 &nbsp; ลงนามผลการประเมิน ( Signature )</div>
     <div class="F-signs s4">${sigLines}</div>
 
     <div class="F-footer">

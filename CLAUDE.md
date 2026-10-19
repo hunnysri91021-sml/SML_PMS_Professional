@@ -9067,3 +9067,80 @@ Before considering a change to `SML_PMS_v14.html` done:
     the second format's own real, complete sequence, or a gap appears
     that reads to the user exactly like missing content even though
     nothing is actually missing.
+
+179. **Follow-up to #178: user asked to re-verify the whole thing —
+    "ข้อมูลมีครบตามใบประเมินใช่ไหม สรุปมีกี่ส่วน 3 หรือ 4 ส่วน กลับไปทบทวน
+    และแก้ไขทุกส่วนให้ถูกต้อง" (is the data complete per the real
+    evaluation form, how many sections really — 3 or 4 — review and fix
+    every section everywhere). #178 only fixed one of four real places
+    this form's sections are rendered — grepping `ส่วนที่ [0-9]` across
+    the whole file surfaced two more genuine numbering bugs, neither of
+    them the one #178 already fixed.**
+    The honest answer to "3 or 4" is: it depends on which output,
+    correctly — the on-screen self-eval page has 4 real sections
+    (1=ตาราง, 2=Z, 3=ความคิดเห็น+Training combined under one header, per
+    its own real markup at line ~1737, 4=ลงนาม); `buildEvalPrintPage()`
+    (#120/#121, the shared builder behind every L1-L4 queue's "🖨️ PDF"
+    export and batch print) and `openReviewerForm()`'s on-screen modal
+    (#177/#178) both deliberately have only 3 (no comments/Training
+    section at all, per #121's own stated reasoning — it reads live
+    `<textarea>` values with no per-draft storage) — 3 and 4 are both
+    "correct," just for different outputs, the same "two numbers answer
+    different questions" shape CLAUDE.md #129/#139 already established,
+    here applied to a section *count* instead of a badge count.
+    **Two real bugs found, neither the one #178 fixed**:
+    1. `printEvalForm()`'s own print output (the self-eval page's
+       "พิมพ์ร่าง"/"พิมพ์ใบประเมิน PDF" button, lines ~5629-5649) had
+       **two separate section-numbering defects at once**: the real
+       section 3 (comments+Training, one combined section on-screen)
+       was split into two side-by-side sub-boxes with their own stray
+       `ส่วนที่ 2`/`ส่วนที่ 3` micro-labels — `ส่วนที่ 2` duplicating the
+       Z-score section's own already-used "2" a few lines above, and the
+       Training sub-box mislabeled `ส่วนที่ 3` as if it were its own
+       top-level section rather than half of one. Fixed by giving the
+       combined block one real `F-sec s3` header ("ส่วนที่ 3 —
+       ความคิดเห็นและแผนพัฒนา", matching the on-screen page's own
+       wording exactly) and stripping the two inner sub-labels down to
+       plain, un-numbered captions ("ความคิดเห็นเพิ่มเติม" /
+       "การอบรมพัฒนาบุคลากร (Training Needs)") — they're sub-parts of one
+       section, not two more top-level ones. Added a matching
+       `.F-sec.s3b` CSS rule (same color as `.s3`) rather than reusing
+       the bare `.s3` class outright, since that class is already used
+       by the unrelated, unlabeled "∑ คะแนนรวม" subtotal row a few lines
+       above and reusing it verbatim risked a confusing visual tie
+       between two different kinds of block even though both happen to
+       want the same color.
+    2. `buildEvalPrintPage()` (queue-export/batch print, no comments
+       section by design) still labeled its signature block "ส่วนที่ 4"
+       — the exact #178 shape of bug, just in the *printed* output
+       instead of the on-screen modal this time: real sections present
+       are only 1 (factors) and 2 (Z), so jumping straight to "4" leaves
+       an unexplained gap at "3," identical to what #178 found and fixed
+       for the reviewer modal one turn earlier. Fixed by renumbering
+       this one block's `F-sec` class and text from `s4`/"4" to `s3`/"3"
+       — its sibling `F-signs s4` class (the 4-column *grid layout* for
+       the 4 real signer rows: self/L1/L2/final-approver) was
+       deliberately left untouched, since that "4" means "four signer
+       columns," a completely different fact from "ส่วนที่ 4" the
+       section-number label, and renaming one must never be confused
+       with the other.
+    **Confirmed correct and left untouched**: the on-screen self-eval
+    page's own static cards (1-2-3-4, real and already consistent) and
+    `openReviewerForm()`'s on-screen modal (1-2-3, #178's own fix,
+    re-verified unaffected by this pass). Verified with a final grep
+    across all four outputs confirming each one now reads a complete,
+    gap-free, duplicate-free sequence: self-eval page 1,2,3,4;
+    `printEvalForm()` print 1,2,3,4; `buildEvalPrintPage()` 1,2,3;
+    reviewer modal 1,2,3 — plus full re-runs of #176/#177/#178's own
+    existing tests (`test_stage_signers.js`, `test_printevalform_stage.js`)
+    and the standard click-sweep (`nav pages clicked: 17 errors: []`),
+    zero regressions. General lesson sharper than #178's own conclusion:
+    when a user's follow-up asks "is this number right across the whole
+    thing," a single fixed instance is not evidence the whole file
+    agrees — grep the *exact same numbering pattern* (`ส่วนที่ [0-9]`,
+    here) across every independent place the same conceptual form gets
+    rendered (on-screen page, two different print/export builders, one
+    on-screen modal) before answering "yes, it's all correct now," since
+    each output can have its own genuinely different real section count
+    by design, and a numbering bug in one is no indication the others
+    are clean — or dirty.
