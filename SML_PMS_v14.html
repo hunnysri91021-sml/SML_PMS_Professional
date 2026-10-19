@@ -11021,7 +11021,7 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
     ${typeof buildPrevCommentsHtml==='function' ? buildPrevCommentsHtml(code, currentReviewerCycle) : ''}
     <div class="review-section-title">📝 ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea id="reviewStrength" rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea id="reviewDev" rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
-    <div class="review-section-title">✍️ ส่วนที่ 4 — ลงนามผลการประเมิน (สถานะจริง)</div>
+    <div class="review-section-title">✍️ ส่วนที่ 3 — ลงนามผลการประเมิน (สถานะจริง)</div>
     <div id="reviewerSignFlow" class="reviewer-sign-flow"></div>`;
   const signFlowEl = document.getElementById('reviewerSignFlow');
   if(signFlowEl && typeof buildReviewerSignFlowHtml==='function') signFlowEl.innerHTML = buildReviewerSignFlowHtml(code, currentReviewerCycle, lv);

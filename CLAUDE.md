@@ -9036,3 +9036,34 @@ Before considering a change to `SML_PMS_v14.html` done:
     place show it too" is exactly the signal that the fix's scope should
     have been "every place this fact is displayed," not just the one
     place the original screenshot happened to show.
+
+178. **Follow-up to #177: user's screenshot of the newly-added on-screen
+    signature section showed "ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา" followed
+    directly by "ส่วนที่ 4 — ลงนามผลการประเมิน" — user asked simply
+    "ส่วนที่ 3 ละ" (where's section 3).** This was a real numbering bug
+    introduced in #177 itself, not a missing-content bug: `printEvalForm()`'s
+    real printed form genuinely has 4 sections (factors=1, comments=2,
+    a distinct "การอบรมพัฒนาบุคลากร (Training Needs)"=3, signatures=4),
+    so when #177 added the signature grid to the on-screen reviewer modal
+    I copied the "ส่วนที่ 4" label straight from the print output — but
+    the on-screen modal has never had a Training Needs section (#121
+    deliberately left it out, since it reads live `<textarea>` values with
+    no per-draft storage), so the modal's own real section sequence is
+    only 1 (factors) → 2 (comments) → signatures, with no section 3
+    content anywhere in it. Confirmed via `grep -n "review-section-title"`
+    that the modal literally renders "ส่วนที่ 1"→"ส่วนที่ 2"→"ส่วนที่ 4" with
+    nothing in between. Fixed by renumbering the one mislabeled heading
+    (line ~11024) from "ส่วนที่ 4" to "ส่วนที่ 3" — the modal's own correct,
+    complete sequence. Verified with `node --check`-equivalent syntax
+    validation, a full re-run of #176/#177's own existing tests
+    (`test_stage_signers.js`, `test_printevalform_stage.js` — both still
+    pass unaffected, since they only check for real signer names, never
+    the section-number text) and the standard click-sweep (`nav pages
+    clicked: 17 errors: []`), zero regressions. General lesson: when
+    porting a UI section from one output format (a printed form with N
+    real sections) into a second, deliberately-smaller output format (an
+    on-screen modal missing one of those sections by design), never copy
+    the first format's section *numbers* verbatim — renumber to match
+    the second format's own real, complete sequence, or a gap appears
+    that reads to the user exactly like missing content even though
+    nothing is actually missing.
