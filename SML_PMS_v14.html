@@ -3400,7 +3400,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <label style="font-weight:400"><input type="checkbox" id="rn_ch_email" checked style="width:auto;margin-right:5px">อีเมล</label>
       <label style="font-weight:400;margin-left:14px"><input type="checkbox" id="rn_ch_line" checked style="width:auto;margin-right:5px">LINE <small style="color:#64748b">(เฉพาะคนที่มี LINE User ID บันทึกไว้แล้ว)</small></label>
     </div>
-    <div class="fg"><label>ข้อความ</label><textarea id="rn_message" rows="4">ผลการประเมินผลการปฏิบัติงานของท่านได้รับการอนุมัติจาก GM แล้ว กรุณาเข้าดูผลที่หน้า "6. ผลประเมิน" ในระบบ SML PMS</textarea></div>
+    <div class="fg"><label>ข้อความ <small style="color:#64748b">(ระบบจะแนบลิงก์เข้าเว็บแอปต่อท้ายให้อัตโนมัติ ถ้าตั้งค่าไว้ที่หน้า MS365 Proxy)</small></label><textarea id="rn_message" rows="4">ผลการประเมินผลการปฏิบัติงานของท่านได้รับการอนุมัติจาก GM แล้ว กรุณาเข้าดูผลที่หน้า "6. ผลประเมิน" ในระบบ SML PMS</textarea></div>
     <div class="fg"><label>รายชื่อที่ GM อนุมัติแล้วแต่ยังไม่ได้แจ้ง</label>
       <div id="rn_preview" style="max-height:160px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
     </div>
@@ -6516,18 +6516,33 @@ async function sendResultNotification(){
   if(!allTargets.length){ smlToast('ไม่มีใบประเมินที่ GM อนุมัติแล้วและยังไม่ได้แจ้ง (และไม่ได้เลือกส่งซ้ำ)','warn'); return; }
   if(!wantEmail && !wantLine){ smlToast('กรุณาเลือกช่องทางที่จะส่งอย่างน้อย 1 ช่องทาง','warn'); return; }
 
-  const emps = allTargets.map(t=>t.emp);
+  /* #183: หนึ่งคนอาจมีมากกว่า 1 draft ที่เข้าเงื่อนไข target (เช่น Excel แถวซ้ำจาก
+     ก่อนที่ composite-key upsert จะมีจริง, #162) — allTargets จึงอาจมี emp object
+     เดิมซ้ำกันหลายรอบ และ bcc เดิมก็ส่ง u[15] ซ้ำตามจำนวนรอบนั้นตรงๆ ไม่มีการ dedupe
+     เลย (ภาพหน้าจอ Outlook ของผู้ใช้โชว์อีเมลเดียวกันซ้ำ 5 ครั้งใน Bcc) — dedupe ด้วย
+     รหัสพนักงานจริง (u[0]) ก่อนเสมอ ไม่ใช่แค่ dedupe อีเมล เพราะยังต้องใช้รายชื่อนี้
+     ส่ง LINE ด้วย (ซึ่งควรส่งหาแต่ละคนครั้งเดียวเช่นกัน) */
+  const emps = [...new Map(allTargets.map(t=>[t.emp[0], t.emp])).values()];
   const withEmail = emps.filter(u=>u[15]);
   const withoutEmail = emps.filter(u=>!u[15]);
 
+  /* #183: เพิ่มลิงก์เข้าเว็บแอปจริง เหมือนที่ notifyEmployeeOfApproval() ทำให้อัตโนมัติ
+     อยู่แล้ว (#175) — แต่ปุ่มนี้ส่งแบบ bulk (bcc/multicast) ครั้งเดียวถึงหลายคน จึงใส่
+     ?ackCode= ของคนใดคนหนึ่งลงในลิงก์เดียวกันไม่ได้ (จะพาคนอื่นไปหน้าของคนนั้นผิดคน) —
+     ใส่เฉพาะลิงก์หน้าแรกของเว็บแอป (ไม่มี ?ackCode=) ให้พนักงานกดเข้าไปแล้วใส่รหัส/PIN
+     ของตัวเองเพื่อดูผล เหมือนเข้าระบบปกติ ไม่เดา URL เองถ้า Admin ยังไม่ได้ตั้งค่า (#14) */
+  const cfg = loadMs365Config();
+  const resultAppLink = cfg.appUrl || '';
+  const messageWithLink = message + (resultAppLink ? `\n\nดูผลและดาวน์โหลด PDF ได้ที่: ${resultAppLink}` : '');
+
   let lineResult = null;
-  if(wantLine) lineResult = await sendLineReminder(emps, message);
+  if(wantLine) lineResult = await sendLineReminder(emps, messageWithLink);
 
   if(wantEmail && withEmail.length){
     const toSelf = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[15]) ? CURRENT_SESSION_USER[15] : withEmail[0][15];
     const bcc = withEmail.map(u=>u[15]).join(',');
     const subject = encodeURIComponent('แจ้งผลการประเมินผลการปฏิบัติงาน — GM อนุมัติแล้ว');
-    const body = encodeURIComponent(message);
+    const body = encodeURIComponent(messageWithLink);
     window.location.href = `mailto:${encodeURIComponent(toSelf)}?bcc=${bcc}&subject=${subject}&body=${body}`;
   } else if(wantEmail && !withEmail.length){
     smlToast('ไม่มีใครในกลุ่มนี้มีอีเมลในระบบ','warn');

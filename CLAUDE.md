@@ -9379,3 +9379,80 @@ Before considering a change to `SML_PMS_v14.html` done:
     store needs to become a real log (who/when/how) rather than a bare
     "has this happened" flag, since a flag can prevent a repeat but can
     never answer "did it already happen" in a way a human can act on.
+
+183. **User's screenshot of the real Outlook compose window opened by
+    "📬 แจ้งผลประเมิน"'s "ส่งทันที" button showed the same real email
+    address repeated 5 times in Bcc — "มี bcc มากเกิน" — plus a second
+    request in the same message: "ให้เพิ่ม link ให้ด้วย เพื่อพาไปดูผล
+    รวมถึงใน line ด้วย" (add a link to view the result, in LINE too).**
+    Traced the Bcc duplication to `getResultNotifyTargets()`
+    (#156/#181/#182): it returns one entry **per matching draft**, not
+    per employee — and a real employee can have more than one draft
+    sitting at `GMApproved`-or-later at once, the same duplicate-Excel-
+    row/stale-local-entry shape CLAUDE.md #162/#163 already diagnosed
+    for this file's review queues (leftover rows from before #41's
+    composite-key upsert existed). `sendResultNotification()` then
+    built `emps = allTargets.map(t=>t.emp)` with **zero dedup** before
+    joining every `u[15]` into the `bcc=` query param — so one real
+    person with 3 stale duplicate drafts appeared in Bcc 3 times, matching
+    the screenshot exactly (this is a different bug from #153's own
+    "To field is empty" fix on the same `mailto:` construction — that one
+    was about the address *slot*, this one is about the *recipient list*
+    itself containing repeats).
+    Fixed by deduplicating `allTargets` down to one entry per real
+    employee **code** (`[...new Map(allTargets.map(t=>[t.emp[0],t.emp]))
+    .values()]`) before building either the email Bcc list or the LINE
+    multicast recipient list — deliberately deduped by `u[0]` (the real
+    employee code), not just by email string, since the same fix also
+    needs to prevent sending the *LINE* multicast to the same person's
+    `lineUserId` multiple times, which a plain email-dedupe wouldn't
+    catch. `allTargets.forEach(t=>markResultNotified(...))` right after
+    is left iterating the **original, undeduped** `allTargets` (not the
+    new `emps` list) so every one of that person's duplicate drafts gets
+    marked notified — not just the first one encountered — or the
+    un-marked duplicates would keep resurfacing as targets on the next
+    open of this same modal, the exact kind of "fixed the display, not
+    the underlying duplicate-row cause" half-fix CLAUDE.md #162/#163
+    already warn against.
+    **Link, second half of the request**: reused the exact `appUrl`/
+    `ackLink` mechanism #175 already built for `notifyEmployeeOfApproval()`
+    (the *automatic* GM-approval email/LINE send) — `loadMs365Config()`'s
+    `appUrl` field, left blank by Admin until explicitly configured,
+    never guessed (CLAUDE.md #14). The one real difference from #175's
+    own per-recipient `ackLink` (`?ackCode=&ackCycle=`): this button
+    sends one **shared** Bcc email and one **shared** LINE multicast to
+    several different real people at once, so a single link can never
+    carry one specific person's `?ackCode=` without silently sending
+    every *other* recipient straight to the wrong person's result page —
+    the exact security boundary #175 itself was built to protect.
+    Appended only the app's **base** URL (no `?ackCode=`) to the message
+    text for both channels (`messageWithLink`, shared by the email body
+    and the LINE text) — each recipient clicks through to the real login
+    page and signs in with their own code/PIN as normal, same honest
+    "no personalized link when the send itself isn't personalized"
+    scope #175's own code comment already documents for the no-`appUrl`
+    case, just applied here to "can't personalize a bulk send" instead
+    of "no URL configured at all." Updated the modal's own message
+    textarea with a one-line note that the link is appended
+    automatically, so Admin isn't surprised to see it show up in the
+    sent message beyond what they typed. Verified with a Playwright test
+    that seeds one real employee with 3 duplicate `GMApproved` drafts
+    (reproducing the exact screenshot's real-world shape) and a second
+    employee with one real draft: confirms the raw target list is 4
+    entries but the deduped employee list used for Bcc/LINE is exactly
+    2 (one per real person), and confirms **all 3** of the duplicate
+    employee's draft keys end up marked notified after one send, not
+    just the first — plus full re-runs of #182's own existing tests and
+    the standard click-sweep (`nav pages clicked: 17 errors: []`), zero
+    regressions. General lesson: a bulk-notify feature built on top of
+    "the list of records matching a status condition" (`getResultNotifyTargets()`
+    here) silently inherits every duplicate-row risk already known to
+    exist in that same underlying draft store (#162/#163's own
+    conclusion) unless it explicitly collapses to one row per real
+    person before building a recipient list — and when adding a "send
+    a link too" feature a second time for a *different* send path than
+    the one it was first built for (#175's per-person send vs. this
+    bulk send), re-check whether the earlier design's core assumption
+    (one link can safely name one specific person) still holds for the
+    new path, since a shared Bcc/multicast send is a fundamentally
+    different trust boundary from a single personalized push message.
