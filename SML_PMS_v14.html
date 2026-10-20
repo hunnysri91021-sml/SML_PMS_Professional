@@ -1629,7 +1629,8 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="grid g4">
         <div class="stat" id="sumYCard" style="--p:var(--evalColor,#0891b2)"><div class="lb">📊 คะแนน Y (ผลงาน)</div><div class="vl" id="sumY" style="color:var(--evalColor,#0891b2)">—</div><div class="sb" id="sumYpct">—</div></div>
         <div class="stat s-i"><div class="lb">⏱️ คะแนน Z (เวลา)</div><div class="vl" id="sumZ">—</div><div class="sb" id="sumZpct">—</div></div>
-        <div class="stat s-ok"><div class="lb">🏆 คะแนนรวม X</div><div class="vl" id="sumX" style="color:var(--ok)">—</div><div class="sb">Y + Z</div></div>
+        <div class="stat" id="sumKpiCard" style="display:none;--p:#9333ea"><div class="lb">🎯 คะแนน KPI</div><div class="vl" id="sumKpi" style="color:#9333ea">—</div><div class="sb" id="sumKpiPct">—</div></div>
+        <div class="stat s-ok"><div class="lb">🏆 คะแนนรวม X</div><div class="vl" id="sumX" style="color:var(--ok)">—</div><div class="sb">Y + Z + KPI</div></div>
         <div class="stat" id="sumPctCard" style="--p:var(--evalColor,#0891b2)"><div class="lb">📋 ความสมบูรณ์</div><div class="vl" id="sumPct" style="color:var(--evalColor,#0891b2)">0%</div><div class="sb" id="sumDone">กรอก 0/0 ข้อ</div></div>
       </div>
     </div>
@@ -3862,7 +3863,7 @@ function renderGoalKpi(data) {
     <td style="text-align:center;font-weight:700;color:#2563eb">${k.pct}%</td>
     <td><span class="bd ${SCOPE_BD[k.scope]||'b-s'}">${SCOPE_LABEL[k.scope]||k.scope}</span></td>
     <td style="text-align:center">${k.year ? '<span class="bd b-ok" style="background:#dcfce7;color:#15803d">FY'+k.year+'</span>' : '<span class="bd b-s" style="font-size:10px">ยังไม่ผูกรอบ</span>'}</td>
-    <td style="font-size:11.5px;color:#64748b">${k.scope==='org'?'ทุกคนในรอบ':k.scope==='dept'?'ตามฝ่าย':'ระบุรายชื่อ'}</td>
+    <td style="font-size:11.5px;color:#64748b">${k.scope==='org'?'ทุกคนในรอบ':k.scope==='dept'?'ตามฝ่าย':(k.empCode ? ((MASTER_USERS.find(u=>u[0]===k.empCode)||[])[1]||k.empCode)+' ('+k.empCode+')' : '⚠️ ยังไม่ระบุรหัส')}</td>
     <td style="text-align:center">${KPI_STATUS[k.status]||''}</td>
     <td>
       <div style="display:flex;gap:4px;justify-content:center">
@@ -3919,19 +3920,44 @@ function editGoalKpi(id) {
   set('mKpiScope', k.scope);
   set('mKpiYear', k.year);
   set('mKpiNote', k.note);
+  set('mKpiEmpCode', k.empCode);
+  set('mKpiActualVal', k.actualVal);
+  set('mKpiTargetVal', k.targetVal);
+  set('mKpiDirection', k.direction || 'up');
+  onKpiScopeChange();
+  onKpiEmpCodeInput();
   const title = document.querySelector('#mAddKpi .md-h h3');
   if(title) title.textContent = '✏️ แก้ไข KPI: ' + k.name;
   openM('mAddKpi');
+}
+/* แสดงช่อง "รหัสพนักงาน" เฉพาะขอบเขต "รายบุคคล" — KPI ขอบเขตองค์กร/แผนกไม่มีคนใดคนหนึ่งให้ระบุ
+   (ดูหมายเหตุใน computeKpiScoreForEmp(): เฉพาะ scope==='person' เท่านั้นที่เข้าคะแนนประเมินรายคนได้) */
+function onKpiScopeChange(){
+  const scope = document.getElementById('mKpiScope')?.value;
+  const grp = document.getElementById('kpiEmpFieldGroup');
+  if(grp) grp.style.display = scope==='person' ? '' : 'none';
+}
+function onKpiEmpCodeInput(){
+  const code = (document.getElementById('mKpiEmpCode')?.value || '').trim();
+  const note = document.getElementById('kpiEmpCodeNote');
+  if(!note) return;
+  if(!code){ note.textContent=''; return; }
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(emp){ note.textContent = `✅ ${emp[1]} — ${emp[7]||''}`; note.style.color = '#16a34a'; }
+  else { note.textContent = '⚠️ ไม่พบรหัสนี้ในระบบ'; note.style.color = '#dc2626'; }
 }
 /* ทางเข้า "+ เพิ่ม KPI" ต้องล้างสถานะแก้ไขเดิมทิ้งก่อนเสมอ (เหมือน clearUserModalForm ของ
    Add/Edit Employee) กัน editingKpiId ค้างจากการกด ✏️ ครั้งก่อนแล้วมาเขียนทับ KPI ผิดตัว */
 function openAddKpiModal(){
   editingKpiId = null;
-  ['mKpiName','mKpiUnit','mKpiTarget','mKpiNote'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['mKpiName','mKpiUnit','mKpiTarget','mKpiNote','mKpiEmpCode','mKpiActualVal','mKpiTargetVal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   const pct=document.getElementById('mKpiPct'); if(pct) pct.value='';
   const type=document.getElementById('mKpiType'); if(type) type.value='ปริมาณ';
   const scope=document.getElementById('mKpiScope'); if(scope) scope.value='org';
   const year=document.getElementById('mKpiYear'); if(year) year.value='';
+  const direction=document.getElementById('mKpiDirection'); if(direction) direction.value='up';
+  const note=document.getElementById('kpiEmpCodeNote'); if(note) note.textContent='';
+  onKpiScopeChange();
   const title = document.querySelector('#mAddKpi .md-h h3');
   if(title) title.textContent = '📌 เพิ่ม / แก้ไข KPI';
   openM('mAddKpi');
@@ -4048,12 +4074,24 @@ function addKpiFromModal() {
   const target = document.getElementById('mKpiTarget')?.value?.trim()||'—';
   const year = document.getElementById('mKpiYear')?.value||'';
   const note = document.getElementById('mKpiNote')?.value?.trim()||'';
+  const empCode = (document.getElementById('mKpiEmpCode')?.value||'').trim();
+  const actualValRaw = document.getElementById('mKpiActualVal')?.value;
+  const targetValRaw = document.getElementById('mKpiTargetVal')?.value;
+  const actualVal = actualValRaw==='' ? '' : Number(actualValRaw);
+  const targetVal = targetValRaw==='' ? '' : Number(targetValRaw);
+  const direction = document.getElementById('mKpiDirection')?.value || 'up';
   if(!name||!unit||!pct){smlToast('กรุณากรอกชื่อ หน่วยวัด และน้ำหนัก','warn');return;}
+  /* KPI ขอบเขต "รายบุคคล" ต้องระบุรหัสพนักงานจริงที่มีในระบบเสมอ — ไม่งั้น "ระบุรายชื่อ" ที่ตารางแสดง
+     ไว้จะเป็นคำโฆษณาเปล่าๆ ไม่มีใครถูกระบุจริง (ตรงกับ CLAUDE.md #16 ที่เคยเจอ) */
+  if(scope==='person'){
+    if(!empCode){ smlToast('ขอบเขต "รายบุคคล" ต้องระบุรหัสพนักงานด้วย','warn'); return; }
+    if(!MASTER_USERS.find(u=>u[0]===empCode)){ smlToast('ไม่พบรหัสพนักงานนี้ในระบบ — กรุณาตรวจสอบรหัส','warn'); return; }
+  }
 
   if(editingKpiId){
     const k = goalKpiData.find(x=>x.id===editingKpiId);
     if(!k){ smlToast('ไม่พบ KPI นี้ในระบบ (อาจถูกลบไปแล้ว)','warn'); editingKpiId=null; closeM(); return; }
-    Object.assign(k, {name, unit, pct, scope, type, target, year, note});
+    Object.assign(k, {name, unit, pct, scope, type, target, year, note, empCode, actualVal, targetVal, direction});
     saveKpiData();
     renderGoalKpi(goalKpiData);
     goalStatUpdate();
@@ -4065,7 +4103,7 @@ function addKpiFromModal() {
     return;
   }
 
-  const newKpi = {id:'k'+(Date.now()), name, unit, pct, scope, type, target, year, note, status:'draft'};
+  const newKpi = {id:'k'+(Date.now()), name, unit, pct, scope, type, target, year, note, status:'draft', empCode, actualVal, targetVal, direction};
   goalKpiData.push(newKpi);
   saveKpiData();
   renderGoalKpi(goalKpiData);
@@ -6705,10 +6743,10 @@ const FACTORS_LEADER = [
 
 // config ต่อระดับ
 const LEVEL_CONFIG = {
-  op:  {label:'พนักงานปฏิบัติการ (PDI/Yard/ซ่อมบำรุง)', color:'#0891b2', Ypct:70, Zpct:30, Zmaxraw:30, maxY:70, leaderShow:false},
-  of:  {label:'พนักงานสำนักงาน',                          color:'#db2777', Ypct:70, Zpct:30, Zmaxraw:30, maxY:70, leaderShow:false},
-  ldr: {label:'หัวหน้าแผนก / Leader / วิศวกร',            color:'#16a34a', Ypct:80, Zpct:20, Zmaxraw:20, maxY:80, leaderShow:true},
-  mgr: {label:'ผู้จัดการส่วน',                             color:'#d97706', Ypct:90, Zpct:10, Zmaxraw:10, maxY:90, leaderShow:true},
+  op:  {label:'พนักงานปฏิบัติการ (PDI/Yard/ซ่อมบำรุง)', color:'#0891b2', Ypct:70, Zpct:30, Zmaxraw:30, Kpct:0, maxY:70, leaderShow:false},
+  of:  {label:'พนักงานสำนักงาน',                          color:'#db2777', Ypct:70, Zpct:30, Zmaxraw:30, Kpct:0, maxY:70, leaderShow:false},
+  ldr: {label:'หัวหน้าแผนก / Leader / วิศวกร',            color:'#16a34a', Ypct:80, Zpct:20, Zmaxraw:20, Kpct:0, maxY:80, leaderShow:true},
+  mgr: {label:'ผู้จัดการส่วน',                             color:'#d97706', Ypct:90, Zpct:10, Zmaxraw:10, Kpct:0, maxY:90, leaderShow:true},
 };
 
 // ดัชนีระดับ: op=0, of=1, ldr=2, mgr=3
@@ -7000,14 +7038,15 @@ function recalc() {
   const rawTotal = rawMain + rawLeader;
   const maxTotal = maxMain + maxLeader;
 
-  // คะแนน Y
-  const Y = maxTotal > 0 ? (rawTotal / maxTotal) * cfg.Ypct : 0;
-
   // คะแนน Z — คำนวณจากข้อมูลเวลาทำงานจริงที่ Import จาก HRGO (ถ้ายังไม่ Import ใช้ค่าเริ่มต้น)
   const empCodeForZ = (document.getElementById('evalCode')?.value || MASTER_USERS[0]?.[0] || '').trim();
   const Z = computeZScore(currentLevel, empCodeForZ).score;
 
-  const X = Y + Z;
+  /* #184: X = Y + Z + KPI — ดู calcCurrentEvalSummary()/computeEvalXWithKpi() คำอธิบายเดียวกัน
+     ฟังก์ชันที่สองนี้มีไว้แสดงผลสด (live) ขณะกรอกฟอร์ม ต้องใช้สูตรเดียวกันเป๊ะๆ ไม่ใช่คนละสูตร */
+  const cycleForKpi = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '';
+  const r = (typeof computeEvalXWithKpi==='function') ? computeEvalXWithKpi(currentLevel, empCodeForZ, cycleForKpi, rawTotal, maxTotal, Z) : {Y:(maxTotal>0?(rawTotal/maxTotal)*cfg.Ypct:0), Z, KPI:0, X:(maxTotal>0?(rawTotal/maxTotal)*cfg.Ypct:0)+Z};
+  const Y = r.Y, KPI = r.KPI, X = r.X;
 
   // filled count
   const mainFs = smCfg.factors.slice(0,10);
@@ -7030,6 +7069,12 @@ function recalc() {
   el('sumYpct', 'น้ำหนัก Y ' + cfg.Ypct + '%');
   el('sumZ', Z.toFixed(2));
   el('sumZpct', 'น้ำหนัก Z ' + cfg.Zpct + '%');
+  /* #184: การ์ด KPI แสดงเฉพาะเมื่อระดับนี้มีสัดส่วน KPI จริง (Admin ตั้งไว้ > 0%) — ถ้าไม่ได้ใช้ KPI
+     เลย (ค่าเริ่มต้นทุกระดับ) ซ่อนการ์ดนี้ไปเลย ไม่ให้ดูเหมือนมีฟีเจอร์ที่ไม่ได้ใช้งานอยู่ */
+  const kpiCard = document.getElementById('sumKpiCard');
+  if(kpiCard) kpiCard.style.display = (cfg.Kpct>0) ? '' : 'none';
+  el('sumKpi', KPI.toFixed(2));
+  el('sumKpiPct', 'น้ำหนัก KPI ' + (cfg.Kpct||0) + '%' + (r.kpi && !r.kpi.hasKpi && cfg.Kpct>0 ? ' (ไม่มี KPI ผูกไว้ — คืนให้ Y)' : ''));
   el('sumX', X.toFixed(2));
   el('sumPct', pct + '%');
   el('sumDone', 'กรอก ' + filled + '/' + total + ' ข้อ');
@@ -7654,10 +7699,14 @@ function calcCurrentEvalSummary(){
   }
   const rawY = rawMain + rawLeader;
   const maxY = maxMain + maxLeader;
-  const Y = maxY>0 ? (rawY/maxY)*cfg.Ypct : 0;
   const Z = cfg.Zmaxraw;
-  const X = Y + Z;
-  return { rawY, maxY, Y:+Y.toFixed(2), Z:+Z.toFixed(2), X:+X.toFixed(2) };
+  /* #184: X = Y + Z + KPI (ไม่ใช่ Y + Z อย่างเดียวแล้ว) — ดูคำอธิบายที่ computeEvalXWithKpi() —
+     ฟังก์ชันเดียวนี้คำนวณ Y จริงใหม่ด้วย เพราะสัดส่วน Y ที่แท้จริงขึ้นกับว่าคนนี้มี KPI จริงผูกไว้
+     หรือไม่ (ถ้าไม่มี สัดส่วน KPI จะถูกคืนให้ Y ตามที่ผู้ใช้ยืนยัน) */
+  const empCodeForKpi = (document.getElementById('evalCode')?.value || '').trim();
+  const cycleForKpi = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '';
+  const r = (typeof computeEvalXWithKpi==='function') ? computeEvalXWithKpi(currentLevel, empCodeForKpi, cycleForKpi, rawY, maxY, Z) : {Y:(maxY>0?(rawY/maxY)*cfg.Ypct:0), Z, KPI:0, X:(maxY>0?(rawY/maxY)*cfg.Ypct:0)+Z};
+  return { rawY, maxY, Y:+r.Y.toFixed(2), Z:+r.Z.toFixed(2), KPI:+r.KPI.toFixed(2), X:+r.X.toFixed(2) };
 }
 
 function gradeFromX(x){ return x>=90?'A':x>=80?'B':x>=70?'C':x>=60?'D':'E'; }
@@ -10700,7 +10749,7 @@ setTimeout(()=>{
 const SML_FORMS = {
   op:{
     label:'พนักงานปฏิบัติการ — PDI / ซ่อมบำรุง / Yard',
-    short:'ปฏิบัติการ', color:'#0891b2', ypct:70, zpct:30, zmax:30, leaderShow:false,
+    short:'ปฏิบัติการ', color:'#0891b2', ypct:70, zpct:30, zmax:30, kpct:0, leaderShow:false,
     minRaw:60, maxRaw:100, total:20, maxY:70, scale:'A+ / A / B / C+ / C',
     factors:[
       ['1. ด้านปริมาณงาน (Quantity)',
@@ -10727,7 +10776,7 @@ const SML_FORMS = {
   },
   of:{
     label:'พนักงานปฏิบัติการ — งานสำนักงาน',
-    short:'สำนักงาน', color:'#db2777', ypct:70, zpct:30, zmax:30, leaderShow:false,
+    short:'สำนักงาน', color:'#db2777', ypct:70, zpct:30, zmax:30, kpct:0, leaderShow:false,
     minRaw:60, maxRaw:100, total:20, maxY:70, scale:'A+ / A / B / C+ / C',
     factors:[
       ['1. ด้านปริมาณงาน (Quantity)',
@@ -10754,7 +10803,7 @@ const SML_FORMS = {
   },
   ldr:{
     label:'หัวหน้าหน่วย / หัวหน้าแผนก / วิศวกร',
-    short:'หัวหน้าแผนก', color:'#16a34a', ypct:80, zpct:20, zmax:20, leaderShow:true,
+    short:'หัวหน้าแผนก', color:'#16a34a', ypct:80, zpct:20, zmax:20, kpct:0, leaderShow:true,
     minRaw:70, maxRaw:100, total:29, maxY:80, scale:'A+ / A / B / C+ / C',
     factors:[
       ['1. ด้านปริมาณงาน (Quantity)',
@@ -10789,7 +10838,7 @@ const SML_FORMS = {
   },
   mgr:{
     label:'ผู้จัดการส่วน',
-    short:'ผจก.ส่วน', color:'#d97706', ypct:90, zpct:10, zmax:10, leaderShow:true,
+    short:'ผจก.ส่วน', color:'#d97706', ypct:90, zpct:10, zmax:10, kpct:0, leaderShow:true,
     minRaw:70, maxRaw:100, total:33, maxY:90, scale:'A+ / A / B / C+ / C',
     factors:[
       ['1. ด้านปริมาณงาน (Quantity)',
@@ -10850,6 +10899,118 @@ function saveFormOverrides(){
 }
 loadFormOverrides();
 
+/* ====== สัดส่วนคะแนน Y (ผลงาน) / Z (เวลาทำงาน) / KPI ต่อระดับฟอร์ม — Admin ปรับได้เอง ======
+   ผู้ใช้ขอ "ให้ Admin กำหนดสัดส่วนได้เอง หากนโยบายเปลี่ยน" (คะแนน KPI) — ค่าเริ่มต้นคือสัดส่วนจริง
+   ที่ใช้อยู่ปัจจุบัน (Y/Z เท่าเดิม, KPI=0%) จึงไม่เปลี่ยนพฤติกรรมใครเลยจนกว่า Admin จะเข้ามาปรับเอง
+   (ตาม CLAUDE.md #6) — ค่าที่ปรับแล้วต้อง apply ทับทั้ง LEVEL_CONFIG (ตัวจริงที่ใช้คำนวณ X ที่บันทึก)
+   และ SML_FORMS (ตัวที่หน้าแบบประเมิน/ผู้สอบทานใช้แสดง/คำนวณสด) พร้อมกันเสมอ ไม่ให้สองชุดนี้ไม่ตรงกัน */
+const DEFAULT_SCORE_WEIGHTS = {
+  op:{ypct:70, zpct:30, kpct:0},
+  of:{ypct:70, zpct:30, kpct:0},
+  ldr:{ypct:80, zpct:20, kpct:0},
+  mgr:{ypct:90, zpct:10, kpct:0},
+};
+const KPI_SCORE_WEIGHTS_KEY = 'smlPmsKpiScoreWeights';
+function applyScoreWeightsToConfigs(weights){
+  Object.keys(weights).forEach(lv=>{
+    const w = weights[lv]; if(!w) return;
+    if(LEVEL_CONFIG[lv]){ LEVEL_CONFIG[lv].Ypct=w.ypct; LEVEL_CONFIG[lv].Zpct=w.zpct; LEVEL_CONFIG[lv].Zmaxraw=w.zpct; LEVEL_CONFIG[lv].Kpct=w.kpct||0; LEVEL_CONFIG[lv].maxY=w.ypct; }
+    if(SML_FORMS[lv]){ SML_FORMS[lv].ypct=w.ypct; SML_FORMS[lv].zpct=w.zpct; SML_FORMS[lv].zmax=w.zpct; SML_FORMS[lv].kpct=w.kpct||0; SML_FORMS[lv].maxY=w.ypct; }
+  });
+}
+function loadScoreWeightsOverride(){
+  let saved={};
+  try{ saved=JSON.parse(localStorage.getItem(KPI_SCORE_WEIGHTS_KEY)||'{}'); }catch(e){ saved={}; }
+  const merged={};
+  Object.keys(DEFAULT_SCORE_WEIGHTS).forEach(lv=>{ merged[lv]=Object.assign({}, DEFAULT_SCORE_WEIGHTS[lv], saved[lv]||{}); });
+  applyScoreWeightsToConfigs(merged);
+  return merged;
+}
+/* เวอร์ชัน "เงียบ" ไม่ push กลับขึ้น Excel ทันที — ใช้ตอน ms365SyncFormWeights() ดึงค่าลงมาเท่านั้น
+   กัน sync-ลง -> push-ขึ้น -> sync-ลง วนไม่จบ (ค่าที่ดึงมาจาก Excel แล้วไม่จำเป็นต้อง push กลับไปซ้ำ) */
+function saveScoreWeightsForLevelSilent(lv, ypct, zpct, kpct){
+  let saved={};
+  try{ saved=JSON.parse(localStorage.getItem(KPI_SCORE_WEIGHTS_KEY)||'{}'); }catch(e){ saved={}; }
+  saved[lv] = {ypct, zpct, kpct};
+  localStorage.setItem(KPI_SCORE_WEIGHTS_KEY, JSON.stringify(saved));
+  loadScoreWeightsOverride();
+}
+function saveScoreWeightsForLevel(lv, ypct, zpct, kpct){
+  saveScoreWeightsForLevelSilent(lv, ypct, zpct, kpct);
+  if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel();
+}
+/* ปุ่ม "บันทึกสัดส่วน" จริงที่หน้า "ตั้งค่าแบบประเมิน" — อ่านค่าจาก 3 ช่อง input ที่ผู้ใช้พิมพ์ไว้
+   บังคับผลรวมต้อง = 100% เสมอ (กันคะแนนรวมเกิน/ไม่ถึง 100 ของทุกคนในระดับนี้) ไม่ปัดเศษ/บังคับให้
+   ตรงเองเงียบๆ เพราะนั่นจะเปลี่ยนสัดส่วนที่ Admin ตั้งใจพิมพ์โดยไม่รู้ตัว */
+function saveScoreWeightsFromForm(lv){
+  if(!isSysadmin()){ smlToast('เฉพาะ Admin ระบบ (sysadmin) เท่านั้นที่ปรับสัดส่วนคะแนนได้','warn'); return; }
+  const ypct = Number(document.getElementById('wY_'+lv)?.value);
+  const zpct = Number(document.getElementById('wZ_'+lv)?.value);
+  const kpct = Number(document.getElementById('wK_'+lv)?.value);
+  if(![ypct,zpct,kpct].every(n=>isFinite(n) && n>=0)){ smlToast('กรุณากรอกสัดส่วนเป็นตัวเลข ≥ 0 ให้ครบทั้ง 3 ช่อง','warn'); return; }
+  const total = ypct+zpct+kpct;
+  if(Math.abs(total-100) > 0.001){ smlToast(`ผลรวม Y+Z+KPI ต้อง = 100% (ตอนนี้รวม ${total}%) — กรุณาแก้ให้ครบ 100 ก่อนบันทึก`,'warn'); return; }
+  saveScoreWeightsForLevel(lv, ypct, zpct, kpct);
+  showTplDetail(lv);
+  if(typeof appendAuditLog==='function') appendAuditLog('settings','ปรับสัดส่วนคะแนน Y/Z/KPI', LEVEL_CONFIG[lv]?.label||lv, `Y=${ypct}% Z=${zpct}% KPI=${kpct}%`);
+  smlToast(`บันทึกสัดส่วนคะแนนของระดับ "${SML_FORMS[lv]?.short||lv}" แล้ว — Y=${ypct}% Z=${zpct}% KPI=${kpct}%`,'ok');
+}
+function resetScoreWeightsForLevel(lv){
+  let saved={};
+  try{ saved=JSON.parse(localStorage.getItem(KPI_SCORE_WEIGHTS_KEY)||'{}'); }catch(e){ saved={}; }
+  delete saved[lv];
+  localStorage.setItem(KPI_SCORE_WEIGHTS_KEY, JSON.stringify(saved));
+  loadScoreWeightsOverride();
+  if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel();
+}
+loadScoreWeightsOverride();
+
+/* คำนวณ % ความสำเร็จของ KPI หนึ่งตัว (0-100) จาก targetVal/actualVal/direction จริงที่ Admin/HR กรอกไว้
+   — "ยิ่งสูงยิ่งดี" (up): actual/target, "ยิ่งต่ำยิ่งดี" (down, เช่นจำนวนอุบัติเหตุ): target/actual
+   ไม่เดา/ไม่ fabricate ถ้ายังไม่มีตัวเลขจริงทั้งสองค่า (ตาม CLAUDE.md #14) คืน null แทนเดาเป็น 0 หรือ 100 */
+function computeKpiAchievementPct(k){
+  const t = Number(k.targetVal), a = Number(k.actualVal);
+  if(!isFinite(t) || !isFinite(a) || k.targetVal==='' || k.actualVal==='' || k.targetVal==null || k.actualVal==null) return null;
+  let ratio;
+  if(k.direction==='down'){ ratio = t<=0 ? (a<=0?1:0) : (a>0 ? t/a : 1); }
+  else { ratio = t<=0 ? (a>0?1:0) : a/t; }
+  return Math.max(0, Math.min(1, ratio)) * 100;
+}
+/* คะแนน KPI รวมของพนักงานคนหนึ่งในรอบหนึ่ง (0-100%) — ถ่วงน้ำหนักด้วย pct ของ KPI แต่ละตัว
+   เฉพาะ KPI ขอบเขต "รายบุคคล" (scope==='person') ที่ผูกรหัสพนักงานคนนี้ไว้จริง, สถานะ active,
+   และปีตรงกับรอบที่กำลังประเมินเท่านั้น — ขอบเขตองค์กร/แผนก (org/dept) ยังไม่มีช่องกรอกผลจริงแยกรายคน
+   จึงยังไม่เข้าคะแนนประเมินรายคนในขณะนี้ (ข้อจำกัดที่ทราบแล้ว ระบุไว้ตรงๆ ไม่ปล่อยให้ดูเหมือนรองรับ) */
+function computeKpiScoreForEmp(empCode, cycle){
+  if(!empCode || typeof goalKpiData==='undefined') return {hasKpi:false, pct:0, detail:[]};
+  const list = goalKpiData.filter(k=>k.scope==='person' && k.empCode===empCode && k.status==='active' && String(k.year||'')===String(cycle||''));
+  if(!list.length) return {hasKpi:false, pct:0, detail:[]};
+  let wsum=0, scoreSum=0; const detail=[];
+  list.forEach(k=>{
+    const pct = computeKpiAchievementPct(k);
+    if(pct===null) return;
+    const w = Number(k.pct)||0;
+    wsum += w; scoreSum += pct*w;
+    detail.push({name:k.name, pct, weight:w});
+  });
+  if(wsum<=0) return {hasKpi:false, pct:0, detail:[]};
+  return {hasKpi:true, pct: scoreSum/wsum, detail};
+}
+/* จุดเดียวที่คำนวณ X=Y+Z+KPI จริง — ทุกฟังก์ชันที่ต้องใช้ X (ประเมินตนเอง/ฟอร์มผู้สอบทาน) ต้องเรียก
+   ฟังก์ชันนี้ ไม่คำนวณซ้ำเองแยกกัน (กันไม่ให้สูตรเพี้ยนไปคนละแบบในแต่ละจุด เหมือนที่ CLAUDE.md #41
+   เตือนไว้สำหรับ logic ที่ซ้ำกันหลายที่) — ถ้าพนักงานคนนี้ไม่มี KPI จริงผูกไว้เลย (hasKpi=false) คืน
+   สัดส่วน KPI ให้ Y ตามที่ผู้ใช้ยืนยัน ("คืนสัดส่วนให้ Y") แทนที่จะเสียคะแนนส่วนนั้นไปเฉยๆ */
+function computeEvalXWithKpi(lv, empCode, cycle, rawY, maxYraw, zScore){
+  const cfg = LEVEL_CONFIG[lv] || {Ypct:0,Zpct:0,Kpct:0};
+  const ypctBase = cfg.Ypct||0, kpct = cfg.Kpct||0;
+  const kpi = computeKpiScoreForEmp(empCode, cycle);
+  const ypctEff = kpi.hasKpi ? ypctBase : (ypctBase + kpct);
+  const kpctEff = kpi.hasKpi ? kpct : 0;
+  const Y = maxYraw>0 ? (rawY/maxYraw)*ypctEff : 0;
+  const KPI = kpctEff>0 ? (kpi.pct/100)*kpctEff : 0;
+  const X = Y + (zScore||0) + KPI;
+  return { Y, Z:(zScore||0), KPI, X, kpi };
+}
+
 /* ====== น้ำหนักปัจจัยแบบประเมิน (SML_FORMS) — sync ขึ้น Excel ======
    เดิม saveFormOverrides() บันทึกแค่ localStorage ของเครื่องนี้ ถ้า Admin แก้น้ำหนักคะแนนที่
    เครื่องหนึ่ง พนักงานที่ประเมินตนเองจากเครื่อง/มือถืออื่นจะยังใช้น้ำหนักเก่าอยู่ — กระทบความถูกต้อง/
@@ -10863,7 +11024,11 @@ async function pushFormWeightsToExcel(){
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushFormWeightsToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     for(const lv of Object.keys(SML_FORMS)){
-      await graphUpsertTableRow(FORM_WEIGHTS_TABLE, 0, lv, [lv, JSON.stringify(SML_FORMS[lv].factors), new Date().toISOString()]);
+      /* #184: เพิ่มสัดส่วน Y/Z/KPI เข้าไปในก้อน JSON เดียวกันนี้ (เดิมมีแค่ factors) — ยังเป็น
+         ก้อนเดียวต่อแถวต่อระดับเหมือนเดิม เปลี่ยนแค่รูปร่างจาก array เปล่าๆ เป็น object ที่มี .factors
+         ด้วย (ขาอ่านด้านล่างรองรับทั้งรูปแบบเก่า/ใหม่ กันแถวเก่าที่ยังไม่มีสัดส่วนพังตอนอ่าน) */
+      const payload = { factors: SML_FORMS[lv].factors, ypct: SML_FORMS[lv].ypct, zpct: SML_FORMS[lv].zpct, kpct: SML_FORMS[lv].kpct||0 };
+      await graphUpsertTableRow(FORM_WEIGHTS_TABLE, 0, lv, [lv, JSON.stringify(payload), new Date().toISOString()]);
     }
     if(typeof appendSyncLog==='function') appendSyncLog('Push น้ำหนักแบบประเมินเข้า Excel', true);
   }catch(e){
@@ -10881,10 +11046,17 @@ async function ms365SyncFormWeights(silent=false){
       const lv = String(r[0]??'').trim();
       if(!SML_FORMS[lv]) return;
       try{
-        const factors = JSON.parse(r[1]);
+        const parsed = JSON.parse(r[1]);
+        /* #184: รองรับทั้งรูปแบบเก่า (array ล้วนๆ = เฉพาะ factors) และรูปแบบใหม่ (object ที่มี
+           .factors + .ypct/.zpct/.kpct) — แถวเก่าที่ยัง sync จากเครื่องที่ไม่ได้อัปเดตโค้ดนี้ ต้องยัง
+           อ่านได้ปกติ ไม่พัง */
+        const factors = Array.isArray(parsed) ? parsed : parsed?.factors;
         if(Array.isArray(factors) && factors.length){
           SML_FORMS[lv].factors = factors;
           recalcFormTotals(SML_FORMS[lv]);
+          if(!Array.isArray(parsed) && (parsed.ypct || parsed.zpct || parsed.kpct!=null)){
+            saveScoreWeightsForLevelSilent(lv, Number(parsed.ypct)||SML_FORMS[lv].ypct, Number(parsed.zpct)||SML_FORMS[lv].zpct, Number(parsed.kpct)||0);
+          }
           applied++;
         }
       }catch(e){}
@@ -10937,7 +11109,7 @@ function showTplDetail(lv){
   const title=document.getElementById('tplDetailTitle');
   const badge=document.getElementById('tplDetailBadge');
   if(title)title.textContent='แบบประเมิน — '+cfg.label;
-  if(badge)badge.textContent=`Y ${cfg.ypct}% + Z ${cfg.zpct}% = 100%`;
+  if(badge)badge.textContent=(cfg.kpct>0) ? `Y ${cfg.ypct}% + Z ${cfg.zpct}% + KPI ${cfg.kpct}% = 100%` : `Y ${cfg.ypct}% + Z ${cfg.zpct}% = 100%`;
 
   const editable = isSysadmin();
   const mainCount = Math.min(cfg.factors.length, SML_FORM_MAIN_SLOTS);
@@ -10971,6 +11143,18 @@ function showTplDetail(lv){
     ${editable?`<div class="al al-i" style="margin:10px 0 0">
       <span>🛡️</span><div><b>โหมด Admin ระบบ:</b> แก้ไข/ลบข้อปัจจัยได้จากปุ่มในตาราง หรือกด "เพิ่มข้อปัจจัย" ด้านล่าง
       (รองรับสูงสุด ${SML_FORM_MAIN_SLOTS} ข้อหลัก${cfg.leaderShow?` + ${SML_FORM_LEADER_SLOTS} ข้อหัวหน้า`:''} — ตามจำนวนคอลัมน์ m01–m${SML_FORM_MAIN_SLOTS}${cfg.leaderShow?`/l01–l${String(SML_FORM_LEADER_SLOTS).padStart(2,'0')}`:''} บนชีต Appraisals)</div>
+    </div>
+    <div class="form-detail-banner" style="margin-top:10px;--form-color:#9333ea">
+      <div><b>⚖️ สัดส่วนคะแนน Y / Z / KPI — ปรับได้ตามนโยบายบริษัท</b><span>ผลรวมทั้ง 3 ช่องต้อง = 100% เสมอ · ค่าเริ่มต้น KPI=0% (ไม่กระทบใครจนกว่าจะปรับที่นี่)</span></div>
+      <div class="form-detail-badges" style="gap:8px">
+        <span>Y <input type="number" id="wY_${lv}" value="${cfg.ypct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
+        <span>Z <input type="number" id="wZ_${lv}" value="${cfg.zpct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
+        <span>KPI <input type="number" id="wK_${lv}" value="${cfg.kpct||0}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
+      </div>
+    </div>
+    <div style="margin:8px 0 0;display:flex;gap:8px">
+      <button class="btn btn-sm btn-p" onclick="saveScoreWeightsFromForm('${lv}')">💾 บันทึกสัดส่วน</button>
+      <button class="btn btn-sm" onclick="resetScoreWeightsForLevel('${lv}');showTplDetail('${lv}');smlToast('รีเซ็ตสัดส่วนเป็นค่าเริ่มต้นแล้ว','ok')">↩️ รีเซ็ตเป็นค่าเริ่มต้น</button>
     </div>`:''}
     <div class="tw" style="margin-top:14px">
       <table class="form-detail-table">
@@ -11159,7 +11343,8 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
       <div><span>Raw Performance</span><b id="reviewRaw2">0</b></div>
       <div><span>Y (${cfg.ypct}%)</span><b id="reviewY">0.00</b></div>
       <div class="locked"><span>Z (${cfg.zpct}%) · HRGO</span><b>${zr.score.toFixed(2)}</b></div>
-      <div class="total"><span>X = Y + Z</span><b id="reviewX">${zr.score.toFixed(2)}</b></div>
+      <div id="reviewKpiCard" style="display:${(LEVEL_CONFIG[lv]?.Kpct||0)>0?'':'none'}"><span>KPI (${cfg.kpct||0}%)</span><b id="reviewKpi">0.00</b></div>
+      <div class="total"><span>X = Y + Z + KPI</span><b id="reviewX">${zr.score.toFixed(2)}</b></div>
     </div>
     ${typeof buildPrevCommentsHtml==='function' ? buildPrevCommentsHtml(code, currentReviewerCycle) : ''}
     <div class="review-section-title">📝 ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
@@ -11309,9 +11494,13 @@ function selectReviewScore(btn,grade,score,isRestore){
   const zval=parseFloat(z?.textContent||'0');
   const cfg=SML_FORMS[currentReviewerLevel];
   if(!cfg)return;
-  const y=raw/cfg.maxRaw*cfg.ypct, x=y+zval;
+  /* #184: X = Y + Z + KPI — เรียก computeEvalXWithKpi() ฟังก์ชันเดียวที่คำนวณ Y ใหม่ตามสัดส่วนที่
+     แท้จริงของพนักงานคนนี้ (คืนสัดส่วน KPI ให้ Y ถ้าไม่มี KPI ผูกไว้) ไม่คำนวณ y=raw/cfg.maxRaw*cfg.ypct
+     ตรงๆ แบบเดิมอีกต่อไป เพราะนั่นไม่รู้จัก KPI เลย */
+  const r = (typeof computeEvalXWithKpi==='function') ? computeEvalXWithKpi(currentReviewerLevel, currentReviewerCode, currentReviewerCycle, raw, cfg.maxRaw, zval) : {Y:raw/cfg.maxRaw*cfg.ypct, KPI:0, X:raw/cfg.maxRaw*cfg.ypct+zval};
+  const y=r.Y, x=r.X;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
-  set('reviewRaw',raw.toFixed(0));set('reviewRaw2',raw.toFixed(0));set('reviewY',y.toFixed(2));set('reviewX',x.toFixed(2));
+  set('reviewRaw',raw.toFixed(0));set('reviewRaw2',raw.toFixed(0));set('reviewY',y.toFixed(2));set('reviewX',x.toFixed(2));set('reviewKpi',(r.KPI||0).toFixed(2));
   /* isRestore=true มาจาก restoreReviewerFormFromDraft() เอง (ติ๊กคะแนนเดิมคืนตอนเปิดฟอร์ม) — ไม่นับเป็น
      การแก้ไขจริง คลิกจริงของผู้ใช้เท่านั้น (onclick ในแม่แบบ HTML ไม่ส่ง isRestore เลย จึง undefined/falsy)
      ที่ถือว่า "สัมผัส" ใบนี้แล้วและปลดล็อกปุ่มส่งได้ (ดู unlockReviewerSubmit() ด้านบน) */
@@ -11325,8 +11514,13 @@ function clearReviewerForm(){
   area.querySelectorAll('.review-comment').forEach(i=>i.value='');
   area.querySelectorAll('textarea').forEach(t=>t.value='');
   const zval=currentReviewerZ||0;
+  const cfg=SML_FORMS[currentReviewerLevel];
+  /* #184: ล้างคะแนนแล้ว raw=0 แต่ X ไม่ใช่แค่ Z เสมอไปแล้ว — ถ้าคนนี้มี KPI จริงผูกไว้ คะแนน KPI ยัง
+     มีอยู่แม้ raw ปัจจัยเป็น 0 (ไม่ได้ขึ้นกับ raw เลย) ต้องคำนวณผ่าน computeEvalXWithKpi() เหมือนกัน
+     ไม่ใช่ตั้ง X=Z ตรงๆ แบบเดิมซึ่งจะลืมคะแนน KPI ไปเฉยๆ */
+  const r = (cfg && typeof computeEvalXWithKpi==='function') ? computeEvalXWithKpi(currentReviewerLevel, currentReviewerCode, currentReviewerCycle, 0, cfg.maxRaw||1, zval) : {KPI:0, X:zval};
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
-  set('reviewRaw','0');set('reviewRaw2','0');set('reviewY','0.00');set('reviewX',zval.toFixed(2));
+  set('reviewRaw','0');set('reviewRaw2','0');set('reviewY','0.00');set('reviewX',r.X.toFixed(2));set('reviewKpi',(r.KPI||0).toFixed(2));
   smlToast('ล้างคะแนนในแบบประเมินเรียบร้อย','ok');
 }
 
@@ -11358,9 +11552,12 @@ async function submitReviewerForm(){
   const l = cfg.leaderShow ? scores.slice(10,14) : [null,null,null,null];
   const emp = MASTER_USERS.find(u=>u[0]===code);
   const empName = emp ? emp[1] : (document.getElementById('reviewerTitle')?.textContent||code);
+  /* #184: อ่าน X จริงที่แสดงอยู่บนหน้าตรงๆ (#reviewX ถูก selectReviewScore() คำนวณใหม่ทุกครั้งด้วย
+     computeEvalXWithKpi() ไปแล้ว รวม KPI ด้วย) ไม่คำนวณ x=y+z ซ้ำเองที่นี่อีกสูตรหนึ่ง — กันสูตรเพี้ยน
+     กันระหว่างจุดแสดงผลกับจุดบันทึกจริง (เหมือนที่ CLAUDE.md #41 เตือนเรื่อง logic ซ้ำกันหลายที่) */
   const y = parseFloat(document.getElementById('reviewY')?.textContent||'0');
   const z = currentReviewerZ||0;
-  const x = y+z;
+  const x = parseFloat(document.getElementById('reviewX')?.textContent||'0');
   const grade = gradeFromX(x);
   const existing = getDrafts().find(d => d[0]===code && d[2]===cycle && d[3]===lv);
   const curStatus = existing ? existing[existing.length-1] : 'Draft';
@@ -12684,7 +12881,7 @@ async function confirmImportEmployees(){
     </div>
     <div class="fr">
       <div class="fg"><label>ขอบเขต</label>
-        <select id="mKpiScope">
+        <select id="mKpiScope" onchange="onKpiScopeChange()">
           <option value="org">🏢 ระดับองค์กร (ทุกคน)</option>
           <option value="dept">🏭 ระดับแผนก (Section)</option>
           <option value="person">👤 รายบุคคลที่ระบุ</option>
@@ -12701,9 +12898,28 @@ async function confirmImportEmployees(){
     <div class="fg"><label>หมายเหตุ / วิธีวัดผล</label>
       <textarea id="mKpiNote" rows="2" placeholder="อธิบายวิธีคำนวณ วิธีวัด หรือแหล่งข้อมูล"></textarea>
     </div>
+    <div class="fg" id="kpiEmpFieldGroup" style="display:none">
+      <label>รหัสพนักงาน (เฉพาะขอบเขต "รายบุคคล") <i>*</i></label>
+      <input id="mKpiEmpCode" list="empCodeList" placeholder="พิมพ์รหัสพนักงาน" oninput="onKpiEmpCodeInput()">
+      <small id="kpiEmpCodeNote" style="display:block;margin-top:3px;color:#94a3b8"></small>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>ผลงานจริง (ตัวเลข — Admin/HR กรอกเมื่อมีผลจริงแล้ว)</label>
+        <input id="mKpiActualVal" type="number" step="any" placeholder="เช่น 96">
+      </div>
+      <div class="fg"><label>เป้าหมาย (ตัวเลข — ใช้เทียบกับผลจริงด้านบน)</label>
+        <input id="mKpiTargetVal" type="number" step="any" placeholder="เช่น 95">
+      </div>
+    </div>
+    <div class="fg"><label>ทิศทางของเป้าหมาย</label>
+      <select id="mKpiDirection">
+        <option value="up">ยิ่งสูงยิ่งดี (เช่น ยอดขาย, OTD%)</option>
+        <option value="down">ยิ่งต่ำยิ่งดี (เช่น จำนวนอุบัติเหตุ, ของเสีย)</option>
+      </select>
+    </div>
     <div class="al al-i">
       <span>ℹ️</span>
-      <div>KPI ที่ "ยังไม่ผูกรอบ" จะถูกเก็บเป็น Draft ไม่มีผลต่อการประเมิน จนกว่า Admin จะเปิดใช้งาน</div>
+      <div>KPI ที่ "ยังไม่ผูกรอบ" จะถูกเก็บเป็น Draft ไม่มีผลต่อการประเมิน จนกว่า Admin จะเปิดใช้งาน — "ผลงานจริง/เป้าหมาย (ตัวเลข)" และ "ทิศทาง" ใช้คำนวณสัดส่วนคะแนน KPI ในแบบประเมิน เฉพาะ KPI ขอบเขต "รายบุคคล" เท่านั้น (ขอบเขตองค์กร/แผนกยังเป็นการติดตามเป้าหมายอย่างเดียว ไม่เข้าคะแนนประเมินรายคนในขณะนี้)</div>
     </div>
   </div>
   <div class="md-f">

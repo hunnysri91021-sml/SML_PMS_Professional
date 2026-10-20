@@ -8171,6 +8171,137 @@ touches employee/attendance/evaluation data.
     output path to confirm visually. Re-ran the same full regression
     suite + click-sweep, zero regressions.
 
+184. **User asked a design question — "ถ้ามีการนำ KPI มาด้วย จะคำนวณอย่างไร" —
+    then confirmed, after I explained X had never included KPI at all, that the
+    real ask was to add KPI as a genuine third component of the real evaluation
+    formula, with "สัดส่วนให้ Admin กำหนดได้เอง หากนโยบายเปลี่ยน" (the Y/Z/KPI split
+    must be Admin-configurable, not hardcoded, since company policy can change
+    over time).** Asked 3 clarifying questions before touching the core scoring
+    engine, since a wrong guess here would mean redoing the real X formula every
+    evaluation ultimately saves: confirmed (1) Admin/HR enters the KPI's real
+    actual achieved value directly on the KPI page itself (not a separate
+    reviewer-step, not self-reported by the employee), (2) the Y/Z/KPI split must
+    be set **per form level** (op/of/ldr/mgr can each have their own real split,
+    not one company-wide number), and (3) an employee with no KPI assigned at all
+    should have the KPI slice's % **returned to Y**, not simply lost.
+    **Investigated the real existing formula first, rather than guessing its
+    shape** — found X = Y + Z was already a clean 0–100 percentage system:
+    `Y = (rawFactorSum/maxFactorSum) × Ypct` and `Z = Zmaxraw` (where `Zmaxraw`
+    already numerically equals `Zpct` for every level), so `Ypct+Zpct=100`
+    already, just never previously exposed to Admin as an editable number — this
+    meant the real KPI feature needed far less new plumbing than it first looked:
+    only the *weight* needed to become configurable and a *third term* needed
+    adding, not a rebuild of the Y/Z math itself. Also found this file keeps
+    **two parallel configs** describing the same percentages — `LEVEL_CONFIG[lv]`
+    (`Ypct`/`Zpct`/`Zmaxraw`, what the real save-path formulas actually read) and
+    `SML_FORMS[lv]` (`ypct`/`zpct`/`zmax`, what the reviewer-form/template-preview
+    pages display and calculate from) — any weight change must apply to both at
+    once through one function, never edited independently, the same #41 "two
+    duplicate implementations that can silently disagree" caution this file has
+    hit before, just for a pair of config *objects* instead of a pair of
+    *functions* this time.
+    **Added `DEFAULT_SCORE_WEIGHTS`/`KPI_SCORE_WEIGHTS_KEY`** — one override
+    object per level (`{ypct, zpct, kpct}`), defaulting to the exact real numbers
+    already in production with `kpct:0` for every level — zero behavior change
+    for anyone until Admin explicitly opens the new weight panel and saves a real
+    split (CLAUDE.md #6's own "a localStorage-backed override must never change
+    existing behavior by default" rule). `applyScoreWeightsToConfigs()` is the
+    one function that writes a saved split onto *both* `LEVEL_CONFIG` and
+    `SML_FORMS` together, so the two configs can never drift apart again — every
+    other function in the file keeps reading `cfg.Ypct`/`cfg.ypct` exactly as
+    before, with zero changes needed at any of those read sites.
+    **New `computeKpiScoreForEmp(empCode, cycle)`** — reads real KPI records from
+    the existing `goalKpiData` (Goal/KPI management module, previously a pure
+    goal-tracking list with **no actual-value or per-employee field at all**) —
+    added `empCode` (which specific employee, required only for `scope==='person'`
+    KPIs — org/dept-scope KPIs have no one person to score, a real, honestly-
+    documented limitation rather than guessed at), `targetVal`/`actualVal`
+    (numeric, separate from the existing free-text `target` label like "≥95%" so
+    existing records' display text is untouched), and `direction` (`up`/`down`,
+    e.g. "ยิ่งต่ำยิ่งดี" for an accident count) to the Add/Edit KPI modal — new
+    fields shown/required only when scope is "รายบุคคล," wired through
+    `onKpiScopeChange()`/`onKpiEmpCodeInput()` the same resolve-by-code-not-name
+    pattern CLAUDE.md #1/#28 already establish (rejects a scope='person' KPI with
+    no real matching `MASTER_USERS` code, same as every other code-entry field in
+    this file). `computeKpiAchievementPct(k)` converts target/actual/direction
+    into a real 0–100% achievement ratio (capped both directions, never
+    fabricated when either number is genuinely blank — returns `null`, per
+    CLAUDE.md #14), and the overall per-employee KPI score is the weight-averaged
+    achievement across every one of that employee's real, active, current-cycle
+    person-scope KPIs.
+    **`computeEvalXWithKpi(lv, empCode, cycle, rawY, maxYraw, zScore)`** is the
+    one real place X=Y+Z+KPI is now computed — re-derives Y itself (not just adds
+    a KPI term onto an already-computed Y), since the *effective* Y% depends on
+    whether this specific employee has a real KPI (`ypctEff = hasKpi ? Ypct :
+    Ypct+Kpct`, implementing the user's own "return KPI's % to Y when absent"
+    answer) — every other function that needs X calls this one shared function
+    (the same CLAUDE.md #41/#94 "one shared chokepoint, no duplicate formula"
+    discipline), never re-derives the split independently: `calcCurrentEvalSummary()`
+    (the self-eval page's real save/submit-confirm path), `recalc()` (the
+    self-eval page's live preview while filling the form — verified against
+    `calcCurrentEvalSummary()`'s own result to confirm the two can never show a
+    different number), `selectReviewScore()` (the reviewer-form's live preview),
+    and `clearReviewerForm()` (resetting raw scores to 0 must NOT also silently
+    zero out a real KPI contribution that doesn't depend on raw factor scores at
+    all — the old code hardcoded `#reviewX` back to just `Z`, which would have
+    been wrong the moment any level ever turns KPI on). `submitReviewerForm()`
+    was simplified to **read `#reviewX`/`#reviewY` straight off the DOM** instead
+    of recomputing `x=y+z` a third, independent time — the exact kind of
+    duplicate-formula risk #41 warns about, closed by deletion rather than a
+    fourth copy of the same math.
+    **New Admin UI**: a "⚖️ สัดส่วนคะแนน Y / Z / KPI" panel added to the existing
+    sysadmin-only factor editor (`showTplDetail()`, "ตั้งค่าแบบประเมิน" page) — 3
+    number inputs per level, a "💾 บันทึกสัดส่วน" button
+    (`saveScoreWeightsFromForm()`, refuses to save unless Y+Z+KPI sums to exactly
+    100%, never silently rescales what Admin typed) and a "↩️ รีเซ็ตเป็นค่าเริ่มต้น"
+    button (`resetScoreWeightsForLevel()`) — the same editable-override +
+    reset-to-default pairing CLAUDE.md #6 requires for every such value in this
+    file. New KPI/Y/Z stat tiles added to both the self-eval page
+    (`#sumKpiCard`) and the reviewer-form modal (`#reviewKpiCard`) — both
+    genuinely hidden (`display:none`) whenever that level's `Kpct` is 0, so a
+    company that never turns KPI on sees no new UI at all, not just a 0.00 tile
+    sitting there unexplained.
+    **Excel sync, extended rather than duplicated**: reused the *same*
+    `FormWeights` table and `pushFormWeightsToExcel()`/`ms365SyncFormWeights()`
+    pair already built for factor overrides (#39) — the JSON payload per level
+    changed shape from a bare factors array to `{factors, ypct, zpct, kpct}`,
+    with the pull side accepting **both** the old array-only shape (so a row
+    synced from before this fix, or from a device not yet updated, still reads
+    correctly) and the new object shape — never breaking an existing sync, per
+    the same backward-compatible-read discipline CLAUDE.md #102/#106 already
+    establish for a changed external-table shape. **Deliberately left the KPI
+    actual-value/target/direction/empCode fields local-only (not synced to
+    Excel)** — unlike the weight panel, there is no real, screenshot-verified
+    column for these in the `KPI_Goals` sheet (CLAUDE.md #30/#97's own "never
+    assume a column exists without verifying against the real file" rule), so
+    guessing a shape here risked the exact #68/#104 class of silent corruption;
+    stated as a known limitation rather than silently built and hoped-for.
+    Verified with Playwright/Node tests driving the real functions (never
+    writing to `LEVEL_CONFIG`/`SML_FORMS` directly): confirmed the baseline
+    (`Kpct=0`) produces byte-identical X to the pre-#184 formula; confirmed
+    saving a real 50/30/20 split and an employee with *no* KPI assigned
+    correctly redistributes the 20% into Y (`Ypct_eff=70`); confirmed the same
+    employee *with* a real 70%-achieved KPI gets the un-redistributed split
+    (`Ypct=50`) plus a real `14.00` KPI contribution; confirmed resetting
+    restores the exact original 70/30/0 default; confirmed a `direction='down'`
+    KPI with target=0/actual=0 scores 100%; confirmed the self-eval page's live
+    `recalc()` tile and `calcCurrentEvalSummary()`'s saved result agree exactly
+    (`Y=50.00, KPI=16.00, X=96.00` both sides); confirmed the reviewer-form path
+    (`openReviewerForm → selectReviewScore → submitReviewerForm`) produces the
+    identical `X=94.00`/grade `A` end-to-end through the real UI (clicking real
+    score buttons, never writing scores to the draft directly) — plus the
+    standard click-sweep (`nav pages clicked: 17 errors: []`). General lesson:
+    before building a user's requested "add a new score component," re-derive
+    the *existing* formula's real shape first (here, discovering Y/Z already
+    summed to a clean 100%, and that two parallel config objects already existed
+    describing it) — it is often far cheaper to extend an already-normalized
+    system with one new configurable weight and one shared calculation
+    chokepoint than to guess at a brand-new formula from scratch, and finding
+    the existing duplicate-config risk (`LEVEL_CONFIG` vs `SML_FORMS`) before
+    writing the override mechanism is what kept the fix from silently
+    reintroducing the exact "two numbers disagree" bug shape this file has hit
+    many times before.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
