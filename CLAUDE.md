@@ -8617,6 +8617,47 @@ touches employee/attendance/evaluation data.
     disagreeing, since nothing enforces that the modal's static markup
     and the live permission-key list stay in sync with each other.
 
+190. **User's screenshot of the "แบบประเมินตนเอง" page's top toolbar (🗑️ ล้าง
+    ผลประเมิน / 💾 บันทึกร่าง / 🖨️ พิมพ์ร่าง / 📤 ส่งแบบประเมิน / 💾 ส่งออก
+    ไฟล์) showed all 5 buttons rendered normally, and asked: "หน้าประเมิน
+    ตนเอง ถ้าไม่มีสิทธิประเมินให้ขึ้นสีเทาไว้ ปุ่มไม่ใช้งาน" (if the
+    employee has no self-eval permission, grey these out — disabled).**
+    `onEvalCodeGateChange()` (CLAUDE.md #111/#62/#71) already correctly
+    gated the 4 level-selection buttons and `#formArea` behind
+    `isEligibleForSelfEval()` — but the 5 real action buttons sit
+    *outside* `#formArea`, in the page header's own `.ph-act` block, and
+    were never wired into that same ineligible branch at all: they had no
+    `id`, no disabled state, nothing — an ineligible employee saw a red
+    "⛔ ไม่อยู่ในรายชื่อ/แผนกที่กำหนด" warning with every one of these 5
+    buttons still fully clickable right above it, exactly contradicting
+    the warning's own meaning.
+    Gave all 5 buttons real `id`s (`evalBtnClear`/`evalBtnSaveDraft`/
+    `evalBtnPrint`/`evalBtnSubmit`/`evalBtnExport`) and added one shared
+    `setEvalToolbarEnabled(enabled)` helper — sets `.disabled`, a greyed
+    `opacity:0.45`/`cursor:not-allowed`, and an explanatory `title` when
+    disabled. Called `setEvalToolbarEnabled(true)` at the top of
+    `onEvalCodeGateChange()` (the same "reset before re-deciding" spot
+    the level buttons already use) and `setEvalToolbarEnabled(false)`
+    inside the existing ineligible branch, right alongside the level-
+    button disable and `#formArea` hide it already does — one real
+    chokepoint, not a second independent gate. Verified with a Playwright
+    test seeding one eligible employee (in `EVAL_ELIGIBILITY`'s real
+    `emps[]` allowlist, written through `localStorage`/`loadEvalEligibility()`
+    itself — not the module variable directly, since `isEligibleForSelfEval()`
+    always re-reads from storage) and one ineligible employee under
+    `restricted` mode: confirms all 5 buttons are enabled/normal for the
+    eligible code, all 5 are disabled+greyed for the ineligible code, and
+    clearing the code field resets them back to enabled — plus the
+    standard click-sweep (`nav pages clicked: 17 errors: []`), zero
+    regressions. General lesson sharper than #111's own conclusion: a
+    gating fix applied to one real element (`#formArea`) and a related
+    set of buttons (the 4 level buttons) inside the same function does
+    not automatically cover every *other* control on the same page that
+    implies the same permission — a page header's own action buttons,
+    sitting outside the gated content area entirely, are exactly the
+    kind of control a "hide the form" fix can walk right past, since
+    they were never part of the form being hidden.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

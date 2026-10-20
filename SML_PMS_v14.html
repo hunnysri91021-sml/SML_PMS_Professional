@@ -1591,12 +1591,12 @@ tbody tr:hover{background:#f0f6ff!important}
   <section class="page" id="pg-myeval">
     <div class="ph">
       <div><h2>แบบประเมินตนเอง</h2><p id="evalSubtitle">กรุณาเลือกระดับตำแหน่งของท่านก่อน</p></div>
-      <div class="ph-act">
-        <button class="btn btn-dg" onclick="clearEvalForm()">🗑️ ล้างผลประเมิน</button>
-        <button class="btn" onclick="saveDraftEval()">💾 บันทึกร่าง</button>
-        <button class="btn print-eval-btn" data-no-delegate onclick="printEvalForm()">🖨️ พิมพ์ร่าง</button>
-        <button class="btn btn-p" onclick="openSubmitConfirmModal()">📤 ส่งแบบประเมิน</button>
-        <button class="btn" onclick="exportMyDataFile()" title="สำหรับผู้ที่ไม่มี MS365 — บันทึกไฟล์เพื่อส่งให้ Admin นำเข้ารวมภายหลัง">💾 ส่งออกไฟล์ (ไม่มี MS365)</button>
+      <div class="ph-act" id="evalToolbarActions">
+        <button class="btn btn-dg" id="evalBtnClear" onclick="clearEvalForm()">🗑️ ล้างผลประเมิน</button>
+        <button class="btn" id="evalBtnSaveDraft" onclick="saveDraftEval()">💾 บันทึกร่าง</button>
+        <button class="btn print-eval-btn" id="evalBtnPrint" data-no-delegate onclick="printEvalForm()">🖨️ พิมพ์ร่าง</button>
+        <button class="btn btn-p" id="evalBtnSubmit" onclick="openSubmitConfirmModal()">📤 ส่งแบบประเมิน</button>
+        <button class="btn" id="evalBtnExport" onclick="exportMyDataFile()" title="สำหรับผู้ที่ไม่มี MS365 — บันทึกไฟล์เพื่อส่งให้ Admin นำเข้ารวมภายหลัง">💾 ส่งออกไฟล์ (ไม่มี MS365)</button>
       </div>
     </div>
 
@@ -6804,17 +6804,33 @@ function getAssignedEvalLevel(emp){
 /* พิมพ์/เปลี่ยนรหัสพนักงานที่ช่องด้านบนแบบฟอร์มประเมิน -> ดึงแบบฟอร์มที่ Admin กำหนดไว้มาเลือกให้
    อัตโนมัติทันที และล็อกปุ่มเลือกระดับอื่นไว้ (กันคนเลือกแบบฟอร์มผิดระดับเอง) ยกเว้น Admin ระบบ/
    Admin HR ที่ยังต้องสลับดูแบบฟอร์มระดับอื่นเพื่อสอบทาน/ตรวจสอบได้ตามปกติ */
+/* #190 — ปุ่มแถบเครื่องมือ (ล้าง/บันทึกร่าง/พิมพ์/ส่ง/ส่งออกไฟล์) บนหน้า "แบบประเมินตนเอง" ไม่เคยถูก
+   gate ด้วยสิทธิ์ประเมินตนเองเลย ต่างจาก #formArea/ปุ่มเลือกระดับ (CLAUDE.md #111/#62/#71) ที่ถูกซ่อน/
+   disable ไปแล้วเมื่อ isEligibleForSelfEval() เป็น false — พนักงานที่ไม่มีสิทธิ์จึงยังเห็นปุ่มทั้ง 5 ปุ่ม
+   เป็นสีปกติกดได้ตามปกติ ทั้งที่ไม่มีฟอร์มให้กรอก/ส่งจริง ให้ greyed out + disabled เมื่อไม่มีสิทธิ์ */
+function setEvalToolbarEnabled(enabled){
+  ['evalBtnClear','evalBtnSaveDraft','evalBtnPrint','evalBtnSubmit','evalBtnExport'].forEach(id=>{
+    const btn = document.getElementById(id);
+    if(!btn) return;
+    btn.disabled = !enabled;
+    btn.style.opacity = enabled ? '' : '0.45';
+    btn.style.cursor = enabled ? '' : 'not-allowed';
+    btn.title = enabled ? '' : 'ไม่มีสิทธิ์ประเมินตนเองในรอบนี้ — ปุ่มนี้ใช้งานไม่ได้';
+  });
+}
 function onEvalCodeGateChange(){
   const code = (document.getElementById('evalCodeGate')?.value || '').trim();
   const note = document.getElementById('evalLevelAssignedNote');
   const isAdminViewer = CURRENT_SESSION_USER && ['admin','sysadmin'].includes(CURRENT_SESSION_USER[2]);
   LV_KEYS.forEach(k=>{ const btn=document.getElementById('lv-'+k); if(btn) btn.disabled = false; });
+  setEvalToolbarEnabled(true);
   const evalCodeEl = document.getElementById('evalCode');
   if(!code){ if(note) note.textContent=''; return; }
   const emp = MASTER_USERS.find(u=>u[0]===code);
   if(!emp){ if(note){ note.textContent = 'ไม่พบรหัสพนักงานนี้ในระบบ'; note.style.color = '#dc2626'; } return; }
   if(typeof isEligibleForSelfEval==='function' && !isEligibleForSelfEval(emp)){
     LV_KEYS.forEach(k=>{ const btn=document.getElementById('lv-'+k); if(btn) btn.disabled = true; });
+    setEvalToolbarEnabled(false);
     if(evalCodeEl) evalCodeEl.value = code;
     const evalNameElX = document.getElementById('evalName');
     if(evalNameElX){ evalNameElX.value = emp[1]; evalNameElX.readOnly = true; }
