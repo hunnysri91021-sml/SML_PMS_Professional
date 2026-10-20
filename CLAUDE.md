@@ -8152,6 +8152,51 @@ touches employee/attendance/evaluation data.
     but "stop forcing data that isn't the same *kind* of information
     (6 raw inputs vs. 1 final answer) into one undifferentiated grid
     built for the other shape."
+
+192. **Follow-up to #191: user said if the header "พิมพ์ใบประเมิน (PDF)"
+    button now pulls the real latest result like the banner's "ดาวน์โหลด
+    ใบประเมิน PDF" button, and the two are duplicates, remove one —
+    confirmed they were now byte-for-byte duplicates (#191 made the
+    header button call the exact same `printSingleDraft()` resolution as
+    the banner), so deleted the header button and the now-unused
+    `printMyResultForm()` function it called, per this project's
+    standing "delete code known to be unused" convention (#48/#51/#80) —
+    the banner's own download button (only shown once a real result
+    exists via `hasVisibleResult()`) is the one real print path left.**
+    **Second half, the notification bell**: "พอคลิกไปแล้วมันเห็นข้อมูลหมด"
+    (once clicked, it shows everything) — traced `getNotifications()`
+    (#73/#85/#87/#126/#130/#138's own repeatedly-fixed function) and
+    found one item still genuinely unscoped: the "รอ Push เข้า Excel"
+    line counted `isFinalStatus()` drafts straight from the raw
+    `MS365_LOCAL_DRAFT_KEY` array with **zero** `getMyScopedEmpCodes()`/
+    `buildTierRoster()` filtering at all — unlike the 4 queue-count
+    lines right above it (all correctly routed through `buildTierRoster()`
+    since #138/#140) and the hierarchy-issues count right below it
+    (already correctly scoped internally by `checkHierarchyIssues()`,
+    #73/#127). #87 had explicitly left this one line company-wide on
+    purpose, reasoning it was "an admin/system concern," but never
+    actually hid it from non-admin roles — so any logged-in L1/L2/unit/
+    emp clicking the bell saw a real company-wide "N รายการ" count and a
+    link into "MS365 Excel," a page whose own nav item is `data-role=
+    "admin"` and that they can't even open. Fixed by gating the whole
+    item behind `['admin','sysadmin'].includes(me[2])`, the identical
+    pattern CLAUDE.md #90 already established for the "📢 ส่ง Reminder"
+    button (hide the control entirely for every role it isn't actually
+    for, not just leave it visible-but-useless). Verified with a
+    Playwright test seeding a real non-admin `l1` session and a real
+    `Approved` draft with nothing scoping it to that L1: confirms
+    `getNotifications()` for the L1 contains no `ms365`-linked item at
+    all, while the same real data still correctly appears for an admin
+    session — plus confirmed the myresult page's header button and
+    `printMyResultForm()` are both gone from the DOM/`window` — plus the
+    standard click-sweep (`nav pages clicked: 17 errors: []`), zero
+    regressions. General lesson sharper than #87's own conclusion:
+    "company-wide on purpose because it's an admin concern" is not the
+    same as "safe to show to everyone" — a summary item built for one
+    specific role still needs the same per-role visibility gate every
+    other admin-only control in this file already gets (#72/#90/#113),
+    or it leaks a real, if harmless-to-act-on, company-wide number to
+    whoever happens to open the bell.
     **Immediate follow-up, same request's real target**: user's next
     screenshot pointed specifically at the employee-info tiles
     (ชื่อ-สกุล/รหัสพนักงาน/ตำแหน่ง/รอบประเมิน) asking for them "ให้เห็น
