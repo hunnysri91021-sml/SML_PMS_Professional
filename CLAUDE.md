@@ -8197,6 +8197,66 @@ touches employee/attendance/evaluation data.
     other admin-only control in this file already gets (#72/#90/#113),
     or it leaks a real, if harmless-to-act-on, company-wide number to
     whoever happens to open the bell.
+
+193. **User reported "แบบฟอร์มที่ขึ้นในหน้าประเมินตนเองดึงมาไม่ตรง" — an
+    employee's self-eval page showed "พนักงานปฏิบัติการ" (op) while the
+    same employee's "แก้ไขพนักงาน" page showed "ระดับแบบฟอร์มประเมิน"
+    already correctly set to "พนักงานสำนักงาน" (of). Asked two clarifying
+    questions before touching code: confirmed the employee code typed on
+    the self-eval page matched the edited employee's code exactly (ruling
+    out a same-name/different-code mix-up, since `getAssignedEvalLevel()`
+    (CLAUDE.md #23) checks `emp[18]` first and would always return the
+    real assigned level if the lookup resolved to the right record at
+    all).** With a duplicate-record or code-mismatch cause ruled out by
+    the user's own confirmation, re-read `saveUserFromModal()`
+    end-to-end: it writes `emp[18]='of'` into `MASTER_USERS` correctly
+    and immediately — but its two Excel pushes
+    (`pushSingleEmployeeSettings()`/`pushSingleEmployeeToExcel()`) were
+    still **fire-and-forget**, exactly the same race CLAUDE.md #55
+    already found and fixed for `resetUserPin()` years of fixes ago, just
+    never applied to this sibling save function. Since `MASTER_USERS` has
+    **zero** persistence of its own (#32 — it resets to the hardcoded
+    demo baseline on every page load/login, then gets rebuilt purely from
+    Excel via the silent-sync chain), a fresh edit only ever lives in
+    that one in-memory array until the push to Excel actually lands — if
+    Admin reloads, logs out, or simply navigates to test the self-eval
+    page right after saving (an extremely ordinary thing to do, exactly
+    what this report describes) before the un-awaited push finishes, the
+    next page load's `doLogin()`/`tryRestoreSession()` sync chain wipes
+    `MASTER_USERS` back to baseline and `ms365SyncEmployeeSettingsSilent()`
+    pulls `evalLevel` back from Excel's `EmployeeSettings` table — which
+    still holds the old `'op'` value, since the push that would have
+    updated it never finished. The result: "แก้ไขพนักงาน" (still on the
+    original, un-reloaded tab) correctly shows `'of'` from its own live
+    `MASTER_USERS` reference, while the self-eval page (opened fresh,
+    post-reload) shows the stale `'op'` pulled back down from Excel —
+    two screens disagreeing about the exact same employee record for a
+    purely timing reason, not a logic bug in either page. Fixed by
+    making `saveUserFromModal()` `async` and `await`ing both push calls
+    before `closeM()` — the identical fix #55 already applied to
+    `resetUserPin()`'s own equivalent race, just extended to this
+    sibling save path that #55 never touched (it only covered the PIN
+    field's push, not the employee-edit save path that also pushes
+    `evalLevel`/`evalExempt`/`lineUserId` through the same table).
+    Verified with a Playwright test that gates the mocked
+    `graphUpsertTableRow()` behind an artificial delay (so the push is
+    still genuinely in-flight when `saveUserFromModal()`'s own promise
+    is inspected) and confirms the function's returned promise only
+    resolves after both pushes have genuinely completed — plus the
+    standard click-sweep (`nav pages clicked: 17 errors: []`), zero
+    regressions. **Real limit, stated plainly**: this closes the *race*
+    — it does not retroactively fix any employee record whose
+    `EmployeeSettings` Excel row is already stuck on a stale value from
+    before this fix; re-saving that employee (even with no real change)
+    will now push the correct value through and hold it across future
+    reloads/syncs. General lesson sharper than #55's own conclusion: a
+    fire-and-forget-push race fixed once in one function (a PIN reset)
+    does not mean every other function pushing through the *same*
+    underlying table is safe — `EmployeeSettings` alone had at least two
+    writers (`resetUserPin()`, already fixed; `saveUserFromModal()`,
+    not) — grep every caller of a push function fixed for this exact
+    race and check whether each one is also awaited, not just the one
+    the original report was about.
     **Immediate follow-up, same request's real target**: user's next
     screenshot pointed specifically at the employee-info tiles
     (ชื่อ-สกุล/รหัสพนักงาน/ตำแหน่ง/รอบประเมิน) asking for them "ให้เห็น

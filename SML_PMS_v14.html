@@ -6205,7 +6205,7 @@ function onSupervisorSelectChange(which){
     note.style.color = '#16a34a';
   }
 }
-function saveUserFromModal() {
+async function saveUserFromModal() {
   const id       = document.getElementById('mu_id')?.value.trim();
   const name     = document.getElementById('mu_name')?.value.trim();
   const role     = document.getElementById('mu_role')?.value;
@@ -6267,9 +6267,16 @@ function saveUserFromModal() {
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
   /* เรียกเสมอ ไม่ใช่แค่ตอน evalLevel/evalExempt เป็นค่าจริง — การ "ติ๊กออก" (เปลี่ยนเป็นค่าว่าง/'0')
-     ก็ต้อง push ขึ้น Excel เหมือนกัน ไม่งั้นการยกเลิกยกเว้นประเมินจะไม่ sync ข้ามอุปกรณ์/ข้ามการเปิดระบบใหม่ */
-  if(typeof pushSingleEmployeeSettings==='function') pushSingleEmployeeSettings(id);
-  if(typeof pushSingleEmployeeToExcel==='function') pushSingleEmployeeToExcel(id);
+     ก็ต้อง push ขึ้น Excel เหมือนกัน ไม่งั้นการยกเลิกยกเว้นประเมินจะไม่ sync ข้ามอุปกรณ์/ข้ามการเปิดระบบใหม่
+     — #193: เดิมสองบรรทัดนี้เป็น fire-and-forget (ไม่ await) เหมือนที่ #55 เคยเจอใน resetUserPin()
+     มาก่อน — ถ้า Admin ปิดแท็บ/รีโหลดหน้า/ออกจากระบบทันทีหลังบันทึก (เช่นสลับไปทดสอบหน้าประเมินตนเอง
+     ของพนักงานคนนั้นต่อ) การ push อาจถูกตัดตอนกลางทางก่อนขึ้น Excel จริง แล้ว silent sync รอบถัดไป
+     (doLogin()/tryRestoreSession() — MASTER_USERS รีเซ็ตเป็น baseline เดิมทุกครั้งที่โหลดหน้าใหม่ตาม
+     CLAUDE.md #32) จะดึงค่าเก่าจาก EmployeeSettings ใน Excel ที่ยังไม่ทันอัปเดตกลับมาทับค่าที่เพิ่งแก้
+     ในเครื่องนี้แทน — ให้ผลคือ "แก้ไขพนักงาน" โชว์ค่าใหม่ถูกต้องตอนบันทึกเสร็จ แต่หน้าประเมินตนเอง
+     (เปิดใหม่/รีโหลด) กลับไม่ตรง — await ให้ push ทั้งสองเสร็จจริงก่อนปิด modal เหมือนที่ #55 แก้ไว้ */
+  if(typeof pushSingleEmployeeSettings==='function') await pushSingleEmployeeSettings(id);
+  if(typeof pushSingleEmployeeToExcel==='function') await pushSingleEmployeeToExcel(id);
   closeM();
 }
 
