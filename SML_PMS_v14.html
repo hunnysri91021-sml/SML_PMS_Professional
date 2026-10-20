@@ -1459,7 +1459,7 @@ tbody tr:hover{background:#f0f6ff!important}
   </div>
   <!-- หมวด 1: ภาพรวมและงานตนเอง -->
   <div class="nav-sec">ภาพรวม</div>
-  <div class="nav-item on" data-pg="dash"><span class="ic">🏠</span> แดชบอร์ด</div>
+  <div class="nav-item on" data-pg="dash" data-role="admin,exec,gm,l2,l1,unit"><span class="ic">🏠</span> แดชบอร์ด</div>
 
   <!-- หมวด 2: กระบวนการประเมิน (เรียงตาม workflow) -->
   <div class="nav-sec">กระบวนการประเมิน</div>
@@ -3673,10 +3673,16 @@ function setRole(r){
   });
   const a=document.getElementById('av');
   if(a){a.textContent=avMap[r][0];a.style.background=avMap[r][1];}
-  // ถ้าหน้าปัจจุบันถูกซ่อน ให้กลับไปแดชบอร์ด
+  // ถ้าหน้าปัจจุบันถูกซ่อน ให้กลับไปหน้าแรกที่ role นี้ยังมองเห็นอยู่จริง
+  // (เดิม hardcode กลับไปที่ dash เสมอ — ตั้งแต่ dash เองก็ซ่อนได้สำหรับ role emp แล้ว (ดู CLAUDE.md
+  // ด้านล่าง "ซ่อน Dashboard สำหรับ พนักงาน") การ .click() ปุ่ม dash ที่ถูกซ่อนไว้ก็ยังพาไปหน้า dash ได้
+  // ตามปกติ (click() ของ element ที่ display:none ยัง dispatch event จริง) แค่ sidebar ไม่ highlight ให้
+  // ต้องหาเมนูแรกที่ role นี้มองเห็นจริงแทน)
   const cur=document.querySelector('.nav-item.on');
-  if(cur&&(cur.style.display==='none'||!cur.style.display))
-    document.querySelector('.nav-item[data-pg="dash"]').click();
+  if(cur&&(cur.style.display==='none'||!cur.style.display)){
+    const fallback=[...document.querySelectorAll('.nav-item[data-pg]')].find(x=>x.style.display!=='none');
+    (fallback||document.querySelector('.nav-item[data-pg="dash"]')).click();
+  }
 }
 setRole('admin');
 
@@ -4769,8 +4775,10 @@ function renderZStats(lv){
 
 /* helpers */
 const U_ROLE_LABEL = {
+  sysadmin:'<span class="bd b-r">🛡️ Admin ระบบ (Super Admin)</span>',
   admin:'<span class="bd b-r">👑 Admin HR&GA</span>',
   exec: '<span class="bd b-p">💼 AGM/MD</span>',
+  gm:   '<span class="bd b-p">🏢 GM</span>',
   l2:   '<span class="bd b-b">🎯 ผู้จัดการส่วน (Division Mgr)</span>',
   l1:   '<span class="bd b-g">👔 หัวหน้าแผนก (Section Head)</span>',
   unit: '<span class="bd b-g">🧭 หัวหน้าหน่วย (Unit Leader)</span>',

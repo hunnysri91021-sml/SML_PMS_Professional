@@ -8484,6 +8484,78 @@ touches employee/attendance/evaluation data.
     a record already communicated to the employee) that a wrong guess
     here would be expensive to walk back.
 
+188. **User asked two things in one short message: "หน้าพนักงานไม่ต้องแสดง
+    dashboard" (the employee's own page shouldn't show the Dashboard) and
+    "ทบทวนหน้า role ด้วย มีแถบให้เลือกไม่ครบ" (review the role page too —
+    a selectable bar/list is missing some options).**
+    **Dashboard-for-emp**: traced `setRole()`/`NAV_PERMS` and found the
+    `dash` nav item had **no `data-role` attribute at all** — unlike
+    every other nav item, it was never gated by role, by design, per
+    CLAUDE.md #58's own stated reason (`setRole('admin')` fires
+    synchronously at script-parse time, before login, to show something
+    while the page loads — wiring `dash` into anything role-sensitive at
+    that exact moment had broken things before). That reasoning covered
+    *why `dash` couldn't be wired into certain async dispatch logic* — it
+    never actually required `dash` to stay visible to every role forever;
+    adding a plain static `data-role` attribute calls no function and
+    doesn't touch the TDZ/`DEFAULT_MS365_CONFIG` ordering #58 warned
+    about, so it was safe to add. Gave the dash nav item
+    `data-role="admin,exec,gm,l2,l1,unit"` (deliberately excluding only
+    `emp` — `sysadmin` always bypasses the role filter in `setRole()`
+    regardless of any list, per its own `r==='sysadmin'?true:...` check).
+    **Found and fixed a real knock-on bug this surfaced**: `setRole()`'s
+    own "current page just got hidden, go somewhere real" fallback was
+    hardcoded to always `.click()` the `dash` nav item — harmless while
+    `dash` was unconditionally visible, but now that `dash` itself can be
+    the hidden page (exactly the case when an `emp` session first loads,
+    since the page's default `.on` state is `pg-dash`), that hardcoded
+    click would have silently shown the Dashboard *content* anyway (a
+    programmatic `.click()` on a `display:none` element still fires its
+    `onclick` handler — only the sidebar wouldn't highlight it), defeating
+    the whole fix. Changed the fallback to find the first nav item that
+    is actually visible for the current role and click that instead
+    (falling back to the old hardcoded `dash` click only if, somehow,
+    nothing is visible at all) — for `emp` this now correctly lands on
+    "1. ประเมินตนเอง" (`myeval`, one of only two nav items — the other
+    being "8. ผลประเมิน" — that have never had a `data-role` at all,
+    since every employee needs access to both regardless of role).
+    **"หน้า role" (the role page) audit**: re-ran the exact #64/#65/#79
+    discipline — grepped every independent role-enumeration list in the
+    file (`#roleSel`, `#filterRole`, `mu_role`, `NAV_ROLES`, `ROLE_DEFS`,
+    `avMap`) and found all six already complete (all 8 real roles:
+    sysadmin/admin/exec/gm/l2/l1/unit/emp, or 7 for `NAV_ROLES` which
+    correctly omits `sysadmin` since that role always bypasses the nav
+    gate and was never meant to need a configurable column). The one
+    genuinely incomplete list found was `U_ROLE_LABEL` (the employee
+    list's own role-badge map, used at 2 render sites) — missing
+    `sysadmin` and `gm` entirely, so an employee row with either role
+    fell through to the bare `||u[2]` fallback and rendered as plain
+    unstyled text ("sysadmin"/"gm") instead of a real colored badge like
+    every other role gets — exactly the #79 shape of a role-label list
+    silently left behind a newer role rollout. Added both, matching the
+    existing icon/wording conventions already used in `NAV_ROLE_LABEL`/
+    `avMap`/`#roleSel` for the same two roles. Verified with a Playwright
+    test that logs in via the real `applySession()` (never touching
+    `setRole()`/CSS directly) as a synthetic `emp` employee — confirms
+    the dash nav item is genuinely hidden (`display:none`) and the page
+    actually lands on `pg-myeval`, not a hidden `pg-dash` — then logs in
+    as `admin` and confirms the dash nav item is visible again, plus
+    confirms `U_ROLE_LABEL.sysadmin`/`.gm` now exist — plus the standard
+    click-sweep (`nav pages clicked: 17 errors: []`), zero regressions.
+    General lesson: a page explicitly left unrestricted in the past for
+    a real, documented reason (here, `dash`'s role in top-level
+    synchronous init, #58) doesn't mean every later request to restrict
+    it is automatically unsafe — re-read *why* the earlier exception
+    existed before assuming it still applies to the new change, since a
+    static HTML attribute and a dynamic function call can carry very
+    different risk even when they touch the same element; and once a
+    previously-"always visible" nav item becomes conditionally hidden,
+    audit every other place in the file that assumed it would always be
+    clickable (here, `setRole()`'s own hardcoded fallback), since that
+    kind of hardcoded reference is easy to miss until the exact
+    condition that breaks it (the currently-active page being the one
+    just hidden) actually occurs.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
