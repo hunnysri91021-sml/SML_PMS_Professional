@@ -1792,7 +1792,7 @@ tbody tr:hover{background:#f0f6ff!important}
   <!-- ========== MY RESULT ========== -->
   <section class="page" id="pg-myresult">
     <div class="ph"><div><h2>ผลประเมินของฉัน</h2><p>ประวัติผลการประเมินจริงของฉันเท่าที่มีบันทึกในระบบ</p></div>
-    <div class="ph-act"><button class="btn print-eval-btn" data-no-delegate onclick="printEvalForm()">🖨️ พิมพ์ใบประเมิน (PDF)</button></div></div>
+    <div class="ph-act"><button class="btn print-eval-btn" data-no-delegate onclick="printMyResultForm()">🖨️ พิมพ์ใบประเมิน (PDF)</button></div></div>
 
     <div class="al al-s" id="myResultBanner" style="display:none"><span>🎉</span><div id="myResultBannerText"></div></div>
     <div class="al al-i" id="myResultEmptyNotice" style="display:none"><span>ℹ️</span><div>ยังไม่มีผลการประเมินที่อนุมัติเสร็จสิ้นของคุณในระบบ — ตัวเลขด้านล่างจะแสดงทันทีที่มีผลประเมินสถานะ "Approved" บันทึกไว้</div></div>
@@ -5408,6 +5408,25 @@ function _levelCells(w, sc, allApproved) {
    เงินเดือนเก็บอยู่ที่ไหนในระบบเลย) จึงตัดออกแทนที่ด้วย "สถานะอนุมัติ" ซึ่งเป็นข้อมูลจริง (#14) และ
    "ความเห็นจากผู้ประเมิน" แบบข้อความเดิมก็เป็นข้อความที่ไม่มีอยู่จริงเช่นกัน (ไม่มีที่เก็บ comment ต่อ
    ขั้นตอนที่นี่) ตัดออก เหลือแค่ชื่อผู้ลงนามอนุมัติจริงจาก getApprovalSignature() (คีย์เดียวกับ #39) */
+/* #191 — ปุ่ม "🖨️ พิมพ์ใบประเมิน (PDF)" บนหัวหน้า pg-myresult เดิมเรียก printEvalForm() เฉยๆ ซึ่งเป็น
+   ฟังก์ชันที่ออกแบบไว้สำหรับหน้า "ประเมินตนเอง" (pg-myeval) โดยเฉพาะ — อ่าน currentLevel/evalScores
+   (ตัวแปร module-level ที่ setEvalLevel() บนหน้าประเมินตนเองเท่านั้นเป็นคนตั้งค่า) และช่อง DOM
+   #evalCode/#evalPos/#evalDept ที่ไม่มีอยู่จริงบนหน้านี้เลย ถ้า session นี้ยังไม่เคยเปิดหน้าประเมิน
+   ตนเองมาก่อนเลย currentLevel จะเป็น null (ขึ้นแจ้งเตือน "กรุณาเลือกระดับตำแหน่งก่อน") และถ้าเคยเปิด
+   หน้าอื่นมาก่อน (เช่น admin เปิดดูฟอร์มคนอื่น) ค่าที่ค้างอยู่จะเป็นของ "คนอื่น"/"ระดับอื่น" ไม่ใช่ผล
+   ประเมินจริงของเจ้าของหน้านี้เลย — ตรงนี้คือสาเหตุที่ปุ่มนี้กับปุ่ม "ดาวน์โหลดใบประเมิน PDF" (#173 ที่
+   เรียก printSingleDraft() ถูกต้องอยู่แล้ว) ให้ผลไม่ตรงกัน ทั้งที่ควรเป็นใบเดียวกัน — ให้ปุ่มนี้ resolve
+   draft จริงด้วยวิธีเดียวกับ renderMyResult() เป๊ะๆ (hasVisibleResult, คนล่าสุดตามรอบ) แล้วเรียก
+   printSingleDraft() ตัวเดียวกัน ไม่สร้างทางพิมพ์ที่สองอีก */
+function printMyResultForm(){
+  const me = CURRENT_SESSION_USER;
+  if(!me){ smlToast('กรุณาเข้าสู่ระบบก่อน','warn'); return; }
+  const myDrafts = (typeof getDrafts==='function') ? getDrafts().filter(d=>d[0]===me[0]) : [];
+  const approvedDrafts = myDrafts.filter(d=>(typeof hasVisibleResult==='function'?hasVisibleResult(d[d.length-1]):d[d.length-1]==='Approved')).sort((a,b)=>Number(b[2])-Number(a[2]));
+  const latest = approvedDrafts[0];
+  if(!latest){ smlToast('ยังไม่มีผลการประเมินที่อนุมัติแล้วให้พิมพ์','warn'); return; }
+  printSingleDraft(latest[0], latest[2], latest[3]);
+}
 function renderMyResult(){
   const box = document.getElementById('pg-myresult');
   if(!box) return;

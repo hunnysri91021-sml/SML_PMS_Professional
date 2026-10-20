@@ -8658,6 +8658,45 @@ touches employee/attendance/evaluation data.
     kind of control a "hide the form" fix can walk right past, since
     they were never part of the form being hidden.
 
+191. **User's screenshot of "ผลประเมินของฉัน" showed two print buttons —
+    the page header's "🖨️ พิมพ์ใบประเมิน (PDF)" and the success banner's
+    "📄 ดาวน์โหลดใบประเมิน PDF" (#173) — and reported "ไม่เหมือนกัน" (they
+    don't produce the same thing).** Traced the header button: it called
+    bare `printEvalForm()` with no arguments — the exact function built
+    for the **self-eval page's own live state** (`currentLevel`/
+    `evalScores`, module variables only `setEvalLevel()` on `pg-myeval`
+    ever sets, plus `#evalCode`/`#evalPos`/`#evalDept` DOM elements that
+    don't exist on `pg-myresult` at all). On the result page, `currentLevel`
+    is whatever it last happened to be set to elsewhere in the session —
+    `null` if the self-eval page was never opened this session (the
+    button then just warns "กรุณาเลือกระดับตำแหน่งก่อน" and does nothing),
+    or a completely different employee's/level's stale scores if an
+    admin had browsed someone else's form earlier — while the banner's
+    "ดาวน์โหลด" button (#173) correctly calls `printSingleDraft(code,
+    cycle, level)` with the real resolved draft for `CURRENT_SESSION_USER`,
+    the same `hasVisibleResult()`-filtered, latest-by-cycle lookup
+    `renderMyResult()` itself already uses to populate the page.
+    Added `printMyResultForm()` — mirrors `renderMyResult()`'s own
+    `latest` resolution exactly (not a new query) and calls the same
+    `printSingleDraft()` both buttons should have used from the start —
+    and pointed the header button at it instead of bare `printEvalForm()`.
+    Verified with a Playwright test that deliberately seeds a stale
+    `currentLevel='mgr'`/`evalScores` leftover (simulating having
+    browsed a different employee's self-eval form earlier in the same
+    session) alongside a real `GMApproved` draft at level `'op'`, and
+    confirms the header button now correctly calls `printSingleDraft()`
+    with the real `op`/2569 record — matching the banner button exactly
+    — instead of silently printing the stale `mgr` state or warning
+    "เลือกระดับก่อน" — plus the standard click-sweep (`nav pages
+    clicked: 17 errors: []`), zero regressions. General lesson: a
+    function built for one page's own live in-memory state (module
+    variables + specific DOM ids) is not safe to call bare from a
+    second page just because it "does roughly the same thing" — when
+    two buttons on the same page are supposed to produce the same
+    document, grep whether they actually call the same function with
+    the same real-data resolution, not just whether their labels and
+    icons look similar.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
