@@ -8556,6 +8556,67 @@ touches employee/attendance/evaluation data.
     condition that breaks it (the currently-active page being the one
     just hidden) actually occurs.
 
+189. **User's screenshot of the "ตั้งค่าผู้ใช้ & บทบาท" page's Super Admin
+    role card (13 real permission rows, all ✓) said "หน้าแก้ไขมารายการ
+    ไม่ครบ" (the edit page's list is incomplete).** Traced `editRole(key)`/
+    `saveRoleFromModal()`: both already iterate `Object.keys(ROLE_PERM_LABELS)`
+    generically (the correct, generic pattern #37 established) — so the
+    bug wasn't in the JS logic, it was in the `#mEditRole` modal's own
+    static HTML, which still only had **10** checkboxes
+    (`rp_selfEval`/`rp_teamEval`/`rp_reviewL2`/`rp_calibration`/
+    `rp_finalApprove`/`rp_dashTeam`/`rp_dashOrg`/`rp_importTime`/
+    `rp_exportReport`/`rp_adminSettings`) against `ROLE_PERM_LABELS`'s
+    real 13 keys — missing `reviewL1` (added by #92), `gmApprove` (added
+    by #61), and `viewCalibGrade` (added by #180), three separate
+    historical role rollouts that each extended `ROLE_PERM_LABELS`/
+    `ROLE_DEFS` (and, per #37/#64/#65's own established discipline, every
+    *other* role-enumeration list in the file) but never circled back to
+    this one specific modal's hand-written checkbox markup.
+    **This was not just a cosmetic gap — it was a real silent data-loss
+    bug**: `editRole(key)`'s loop does `document.getElementById('rp_'+k)`
+    for each key and only sets `.checked` `if(el)` (correctly guarded, so
+    opening the modal never crashed), but `saveRoleFromModal()`'s own
+    write-back loop does `perms[k] = !!document.getElementById('rp_'+k)
+    ?.checked` with **no such guard** — for any of the 3 missing keys,
+    `getElementById` returns `null`, `?.checked` is `undefined`, and
+    `!!undefined` is `false`. So editing *any* role (even just to fix a
+    typo in its name) and clicking "บันทึก" silently wrote `gmApprove:
+    false`/`reviewL1:false`/`viewCalibGrade:false` into that role's
+    stored perms, **regardless of what the real value had been**,
+    permanently disabling GM-approval/dept-head-review/post-Calibration-
+    grade-visibility for that role the next time anyone edited it at
+    all — a real, serious access-control regression hiding behind an
+    innocent-looking "แก้ไข" button, exactly the shape of risk CLAUDE.md
+    #55/#143 already warn about for any save path that can silently
+    clear a value nobody meant to touch.
+    Fixed by adding the 3 missing `<label><input type="checkbox"
+    id="rp_...">` rows to the modal's static HTML, in the same order
+    `ROLE_PERM_LABELS` lists them (right after `teamEval` for `reviewL1`,
+    right after `reviewL2` for `gmApprove`, at the end for
+    `viewCalibGrade` — matching the real display card's own row order)
+    — zero JS changes needed, since `editRole()`/`saveRoleFromModal()`
+    were already written generically and only needed the matching markup
+    to exist. Verified with a Playwright test that opens `editRole('gm')`
+    (a real role with `gmApprove:true`/`viewCalibGrade:true` in its
+    actual `ROLE_DEFS` defaults) and confirms all 13 checkboxes now
+    exist in the DOM, the 3 previously-missing ones correctly reflect
+    the real stored state (not defaulting to unchecked), and — the part
+    that actually matters — clicking "บันทึก" with nothing touched now
+    **preserves** `gmApprove`/`viewCalibGrade` as `true` instead of
+    silently flipping them to `false` — plus the standard click-sweep
+    (`nav pages clicked: 17 errors: []`), zero regressions. General
+    lesson sharper than #37/#64/#65's own "grep every role-enumeration
+    array when adding a role" discipline: that discipline covers *which
+    roles exist*, but a **permission key** rollout (adding a new
+    checkable capability like `gmApprove`/`reviewL1`/`viewCalibGrade` to
+    an existing set of roles) needs the identical sweep applied to every
+    place that lists *permission keys*, not just role keys — and when
+    the generic read/write loop (`editRole()`/`saveRoleFromModal()`)
+    already iterates the keys correctly, a hand-written HTML checklist
+    sitting right next to it is the one place still capable of silently
+    disagreeing, since nothing enforces that the modal's static markup
+    and the live permission-key list stay in sync with each other.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
