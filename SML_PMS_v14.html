@@ -4035,15 +4035,20 @@ function pushKpiToExcel(kpi){
   if(!kpi || !kpi.id) return;
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushKpiToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
+  /* #186: ลำดับคอลัมน์จริง ยืนยันจากภาพหน้าจอ header row จริงของ HR —
+     KPI_ID·ชื่อ·หน่วยวัด·น้ำหนัก·เป้าหมาย·ประเภท·ขอบเขต·ใช้ในรอบ·Status·หมายเหตุ ครบ 10 คอลัมน์จริง
+     (ไม่ใช่ 8 คอลัมน์ตามที่เคยสมมติไว้ก่อนหน้านี้ — "ประเภท"/"หมายเหตุ" เป็นคอลัมน์จริงที่มีอยู่แล้ว
+     ไม่ใช่ field สมมติแบบที่ comment เดิมเข้าใจผิด) ฟิลด์ใหม่จาก #185 (EmpCode/ActualVal/TargetVal/
+     Direction) จึงต้องต่อท้ายหลังคอลัมน์ที่ 10 นี้ ไม่ใช่หลังคอลัมน์ที่ 8 เหมือนที่เคยเขียนผิด */
   graphUpsertTableRow('KPI_Goals', 0, kpi.id,
-    [kpi.id, kpi.name, kpi.unit, kpi.target, kpi.pct, kpi.scope, kpi.year||'', kpi.status,
+    [kpi.id, kpi.name, kpi.unit, kpi.pct, kpi.target, kpi.type||'ปริมาณ', kpi.scope, kpi.year||'', kpi.status, kpi.note||'',
      kpi.empCode||'', kpi.actualVal===''||kpi.actualVal==null?'':kpi.actualVal, kpi.targetVal===''||kpi.targetVal==null?'':kpi.targetVal, kpi.direction||'up'])
     .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) เข้า Excel`, true); })
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
 /* ดึง KPI ทั้งหมดจาก Excel มาแทนที่ goalKpiData ในเครื่องนี้ (เหมือน loadEmployeesFromMs365())
-   คอลัมน์ "Type" (ปริมาณ/คุณภาพ/...) ไม่ได้อยู่ใน schema จริงของตาราง Excel นี้ — ถ้าเจอ KPI ตัวนี้
-   ในเครื่องอยู่แล้วให้คงค่า type เดิมไว้ ถ้าไม่เคยมีเลยปล่อยว่าง ห้ามเดาค่าใส่ไปเอง (ดู CLAUDE.md #14) */
+   #186: "ประเภท"(index 5)/"หมายเหตุ"(index 9) เป็นคอลัมน์จริงของตาราง — อ่านตรงจาก Excel เสมอ
+   ไม่ใช่ fallback จาก oldById เหมือนก่อนหน้า (ที่เข้าใจผิดว่าไม่มีคอลัมน์นี้จริง) */
 async function ms365SyncKpiGoals(silent=false){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncKpiGoals: ยังไม่ได้ตั้งค่า MS365', false); return; }
@@ -4053,19 +4058,21 @@ async function ms365SyncKpiGoals(silent=false){
     const oldById = new Map(goalKpiData.map(k=>[k.id,k]));
     const parsed = rows.map(r => {
       const id = String(r[0]??'').trim();
-      /* #184: r[8..11] ไม่มีในแถวที่ sync มาจากก่อน #184 เลย — ต้องเช็ค undefined/null แยกจาก
+      /* #184/#185: r[10..13] ไม่มีในแถวที่ sync มาจากก่อน #185 เลย — ต้องเช็ค undefined/null แยกจาก
          ค่าว่าง '' จริง (ค่าว่างจริงคือ "ยังไม่กรอกผลงานจริง" ส่วน undefined คือ "แถวเก่าไม่มีคอลัมน์
          นี้เลย") ทั้งสองกรณีให้ผล null เดียวกันตอนนี้ แต่ไม่ปนกับเลข 0 จริง (เช่น 0 ครั้งอุบัติเหตุ) */
-      const actualValRaw = r[9], targetValRaw = r[10];
+      const actualValRaw = r[11], targetValRaw = r[12];
+      const typeRaw = String(r[5]??'').trim();
       return {
         id, name: String(r[1]??'').trim(), unit: String(r[2]??'').trim(),
-        target: String(r[3]??'').trim(), pct: Number(r[4])||0,
-        scope: String(r[5]??'').trim()||'org', year: String(r[6]??'').trim(),
-        status: String(r[7]??'').trim()||'draft', type: oldById.get(id)?.type || '',
-        empCode: String(r[8]??'').trim(),
+        pct: Number(r[3])||0, target: String(r[4]??'').trim(),
+        type: typeRaw || oldById.get(id)?.type || 'ปริมาณ',
+        scope: String(r[6]??'').trim()||'org', year: String(r[7]??'').trim(),
+        status: String(r[8]??'').trim()||'draft', note: String(r[9]??'').trim(),
+        empCode: String(r[10]??'').trim(),
         actualVal: (actualValRaw===undefined||actualValRaw===null||actualValRaw==='') ? '' : Number(actualValRaw),
         targetVal: (targetValRaw===undefined||targetValRaw===null||targetValRaw==='') ? '' : Number(targetValRaw),
-        direction: String(r[11]??'').trim()||'up'
+        direction: String(r[13]??'').trim()||'up'
       };
     }).filter(k=>k.id && k.name);
     if(!parsed.length) return;

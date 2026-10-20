@@ -8346,6 +8346,53 @@ touches employee/attendance/evaluation data.
     real screenshot of that header row is the next real fix, not
     further guessing from code alone.
 
+186. **User sent a real screenshot of the `KPI_Goals` sheet's actual header
+    row and data — exactly the "verify against the real file" check #185
+    itself invited. It confirmed the column-order guess in #184/#185 was
+    wrong on two real points at once.** The real sheet has **10** base
+    columns, not the 8 assumed: `KPI_ID · ชื่อ KPI · หน่วยวัด · น้ำหนัก ·
+    เป้าหมาย · ประเภท · ขอบเขต · ใช้ในรอบ · Status · หมายเหตุ` — "น้ำหนัก"
+    (weight/pct) sits **before** "เป้าหมาย" (target text), the reverse of
+    what `pushKpiToExcel()`/`ms365SyncKpiGoals()` assumed, and there are
+    two genuinely real columns the code never accounted for at all:
+    "ประเภท" (Type) at index 5 and "หมายเหตุ" (Note) at index 9. The old
+    code comment explicitly claimed "คอลัมน์ Type ไม่ได้อยู่ใน schema จริง"
+    (the Type column isn't in the real schema) — that was simply wrong,
+    now disproven by the real header row; both `type` and `note` already
+    existed as real fields on the local `goalKpiData` object (`mKpiType`/
+    `mKpiNote` in the Add/Edit KPI modal, #35) but were never pushed to
+    Excel at all, so every real push was silently 2 columns short and
+    writing `pct`/`target` into each other's real cells. Since #185's
+    4 new trailing fields (EmpCode/ActualVal/TargetVal/Direction) were
+    appended right after the assumed 8th column, they also collided with
+    the real Status(8)/Note(9) columns instead of landing past them.
+    Fixed `pushKpiToExcel()`'s array to the real verified order — `[id,
+    name, unit, pct, target, type, scope, year, status, note, empCode,
+    actualVal, targetVal, direction]` (14 elements) — and
+    `ms365SyncKpiGoals()`'s reader to the matching indices, reading
+    `type`/`note` directly from their now-confirmed-real columns (5/9)
+    instead of `type`'s old oldById-fallback-only treatment (kept as a
+    secondary fallback only for a genuinely blank cell, never the primary
+    source anymore, since the column is real). Verified with a Playwright
+    test that feeds the **exact real screenshot rows** (K001/K002/K005,
+    10 columns, no trailing #185 fields at all) through the real
+    `ms365SyncKpiGoals()` and confirms every field — including `type`
+    ("ปริมาณ"/"คุณภาพ"/"ภาวะผู้นำ") and `note` ("— ยังไม่เปิดใช้...") —
+    lands correctly; plus a full push→capture→pull round-trip test with
+    every field (type/note/empCode/actualVal/targetVal/direction all
+    populated) confirming byte-for-byte fidelity — plus re-ran all four
+    of #184/#185's own existing tests and the standard click-sweep (`nav
+    pages clicked: 17 errors: []`), zero regressions. General lesson
+    sharper than #185's own closing line: the very next real screenshot
+    *did* turn out to contradict the guessed column order — not at the
+    new trailing fields #185 flagged as unverified, but one layer
+    further back, in the base 8-column layout #184 had itself never
+    actually verified against a real header row either (it was adapted
+    from an idealized schema, not the real sheet) — a "based on the
+    established doc schema" assumption is still a guess until a real
+    screenshot confirms it, even when it's reused from an earlier,
+    seemingly-settled fix rather than invented fresh.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
