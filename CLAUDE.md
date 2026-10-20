@@ -8393,6 +8393,97 @@ touches employee/attendance/evaluation data.
     screenshot confirms it, even when it's reused from an earlier,
     seemingly-settled fix rather than invented fresh.
 
+187. **User asked directly: "กรณีที่เราลงผลประเมินไปแล้วมาเพิ่ม KPI ภายหลัง
+    ระบบทำไง" (what happens if an evaluation is already recorded and a KPI
+    gets added afterward).** Traced the real behavior first rather than
+    guessing: the self-eval page's `recalc()` and the reviewer modal's
+    `selectReviewScore()` both call `computeEvalXWithKpi()` (#184) fresh
+    every time, reading `goalKpiData` live with no caching — so a record
+    still sitting at `Submitted`/`L1Reviewed`/`L2Reviewed` picks up a
+    newly-added KPI automatically the next time anyone opens that form
+    (`restoreEvalFormFromDraft()`/`restoreReviewerFormFromDraft()` call
+    the real `setScore()` per factor, which triggers `recalc()`), and
+    resaving/resubmitting persists the updated value. But once a record
+    passes `GMApproved`/`Acknowledged`/`Calibrated`, nothing in this file
+    ever reopens its score form again — the stored `X`/`Y`/`KPI` become a
+    permanent snapshot from whenever they were last saved, and a KPI
+    added after that point has no path to reach them at all. Asked 3
+    clarifying questions before building anything, since this touches
+    the core scoring chokepoint and the already-ranked Bell Curve
+    results: confirmed (1) a manual "Admin กดคำนวณใหม่เอง" button, not a
+    silent auto-recompute — the same "no silent score change" caution
+    #180's grade-hiding and #182's notify-dedup both already apply;
+    (2) scope is **any status up to and including `Calibrated`, never
+    `Approved`** — an Approved record is genuinely closed, consistent
+    with `exportPayrollData()`'s own `isFinalStatus()` gate (#61) that
+    already treats `Approved` as the one real point of no return; (3)
+    recalculating updates **only the raw X/Y/Z numbers — the grade
+    (A-E) stays exactly as it was** until HR explicitly reruns Bell
+    Curve for that person's real comparison group, since a grade is a
+    relative rank against peers (#155), not a function of one person's
+    score alone — silently re-grading one person without re-ranking the
+    whole group would produce a grade that no longer means what Bell
+    Curve's own percentile promise claims it means.
+    Added `recalcKpiScoreForRecord(empCode, cycle)`: looks the record up
+    via the same `findCurrentCycleDraft()` helper every other status-
+    sensitive lookup in this file already uses (#162/#163's own "don't
+    `.find()` blind, pick the highest-ranked real match" discipline),
+    refuses for a non-admin (`isAdminOrSysadmin()`, #113's own gate) or
+    for a record already `Approved` (pointing the toast at "✏️ ปรับ
+    เกรดเอง" — #155's real per-person override — as the honest remaining
+    path for that case), then rebuilds `rawY`/`maxY` from the record's
+    own **already-given raw factor scores** (`d[4..13]`/`d[14..17]`,
+    `collectEvaluationPayload()`'s own established positional shape —
+    never re-asks anyone to re-score anything) against the *current*
+    `SML_FORMS[lv].factors` weights, recomputes `Z` live via
+    `computeZScore()` (so a since-corrected attendance record also gets
+    picked up, not just KPI — "คำนวณใหม่" means genuinely fresh, not
+    KPI-only), and calls `computeEvalXWithKpi()` — the one real formula
+    chokepoint (#184) — to get the real new `Y`/`Z`/`KPI`/`X`. Writes
+    only `d[d.length-5..3]` (Y/Z/X) in place, leaves grade/status
+    completely untouched, pushes to Excel via `pushDraftRowToExcel()`
+    (#94's established "always push the current-state table, never
+    silently local-only" rule), and logs a real before→after `X` diff to
+    Audit Log (#114's own established diff-log pattern). Added a
+    "🔄 คำนวณใหม่ (KPI)" button to **both** real rows on the Calibration
+    page (`renderCalibQueue()`) that can legitimately need it: the
+    `'ready'` row (status exactly `Acknowledged`, about to be
+    calibrated — HR already has an editable `.calib-adj` number box
+    there, this button just fills it with the real recalculated value
+    instead of making HR do the math by hand) and the `'done'` row
+    (status `Calibrated` or later — this is the one genuinely new real
+    gap, since that row previously had no editable field or any way to
+    touch the stored score at all). The `'done'` row's button is
+    explicitly gated on the record's **real** `d[d.length-1]` status,
+    not the roster's `state` label — `buildTierRoster()`'s `'done'`
+    bucket for Calibration's `Acknowledged` input status covers both
+    `Calibrated` *and* `Approved` records together (#136), so checking
+    the real status directly is what correctly hides the button once a
+    record is truly `Approved`, where the roster-level `'done'` label
+    alone would not have been specific enough. Verified end-to-end with
+    a Playwright test: seeds a real `Acknowledged` draft with real raw
+    factor scores and a pre-KPI baseline `X`, adds a real person-scope
+    KPI afterward, confirms the button correctly recomputes `X`/`Y` to
+    include it while `grade`/`status` stay exactly as they were and a
+    real Excel push + Audit Log entry fire; repeats the same recalc
+    against a `Calibrated` record and confirms the grade is provably
+    unchanged even though `X` moved; confirms a record flipped to
+    `Approved` is refused outright with the stored `X` genuinely
+    untouched; confirms a non-admin session is refused too — plus full
+    re-runs of #184-#186's own existing KPI tests and the standard
+    click-sweep (`nav pages clicked: 17 errors: []`), zero regressions.
+    General lesson: when a user asks "what happens in scenario X" about
+    a feature that was just shipped, tracing the real code path first
+    (rather than assuming "it just works" or "it's broken") often
+    reveals the honest answer splits into "automatic in some states,
+    a real gap in others" — and once the gap is confirmed real, the
+    right scope for closing it (how far it should reach, whether it's
+    automatic or manual, what it should and shouldn't touch) is worth
+    confirming explicitly before writing code, since a scoring/grading
+    feature has real consequences (an already-ranked Bell Curve result,
+    a record already communicated to the employee) that a wrong guess
+    here would be expensive to walk back.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
