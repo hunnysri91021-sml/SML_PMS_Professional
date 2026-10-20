@@ -3404,6 +3404,11 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     <div class="fg"><label>รายชื่อที่ GM อนุมัติแล้วแต่ยังไม่ได้แจ้ง</label>
       <div id="rn_preview" style="max-height:160px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
     </div>
+    <!-- #182: รายชื่อที่แจ้งไปแล้ว (ทั้งแจ้งอัตโนมัติตอน GM อนุมัติ และแจ้งด้วยมือจากปุ่มนี้เอง) —
+         ติ๊กเพื่อ "ส่งซ้ำ" ได้ แต่ sendResultNotification() จะ confirm() ก่อนส่งซ้ำเสมอ ไม่ส่งซ้ำเงียบๆ -->
+    <div class="fg"><label>รายชื่อที่แจ้งไปแล้ว <small style="color:#64748b">(ติ๊กถ้าต้องการส่งซ้ำ — ระบบจะถามยืนยันก่อนส่ง)</small></label>
+      <div id="rn_already" style="max-height:140px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
+    </div>
   </div>
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="sendResultNotification()">ส่งทันที</button></div>
 </div></div>
@@ -6428,19 +6433,40 @@ async function sendReminder(){
    PUSHED_APPRAISALS_KEY (#42): เก็บ "แจ้งแล้วหรือยัง" แยกจากสถานะจริงของใบประเมิน ไม่ปนกัน เพื่อไม่ให้
    การ "มาร์คว่าแจ้งแล้ว" ไปกระทบ workflow status จริงโดยไม่ได้ตั้งใจ */
 const RESULT_NOTIFIED_KEY = 'smlPmsResultNotified';
+/* #182: เปลี่ยนจาก Set เปล่าๆ เป็น object เก็บ metadata ต่อรายการ ({at, source}) เพื่อให้ตอบคำถาม
+   "ใครแจ้งไปแล้ว เมื่อไหร่ แจ้งผ่านอะไร" ได้จริง — source='auto' มาจาก approveGmSelected() ตอน GM
+   อนุมัติ (กันไม่ให้ขึ้นเป็น target ของปุ่มนี้ซ้ำโดยไม่มีใครรู้), source='manual' มาจากปุ่ม "ส่งทันที"
+   นี้เอง รองรับ backward-compat กับของเก่า (เคยเป็น array ของ string key ตรงๆ จาก Set เดิม) */
 function loadResultNotified(){
-  try{ return new Set(JSON.parse(localStorage.getItem(RESULT_NOTIFIED_KEY)||'[]')); }catch(e){ return new Set(); }
+  try{
+    const raw = JSON.parse(localStorage.getItem(RESULT_NOTIFIED_KEY)||'{}');
+    if(Array.isArray(raw)){ const out={}; raw.forEach(k=>{ out[k]={at:null,source:'manual'}; }); return out; }
+    return (raw && typeof raw==='object') ? raw : {};
+  }catch(e){ return {}; }
 }
-function markResultNotified(key){
-  const s = loadResultNotified(); s.add(key);
-  try{ localStorage.setItem(RESULT_NOTIFIED_KEY, JSON.stringify([...s])); }catch(e){}
+function saveResultNotified(map){
+  try{ localStorage.setItem(RESULT_NOTIFIED_KEY, JSON.stringify(map)); }catch(e){}
+}
+function markResultNotified(key, source){
+  const m = loadResultNotified();
+  m[key] = { at: new Date().toISOString(), source: source || 'manual' };
+  saveResultNotified(m);
 }
 function getResultNotifyTargets(){
   const notified = loadResultNotified();
   return getDrafts().filter(d=>{
     if(!(typeof hasVisibleResult==='function' ? hasVisibleResult(d[d.length-1]) : false)) return false;
-    return !notified.has(draftKey(d));
+    return !notified[draftKey(d)];
   }).map(d=>({ draft:d, emp: MASTER_USERS.find(u=>u[0]===d[0]) })).filter(t=>t.emp);
+}
+/* #182: รายชื่อที่ "แจ้งไปแล้ว" จริง (ทั้ง auto และ manual) — สำหรับแสดงเป็น list ใน modal และเลือก
+   ส่งซ้ำ ไม่ใช่สำหรับคำนวณ target ของการส่งปกติ (นั่นคือ getResultNotifyTargets() ด้านบน) */
+function getResultAlreadyNotified(){
+  const notified = loadResultNotified();
+  return getDrafts().filter(d=>{
+    if(!(typeof hasVisibleResult==='function' ? hasVisibleResult(d[d.length-1]) : false)) return false;
+    return !!notified[draftKey(d)];
+  }).map(d=>({ draft:d, emp: MASTER_USERS.find(u=>u[0]===d[0]), meta: notified[draftKey(d)] })).filter(t=>t.emp);
 }
 function renderResultNotifyPreview(){
   const box = document.getElementById('rn_preview');
@@ -6454,16 +6480,43 @@ function renderResultNotifyPreview(){
       <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมล'}${hasLine ? ' · 💬 LINE' : ''}</span>
     </div>`;
   }).join('') : '<div style="color:#94a3b8">ไม่มีใบประเมินที่ GM อนุมัติแล้วและยังไม่ได้แจ้ง</div>';
+
+  const alreadyBox = document.getElementById('rn_already');
+  if(alreadyBox){
+    const already = getResultAlreadyNotified();
+    alreadyBox.innerHTML = already.length ? already.map(t=>{
+      const u = t.emp, key = draftKey(t.draft);
+      const when = t.meta.at ? new Date(t.meta.at).toLocaleString('th-TH') : 'ไม่ทราบเวลา (ของเก่าก่อนมีการบันทึกเวลา)';
+      const srcLabel = t.meta.source==='auto' ? 'อัตโนมัติตอน GM อนุมัติ' : 'ส่งด้วยมือ (ปุ่มนี้)';
+      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f1f5f9;font-weight:400">
+        <input type="checkbox" class="rn-resend-chk" value="${key}" style="width:auto">
+        <span style="flex:1">${u[1]} <span style="color:#94a3b8">(${u[0]})</span><br><small style="color:#94a3b8">${when} · ${srcLabel}</small></span>
+      </label>`;
+    }).join('') : '<div style="color:#94a3b8">ยังไม่มีใครถูกแจ้งเลย</div>';
+  }
 }
 async function sendResultNotification(){
   const targets = getResultNotifyTargets();
   const message = document.getElementById('rn_message')?.value || '';
   const wantEmail = document.getElementById('rn_ch_email')?.checked;
   const wantLine = document.getElementById('rn_ch_line')?.checked;
-  if(!targets.length){ smlToast('ไม่มีใบประเมินที่ GM อนุมัติแล้วและยังไม่ได้แจ้ง','warn'); return; }
+
+  /* #182: รายการที่ติ๊กใน "รายชื่อที่แจ้งไปแล้ว" เพื่อ "ส่งซ้ำ" — ต้อง confirm() ก่อนเสมอ ไม่ส่งซ้ำเงียบๆ
+     ไม่ว่าจะมี target ใหม่ (ยังไม่เคยแจ้ง) อยู่ด้วยหรือไม่ก็ตาม */
+  const resendKeys = [...document.querySelectorAll('.rn-resend-chk:checked')].map(c=>c.value);
+  let resendTargets = [];
+  if(resendKeys.length){
+    const already = getResultAlreadyNotified();
+    resendTargets = already.filter(t=>resendKeys.includes(draftKey(t.draft)));
+    const ok = confirm(`มี ${resendTargets.length} คนที่เคยแจ้งไปแล้ว คุณต้องการส่งซ้ำให้คนกลุ่มนี้จริงหรือไม่?`);
+    if(!ok){ smlToast('ยกเลิกการส่งซ้ำ — จะส่งเฉพาะรายชื่อที่ยังไม่เคยแจ้ง (ถ้ามี)','warn'); resendTargets = []; }
+  }
+
+  const allTargets = targets.concat(resendTargets);
+  if(!allTargets.length){ smlToast('ไม่มีใบประเมินที่ GM อนุมัติแล้วและยังไม่ได้แจ้ง (และไม่ได้เลือกส่งซ้ำ)','warn'); return; }
   if(!wantEmail && !wantLine){ smlToast('กรุณาเลือกช่องทางที่จะส่งอย่างน้อย 1 ช่องทาง','warn'); return; }
 
-  const emps = targets.map(t=>t.emp);
+  const emps = allTargets.map(t=>t.emp);
   const withEmail = emps.filter(u=>u[15]);
   const withoutEmail = emps.filter(u=>!u[15]);
 
@@ -6485,7 +6538,7 @@ async function sendResultNotification(){
      ส่วน LINE ยืนยันผลจริงจาก Worker ได้ (lineResult.sent/.failed) แต่ยังมาร์คแจ้งแล้วเหมือนกันทั้งกลุ่ม
      เพื่อไม่ให้รายการเดิมค้างวนซ้ำไปเรื่อยๆ ในปุ่มนี้ — ถ้าต้องส่งซ้ำเฉพาะคนที่ LINE ส่งไม่สำเร็จจริง
      ต้องแก้ไข lineUserId/ตั้งค่า Worker แล้วใช้ปุ่ม "ส่ง Reminder" ปกติแทน */
-  targets.forEach(t=>markResultNotified(draftKey(t.draft)));
+  allTargets.forEach(t=>markResultNotified(draftKey(t.draft), 'manual'));
   if(typeof renderWorkflowPages==='function') renderWorkflowPages();
   closeM();
   const parts = [];
@@ -6494,8 +6547,9 @@ async function sendResultNotification(){
     parts.push(lineResult.sent ? `ส่ง LINE สำเร็จ ${lineResult.sent} คน` : `ส่ง LINE ไม่สำเร็จ — ${lineResult.reason}`);
   }
   if(!parts.length) parts.push('ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน');
-  smlToast(`แจ้งผลแล้ว ${targets.length} คน · ` + parts.join(' · '), (wantEmail&&withEmail.length) || (lineResult&&lineResult.sent) ? 'ok' : 'warn');
-  if(typeof appendAuditLog==='function') appendAuditLog('reminder','แจ้งผลการประเมิน', targets.length+' รายการ', targets.map(t=>t.draft[0]).join(', '));
+  const resendNote = resendTargets.length ? ` (รวมส่งซ้ำ ${resendTargets.length} คน)` : '';
+  smlToast(`แจ้งผลแล้ว ${allTargets.length} คน${resendNote} · ` + parts.join(' · '), (wantEmail&&withEmail.length) || (lineResult&&lineResult.sent) ? 'ok' : 'warn');
+  if(typeof appendAuditLog==='function') appendAuditLog('reminder','แจ้งผลการประเมิน'+(resendTargets.length?' (มีส่งซ้ำ)':''), allTargets.length+' รายการ', allTargets.map(t=>t.draft[0]).join(', '));
 }
 function closeM(){document.querySelectorAll('.ov').forEach(o=>o.classList.remove('on'))}
 document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM();});
@@ -9179,6 +9233,11 @@ async function approveGmSelected(){
     const r = await notifyEmployeeOfApproval(d[0], d[1], d[2], Y, Z, X).catch(()=>({email:{sent:false},line:{sent:false}}));
     if(r.email?.sent) emailSent++;
     if(r.line?.sent) lineSent++;
+    /* #182: มาร์คว่า "แจ้งแล้วอัตโนมัติ" ทันทีที่ช่องทางใดช่องทางหนึ่งสำเร็จจริง — กันไม่ให้คนกลุ่มนี้
+       ไปโผล่เป็น target ของปุ่ม "📬 แจ้งผลการประเมิน" (มือ) อีกโดยไม่มีใครรู้ว่าเคยแจ้งไปแล้ว ถ้าทั้ง
+       2 ช่องทางล้มเหลวจริง (เช่น Worker ยังไม่ตั้งค่า) จะไม่มาร์ค — ยังต้องขึ้นเป็น target ให้ Admin
+       เห็นและส่งเอง (ปุ่มมือ) เหมือนเดิม ไม่ใช่หายไปเงียบๆ */
+    if(r.email?.sent || r.line?.sent) markResultNotified(draftKey(d), 'auto');
   }
   const notifParts = [];
   if(emailSent) notifParts.push(`อีเมล ${emailSent}/${rows.length} คน`);

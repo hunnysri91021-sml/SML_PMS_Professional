@@ -9307,3 +9307,75 @@ Before considering a change to `SML_PMS_v14.html` done:
     was supposed to watch, and an already-existing function built for an
     unrelated purpose (#180's `hasVisibleResult()`) was exactly the right
     tool once the real target stage was named.
+
+182. **Follow-up to #181: right after retargeting "แจ้งผลการประเมิน" to fire
+    at GM approval instead of final MD approval, I flagged that this makes
+    the manual button's trigger stage the exact same stage as the
+    *automatic* email/LINE notification `approveGmSelected()` already sends
+    the instant GM approves — a real risk of double-notifying someone. User
+    asked for three things in response: "ถ้าไม่ต้องการให้ส่งซ้ำอัตโนมัติ
+    แจ้งเป็น list ว่าใครส่งไปแล้ว แล้ว ต้องการให้ส่งซ้ำไหม ถามก่อนส่ง" — (1)
+    stop the automatic send from silently colliding with the manual one,
+    (2) show a real list of who's already been notified, (3) if Admin wants
+    to resend to someone already notified, ask for confirmation first.**
+    `RESULT_NOTIFIED_KEY` (#156/#181) was a flat `Set` of `draftKey()`
+    strings with no metadata at all — enough to filter the *target* list
+    but not enough to ever show a real "who/when/how" list, and with no
+    distinction between an automatic send and a manual one. Restructured it
+    into an object map keyed by `draftKey()`, each entry `{at, source}`
+    (`loadResultNotified()`/`saveResultNotified()`/`markResultNotified(key,
+    source)`) — with a backward-compat read path that converts an old
+    array-shaped Set into `{at:null, source:'manual'}` entries rather than
+    discarding a previously-saved notified state the moment this ships.
+    **Closing the duplicate-send gap**: `approveGmSelected()`'s own
+    per-record notify loop (`notifyEmployeeOfApproval()`, #173/#174) now
+    calls `markResultNotified(draftKey(d), 'auto')` the instant either
+    channel (email open or a real LINE send) succeeds — so a GM-approved
+    record that was already auto-notified never appears as a target in the
+    manual modal, closing the gap at its real source rather than only
+    deduping inside the manual button itself. Deliberately only marks on a
+    real success (`r.email?.sent || r.line?.sent`) — if both channels fail
+    (e.g. the Worker isn't configured), the record is left un-notified so
+    it still surfaces to Admin via the manual button rather than silently
+    vanishing, the same CLAUDE.md #10 "never look like it worked when it
+    didn't" rule.
+    **Already-notified list**: added `getResultAlreadyNotified()` (the
+    mirror of `getResultNotifyTargets()` — same `hasVisibleResult()` gate,
+    opposite notified-filter) and a new "รายชื่อที่แจ้งไปแล้ว" section in
+    the `mResultNotify` modal, rendered by the same `renderResultNotifyPreview()`
+    call that already populates the normal target list — each row shows
+    the real employee name/code, the real notified timestamp (`toLocaleString('th-TH')`,
+    or an honest "ไม่ทราบเวลา (ของเก่า)" for a pre-#182 entry with no
+    recorded time, never a fabricated one, per CLAUDE.md #14), and the real
+    source ("อัตโนมัติตอน GM อนุมัติ" vs. "ส่งด้วยมือ"), each with its own
+    `.rn-resend-chk` checkbox to opt back in for a resend.
+    **Confirm-before-resend**: `sendResultNotification()` now reads whatever
+    `.rn-resend-chk` boxes are checked, and if any are, calls a real
+    `confirm()` naming exactly how many people are about to be re-notified
+    before proceeding — declining clears the resend set but still lets the
+    normal (never-notified) targets send as usual, never silently blocking
+    the whole action over a declined resend. Accepted resend targets are
+    concatenated with the normal target list for the actual send, and
+    re-marked `markResultNotified(key, 'manual')` (updating both the
+    timestamp and the source) so a resent record's history reflects the
+    real, most recent action rather than the stale original one. Verified
+    with a Playwright test (stubbing `window.confirm` to record calls and
+    return a controlled answer) covering the full sequence: before any
+    notify both of two GM-approved employees are real targets; marking one
+    `'auto'` (simulating what `approveGmSelected()` now does) removes it
+    from the target list and surfaces it in the already-notified list with
+    the correct source label and a real checkbox; checking that box and
+    declining the confirm sends only the still-normal target and leaves the
+    declined one's source untouched; checking it again and accepting the
+    confirm resends it and flips its stored source to `'manual'` — plus the
+    standard click-sweep (`nav pages clicked: 17 errors: []`), zero
+    regressions. General lesson: when a fix retargets a feature's trigger
+    stage to overlap with an existing automatic action at that same stage
+    (#181 moving onto the same stage #173/#174's auto-notify already uses),
+    the collision isn't hypothetical — the fix for it belongs at the
+    automatic action's own success path (mark there, not just filter in
+    the manual button), and a "don't let X happen automatically, but let me
+    choose to do it anyway" request is a strong signal that the underlying
+    store needs to become a real log (who/when/how) rather than a bare
+    "has this happened" flag, since a flag can prevent a repeat but can
+    never answer "did it already happen" in a way a human can act on.
