@@ -10087,3 +10087,44 @@ Before considering a change to `SML_PMS_v14.html` done:
     (one link can safely name one specific person) still holds for the
     new path, since a shared Bcc/multicast send is a fundamentally
     different trust boundary from a single personalized push message.
+
+194. **User's screenshot of a plain employee's (role `emp`) notification bell
+    showed "⚠️ ข้อมูลสายบังคับบัญชาไม่ครบ 22 รายการ" — the exact same
+    company-wide hierarchy-data-quality count an Admin would see — and said
+    plainly: "เช็ค ว่า การแจ้งเตือน พนักงานยังเห็นเหมือน ไม่ถูกต้อง" (check —
+    the employee's notification still shows the same [as admin], it's not
+    correct).** Traced `getNotifications()`'s `hierCount` item: it calls
+    `checkHierarchyIssues(false)` (#73/#127), which already scopes its
+    `noL1`/`circular` output lists via `getMyScopedEmpCodes()` — but that
+    helper deliberately returns `null` (unrestricted/company-wide) for role
+    `emp`, the exact same treatment it gives `admin`/`sysadmin`/`exec`,
+    specifically so a plain employee can see org-wide averages elsewhere in
+    the app (CLAUDE.md #45's own stated reason). So the internal scoping was
+    a complete no-op for this role — a plain employee got the identical
+    company-wide count, with a link into "org" (the org-chart page), which
+    is itself `data-role="admin"` and therefore a page they can't even open.
+    This is the exact same shape of leak #192 just fixed one item below it
+    in the same function (`pendingPush`) — a summary notification item with
+    zero role gate of its own, relying entirely on an inner function's
+    scoping that happens to be a no-op for this specific role.
+    Fixed the same way #192 fixed `pendingPush`: wrapped the whole
+    `hierCount` computation + `items.push()` call in
+    `if(me && ['admin','sysadmin'].includes(me[2])){ ... }` — hiding the
+    item entirely for every other role, not just leaving a correct-but-
+    useless number visible (CLAUDE.md #90's own "hide the control entirely
+    for every role it isn't actually for" rule). Verified with a Playwright
+    test seeding a real employee with no L1 at all (so `checkHierarchyIssues()`
+    has a genuine real issue to count) and confirming a plain `emp` session's
+    `getNotifications()` no longer contains the `org`-linked item, while an
+    admin session still sees it with the real count ("2 รายการ") — plus a
+    re-run of #192's own existing test and the standard click-sweep (`nav
+    pages clicked: 17 errors: []`), zero regressions. General lesson sharper
+    than #87/#192's own conclusion: when one unscoped notification item in
+    `getNotifications()` is found and fixed, check every *other* item in the
+    same function for the identical risk — an item that calls a function
+    which scopes "most of the time" (`checkHierarchyIssues()`'s own
+    `getMyScopedEmpCodes()` call, correct for `l1`/`unit`/`l2`/`gm`) can
+    still leak company-wide for the specific roles that helper deliberately
+    leaves unrestricted, and a notification item is the wrong place to carry
+    that company-wide exception when the page it links to is admin-only
+    anyway.

@@ -10708,9 +10708,18 @@ function getNotifications(){
   if(l2reviewed) items.push({ icon:'🏢', text:`มีใบประเมิน ${l2reviewed} รายการ รออนุมัติ GM`, page:'gmapprove' });
   if(calibrated) items.push({ icon:'✅', text:`มีใบประเมิน ${calibrated} รายการ รออนุมัติขั้นสุดท้าย`, page:'approve' });
 
-  const hier = (typeof checkHierarchyIssues==='function') ? checkHierarchyIssues(false) : {noL1:[],circular:[]};
-  const hierCount = hier.noL1.length + hier.circular.length;
-  if(hierCount) items.push({ icon:'⚠️', text:`ข้อมูลสายบังคับบัญชาไม่ครบ ${hierCount} รายการ (ไม่กระทบการส่งแบบประเมิน)`, page:'org' });
+  /* #194: "ข้อมูลสายบังคับบัญชาไม่ครบ" เดิมไม่มีการกรอง role เลย — checkHierarchyIssues() เอง
+     กรองผ่าน getMyScopedEmpCodes() ก็จริง แต่ getMyScopedEmpCodes() คืน null (ไม่จำกัด/ทั้งบริษัท)
+     ให้ role 'emp' โดยตั้งใจ (#45 — เพื่อให้พนักงานเห็นค่าเฉลี่ยทั้งบริษัทได้ที่อื่น) จึงทำให้การกรองนี้
+     ไม่มีผลอะไรเลยสำหรับพนักงานทั่วไป — พนักงานคลิกกระดิ่งแล้วเห็นตัวเลขปัญหาข้อมูลทั้งบริษัท (เช่น
+     "22 รายการ") เหมือน Admin ทุกประการ ทั้งที่หน้า "org" ปลายทางก็เป็น admin-only (data-role="admin")
+     ที่พนักงานเข้าไม่ได้อยู่แล้ว — ปัญหาเดียวกับ #192 ที่เพิ่งแก้ให้ pendingPush ไปก่อน แก้ด้วยวิธีเดียวกัน:
+     ซ่อนทั้งรายการสำหรับ role ที่ไม่ใช่ admin/sysadmin ไปเลย ไม่ใช่แค่กรองตัวเลขที่ผิดอยู่แล้ว */
+  if(me && ['admin','sysadmin'].includes(me[2])){
+    const hier = (typeof checkHierarchyIssues==='function') ? checkHierarchyIssues(false) : {noL1:[],circular:[]};
+    const hierCount = hier.noL1.length + hier.circular.length;
+    if(hierCount) items.push({ icon:'⚠️', text:`ข้อมูลสายบังคับบัญชาไม่ครบ ${hierCount} รายการ (ไม่กระทบการส่งแบบประเมิน)`, page:'org' });
+  }
 
   /* #192: "รอ Push เข้า Excel" เดิมนับจากทุก draft ใน localStorage ทั้งบริษัท ไม่กรอง scope เลย —
      ต่างจาก submitted/l1reviewed/l2reviewed/calibrated/hierCount ด้านบนที่กรองผ่าน buildTierRoster()/
