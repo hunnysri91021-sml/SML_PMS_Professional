@@ -8302,6 +8302,50 @@ touches employee/attendance/evaluation data.
     reintroducing the exact "two numbers disagree" bug shape this file has hit
     many times before.
 
+185. **Follow-up to #184: user asked "sync excel ด้วย" — closing the one
+    gap #184 itself explicitly deferred: the real KPI actual-value/
+    target/direction/empCode fields (only meaningful for scope='person'
+    KPIs, the ones that feed the new Y/Z/KPI formula) were left
+    local-only, since #184 had no real screenshot-verified column
+    layout for them in the `KPI_Goals` sheet to extend safely.** Rather
+    than guess a column position inside the existing 8-column layout
+    (`KPI_ID·Name·Unit·Target·Weight·Scope·Year·Status`, verified real
+    per #34), appended the 4 new fields as **trailing** columns 8–11
+    (`EmpCode·ActualVal·TargetVal·Direction`) — the same CLAUDE.md #5
+    "append at the end, never insert mid-row" discipline this file
+    already applies to arrays, here applied to an external table whose
+    real shape beyond column 7 has never been confirmed against a
+    screenshot. `pushKpiToExcel()` now sends all 12 values on every
+    push; `ms365SyncKpiGoals()`'s reader explicitly distinguishes
+    "column genuinely absent" (`undefined`/`null`, from a row synced
+    before this fix or from a real sheet that hasn't added these
+    columns yet) from "a real empty string"/"a real `0`" — `actualVal`/
+    `targetVal` parse to `''` only when the raw cell is itself
+    `undefined`/`null`/`''`, never conflating that with the real number
+    `0` (meaningful for e.g. a zero-accident KPI's real actual value).
+    Verified with a Node/Playwright test: pushing a real person-scope
+    KPI captures the exact 12-element array sent to
+    `graphUpsertTableRow`, round-tripping that same row back through
+    `ms365SyncKpiGoals()` reproduces the identical KPI object; and,
+    separately, feeding the sync function an **old-shape 8-column row**
+    (simulating a real sheet or a pre-#184 sync that never had these
+    columns) confirms it parses without error and correctly falls back
+    to `empCode:''`/`actualVal:''`/`targetVal:''`/`direction:'up'`
+    rather than crashing or guessing — plus re-ran all three of #184's
+    own weight/UI/reviewer-form tests (unaffected, since this change
+    only touches the KPI-record read/write shape, not the scoring
+    formula itself) and the standard click-sweep (`nav pages clicked:
+    17 errors: []`), zero regressions. **Left unchanged, stated
+    plainly**: the weight panel's own Excel sync (`FormWeights` table,
+    #184's `{factors, ypct, zpct, kpct}` JSON payload) was already real
+    as of #184 — this fix only closes the *second*, explicitly-deferred
+    half (the per-employee actual-value fields on `KPI_Goals`). Like
+    every other locally-guessed Excel column in this file's history
+    (#68's GM column, #97's Approvals mismatch), if the real sheet
+    later turns out to already use columns 8–11 for something else, a
+    real screenshot of that header row is the next real fix, not
+    further guessing from code alone.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

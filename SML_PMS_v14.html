@@ -4024,14 +4024,20 @@ function confirmKpiActivate(){
 
 /* KPI แต่ละตัวคือ "สถานะปัจจุบันของเป้าหมายนั้น" (แก้ไข/เปิดใช้งานซ้ำได้) ไม่ใช่เหตุการณ์ที่เกิดซ้ำ
    จึงต้อง upsert ด้วยรหัส KPI (col 0) เหมือน Employees/Attendance ไม่ใช่ append แบบ AuditLog/
-   Approvals — คอลัมน์เรียงตามที่ระบุไว้ในหน้า "โครงสร้าง Sheets": KPI_ID·Name·Unit·Target·Weight·
-   Scope·Year·Status */
+   Approvals — คอลัมน์หลัก (0-7) เรียงตามที่ระบุไว้ในหน้า "โครงสร้าง Sheets": KPI_ID·Name·Unit·Target·
+   Weight·Scope·Year·Status
+   #184 เพิ่มสัดส่วนคะแนน KPI เข้าแบบประเมินจริงแล้ว ค่า "ผลงานจริง/เป้าหมาย(ตัวเลข)/ทิศทาง/รหัส
+   พนักงาน" (scope='person' เท่านั้นที่เข้าคะแนนประเมินได้) จำเป็นต้อง sync ข้ามเครื่องด้วย ไม่ใช่
+   แค่น้ำหนัก % — เพิ่มเป็นคอลัมน์ต่อท้ายคอลัมน์ที่ 8-11 (EmpCode·ActualVal·TargetVal·Direction)
+   ตาม CLAUDE.md #5 (append ที่ปลายแถวเท่านั้น ไม่แทรกกลาง) เพราะยังไม่มีภาพหน้าจอ Excel จริงยืนยัน
+   ตำแหน่งคอลัมน์เหล่านี้ — ขาอ่านด้านล่างต้องรองรับแถวเก่าที่มีแค่ 8 คอลัมน์ (ก่อน #184) ด้วย */
 function pushKpiToExcel(kpi){
   if(!kpi || !kpi.id) return;
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushKpiToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   graphUpsertTableRow('KPI_Goals', 0, kpi.id,
-    [kpi.id, kpi.name, kpi.unit, kpi.target, kpi.pct, kpi.scope, kpi.year||'', kpi.status])
+    [kpi.id, kpi.name, kpi.unit, kpi.target, kpi.pct, kpi.scope, kpi.year||'', kpi.status,
+     kpi.empCode||'', kpi.actualVal===''||kpi.actualVal==null?'':kpi.actualVal, kpi.targetVal===''||kpi.targetVal==null?'':kpi.targetVal, kpi.direction||'up'])
     .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) เข้า Excel`, true); })
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
@@ -4047,11 +4053,19 @@ async function ms365SyncKpiGoals(silent=false){
     const oldById = new Map(goalKpiData.map(k=>[k.id,k]));
     const parsed = rows.map(r => {
       const id = String(r[0]??'').trim();
+      /* #184: r[8..11] ไม่มีในแถวที่ sync มาจากก่อน #184 เลย — ต้องเช็ค undefined/null แยกจาก
+         ค่าว่าง '' จริง (ค่าว่างจริงคือ "ยังไม่กรอกผลงานจริง" ส่วน undefined คือ "แถวเก่าไม่มีคอลัมน์
+         นี้เลย") ทั้งสองกรณีให้ผล null เดียวกันตอนนี้ แต่ไม่ปนกับเลข 0 จริง (เช่น 0 ครั้งอุบัติเหตุ) */
+      const actualValRaw = r[9], targetValRaw = r[10];
       return {
         id, name: String(r[1]??'').trim(), unit: String(r[2]??'').trim(),
         target: String(r[3]??'').trim(), pct: Number(r[4])||0,
         scope: String(r[5]??'').trim()||'org', year: String(r[6]??'').trim(),
-        status: String(r[7]??'').trim()||'draft', type: oldById.get(id)?.type || ''
+        status: String(r[7]??'').trim()||'draft', type: oldById.get(id)?.type || '',
+        empCode: String(r[8]??'').trim(),
+        actualVal: (actualValRaw===undefined||actualValRaw===null||actualValRaw==='') ? '' : Number(actualValRaw),
+        targetVal: (targetValRaw===undefined||targetValRaw===null||targetValRaw==='') ? '' : Number(targetValRaw),
+        direction: String(r[11]??'').trim()||'up'
       };
     }).filter(k=>k.id && k.name);
     if(!parsed.length) return;
