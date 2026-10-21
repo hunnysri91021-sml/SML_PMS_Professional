@@ -1962,6 +1962,22 @@ tbody tr:hover{background:#f0f6ff!important}
 
     <div class="card calib-table-card">
       <div class="card-h"><h3>📋 ตารางปรับเทียบรายบุคคล</h3><div class="r"><span class="bd b-y" id="calibCount">รอปรับเทียบ 0 รายการ</span></div></div>
+      <div style="padding:10px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--bd)">
+        <select id="calibFilterGroup" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
+          <option value="">ทุกกลุ่มงาน (Group)</option>
+        </select>
+        <select id="calibFilterSection" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
+          <option value="">ทุกแผนก (Section)</option>
+        </select>
+        <select id="calibFilterDivision" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
+          <option value="">ทุกส่วน (Division)</option>
+        </select>
+        <select id="calibFilterDept" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
+          <option value="">ทุกฝ่าย (Department)</option>
+        </select>
+        <button class="btn btn-sm" onclick="resetCalibTableFilters()" title="ล้างตัวกรองทั้งหมด">↩️ ล้างตัวกรอง</button>
+        <button class="btn btn-sm" onclick="exportCalibTableList()" title="Export ตารางนี้ (ตามตัวกรองที่เลือกไว้) เป็นไฟล์ Excel (CSV)" style="margin-left:auto">📥 Export Excel (ตารางนี้)</button>
+      </div>
       <div class="tw calib-table-wrap"><table>
         <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงาน<br>รับทราบ (X)</th><th>เกรดเดิม<br><small>(ชั่วคราว)</small></th><th>คะแนนหลังปรับ</th><th>เกรด<br>Bell Curve</th><th>ใบเตือน /<br>หมายเหตุวินัย (HR)</th><th>การดำเนินการ</th></tr></thead>
         <tbody id="calibRows"></tbody>
@@ -9620,6 +9636,69 @@ function rejectGmSelected(){
   smlToast('ตีกลับให้ผู้จัดการส่วนสอบทานอีกครั้ง '+keys.length+' รายการ','warn');
 }
 
+/* 4 ช่อง field index เดียวกับ BELL_CURVE_GROUP_FIELDS (group:3, section:4, division:5, department:6)
+   — ใช้ชุดเดียวกัน ไม่ประกาศ mapping ซ้ำ เพื่อไม่ให้ตัวกรองตารางกับตัวเลือก Bell Curve อ่านคนละ field
+   กันถ้าใครมาแก้ภายหลัง */
+const CALIB_TABLE_FILTER_SELECTS = [
+  { id:'calibFilterGroup', fieldKey:'group' },
+  { id:'calibFilterSection', fieldKey:'section' },
+  { id:'calibFilterDivision', fieldKey:'division' },
+  { id:'calibFilterDept', fieldKey:'department' }
+];
+function populateCalibTableFilters(fullRoster){
+  CALIB_TABLE_FILTER_SELECTS.forEach(({id,fieldKey})=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const counts = {};
+    fullRoster.forEach(r=>{ const v = getBellCurveGroupValue(r.emp, fieldKey); counts[v] = (counts[v]||0)+1; });
+    const values = Object.keys(counts).filter(v=>v && v!=='—').sort((a,b)=>a.localeCompare(b,'th'));
+    const prev = sel.value;
+    const placeholder = sel.options[0] ? sel.options[0].outerHTML : '<option value="">ทุกค่า</option>';
+    sel.innerHTML = placeholder + values.map(v=>`<option value="${v.replace(/"/g,'&quot;')}">${v} (${counts[v]} คน)</option>`).join('');
+    sel.value = values.includes(prev) ? prev : '';
+  });
+}
+function filterCalibTableRoster(fullRoster){
+  const active = CALIB_TABLE_FILTER_SELECTS
+    .map(({id,fieldKey})=>({ fieldKey, val: (document.getElementById(id)||{}).value||'' }))
+    .filter(f=>f.val);
+  if(!active.length) return fullRoster;
+  return fullRoster.filter(r=> active.every(f=> getBellCurveGroupValue(r.emp, f.fieldKey) === f.val));
+}
+function resetCalibTableFilters(){
+  CALIB_TABLE_FILTER_SELECTS.forEach(({id})=>{ const sel = document.getElementById(id); if(sel) sel.value=''; });
+  renderCalibQueue();
+}
+/* Export ตารางปรับเทียบรายบุคคลตามตัวกรองที่เลือกไว้ตอนนี้ (ทุก state — pending/ready/done ไม่ใช่แค่
+   ที่พร้อม Calibration เท่านั้น ต่างจาก exportCalibScopedList() ด้านบนซึ่ง export เฉพาะกลุ่ม Bell
+   Curve ที่กำลังจะคำนวณ) ใช้ roster ตัวเดียวกับที่ตารางกำลังแสดงอยู่จริง (filterCalibTableRoster())
+   เพื่อให้ไฟล์ที่ได้ตรงกับหน้าจอเป๊ะ (บทเรียน CLAUDE.md #126/#127/#138/#156) */
+function exportCalibTableList(){
+  const cycle = getCurrentEvalCycleYear();
+  const fullRoster = buildTierRoster(null, null, 'Acknowledged', cycle);
+  const roster = filterCalibTableRoster(fullRoster);
+  if(!roster.length){ smlToast('ไม่มีรายการในตัวกรองที่เลือกให้ Export','warn'); return; }
+  const inputs = {};
+  document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','เกรด'];
+  const rows = roster.map(r=>{
+    const code = r.emp[0], name = r.emp[1]||'';
+    const group = getBellCurveGroupValue(r.emp,'group'), section = getBellCurveGroupValue(r.emp,'section');
+    const division = getBellCurveGroupValue(r.emp,'division'), dept = getBellCurveGroupValue(r.emp,'department');
+    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', ''];
+    const d = r.draft;
+    const key = draftKey(d);
+    const X = r.state==='ready' && Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(d[d.length-3])||0;
+    const statusLabel = r.state==='ready' ? 'พร้อม Calibration' : d[d.length-1];
+    return [code, name, group, section, division, dept, statusLabel, X, d[d.length-2]];
+  });
+  const filterTag = CALIB_TABLE_FILTER_SELECTS
+    .map(({id})=>(document.getElementById(id)||{}).value)
+    .filter(Boolean).join('_').replace(/[^฀-๿a-zA-Z0-9_]+/g,'_') || 'ทั้งหมด';
+  downloadCsv(`CalibTable_${filterTag}_${cycle}.csv`, headers, rows);
+  smlToast('Export ตารางปรับเทียบ '+roster.length+' รายการแล้ว','ok');
+}
+
 function renderCalibQueue(){
   const tbody=document.getElementById('calibRows'); const cnt=document.getElementById('calibCount');
   const distBox=document.getElementById('calibGradeDist');
@@ -9630,7 +9709,14 @@ function renderCalibQueue(){
      เฉพาะของตนเอง (scope ทั้งบริษัทอยู่แล้วผ่าน getMyScopedEmpCodes()) จึง resolverFn=null —
      roster = getEvalParticipants() ทั้งหมดในขอบเขต (ดูคอมเมนต์บน buildTierRoster) */
   const cycle = getCurrentEvalCycleYear();
-  const roster = buildTierRoster(null, null, 'Acknowledged', cycle);
+  const fullRoster = buildTierRoster(null, null, 'Acknowledged', cycle);
+  /* ผู้ใช้ขอให้ "ตารางปรับเทียบรายบุคคล" กรองตาม กลุ่มงาน/แผนก/ส่วน/ฝ่าย ได้ — แยกจาก dropdown
+     "เฉพาะค่า" ของ Bell Curve ด้านบนโดยเจตนา (คนละวัตถุประสงค์: อันนั้นกำหนดว่าจะ "คำนวณ" กลุ่มไหน
+     ส่วนตัวกรองนี้แค่ "แสดง" แถวไหนในตารางให้ HR ดู/ไล่ดูทีละหน่วยงานได้ ไม่กระทบการคำนวณ/ยืนยัน
+     Bell Curve เลย) เติม option จากคนจริงในรอบนี้ทั้งหมด (ทุก state ไม่ใช่แค่ ready) ตามบทเรียน
+     CLAUDE.md #3 — ค่าเก่าที่เลือกไว้ยังอยู่ถ้ายังมีอยู่จริง (เหมือน populateBellCurveValueOptions) */
+  populateCalibTableFilters(fullRoster);
+  const roster = filterCalibTableRoster(fullRoster);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = 'รอปรับเทียบ '+readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');

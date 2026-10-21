@@ -10434,3 +10434,44 @@ Before considering a change to `SML_PMS_v14.html` done:
     header with real rank text after clicking compute — plus full re-runs
     of #197/#198/#199's own existing Calibration tests and the standard
     click-sweep (`nav pages clicked: 17 errors: []`), zero regressions.
+
+201. **User asked: "ตารางปรับเทียบรายบุคคล ให้มีกรองเลือก ฝ่าย ส่วน แผนก
+    กลุ่มงาน ด้วย และ เพิ่ม export excel ได้" (the individual calibration
+    table should also have filters for department/division/section/group,
+    and add Excel export).** The existing "เฉพาะค่า" dropdown + Export
+    button above it (#197/#198) only govern which group gets *computed*
+    for Bell Curve and that group's preview/export — the main "📋 ตาราง
+    ปรับเทียบรายบุคคล" table itself (every pending/ready/done row in the
+    whole roster) had no filter of its own and no export at all. Added 4
+    real filter `<select>`s (`calibFilterGroup`/`Section`/`Division`/
+    `Dept`, matching `BELL_CURVE_GROUP_FIELDS`'s existing group:3/section:4/
+    division:5/department:6 indices — reused, never a second mapping) above
+    the table, deliberately independent of the Bell Curve "เฉพาะค่า"
+    selector (two different purposes: that one decides what to *compute*,
+    this one just decides what to *show/browse* and never touches
+    calculation/confirm logic at all). `populateCalibTableFilters(fullRoster)`
+    fills all 4 from the real distinct values present in the full roster
+    (every state, not just `ready`) — CLAUDE.md #3's own "populate from
+    real data" rule — preserving each select's current value if it's still
+    real, called every render alongside the existing
+    `populateBellCurveValueOptions()`. `filterCalibTableRoster(fullRoster)`
+    applies all 4 (AND, empty = no restriction) before building the table
+    rows and before computing the header's "รอปรับเทียบ N รายการ" count, so
+    the count always matches what the filtered table actually shows
+    (CLAUDE.md #126/#127/#138's own discipline). Added a "↩️ ล้างตัวกรอง"
+    reset button and a "📥 Export Excel (ตารางนี้)" button
+    (`exportCalibTableList()`) that exports the exact same filtered roster
+    the table is currently showing — code/name/group/section/division/
+    department/status/X/grade, including `pending` rows (honestly labeled
+    "รอผลประเมิน" with blank score/grade, never fabricated) — via the
+    file's existing `downloadCsv()` helper (#60/#156/#198), distinct from
+    `exportCalibScopedList()`'s own Bell-Curve-group-only export above it.
+    Verified with a Playwright test seeding 3 employees across two real
+    departments: confirms the filter options show real department values
+    with real counts, selecting one department correctly narrows both the
+    table rows and the "รอปรับเทียบ" count to just that department, the
+    Export button produces a real non-empty CSV named after the active
+    filter, and "ล้างตัวกรอง" restores all 3 rows — plus full re-runs of
+    #197/#198/#199/#200's own existing Calibration tests, all with zero
+    regressions, plus the standard click-sweep (`nav pages clicked: 17
+    errors: []`).
