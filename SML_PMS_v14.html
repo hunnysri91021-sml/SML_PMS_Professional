@@ -7961,16 +7961,24 @@ function renderCalibBellCurveNamesPreview(){
   }
   const inputs = {};
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
+  /* ผู้ใช้ขอให้รายชื่อนี้ "แสดงข้อมูล update ตามที่คำนวณ" — หลังกด "📊 คำนวณ Bell Curve" ต้องเห็นเกรด/
+     อันดับจริงจากผลคำนวณ (bellCurveResult.byKey) ทันที ไม่ใช่เกรดชั่วคราว (gradeFromX จาก draft เดิม)
+     เหมือนก่อนหน้านี้ — ถ้า key นี้ยังไม่มีผลคำนวณ (ยังไม่กดคำนวณ หรืออยู่นอกกลุ่ม/ค่าที่เลือกคำนวณรอบนี้)
+     ยังคงแสดงเกรดชั่วคราวเดิมไปก่อน (ตรงกับที่ตารางหลักก็ยังโชว์ "ยังไม่คำนวณ" อยู่) */
+  const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
   const rows = roster.map(r=>{
     const key = draftKey(r.draft);
     const X = Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(r.draft[r.draft.length-3])||0;
-    const grade = r.draft[r.draft.length-2];
+    const bc = bcByKey[key];
+    const gradeCell = bc
+      ? `<span class="grade g${bc.grade}">${bc.grade}</span><br><small style="color:#64748b;font-size:10px">อันดับ ${bc.rank}/${bc.n}</small>`
+      : provisionalGradeCell(r.draft[r.draft.length-2]);
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
-    return `<tr><td>${name}</td><td style="color:#94a3b8;font-size:11px">${r.emp[0]}</td><td style="font-size:11px">${dept}</td><td style="text-align:center">${X}</td><td style="text-align:center">${provisionalGradeCell(grade)}</td></tr>`;
+    return `<tr><td>${name}</td><td style="color:#94a3b8;font-size:11px">${r.emp[0]}</td><td style="font-size:11px">${dept}</td><td style="text-align:center">${X}</td><td style="text-align:center">${gradeCell}</td></tr>`;
   }).join('');
   box.innerHTML = `<div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px">รายชื่อในกลุ่มที่เลือก (${roster.length} คน)</div>
     <div class="tw" style="max-height:220px;overflow-y:auto"><table>
-      <thead><tr><th>ชื่อ</th><th>รหัส</th><th>หน่วยงาน</th><th>X</th><th>เกรดชั่วคราว</th></tr></thead>
+      <thead><tr><th>ชื่อ</th><th>รหัส</th><th>หน่วยงาน</th><th>X</th><th>เกรด${Object.keys(bcByKey).length?'':'ชั่วคราว'}</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 }
@@ -9732,6 +9740,7 @@ function runBellCurveCalculation(){
     cell.innerHTML = `<span class="grade g${info.grade}">${info.grade}</span><br><small style="color:#64748b">อันดับ ${info.rank}/${info.n}<br>${info.groupLabel}</small>`;
     cell.style.color = '';
   });
+  renderCalibBellCurveNamesPreview();
   updateCalibConfirmLock();
   const totalReady = document.querySelectorAll('.calib-adj').length;
   smlToast('คำนวณ Bell Curve แล้ว '+n+' รายการ'+(n<totalReady?` (เหลืออีก ${totalReady-n} รายการ รอเลือกกลุ่มถัดไป)`:''),'ok');

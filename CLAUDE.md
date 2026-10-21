@@ -10411,3 +10411,26 @@ Before considering a change to `SML_PMS_v14.html` done:
     final by this stage, never label it provisional," grep every other place
     reading the exact same status range for the identical helper call, not
     just the one function the fix was written against.
+
+200. **Follow-up to #199: user asked "รายชื่อในกลุ่มที่เลือก ให้แสดงข้อมูล
+    update ตามที่คำนวณ" (the names list in the selected group should show
+    updated data per what was calculated).** `renderCalibBellCurveNamesPreview()`
+    (#198) always showed each person's stored draft grade via
+    `provisionalGradeCell()` — even after HR clicked "📊 คำนวณ Bell Curve,"
+    the preview kept showing the old provisional `gradeFromX()` grade and
+    never the real computed rank/grade sitting in `bellCurveResult.byKey`;
+    `runBellCurveCalculation()` also never re-rendered this preview at all,
+    only the main table's `.calib-bc-cell`s. Fixed by having the preview
+    read `bellCurveResult.byKey` first for each row — showing the real
+    computed grade + rank (`อันดับ N/M`) the moment it exists for that key,
+    falling back to the old provisional cell only for a row not yet computed
+    (still outside the chosen group/value, or before any calculation has
+    run) — and calling `renderCalibBellCurveNamesPreview()` from
+    `runBellCurveCalculation()` itself right after updating the main table's
+    cells, so both views refresh together instead of only one. The column
+    header also drops "ชั่วคราว" once a real calculation exists for this
+    group. Verified with a Playwright test confirming the preview shows
+    "เกรดชั่วคราว"/no rank before computing and switches to a plain "เกรด"
+    header with real rank text after clicking compute — plus full re-runs
+    of #197/#198/#199's own existing Calibration tests and the standard
+    click-sweep (`nav pages clicked: 17 errors: []`), zero regressions.
