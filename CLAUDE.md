@@ -10251,3 +10251,65 @@ Before considering a change to `SML_PMS_v14.html` done:
     re-run of the page's own existing logic tests (for everything that wasn't
     supposed to change at all) — neither one alone is sufficient proof the
     change was safe.
+
+197. **User asked to be able to run Bell Curve "แบบ กลุ่ม แผนก ส่วน ฝ่าย ใดก็ได้
+    ระบบจะดึงข้อมูลแล้ว admin สามารถคลิกให้ประมวลผลได้เมื่อต้องการ หรือมีการเลือก
+    กลุ่มใหม่" — asked a clarifying question first since the field-level select
+    (`#calibBellCurveField`, กลุ่ม/แผนก/ส่วน/ฝ่าย) already existed since #155;
+    confirmed what was actually missing: picking one **specific real value**
+    within the chosen field (e.g. เทียบเฉพาะแผนกบัญชี) and computing/confirming
+    that one group at a time, not all groups at once every time.** Before this,
+    `computeBellCurveGrades()` always split the whole ready roster into every
+    distinct group automatically and `confirmCalibration()` required
+    `bellCurveResult.byKey`'s count to **exactly equal** every `.calib-adj`
+    input on the page — any partial computation was rejected outright, so
+    there was no way to process one real department and leave the rest for
+    later; HR had to always compute+confirm the entire company at once.
+    Added a second `<select id="calibBellCurveValue">`, populated by
+    `populateBellCurveValueOptions()` with the **real distinct values** (with
+    real per-group counts) of whichever field is currently chosen, read live
+    from `getReadyCalibRoster()` (a new shared helper both this and
+    `computeBellCurveGrades()` now call, instead of each independently calling
+    `buildTierRoster()` with its own filter — the #126/#127/#138 "reuse one
+    function, don't recompute the same condition twice" discipline) — the
+    first option is always "— ทุกกลุ่ม —" (empty value = the exact old
+    behavior, byte-for-byte, when left unselected). `computeBellCurveGrades()`
+    gained an optional `specificValue` parameter: when set, it filters the
+    roster to only that one real group before ranking (same Bell Curve
+    math/tie-break, just scoped to fewer people) and stamps the result with
+    `scopeValue` so the status line can say which group was computed.
+    `runBellCurveCalculation()` only updates `.calib-bc-cell`s that are
+    present in the new (possibly partial) result — cells outside the chosen
+    group are left exactly as they were (`ยังไม่คำนวณ`), never overwritten or
+    blanked. **The real behavior change, to make partial confirms possible**:
+    `updateCalibConfirmLock()` now unlocks the confirm button once **any**
+    row has a computed result (not all of them), and `confirmCalibration()`
+    now commits only the subset of `.calib-adj` inputs whose key is present
+    in `bellCurveResult.byKey` — every other row is left completely untouched
+    at its current `Acknowledged` status, ready for the next group/value
+    selection and calculation. The status message and the final toast always
+    state the real split ("คำนวณแล้ว 2/4 รายการ... เหลืออีก N รายการ รอเลือก
+    กลุ่มถัดไป"), never implying "done" when a subset remains. Changing either
+    select (`onCalibBellCurveFieldChange()`/`onCalibBellCurveValueChange()`)
+    invalidates `bellCurveResult` and re-locks the confirm button, the exact
+    same "must recompute after any change" discipline CLAUDE.md #133/#155
+    already established for a single reject and for a score edit — now also
+    applied to "picking a different group," matching the user's own "หรือมีการ
+    เลือกกลุ่มใหม่" requirement. Verified with a Playwright test that seeds 4
+    employees split across two real departments (แผนกบัญชี/แผนกขาย), selects
+    field=department + value=แผนกบัญชี, computes, confirms (only those 2 move
+    to `Calibrated` with real Bell Curve grades, the other 2 stay
+    `Acknowledged`/`calib-row-ready`), then selects value=แผนกขาย and repeats
+    — confirming the second pair advances too, completing the full roster
+    across two separate admin actions instead of one — plus full re-runs of
+    #155/#172/#187/#196's own existing Calibration tests confirming the
+    **default** (no specific value picked) path still computes/confirms
+    everyone in one shot exactly as before, with zero regression, plus the
+    standard click-sweep (`nav pages clicked: 17 errors: []`). General lesson:
+    when a user names a feature ("compute Bell Curve by any of these 4 real
+    org levels") that already exists in the UI almost exactly as described,
+    the real gap is often one level more specific than the words first suggest
+    — here "any of these 4" was already true, but "one at a time, by a real
+    value within the chosen level" was the part silently missing; a single
+    clarifying question with concrete option previews, rather than assuming
+    the feature request restates something already built, is what surfaced it.

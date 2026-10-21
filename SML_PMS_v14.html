@@ -1934,16 +1934,20 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="card-h"><h3>⚙️ ตั้งค่า Bell Curve</h3></div>
       <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <label style="font-size:13px;color:#475569;font-weight:700">เทียบกันภายในระดับ:</label>
-        <select id="calibBellCurveField" style="padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px">
+        <select id="calibBellCurveField" onchange="onCalibBellCurveFieldChange()" style="padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px">
           <option value="group">กลุ่ม (Group)</option>
           <option value="section">แผนก (Section)</option>
           <option value="division">ส่วน (Division)</option>
           <option value="department">ฝ่าย (Department)</option>
         </select>
+        <label style="font-size:13px;color:#475569;font-weight:700">เฉพาะค่า:</label>
+        <select id="calibBellCurveValue" onchange="onCalibBellCurveValueChange()" style="padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;max-width:260px">
+          <option value="">— ทุกกลุ่ม (เทียบแยกตามค่าจริงของแต่ละคน) —</option>
+        </select>
         <button class="btn btn-p" onclick="runBellCurveCalculation()">📊 คำนวณ Bell Curve</button>
         <span id="calibBellCurveStatus" class="calib-bc-status"></span>
       </div>
-      <div style="padding:0 18px 14px;font-size:12px;color:#94a3b8">แยกจัดอันดับตามระดับฟอร์มประเมิน (ปฏิบัติการ/สำนักงาน/หัวหน้า/ผจก.ส่วน) ภายในหน่วยงานเดียวกันก่อนจัดสัดส่วนเกรด — ถ้าแก้ไข "คะแนนหลังปรับ" ของใครหลังคำนวณแล้ว ต้องกดคำนวณใหม่อีกครั้งก่อนยืนยัน</div>
+      <div style="padding:0 18px 14px;font-size:12px;color:#94a3b8">แยกจัดอันดับตามระดับฟอร์มประเมิน (ปฏิบัติการ/สำนักงาน/หัวหน้า/ผจก.ส่วน) ภายในหน่วยงานเดียวกันก่อนจัดสัดส่วนเกรด — เลือก "เฉพาะค่า" เป็นกลุ่ม/แผนก/ส่วน/ฝ่ายใดกลุ่มหนึ่งเพื่อคำนวณและยืนยันทีละกลุ่มได้ (รายการนอกกลุ่มที่เลือกจะรอรอบถัดไป) ถ้าแก้ไข "คะแนนหลังปรับ" หรือเปลี่ยนกลุ่ม/ค่าหลังคำนวณแล้ว ต้องกดคำนวณใหม่อีกครั้งก่อนยืนยัน</div>
     </div>
 
     <div class="card" style="margin-bottom:18px">
@@ -7905,14 +7909,57 @@ function getBellCurveGroupValue(emp, fieldKey){
   return (emp[idx] || '—').trim() || '—';
 }
 
+/* ใช้ร่วมกันโดย computeBellCurveGrades()/populateBellCurveValueOptions() เพื่อไม่ให้สอง endpoint
+   เรียก buildTierRoster() คนละครั้งด้วยเงื่อนไขไม่ตรงกัน (บทเรียน CLAUDE.md #126/#127/#138 — reuse
+   ฟังก์ชันเดียว อย่าคำนวณซ้ำแยกกัน) */
+function getReadyCalibRoster(){
+  const cycle = getCurrentEvalCycleYear();
+  return buildTierRoster(null, null, 'Acknowledged', cycle).filter(r=>r.state==='ready');
+}
+
+/* ผู้ใช้ขอ "เลือกค่าเฉพาะเจาะจงได้ (เช่น เทียบเฉพาะแผนกบัญชี)" — เติม dropdown ตัวที่สองด้วยค่าจริงที่มี
+   อยู่ในกลุ่ม/แผนก/ส่วน/ฝ่าย (ตาม field ที่เลือก) ของคนที่พร้อม Calibration จริงตอนนี้เท่านั้น ไม่ใช่ค่า
+   คงที่ที่เขียนไว้ล่วงหน้า — ให้ตัวเลือก "ทุกกลุ่ม" อยู่บนสุดเสมอ (ค่าว่าง = พฤติกรรมเดิมก่อนฟีเจอร์นี้) */
+function populateBellCurveValueOptions(){
+  const fieldSel = document.getElementById('calibBellCurveField');
+  const valSel = document.getElementById('calibBellCurveValue');
+  if(!fieldSel || !valSel) return;
+  const fieldKey = fieldSel.value;
+  const roster = getReadyCalibRoster();
+  const counts = {};
+  roster.forEach(r=>{ const v = getBellCurveGroupValue(r.emp, fieldKey); counts[v] = (counts[v]||0)+1; });
+  const values = Object.keys(counts).filter(v=>v && v!=='—').sort((a,b)=>a.localeCompare(b,'th'));
+  const prev = valSel.value;
+  valSel.innerHTML = '<option value="">— ทุกกลุ่ม (เทียบแยกตามค่าจริงของแต่ละคน) —</option>' +
+    values.map(v=>`<option value="${v.replace(/"/g,'&quot;')}">${v} (${counts[v]} คน)</option>`).join('');
+  valSel.value = values.includes(prev) ? prev : '';
+}
+/* เปลี่ยน field (กลุ่ม/แผนก/ส่วน/ฝ่าย) ต้องเติม dropdown ค่าใหม่ทันที (ค่าของ field เดิมใช้กับ field
+   ใหม่ไม่ได้) และ invalidate ผล Bell Curve เดิม — เหมือนกลไก "ต้องคำนวณใหม่หลังแก้ไข" ของ #133/#155 */
+function onCalibBellCurveFieldChange(){
+  bellCurveResult = null;
+  populateBellCurveValueOptions();
+  updateCalibConfirmLock();
+}
+/* เปลี่ยนค่าเฉพาะที่จะคำนวณ (หรือกลับไป "ทุกกลุ่ม") ก็ต้องคำนวณใหม่เช่นกัน ตามที่ผู้ใช้ระบุ "หรือมีการ
+   เลือกกลุ่มใหม่" */
+function onCalibBellCurveValueChange(){
+  bellCurveResult = null;
+  updateCalibConfirmLock();
+}
+
 /* คำนวณเกรดแบบ Bell Curve จากรายชื่อที่พร้อม Calibration (state==='ready') ในขอบเขตปัจจุบัน โดยอ่าน
    คะแนน X ล่าสุดจากช่อง .calib-adj ที่แสดงอยู่บนหน้า (ไม่ใช่ X เดิมใน draft) เพื่อให้ Bell Curve คิดจาก
    คะแนนที่กำลังจะถูกบันทึกจริง ไม่ใช่คะแนนก่อนที่ HR แก้ไข — จัดกลุ่มแยกตาม (หน่วยงานที่เลือก, ระดับ
-   ฟอร์มประเมิน) ก่อนจัดอันดับ ตามที่ผู้ใช้ยืนยัน "แยกตามระดับฟอร์มในหน่วยเดียวกัน" */
-function computeBellCurveGrades(){
+   ฟอร์มประเมิน) ก่อนจัดอันดับ ตามที่ผู้ใช้ยืนยัน "แยกตามระดับฟอร์มในหน่วยเดียวกัน"
+   specificValue (ใหม่): ถ้าระบุ จะคำนวณเฉพาะคนที่มีค่า field นี้ตรงกับที่เลือกเท่านั้น (ให้ HR
+   ประมวลผลทีละกลุ่ม/แผนก/ส่วน/ฝ่ายได้ ไม่ต้องรอให้ครบทุกคนก่อน) — ค่าว่าง/ไม่ส่งมา = พฤติกรรมเดิม
+   (คำนวณทุกคนพร้อมกัน แยกกลุ่มอัตโนมัติตามค่าจริงของแต่ละคน) */
+function computeBellCurveGrades(specificValue){
   const fieldKey = loadBellCurveGroupField();
   const cycle = getCurrentEvalCycleYear();
-  const roster = buildTierRoster(null, null, 'Acknowledged', cycle).filter(r=>r.state==='ready');
+  let roster = getReadyCalibRoster();
+  if(specificValue) roster = roster.filter(r=>getBellCurveGroupValue(r.emp, fieldKey)===specificValue);
   const inputs = {};
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = Number(inp.value)||0; });
   const groups = {};
@@ -7941,7 +7988,7 @@ function computeBellCurveGrades(){
       byKey[row.key] = { grade: BELL_CURVE_PCT[gradeIdx][0], rank, n, groupLabel: BELL_CURVE_GROUP_LABELS[fieldKey]+': '+g.groupVal+' ('+g.formLevel+')', X: row.X };
     });
   });
-  bellCurveResult = { fieldKey, cycle, byKey };
+  bellCurveResult = { fieldKey, cycle, scopeValue: specificValue || null, byKey };
   return bellCurveResult;
 }
 
@@ -9515,6 +9562,9 @@ function renderCalibQueue(){
   if(cnt) cnt.textContent = 'รอปรับเทียบ '+readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
   const groupSel = document.getElementById('calibBellCurveField');
   if(groupSel && !groupSel.dataset.inited){ groupSel.value = loadBellCurveGroupField(); groupSel.dataset.inited='1'; }
+  /* เติม dropdown "เฉพาะค่า" ด้วยค่าจริงที่มีอยู่ในรอบนี้ทุกครั้งที่ render — รายชื่อ/จำนวนคนต่อกลุ่ม
+     ต้องสดเสมอ (บทเรียน CLAUDE.md #3: เติม option จากข้อมูลจริง ไม่ใช่ static) */
+  populateBellCurveValueOptions();
   /* Bell Curve ถูก invalidate ทุกครั้งที่ renderCalibQueue() รันใหม่ (เปิดหน้า/sync อัตโนมัติ/แก้ไข
      คะแนน) — บังคับให้ HR ต้องกด "คำนวณ Bell Curve" ใหม่เสมอก่อนยืนยัน เหมือนกลไก #133 */
   bellCurveResult = null;
@@ -9567,40 +9617,65 @@ function renderCalibQueue(){
 /* แก้ไขคะแนน (X) ใดๆ ในตาราง ต้อง invalidate ผล Bell Curve ที่คำนวณไว้ก่อนหน้าทันที — ไม่งั้นเกรดที่
    ยืนยันอาจคำนวณมาจากคะแนนคนละค่ากับที่กำลังจะบันทึกจริง (หลักการเดียวกับ CLAUDE.md #133) */
 function onCalibScoreInput(){ bellCurveResult = null; updateCalibConfirmLock(); }
+/* ผู้ใช้ขอให้คำนวณ+ยืนยันทีละกลุ่ม/แผนก/ส่วน/ฝ่ายได้ ไม่ต้องรอให้ครบทุกคนก่อน — ปุ่มยืนยันจึงปลดล็อก
+   ทันทีที่มีผลคำนวณอย่างน้อย 1 รายการ (ไม่ใช่ต้องครบ 100% เหมือนเดิมอีกต่อไป) ส่วน confirmCalibration()
+   เองจะยืนยันเฉพาะรายการที่มีผลคำนวณจริงเท่านั้น รายการที่เหลือ (นอกกลุ่มที่เลือกรอบนี้) ยังอยู่ใน
+   คิวรอกลุ่ม/ค่าถัดไป — สถานะข้อความบอกจำนวนจริงทั้งสองฝั่งเสมอ ไม่ปัดเศษหรือบอกว่า "เสร็จหมด" ถ้ายังไม่หมด */
 function updateCalibConfirmLock(){
   const btn = document.getElementById('confirmCalibBtn');
   const status = document.getElementById('calibBellCurveStatus');
-  const hasReady = document.querySelectorAll('.calib-adj').length > 0;
-  const ok = hasReady && bellCurveResult && Object.keys(bellCurveResult.byKey).length === document.querySelectorAll('.calib-adj').length;
+  const totalReady = document.querySelectorAll('.calib-adj').length;
+  const computedCount = bellCurveResult ? Object.keys(bellCurveResult.byKey).length : 0;
+  const ok = totalReady > 0 && computedCount > 0;
   if(btn) btn.disabled = !ok;
   if(status){
-    status.innerHTML = !hasReady ? ''
-      : ok ? `✅ คำนวณ Bell Curve แล้ว (เทียบตาม: ${BELL_CURVE_GROUP_LABELS[bellCurveResult.fieldKey]}) — พร้อมยืนยัน`
-      : '⚠️ ยังไม่คำนวณ Bell Curve (หรือมีการแก้ไขคะแนนหลังคำนวณ) — กรุณากด "📊 คำนวณ Bell Curve" ก่อนยืนยัน';
+    if(!totalReady){
+      status.innerHTML = '';
+    }else if(!ok){
+      status.innerHTML = '⚠️ ยังไม่คำนวณ Bell Curve (หรือมีการแก้ไขคะแนน/เปลี่ยนกลุ่มหลังคำนวณ) — กรุณากด "📊 คำนวณ Bell Curve" ก่อนยืนยัน';
+    }else{
+      const scopeTxt = bellCurveResult.scopeValue ? ` — เฉพาะ "${bellCurveResult.scopeValue}"` : '';
+      status.innerHTML = computedCount < totalReady
+        ? `✅ คำนวณแล้ว ${computedCount}/${totalReady} รายการ (เทียบตาม: ${BELL_CURVE_GROUP_LABELS[bellCurveResult.fieldKey]}${scopeTxt}) — กดยืนยันเพื่อปิดจบ ${computedCount} รายการนี้ก่อน ที่เหลือเลือกกลุ่มถัดไปแล้วคำนวณ/ยืนยันต่อได้`
+        : `✅ คำนวณ Bell Curve ครบทุกรายการแล้ว (เทียบตาม: ${BELL_CURVE_GROUP_LABELS[bellCurveResult.fieldKey]}${scopeTxt}) — พร้อมยืนยัน`;
+    }
   }
 }
 function runBellCurveCalculation(){
   const sel = document.getElementById('calibBellCurveField');
   const fieldKey = sel ? sel.value : loadBellCurveGroupField();
   saveBellCurveGroupField(fieldKey);
-  const result = computeBellCurveGrades();
+  const valSel = document.getElementById('calibBellCurveValue');
+  const specificValue = valSel ? valSel.value : '';
+  const result = computeBellCurveGrades(specificValue);
   const n = Object.keys(result.byKey).length;
-  if(!n){ smlToast('ไม่มีรายการรอ Calibration ให้คำนวณ','warn'); updateCalibConfirmLock(); return; }
+  if(!n){
+    smlToast(specificValue ? `ไม่มีรายการในกลุ่ม "${specificValue}" ที่รอ Calibration` : 'ไม่มีรายการรอ Calibration ให้คำนวณ', 'warn');
+    updateCalibConfirmLock();
+    return;
+  }
+  /* อัปเดตเฉพาะเซลล์ที่อยู่ในกลุ่ม/ค่าที่เลือกคำนวณรอบนี้ (result.byKey) — เซลล์นอกกลุ่มที่เลือก (เช่น
+     เลือก "เฉพาะค่า" เป็นแผนกบัญชี) จะไม่ถูกแตะเลย ยังคงเป็น "ยังไม่คำนวณ" เดิม รอรอบถัดไปที่ HR เลือก
+     กลุ่มอื่นแล้วกดคำนวณซ้ำ — ไม่ใช่ลบล้าง/เขียนทับทุกเซลล์เหมือนก่อนที่ยังไม่มีตัวกรอง "เฉพาะค่า" */
   document.querySelectorAll('.calib-bc-cell').forEach(cell=>{
     const info = result.byKey[cell.dataset.key];
-    cell.innerHTML = info
-      ? `<span class="grade g${info.grade}">${info.grade}</span><br><small style="color:#64748b">อันดับ ${info.rank}/${info.n}<br>${info.groupLabel}</small>`
-      : '—';
+    if(!info) return;
+    cell.innerHTML = `<span class="grade g${info.grade}">${info.grade}</span><br><small style="color:#64748b">อันดับ ${info.rank}/${info.n}<br>${info.groupLabel}</small>`;
     cell.style.color = '';
   });
   updateCalibConfirmLock();
-  smlToast('คำนวณ Bell Curve แล้ว '+n+' รายการ','ok');
+  const totalReady = document.querySelectorAll('.calib-adj').length;
+  smlToast('คำนวณ Bell Curve แล้ว '+n+' รายการ'+(n<totalReady?` (เหลืออีก ${totalReady-n} รายการ รอเลือกกลุ่มถัดไป)`:''),'ok');
 }
+/* ผู้ใช้ขอ "เลือกค่าเฉพาะเจาะจงได้" — ยืนยันทีละกลุ่มได้แล้ว ไม่ต้องรอให้ bellCurveResult ครอบคลุม
+   ทุกแถวเหมือนเดิมอีกต่อไป: เดิมถ้าจำนวนผลคำนวณไม่เท่ากับจำนวน .calib-adj ทั้งหมด (byKey.length !==
+   inputs.length) จะปฏิเสธการยืนยันทั้งหมด — ตอนนี้ confirm เฉพาะแถวที่มีผลคำนวณจริง (bcByKey[key] มีค่า)
+   เท่านั้น แถวที่เหลือ (ยังไม่ถูกเลือกคำนวณรอบนี้) ยังคงเป็น 'ready'/Acknowledged ต่อไป รอรอบถัดไป */
 function confirmCalibration(){
   const inputs=[...document.querySelectorAll('.calib-adj')];
   if(!inputs.length){ smlToast('ไม่มีรายการรอ Calibration','warn'); return; }
-  if(!bellCurveResult || Object.keys(bellCurveResult.byKey).length !== inputs.length){
-    smlToast('กรุณากด "📊 คำนวณ Bell Curve" ให้ตรงกับคะแนนปัจจุบันก่อนยืนยัน','warn');
+  if(!bellCurveResult || !Object.keys(bellCurveResult.byKey).length){
+    smlToast('กรุณากด "📊 คำนวณ Bell Curve" อย่างน้อย 1 กลุ่มก่อนยืนยัน','warn');
     return;
   }
   /* เก็บผล Bell Curve ไว้ในตัวแปร local ก่อน — renderWorkflowPages() ด้านล่างจะเรียก
@@ -9608,9 +9683,11 @@ function confirmCalibration(){
      render ใหม่ ถ้าไปอ่าน bellCurveResult.byKey หลังจากนั้นจะพังเปล่าๆ (ครั้งแรกพลาดจุดนี้ ตรวจพบจาก
      Playwright test ของฟีเจอร์นี้เอง ไม่ใช่สมมติ) */
   const bcByKey = { ...bellCurveResult.byKey };
+  const confirmInputs = inputs.filter(inp=>bcByKey[inp.dataset.key]);
+  const skippedCount = inputs.length - confirmInputs.length;
   const drafts=getDrafts();
   const changed=[];
-  inputs.forEach(inp=>{
+  confirmInputs.forEach(inp=>{
     const key=inp.dataset.key, newX=Number(inp.value)||0;
     const d=drafts.find(x=>draftKey(x)===key);
     const bc = bcByKey[key];
@@ -9619,21 +9696,22 @@ function confirmCalibration(){
   saveDrafts(drafts);
   /* #96: บันทึกใบเตือน/หมายเหตุวินัยที่ HR กรอกไว้คู่กับการยืนยัน Calibration — เก็บแยกจาก draft
      (EVAL_HR_NOTE_KEY) แล้วแนบไปกับ comment ที่ push เข้า Approvals ด้วย เพื่อให้ ms365SyncHrNotes()
-     ดึงกลับมาข้ามเครื่องได้ (แบบเดียวกับลายเซ็น #39) */
+     ดึงกลับมาข้ามเครื่องได้ (แบบเดียวกับลายเซ็น #39) — บันทึกหมายเหตุของทุกแถวที่กรอกไว้ ไม่ใช่แค่แถว
+     ที่ยืนยันรอบนี้ (การจดหมายเหตุไม่ขึ้นกับว่ากลุ่มนี้ถูกเลือกคำนวณ Bell Curve หรือยัง) */
   const noteInputs = [...document.querySelectorAll('.calib-note')];
   const notesByKey = {};
   noteInputs.forEach(ni => { notesByKey[ni.dataset.notekey] = ni.value; saveEvalHrNote(ni.dataset.notekey, ni.value); });
   renderWorkflowPages();
   changed.forEach(d=>pushDraftRowToExcel(d));
-  inputs.forEach(inp=>{
+  confirmInputs.forEach(inp=>{
     const [empCode,cycle]=inp.dataset.key.split('|');
     const note = notesByKey[empCode+'|'+cycle] || '';
     const bc = bcByKey[inp.dataset.key];
     const comment = 'X='+inp.value+' | เกรด Bell Curve='+(bc?bc.grade:'—')+' (อันดับ '+(bc?bc.rank+'/'+bc.n:'—')+', '+(bc?bc.groupLabel:'—')+')' + (note.trim() ? ' | หมายเหตุ: '+note.trim() : '');
     pushApprovalRecordToExcel(empCode,cycle,'Calibrated',comment);
   });
-  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration (Bell Curve)', inputs.length+' รายการ', inputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
-  smlToast('ยืนยันผล Calibration แล้ว '+inputs.length+' รายการ (เกรดจาก Bell Curve)','ok');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration (Bell Curve)', confirmInputs.length+' รายการ', confirmInputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
+  smlToast('ยืนยันผล Calibration แล้ว '+confirmInputs.length+' รายการ (เกรดจาก Bell Curve)'+(skippedCount?` — เหลืออีก ${skippedCount} รายการ รอเลือกกลุ่มถัดไป`:''),'ok');
 }
 /* ข้อยกเว้นจากผู้ใช้ (#155): "Admin ปรับเกรดรายคนเองได้ด้วยเหตุผลพิเศษ" — ไม่ใช่ Bell Curve ทั้งหน่วยงาน
    แต่เป็นการแก้ไขเกรดเฉพาะรายคนเดียว ต้องระบุเหตุผลเสมอ (ห้ามเงียบ) และบันทึกลง Audit Log + Approvals
