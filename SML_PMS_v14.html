@@ -946,6 +946,35 @@ input[type="checkbox"]{accent-color:#0b63ce}
 </style>
 
 <style>
+/* #196: ผู้ใช้ขอ "หมวดของ Calibration ปรับหน้าให้ดูง่าย ชัดเจน" — scope ทุก selector ด้วย #pg-calib
+   เพื่อไม่ให้ไปชนกับคลาสชื่อซ้ำที่อื่นในไฟล์ (บทเรียน CLAUDE.md #15) แทนการเพิ่ม class แบบ generic
+   ที่ไม่ได้ผูกกับหน้านี้โดยเฉพาะ — ไม่แก้ logic ใดๆ ใน renderCalibQueue()/confirmCalibration() เลย
+   เพิ่มแค่ class ติดกับ <tr> (ready/done/pending) + <span> ครอบข้อความสถานะ เพื่อให้ CSS จับสไตล์ได้ */
+#pg-calib .card-h h3{display:flex;align-items:center;gap:7px;font-size:14px}
+#pg-calib .calib-step-card .card-h{background:linear-gradient(90deg,#eef4ff,#fff)}
+#pg-calib .calib-bc-status{display:inline-flex;align-items:center;font-size:12.5px;font-weight:700;padding:6px 13px;border-radius:999px}
+#pg-calib .calib-bc-status:not(:empty){background:#f1f5f9;color:#475569}
+#pg-calib .calib-dist-wrap table,#pg-calib .calib-table-wrap table{border-collapse:separate;border-spacing:0}
+#pg-calib .calib-table-wrap{overflow-x:auto}
+#pg-calib .calib-table-wrap table{min-width:960px}
+#pg-calib .calib-table-wrap thead th,#pg-calib .calib-dist-wrap thead th{background:#f1f5fb;color:#334155;font-weight:800;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;line-height:1.5}
+#pg-calib #calibRows td{padding:10px 9px;vertical-align:middle}
+#pg-calib .calib-row-ready{background:#fffdf7}
+#pg-calib .calib-row-ready:nth-child(even){background:#fffbef}
+#pg-calib .calib-row-done{background:#f3fdf6}
+#pg-calib .calib-row-done:nth-child(even){background:#eefbf2}
+#pg-calib .calib-row-pending:nth-child(even){background:#fafbfd}
+#pg-calib .calib-adj{width:90px;padding:7px;border:1px solid #cbd5e1;border-radius:6px;text-align:center;font-weight:700;color:#0f2748}
+#pg-calib .calib-adj:focus{outline:2px solid #2563eb;border-color:#2563eb}
+#pg-calib .calib-note{width:220px;padding:7px;border:1px solid #dfe7f0;border-radius:6px}
+#pg-calib .calib-note:focus{outline:2px solid #2563eb;border-color:#2563eb}
+#pg-calib .calib-bc-pending{display:inline-block;padding:3px 10px;border-radius:999px;background:#f1f5f9;color:#94a3b8;font-size:10.5px;font-weight:600}
+#pg-calib .calib-done-pill{display:inline-block;padding:4px 12px;border-radius:999px;background:#dcfce7;color:#15803d;font-weight:700;font-size:12px}
+#pg-calib #calibGradeDist td{padding:9px 10px}
+@media(max-width:900px){#pg-calib .calib-adj,#pg-calib .calib-note{width:auto}}
+</style>
+
+<style>
 .tpl-preview-md .md-b{background:#f6f9fc}.tpl-preview-banner{display:flex;justify-content:space-between;gap:15px;align-items:center;padding:14px 16px;background:#fff;border-left:5px solid var(--form-color);border-radius:10px;margin-bottom:12px}.tpl-preview-banner b{display:block;font-size:14px}.tpl-preview-banner span{font-size:10.5px;color:#748196}.tpl-pill{display:inline-block!important;background:#f1f5f9;border:1px solid #dbe4ee;border-radius:999px;padding:5px 9px;margin-left:5px!important;color:#42526a!important}.tpl-preview-table{background:#fff;border:1px solid #e1e8f0;border-radius:10px;overflow:auto}.tpl-preview-table table{width:100%;border-collapse:collapse;font-size:11px}.tpl-preview-table th,.tpl-preview-table td{padding:9px 10px;border-bottom:1px solid #edf1f5}.tpl-preview-table th{background:#f7f9fc;white-space:nowrap}.tpl-preview-table .sum{background:#eef6ff;font-weight:700}.tpl-preview-table .z{background:#f0fdf4}.tpl-preview-table .total{background:#f8fafc;font-weight:800}.tpl-preview-notes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.tpl-preview-notes>div{background:#fff;border:1px solid #e1e8f0;border-radius:10px;padding:12px}.tpl-preview-notes b{display:block;font-size:11px;margin-bottom:6px}.tpl-preview-notes textarea{width:100%;min-height:75px;border:1px solid #dce5ef;border-radius:8px;padding:9px;resize:vertical;font-family:inherit}.tpl-preview-md{width:calc(100vw - 40px);max-height:92vh}.tpl-preview-md .md-b{max-height:72vh;overflow:auto}@media(max-width:700px){.tpl-preview-banner,.tpl-preview-notes{grid-template-columns:1fr;flex-direction:column;align-items:flex-start}.tpl-pill{margin:3px 3px 0 0!important}}
 
 
@@ -1898,37 +1927,37 @@ tbody tr:hover{background:#f0f6ff!important}
 
   <!-- ========== CALIBRATION (HR) ========== -->
   <section class="page" id="pg-calib">
-    <div class="ph"><div><h2>Calibration — ปรับเทียบคะแนน (ขั้นที่ 6, HR)</h2><p>ปรับเทียบคะแนนของใบประเมินที่พนักงานรับทราบผลแล้ว (สถานะ Acknowledged) ก่อนส่งอนุมัติขั้นสุดท้าย AMD/MD — เกรดสุดท้ายคำนวณแบบ Bell Curve (A=10% B=20% C=40% D=20% E=10%) ตามระเบียบปฏิบัติข้อ 6.7 ไม่ใช่เกณฑ์ตัดคะแนนสัมบูรณ์แบบเดิม</p></div>
+    <div class="ph"><div><h2>⚖️ Calibration — ปรับเทียบคะแนน (ขั้นที่ 6, HR)</h2><p>ปรับเทียบคะแนนของใบประเมินที่พนักงานรับทราบผลแล้ว (สถานะ Acknowledged) ก่อนส่งอนุมัติขั้นสุดท้าย AMD/MD — เกรดสุดท้ายคำนวณแบบ Bell Curve (A=10% B=20% C=40% D=20% E=10%) ตามระเบียบปฏิบัติข้อ 6.7 ไม่ใช่เกณฑ์ตัดคะแนนสัมบูรณ์แบบเดิม</p></div>
     <div class="ph-act"><button class="btn btn-ok" id="confirmCalibBtn" disabled onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
 
-    <div class="card" style="margin-bottom:18px">
+    <div class="card calib-step-card" style="margin-bottom:18px">
       <div class="card-h"><h3>⚙️ ตั้งค่า Bell Curve</h3></div>
       <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <label style="font-size:13px;color:#475569">เทียบกันภายในระดับ:</label>
-        <select id="calibBellCurveField" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px">
+        <label style="font-size:13px;color:#475569;font-weight:700">เทียบกันภายในระดับ:</label>
+        <select id="calibBellCurveField" style="padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px">
           <option value="group">กลุ่ม (Group)</option>
           <option value="section">แผนก (Section)</option>
           <option value="division">ส่วน (Division)</option>
           <option value="department">ฝ่าย (Department)</option>
         </select>
         <button class="btn btn-p" onclick="runBellCurveCalculation()">📊 คำนวณ Bell Curve</button>
-        <span id="calibBellCurveStatus" style="font-size:13px"></span>
+        <span id="calibBellCurveStatus" class="calib-bc-status"></span>
       </div>
       <div style="padding:0 18px 14px;font-size:12px;color:#94a3b8">แยกจัดอันดับตามระดับฟอร์มประเมิน (ปฏิบัติการ/สำนักงาน/หัวหน้า/ผจก.ส่วน) ภายในหน่วยงานเดียวกันก่อนจัดสัดส่วนเกรด — ถ้าแก้ไข "คะแนนหลังปรับ" ของใครหลังคำนวณแล้ว ต้องกดคำนวณใหม่อีกครั้งก่อนยืนยัน</div>
     </div>
 
     <div class="card" style="margin-bottom:18px">
-      <div class="card-h"><h3>การกระจายเกรด (เฉพาะที่ผ่าน Calibration แล้วในรอบนี้)</h3></div>
-      <div class="tw"><table>
+      <div class="card-h"><h3>📊 การกระจายเกรด <small style="font-weight:400;color:#94a3b8">(เฉพาะที่ผ่าน Calibration แล้วในรอบนี้)</small></h3></div>
+      <div class="tw calib-dist-wrap"><table>
         <thead><tr><th>เกรด</th><th>จำนวน</th></tr></thead>
         <tbody id="calibGradeDist"></tbody>
       </table></div>
     </div>
 
-    <div class="card">
-      <div class="card-h"><h3>ตารางปรับเทียบรายบุคคล</h3><div class="r"><span class="bd b-y" id="calibCount">รอปรับเทียบ 0 รายการ</span></div></div>
-      <div class="tw"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงานรับทราบ (X)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>เกรด Bell Curve</th><th>ใบเตือน / หมายเหตุวินัย (HR)</th><th></th></tr></thead>
+    <div class="card calib-table-card">
+      <div class="card-h"><h3>📋 ตารางปรับเทียบรายบุคคล</h3><div class="r"><span class="bd b-y" id="calibCount">รอปรับเทียบ 0 รายการ</span></div></div>
+      <div class="tw calib-table-wrap"><table>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงาน<br>รับทราบ (X)</th><th>เกรดเดิม<br><small>(ชั่วคราว)</small></th><th>คะแนนหลังปรับ</th><th>เกรด<br>Bell Curve</th><th>ใบเตือน /<br>หมายเหตุวินัย (HR)</th><th>การดำเนินการ</th></tr></thead>
         <tbody id="calibRows"></tbody>
       </table></div>
     </div>
@@ -9493,7 +9522,7 @@ function renderCalibQueue(){
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
-      return `<tr style="color:#94a3b8"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
+      return `<tr class="calib-row-pending" style="color:#94a3b8"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
         <td colspan="6" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
@@ -9505,23 +9534,23 @@ function renderCalibQueue(){
       const recalcBtn = statusReal!=='Approved' && isAdminOrSysadmin()
         ? `<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${d[2]}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน (ไม่เปลี่ยนเกรด)">🔄 คำนวณใหม่ (KPI)</button> `
         : '';
-      return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
+      return `<tr class="calib-row-done"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
         <td style="text-align:center">${provisionalGradeCell(grade)}</td>
-        <td colspan="3" style="text-align:center;color:#16a34a">✓ ผ่าน Calibration แล้ว</td>
+        <td colspan="3" style="text-align:center"><span class="calib-done-pill">✓ ผ่าน Calibration แล้ว</span></td>
         <td>${recalcBtn}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     const noteKey = code+'|'+d[2];
     const noteVal = (typeof getEvalHrNote==='function' ? getEvalHrNote(noteKey) : '').replace(/"/g,'&quot;');
     const key = draftKey(d);
-    return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
+    return `<tr class="calib-row-ready"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center">${provisionalGradeCell(grade)}</td>
-      <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()" style="width:80px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
-      <td class="calib-bc-cell" data-key="${key}" style="text-align:center;color:#94a3b8;font-size:12px">ยังไม่คำนวณ</td>
-      <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)" style="width:220px;padding:5px;border:1px solid #e2e8f0;border-radius:5px"></td>
+      <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()"></td>
+      <td class="calib-bc-cell" data-key="${key}" style="text-align:center"><span class="calib-bc-pending">ยังไม่คำนวณ</span></td>
+      <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)"></td>
       <td>${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${d[2]}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน แล้วเติมลงช่องให้อัตโนมัติ">🔄 คำนวณใหม่ (KPI)</button> `:''}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
   updateCalibConfirmLock();

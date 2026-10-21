@@ -10196,3 +10196,58 @@ Before considering a change to `SML_PMS_v14.html` done:
     the Worker isn't set up), and double-check which specific function name
     a test mocks against the real call site, not just a plausible-sounding
     sibling name.
+
+196. **User asked for the Calibration page itself ("หมวดของ calibration ปรับหน้า
+    ให้ดูง่าย ชัดเจน" — a typo for "calibration," confirmed from context since
+    this is the only page that name could mean) to be visually easier to read
+    and clearer — pure layout/CSS request, same shape as #171's reviewer-modal
+    cleanup, no logic change asked for or made.** Read the real current markup
+    (`pg-calib`, line ~1900) and `renderCalibQueue()` (line ~9473) first: an
+    8-column table (พนักงาน/หน่วยงาน/X/เกรดเดิม/คะแนนหลังปรับ/เกรด Bell
+    Curve/หมายเหตุวินัย/การดำเนินการ) built from inline `style="..."` attributes
+    on every cell, a Bell Curve settings card, a grade-distribution mini-table,
+    and the table's 3 row states (`'pending'`/`'ready'`/`'done'` from
+    `buildTierRoster()`, #136) rendered with no visual distinction beyond the
+    pending row's plain gray text color — the "needs action" row looked
+    identical to the page's general background, and a "ยังไม่คำนวณ" Bell Curve
+    placeholder was unstyled plain text sitting next to where a real grade badge
+    would later appear, easy to miss. Fixed with the exact #171 pattern: a new,
+    clearly-labeled `<style>` block (not editing the existing CSS in place), every
+    selector scoped under `#pg-calib` specifically to avoid the CLAUDE.md #15
+    "a generic class name collides with an unrelated component elsewhere in this
+    7000+ line file" risk, rather than inventing new generic class names. Added
+    `calib-row-ready`/`calib-row-done`/`calib-row-pending` classes to the 3 real
+    `<tr>` templates in `renderCalibQueue()` (zero logic touched — purely an
+    added `class="..."` attribute on each template string) so CSS can give a
+    ready row a warm "needs attention" tint, a done row a green "finished" tint
+    with a real pill badge ("✓ ผ่าน Calibration แล้ว"), and a muted "ยังไม่คำนวณ"
+    pill instead of bare text. Added icon prefixes to the page title and all 3
+    card headers (⚖️/⚙️/📊/📋, matching every other page's own icon-prefixed
+    heading convention already established across this file), two-line column
+    headers for the longer labels, a gradient-highlighted header on the Bell
+    Curve settings card (since it's the one real action HR must do before
+    confirming — the same visual-priority instinct #171 already applied), a
+    pill-styled Bell Curve status message, zebra striping + bold uppercase
+    table headers (reusing the exact same styling #171 already established for
+    the reviewer modal's own table, for visual consistency across the two
+    pages), and wider/clearer input boxes with a real `:focus` outline for the
+    adjusted-score and HR-note fields. Verified with a real rendered screenshot
+    (CLAUDE.md #15's own rule — a DOM/class check alone can't catch a visual
+    bug) seeding one employee at each of the 3 real states and confirming the
+    page reads cleanly: pending rows muted, the ready row has an editable
+    highlighted input with a clear "ยังไม่คำนวณ" pill, the done row has a green
+    tint and a real "ผ่านแล้ว" badge — plus re-ran all 3 existing Calibration-
+    related Playwright tests (#155's/#172's/#187's own tests covering the real
+    Bell Curve calculation, the provisional-vs-final grade distinction, and the
+    KPI recalc button) with zero regressions, a full end-to-end flow test
+    (seed a real Acknowledged draft → run the real `runBellCurveCalculation()`
+    → confirm the cell populates and the confirm button unlocks, exactly as
+    before this change) confirming the new classes never interfered with the
+    real Bell Curve logic, and the standard click-sweep (`nav pages clicked: 17
+    errors: []`). General lesson: a pure visual-polish request on a page this
+    file already has several working Playwright tests for is exactly the case
+    where "verify nothing broke" means two separate checks — a rendered
+    screenshot (for the thing that was actually asked to change) and a full
+    re-run of the page's own existing logic tests (for everything that wasn't
+    supposed to change at all) — neither one alone is sufficient proof the
+    change was safe.
