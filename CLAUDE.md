@@ -10369,3 +10369,45 @@ Before considering a change to `SML_PMS_v14.html` done:
     — the fix is almost always exposing that existing list through two new
     thin views (a preview render, a CSV builder), never recomputing a fourth
     version of "who's in this group" independently.
+
+199. **User reported "กด calibation แล้ว เกรด กลับมาเปฌนก่อน calibation" (after
+    clicking Calibration, the grade goes back to [looking like] before
+    Calibration).** Traced `renderCalibQueue()`'s `'done'` row branch (status
+    already `Calibrated`/`Approved`, i.e. `grade` is the real Bell Curve/
+    manual-override result, #155) — it still called `provisionalGradeCell(grade)`,
+    the same helper used for `'ready'` rows that haven't been calibrated yet.
+    `provisionalGradeCell()` always appends "(ชั่วคราว)" (provisional/temporary)
+    with a tooltip stating "the real grade will only be computed via Bell
+    Curve at the Calibration step" — so the instant `confirmCalibration()`
+    finished and `renderWorkflowPages()` re-rendered the queue, the just-
+    calibrated row's grade *letter* was correct but its caption/tooltip
+    claimed the opposite — that it was still provisional and Calibration
+    hadn't really happened yet — reading exactly like the grade reverted to
+    its pre-Calibration state. This directly contradicted this file's own
+    stated design: #172's own `renderApproveQueue()` comment explicitly says
+    a `Calibrated`/`Approved` record's grade is genuinely final and "labeling
+    it provisional would be dishonest" — #172's fix just never carried that
+    same exemption into `renderCalibQueue()`'s own `'done'` branch, even
+    though its roster (`buildTierRoster(null,null,'Acknowledged',cycle)`)
+    buckets both `Calibrated` and `Approved` records into that exact `'done'`
+    state. Fixed by rendering the `'done'` row's grade plainly (`<span
+    class="grade g${grade}">` with a real "เกรดจริงจาก Bell Curve/การปรับเอง
+    ณ ขั้น Calibration — ไม่ใช่เกรดชั่วคราวอีกต่อไป" tooltip) and a "(ผ่าน
+    Calibration แล้ว)" caption instead of `provisionalGradeCell()`'s
+    "(ชั่วคราว)" one — the `'ready'` row (still genuinely provisional,
+    `gradeFromX()`) keeps `provisionalGradeCell()` unchanged. Verified with a
+    Playwright test that seeds 2 employees, runs the real Bell Curve
+    calculation + `confirmCalibration()`, and confirms the re-rendered
+    `'done'` row shows the real stored grade with the new "(ผ่าน Calibration
+    แล้ว)" caption and never the old "(ชั่วคราว)" text — plus full re-runs of
+    #155/#172/#187/#196/#197/#198's own existing Calibration tests, all with
+    zero regressions, plus the standard click-sweep (`nav pages clicked: 17
+    errors: []`). General lesson sharper than #172's own conclusion: a shared
+    display helper built for "not yet calibrated" (`provisionalGradeCell()`)
+    is easy to leave wired into a sibling row state that reaches the exact
+    same roster bucket (`'done'`) through a different filter (`buildTierRoster`'s
+    status comparison) than the one a fix explicitly reasoned about (`renderApproveQueue()`'s
+    separate `'Calibrated'`-input roster) — when a fix states "X's grade is
+    final by this stage, never label it provisional," grep every other place
+    reading the exact same status range for the identical helper call, not
+    just the one function the fix was written against.

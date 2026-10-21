@@ -9653,7 +9653,7 @@ function renderCalibQueue(){
       return `<tr class="calib-row-done"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td style="text-align:center">${provisionalGradeCell(grade)}</td>
+        <td style="text-align:center"><span class="grade g${grade}" title="เกรดจริงจาก Bell Curve/การปรับเอง ณ ขั้น Calibration — ไม่ใช่เกรดชั่วคราวอีกต่อไป">${grade}</span><br><small style="color:#16a34a;font-size:10px">(ผ่าน Calibration แล้ว)</small></td>
         <td colspan="3" style="text-align:center"><span class="calib-done-pill">✓ ผ่าน Calibration แล้ว</span></td>
         <td>${recalcBtn}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
