@@ -10128,3 +10128,71 @@ Before considering a change to `SML_PMS_v14.html` done:
     leaves unrestricted, and a notification item is the wrong place to carry
     that company-wide exception when the page it links to is admin-only
     anyway.
+
+195. **User asked "การส่งเมลแจ้งพนักงานใช้แบบเดียวกับที่ส่งแจ้งตอนเปลี่ยนรหัส
+    (PIN) ได้ไหม" — confirmed via a clarifying question this means both
+    "📢 ส่ง Reminder" and "📬 แจ้งผลประเมิน" should switch from `mailto:`
+    (opens the Admin's own email client, #10/#153) to a real server-side
+    send through the Worker's `/send-mail` endpoint, the same mechanism
+    `tryEmailPin()` (#26) already uses to deliver a PIN automatically.**
+    `/send-mail` has no Bcc support — it sends to exactly one `toEmail` at
+    a time — so added `sendEmailToList(recipients, subject, body)`: loops
+    one `/send-mail` call per recipient, best-effort (one person's failure
+    never blocks the rest, the same pattern `notifyAdminOfMissingReviewChain()`
+    #128 already established for looping over several admins), and returns
+    a real per-recipient result map (`perEmp: Map<empCode, {sent, reason}>`)
+    plus aggregate counts — not just "opened the compose window," which is
+    all `mailto:` could ever honestly report (#10/#153's own stated limit).
+    Gates on `isWorkerConfigured(cfg)` — the exact same check `tryEmailPin()`
+    uses, not a new one — and when false, returns `{configured:false}` so
+    the caller can fall back to the old `mailto:` flow rather than silently
+    failing to send on a device that hasn't set up the Worker yet.
+    Rewired both `sendReminder()` and `sendResultNotification()`: when the
+    Worker is configured, every recipient gets a real individual email via
+    `sendEmailToList()`, and the toast now reports genuine "ส่งอีเมลสำเร็จ
+    N คน / ไม่สำเร็จ M คน (เหตุผลจริง)" counts instead of "เปิดโปรแกรม
+    อีเมลแล้ว"; when it isn't configured, both fall back to the exact same
+    `mailto:`-with-To-filled-in flow #153 already fixed, with the toast
+    stating plainly that the fallback was used because the Proxy isn't set
+    up. **`sendResultNotification()`'s "mark as notified" logic got a real
+    accuracy upgrade as a direct consequence**: the old mailto:-only code
+    could only ever mark "opened the compose window" for the *whole* Bcc
+    batch at once (#182's own stated limitation); now that the Worker path
+    verifies success per person, a target is only marked `RESULT_NOTIFIED_KEY`
+    when their own email genuinely sent (or LINE succeeded for the group,
+    or the mailto: fallback was used — both kept at the old batch-level
+    granularity, since neither can be verified per person) — someone whose
+    real send failed stays an un-notified target for the next click instead
+    of silently disappearing from the list while never actually receiving
+    anything. Verified with 4 Playwright/Node cases driving the real
+    functions: a 2-recipient send where both succeed, one where a specific
+    recipient's mocked `/send-mail` call throws (confirms the other still
+    succeeds, the failure is attributed to the right person, and the
+    aggregate counts are correct), a case with the Worker reported as not
+    configured (confirms `configured:false`, zero calls made), and a full
+    `sendResultNotification()` run with one recipient's send mocked to fail
+    (confirms only the succeeding recipient's draft gets marked notified,
+    the failing one does not) — plus full re-runs of #192/#194's own
+    existing tests and the standard click-sweep (`nav pages clicked: 17
+    errors: []`), zero regressions. **One test-authoring mistake caught
+    and fixed during this pass, worth remembering**: a first draft of the
+    test mocked `window.isMs365Configured` (a *different*, broader function
+    checking `tenantId`/`clientId`/`siteUrl`) expecting it to gate the new
+    send path — but `tryEmailPin()`'s own real check, which `sendEmailToList()`
+    deliberately mirrors, is `isWorkerConfigured(cfg)` (checks `workerUrl`/
+    `workerApiKey` specifically), a narrower and genuinely different
+    function; the mock silently had zero effect since the real code never
+    calls the function the test overrode, producing a test that looked like
+    it passed with the wrong numbers until checked case-by-case. **This
+    change is purely client-side** — `/send-mail` itself, the Worker
+    endpoint, already exists and needs no redeploy; everything here goes
+    live the moment GitHub Pages updates. General lesson sharper than
+    #147's own conclusion: when a user asks to make one already-working
+    feature (Reminder/Result-notify) "use the same method as" another
+    already-working feature (PIN email), the real design is almost always
+    already sitting in the second feature's own function — reuse its exact
+    gating check (`isWorkerConfigured`, not a similarly-named but different
+    function) and its exact fallback discipline (never fail silently when
+    the Worker isn't set up), and double-check which specific function name
+    a test mocks against the real call site, not just a plausible-sounding
+    sibling name.

@@ -6457,6 +6457,31 @@ async function sendLineReminder(targets, message){
   }
 }
 
+/* #195: ส่งอีเมลจริงให้หลายคนในครั้งเดียว ผ่าน Worker /send-mail ตัวเดียวกับที่ tryEmailPin() (#26)
+   ใช้ส่ง PIN — ไม่มี bcc ใน endpoint นี้ จึงยิงทีละคน (best-effort ต่อคน เหมือน
+   notifyAdminOfMissingReviewChain() #128 ที่ loop ส่งหลาย admin) แทนการเปิดโปรแกรมอีเมล (mailto:)
+   ให้ Admin กดส่งเอง — ข้อดีจริงคือยืนยันผลสำเร็จ/ไม่สำเร็จเป็นรายคนได้ (mailto: ยืนยันได้แค่
+   "เปิดโปรแกรมแล้ว" ไม่รู้ว่ากดส่งจริงหรือเปล่า) เมื่อยังไม่ได้ตั้งค่า Proxy (isWorkerConfigured
+   เป็น false) จะคืน configured:false ให้ผู้เรียกตกไปใช้ mailto: แบบเดิมแทน ไม่ใช่ปล่อยให้ส่งไม่ได้เลย */
+async function sendEmailToList(recipients, subject, body){
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return { configured:false, perEmp:new Map(), sentCount:0, failedCount:0 };
+  const perEmp = new Map();
+  let sentCount=0, failedCount=0, firstErr='';
+  for(const u of recipients){
+    try{
+      await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail:u[15], toName:u[1], subject, body }) });
+      perEmp.set(u[0], { sent:true });
+      sentCount++;
+    }catch(e){
+      perEmp.set(u[0], { sent:false, reason:e.message });
+      failedCount++;
+      if(!firstErr) firstErr = e.message;
+    }
+  }
+  return { configured:true, perEmp, sentCount, failedCount, reason: firstErr ? ('ส่งอีเมลไม่สำเร็จบางรายการ: '+firstErr) : '' };
+}
+
 async function sendReminder(){
   const targets = getReminderTargets(document.getElementById('rm_target')?.value || 'pending');
   const message = document.getElementById('rm_message')?.value || '';
@@ -6473,28 +6498,39 @@ async function sendReminder(){
   let lineResult = null;
   if(wantLine) lineResult = await sendLineReminder(targets, message);
 
+  let emailSendResult = null;
   if(wantEmail && withEmail.length){
-    /* โปรแกรมอีเมลหลายตัว (รวม Outlook) จะไม่ยอมให้กดส่งถ้าช่อง "To" ว่างเปล่า — เดิมใส่ผู้รับไว้ใน
-       Bcc เท่านั้นเพื่อไม่ให้แต่ละคนเห็นอีเมลกันและกัน แต่ผลคือ To ว่าง ส่งไม่ได้จริง (รายงานจริงจาก
-       ภาพหน้าจอ Outlook) ใส่อีเมลของผู้ส่งเอง (Admin ที่กำลังส่ง) ไว้ใน "To" แทน — มีช่อง To ที่ใช้ได้
-       จริง และยังคงความเป็นส่วนตัวของผู้รับทุกคนไว้ใน Bcc เหมือนเดิมทุกประการ */
-    const toSelf = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[15]) ? CURRENT_SESSION_USER[15] : withEmail[0][15];
-    const bcc = withEmail.map(u=>u[15]).join(',');
-    const subject = encodeURIComponent('แจ้งเตือน: SML PMS — กรุณาดำเนินการประเมินผล');
-    const body = encodeURIComponent(message);
-    window.location.href = `mailto:${encodeURIComponent(toSelf)}?bcc=${bcc}&subject=${subject}&body=${body}`;
+    const subject = 'แจ้งเตือน: SML PMS — กรุณาดำเนินการประเมินผล';
+    emailSendResult = await sendEmailToList(withEmail, subject, message);
+    if(!emailSendResult.configured){
+      /* ยังไม่ได้ตั้งค่า Proxy — ตกไปใช้ mailto: แบบเดิม (To = Admin เอง ตามที่ #153 แก้ไว้,
+         ผู้รับจริงอยู่ใน Bcc) เพื่อไม่ให้ Admin ส่งไม่ได้เลยทั้งที่ Worker ยังไม่พร้อม */
+      const toSelf = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[15]) ? CURRENT_SESSION_USER[15] : withEmail[0][15];
+      const bcc = withEmail.map(u=>u[15]).join(',');
+      const subjectEnc = encodeURIComponent(subject);
+      const body = encodeURIComponent(message);
+      window.location.href = `mailto:${encodeURIComponent(toSelf)}?bcc=${bcc}&subject=${subjectEnc}&body=${body}`;
+    }
   } else if(wantEmail && !withEmail.length){
     smlToast('ไม่มีใครในกลุ่มนี้มีอีเมลในระบบ — เพิ่มอีเมลที่หน้าแก้ไขพนักงานก่อน','warn');
   }
 
   closeM();
   const parts = [];
-  if(wantEmail && withEmail.length) parts.push(`เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง ${withEmail.length} คน` + (withoutEmail.length ? ` (${withoutEmail.length} คนไม่มีอีเมล)` : ''));
+  if(emailSendResult && emailSendResult.configured){
+    parts.push(emailSendResult.failedCount
+      ? `ส่งอีเมลสำเร็จ ${emailSendResult.sentCount} คน · ไม่สำเร็จ ${emailSendResult.failedCount} คน (${emailSendResult.reason})`
+      : `ส่งอีเมลสำเร็จ ${emailSendResult.sentCount} คน`);
+    if(withoutEmail.length) parts.push(`${withoutEmail.length} คนไม่มีอีเมล`);
+  } else if(wantEmail && withEmail.length){
+    parts.push(`ยังไม่ได้ตั้งค่า Proxy — เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง ${withEmail.length} คน` + (withoutEmail.length ? ` (${withoutEmail.length} คนไม่มีอีเมล)` : ''));
+  }
   if(lineResult){
     parts.push(lineResult.sent ? `ส่ง LINE สำเร็จ ${lineResult.sent} คน` : `ส่ง LINE ไม่สำเร็จ — ${lineResult.reason}`);
   }
   if(!parts.length) parts.push('ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน');
-  smlToast(parts.join(' · '), (wantEmail&&withEmail.length) || (lineResult&&lineResult.sent) ? 'ok' : 'warn');
+  const okOverall = (emailSendResult && emailSendResult.configured && emailSendResult.sentCount) || (wantEmail && withEmail.length && (!emailSendResult || !emailSendResult.configured)) || (lineResult&&lineResult.sent);
+  smlToast(parts.join(' · '), okOverall ? 'ok' : 'warn');
   if(typeof appendAuditLog==='function') appendAuditLog('reminder','ส่ง Reminder', document.getElementById('rm_target')?.value||'pending', parts.join(' · '));
 }
 
@@ -6611,32 +6647,57 @@ async function sendResultNotification(){
   let lineResult = null;
   if(wantLine) lineResult = await sendLineReminder(emps, messageWithLink);
 
+  /* #195: เปลี่ยนจาก mailto: มาส่งจริงผ่าน Worker /send-mail ทีละคน เหมือน tryEmailPin() (#26) —
+     ตกไปใช้ mailto: เดิมเฉพาะตอนยังไม่ได้ตั้งค่า Proxy เท่านั้น */
+  let emailSendResult = null;
+  let emailFallbackOpened = false;
   if(wantEmail && withEmail.length){
-    const toSelf = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[15]) ? CURRENT_SESSION_USER[15] : withEmail[0][15];
-    const bcc = withEmail.map(u=>u[15]).join(',');
-    const subject = encodeURIComponent('แจ้งผลการประเมินผลการปฏิบัติงาน — GM อนุมัติแล้ว');
-    const body = encodeURIComponent(messageWithLink);
-    window.location.href = `mailto:${encodeURIComponent(toSelf)}?bcc=${bcc}&subject=${subject}&body=${body}`;
+    const subject = 'แจ้งผลการประเมินผลการปฏิบัติงาน — GM อนุมัติแล้ว';
+    emailSendResult = await sendEmailToList(withEmail, subject, messageWithLink);
+    if(!emailSendResult.configured){
+      const toSelf = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[15]) ? CURRENT_SESSION_USER[15] : withEmail[0][15];
+      const bcc = withEmail.map(u=>u[15]).join(',');
+      const subjectEnc = encodeURIComponent(subject);
+      const body = encodeURIComponent(messageWithLink);
+      window.location.href = `mailto:${encodeURIComponent(toSelf)}?bcc=${bcc}&subject=${subjectEnc}&body=${body}`;
+      emailFallbackOpened = true;
+    }
   } else if(wantEmail && !withEmail.length){
     smlToast('ไม่มีใครในกลุ่มนี้มีอีเมลในระบบ','warn');
   }
 
-  /* มาร์คว่า "แจ้งแล้ว" ทันทีที่ Admin กดส่ง — ข้อจำกัดเดียวกับ mailto: ทั่วทั้งไฟล์ (#10/#153):
-     เปิดโปรแกรมอีเมลให้แล้วคือสิ่งเดียวที่ระบบยืนยันได้จริงสำหรับอีเมล ไม่สามารถยืนยัน "กดส่งจริง" ได้
-     ส่วน LINE ยืนยันผลจริงจาก Worker ได้ (lineResult.sent/.failed) แต่ยังมาร์คแจ้งแล้วเหมือนกันทั้งกลุ่ม
-     เพื่อไม่ให้รายการเดิมค้างวนซ้ำไปเรื่อยๆ ในปุ่มนี้ — ถ้าต้องส่งซ้ำเฉพาะคนที่ LINE ส่งไม่สำเร็จจริง
-     ต้องแก้ไข lineUserId/ตั้งค่า Worker แล้วใช้ปุ่ม "ส่ง Reminder" ปกติแทน */
-  allTargets.forEach(t=>markResultNotified(draftKey(t.draft), 'manual'));
+  /* #195: ตอนนี้ยืนยันผลอีเมลเป็นรายคนได้จริงผ่าน Worker (ต่างจาก mailto: เดิมที่รู้ได้แค่ "เปิด
+     โปรแกรมแล้ว") — มาร์ค "แจ้งแล้ว" เฉพาะคนที่อย่างน้อย 1 ช่องทางสำเร็จจริง (อีเมลส่งสำเร็จ,
+     หรือ LINE ทั้งกลุ่มส่งสำเร็จ — การแยกผลเป็นรายคนของ LINE ยังทำไม่ได้เพราะ multicast คืนผลรวม
+     ไม่ใช่รายคน, ข้อจำกัดเดิมที่เคยระบุไว้) หรือ fallback เป็น mailto: (ยืนยันได้แค่เปิดโปรแกรมแล้ว
+     เหมือนเดิม) — คนที่อีเมลส่งไม่สำเร็จจริงและไม่ได้เลือก LINE จะไม่ถูกมาร์ค ยังคงเป็น target
+     ให้กดส่งใหม่ได้ ไม่ใช่หายไปเงียบๆ ทั้งที่ยังไม่ถึงมือใครเลย */
+  const lineOkOverall = !!(wantLine && lineResult && lineResult.sent);
+  allTargets.forEach(t=>{
+    const code = t.emp[0];
+    const emailOk = emailSendResult && emailSendResult.configured
+      ? !!(emailSendResult.perEmp.get(code)||{}).sent
+      : emailFallbackOpened;
+    if(emailOk || lineOkOverall) markResultNotified(draftKey(t.draft), 'manual');
+  });
   if(typeof renderWorkflowPages==='function') renderWorkflowPages();
   closeM();
   const parts = [];
-  if(wantEmail && withEmail.length) parts.push(`เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง ${withEmail.length} คน` + (withoutEmail.length ? ` (${withoutEmail.length} คนไม่มีอีเมล)` : ''));
+  if(emailSendResult && emailSendResult.configured){
+    parts.push(emailSendResult.failedCount
+      ? `ส่งอีเมลสำเร็จ ${emailSendResult.sentCount} คน · ไม่สำเร็จ ${emailSendResult.failedCount} คน (${emailSendResult.reason})`
+      : `ส่งอีเมลสำเร็จ ${emailSendResult.sentCount} คน`);
+    if(withoutEmail.length) parts.push(`${withoutEmail.length} คนไม่มีอีเมล`);
+  } else if(emailFallbackOpened){
+    parts.push(`ยังไม่ได้ตั้งค่า Proxy — เปิดโปรแกรมอีเมลแล้ว พร้อมส่งถึง ${withEmail.length} คน` + (withoutEmail.length ? ` (${withoutEmail.length} คนไม่มีอีเมล)` : ''));
+  }
   if(lineResult){
     parts.push(lineResult.sent ? `ส่ง LINE สำเร็จ ${lineResult.sent} คน` : `ส่ง LINE ไม่สำเร็จ — ${lineResult.reason}`);
   }
   if(!parts.length) parts.push('ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน');
   const resendNote = resendTargets.length ? ` (รวมส่งซ้ำ ${resendTargets.length} คน)` : '';
-  smlToast(`แจ้งผลแล้ว ${allTargets.length} คน${resendNote} · ` + parts.join(' · '), (wantEmail&&withEmail.length) || (lineResult&&lineResult.sent) ? 'ok' : 'warn');
+  const anyOk = (emailSendResult && emailSendResult.configured && emailSendResult.sentCount) || emailFallbackOpened || lineOkOverall;
+  smlToast(`แจ้งผลแล้ว ${allTargets.length} คน${resendNote} · ` + parts.join(' · '), anyOk ? 'ok' : 'warn');
   if(typeof appendAuditLog==='function') appendAuditLog('reminder','แจ้งผลการประเมิน'+(resendTargets.length?' (มีส่งซ้ำ)':''), allTargets.length+' รายการ', allTargets.map(t=>t.draft[0]).join(', '));
 }
 function closeM(){document.querySelectorAll('.ov').forEach(o=>o.classList.remove('on'))}
