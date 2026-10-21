@@ -10313,3 +10313,59 @@ Before considering a change to `SML_PMS_v14.html` done:
     value within the chosen level" was the part silently missing; a single
     clarifying question with concrete option previews, rather than assuming
     the feature request restates something already built, is what surfaced it.
+
+198. **Follow-up to #197: user's screenshot of the new field/value selects
+    (confirming #197 shipped correctly) asked for two more things in the
+    same card: "ให้ดึงรายชื่อตามที่กำหนดขึ้นมา" (pull up the actual names
+    matching what's selected) and "ให้มีแถบ export เป็น excel ได้ด้วย" (add
+    an Excel export tab too).** Before this, #197's field/value selects only
+    *drove* the Bell Curve calculation and the export list did not exist at
+    all — HR had no way to see *who* was actually in the chosen group before
+    clicking "คำนวณ Bell Curve," and no way to pull a group's roster out of
+    the app as a file.
+    Added `getCalibScopedRoster(fieldKey, specificValue)` — one shared
+    filter function that `computeBellCurveGrades()` (#197), the new preview,
+    and the new export all now call identically (replacing the inline filter
+    line #197 had written directly inside `computeBellCurveGrades()`), so the
+    three can never silently disagree on which people belong to the selected
+    group (the #126/#127/#138/#156 "one function, not a fourth independent
+    query" discipline, applied here across three *new* consumers of the same
+    real-time list at once rather than found as a drift bug later).
+    `renderCalibBellCurveNamesPreview()` renders a real table (name/code/
+    department/live X/provisional grade) of exactly who's in the currently
+    selected field+value right inside the Bell Curve settings card — refreshed
+    on every render (`renderCalibQueue()`, after the roster rows exist, since
+    the preview reads each person's live `.calib-adj` input value) and on
+    every field/value change (`onCalibBellCurveFieldChange()`/
+    `onCalibBellCurveValueChange()`), so it's always showing the group that's
+    about to be computed, not a stale one. An honest empty state ("ไม่มี
+    รายชื่อในกลุ่มนี้ที่รอ Calibration") shows when a chosen value has nobody
+    left — never a blank table pretending there's data, per CLAUDE.md #14.
+    A new "📥 Export Excel" button next to "📊 คำนวณ Bell Curve" calls
+    `exportCalibScopedList()`, which builds a CSV (code/name/department/form
+    level/X/provisional grade, via the file's existing `downloadCsv()`
+    helper, #60/#156 — this file has no real `.xlsx` writer, a UTF-8-BOM CSV
+    Excel opens natively is the established honest equivalent) from the
+    **exact same** `getCalibScopedRoster()` call the preview and the Bell
+    Curve calculation itself use — exporting "ทุกกลุ่ม" (no value selected)
+    exports everyone currently ready for Calibration, exporting a specific
+    value (e.g. แผนกบัญชี) exports only that group, matching "ตามที่กำหนด"
+    (per what's currently selected) literally. Verified with a Playwright
+    test seeding 3 employees across two real departments: confirms the
+    preview with no value selected shows all 3 real names, confirms
+    selecting "แผนกบัญชี" narrows the preview to exactly the 2 real matching
+    names (and states "2 คน"), and confirms clicking Export (intercepting
+    the generated `<a download>` element rather than letting a real file
+    download in the test) produces a real non-empty CSV filename naming the
+    real field+value+cycle — plus full re-runs of #197's own partial-confirm
+    test and #155/#172/#187/#196's own existing Calibration tests, all with
+    zero regressions, plus the standard click-sweep (`nav pages clicked: 17
+    errors: []`), plus a real rendered screenshot (CLAUDE.md #15's own rule)
+    confirming the preview table and Export button render cleanly inside the
+    settings card. General lesson: when a feature ships and the user's very
+    next message asks for "show me who" and "let me export it" about the
+    same selection that feature just introduced, both requests point at the
+    identical underlying list the feature's own calculation already computes
+    — the fix is almost always exposing that existing list through two new
+    thin views (a preview render, a CSV builder), never recomputing a fourth
+    version of "who's in this group" independently.
