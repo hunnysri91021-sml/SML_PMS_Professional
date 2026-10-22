@@ -9681,7 +9681,12 @@ function resetCalibTableFilters(){
 /* Export ตารางปรับเทียบรายบุคคลตามตัวกรองที่เลือกไว้ตอนนี้ (ทุก state — pending/ready/done ไม่ใช่แค่
    ที่พร้อม Calibration เท่านั้น ต่างจาก exportCalibScopedList() ด้านบนซึ่ง export เฉพาะกลุ่ม Bell
    Curve ที่กำลังจะคำนวณ) ใช้ roster ตัวเดียวกับที่ตารางกำลังแสดงอยู่จริง (filterCalibTableRoster())
-   เพื่อให้ไฟล์ที่ได้ตรงกับหน้าจอเป๊ะ (บทเรียน CLAUDE.md #126/#127/#138/#156) */
+   เพื่อให้ไฟล์ที่ได้ตรงกับหน้าจอเป๊ะ (บทเรียน CLAUDE.md #126/#127/#138/#156)
+   แก้บั๊กเดียวกับ #203 (เกิดกับปุ่ม export อีกปุ่มที่ติดกัน): แถว state==='ready' ที่กด "คำนวณ Bell
+   Curve" ไปแล้วแต่ยังไม่ "ยืนยันผล Calibration" ต้องอ่านเกรดจาก bellCurveResult.byKey[key] (ค่าสดที่
+   เพิ่งคำนวณ) ก่อน ไม่ใช่ d[d.length-2] (ค่าเก่าก่อน Calibration) เสมอ — #203 แก้ไว้แค่
+   exportCalibScopedList() แต่ไม่เคยไล่มาแก้ฟังก์ชันนี้ ทั้งที่อ่าน field เดียวกันและมีความเสี่ยงเดียวกัน
+   (บทเรียน CLAUDE.md #126/#127/#138/#156) */
 function exportCalibTableList(){
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = buildTierRoster(null, null, 'Acknowledged', cycle);
@@ -9689,17 +9694,21 @@ function exportCalibTableList(){
   if(!roster.length){ smlToast('ไม่มีรายการในตัวกรองที่เลือกให้ Export','warn'); return; }
   const inputs = {};
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
-  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','เกรด'];
+  const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','เกรด','อันดับ'];
   const rows = roster.map(r=>{
     const code = r.emp[0], name = r.emp[1]||'';
     const group = getBellCurveGroupValue(r.emp,'group'), section = getBellCurveGroupValue(r.emp,'section');
     const division = getBellCurveGroupValue(r.emp,'division'), dept = getBellCurveGroupValue(r.emp,'department');
-    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', ''];
+    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', '', ''];
     const d = r.draft;
     const key = draftKey(d);
     const X = r.state==='ready' && Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(d[d.length-3])||0;
     const statusLabel = r.state==='ready' ? 'พร้อม Calibration' : d[d.length-1];
-    return [code, name, group, section, division, dept, statusLabel, X, d[d.length-2]];
+    const bc = bcByKey[key];
+    const grade = bc ? bc.grade : d[d.length-2];
+    const rankTxt = bc ? (bc.rank+'/'+bc.n) : '';
+    return [code, name, group, section, division, dept, statusLabel, X, grade, rankTxt];
   });
   const filterTag = CALIB_TABLE_FILTER_SELECTS
     .map(({id})=>(document.getElementById(id)||{}).value)

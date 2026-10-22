@@ -10592,3 +10592,54 @@ Before considering a change to `SML_PMS_v14.html` done:
     an export button sitting right next to a just-fixed preview, built
     from the same roster and the same "show what Bell Curve just computed"
     intent, is exactly the kind of sibling a scoped fix walks past.
+
+204. **Follow-up to #203: user immediately reported the EXACT symptom on
+    the OTHER export button too — "Export Excel (ตารางนี้) ยังเป็นค้าเดิม
+    ก่อน calibation" (Export Excel [this table] is still the old value
+    from before calibration) — directly contradicting #203's own closing
+    claim that `exportCalibTableList()` (the bottom button) was "confirmed,
+    not a bug... already reading the real post-confirm grade correctly."**
+    That earlier verification was correct but incomplete: it only tested
+    the POST-confirm scenario (where `confirmCalibration()` has already
+    overwritten `d[d.length-2]` with the real grade, so reading it
+    unconditionally happens to work). It never tested the exact scenario
+    the user was actually describing — a `'ready'`-state row where HR has
+    clicked "📊 คำนวณ Bell Curve" (populating the live, not-yet-committed
+    `bellCurveResult` global) but has NOT yet clicked "ยืนยันผล
+    Calibration." In that window, `d[d.length-2]` is still the stale
+    pre-calibration value, and `exportCalibTableList()`'s final `return`
+    line read it unconditionally, with zero check against
+    `bellCurveResult.byKey[key]` — the identical bug class #203 had just
+    fixed one function over, never propagated to this sibling.
+    Reproduced with a Playwright test mirroring #203's own reproduction
+    exactly (seed 2 real employees + drafts, compute Bell Curve, do NOT
+    confirm, click the bottom "Export Excel (ตารางนี้)" button, decode the
+    real blob CSV) — confirmed pre-fix shows the stale "C"/"C" for both
+    rows; post-fix shows the real computed "B"/"D" with correct rank
+    ("1/2"/"2/2"), verified by stashing the fix and re-running the
+    identical test against the pre-fix code. Fixed with the exact same
+    pattern already proven in #203: read `bcByKey = bellCurveResult ?
+    bellCurveResult.byKey : {}` once, and for each non-pending row compute
+    `const bc = bcByKey[key]; const grade = bc ? bc.grade : d[d.length-2];`
+    plus a real "อันดับ" rank column (new 10th CSV column, `pending` rows
+    get an honest blank rather than a guessed rank) — `'done'`-state rows
+    fall through correctly to the now-real `d[d.length-2]` exactly as
+    before, since `bellCurveResult` is reliably invalidated by the time a
+    row has actually been confirmed. Verified with the new reproduction
+    test (now passing) plus full re-runs of #198/#199/#200/#201/#202/
+    #203's own existing Calibration tests (table-filter export,
+    scoped-group export before/after confirm, grade-revert, preview-
+    update, auto-sync-persist) — all with zero regressions — plus the
+    standard click-sweep (`nav pages clicked: 22 errors: []`). General
+    lesson sharper than #203's own closing line: "grep every other function
+    reading the same stored field" is the right instinct, but testing only
+    the state the bug report happened to describe (post-confirm) is not
+    the same as testing the state the FIX actually needs to cover
+    (pre-confirm, live-but-uncommitted) — when a sibling function is
+    "confirmed, not a bug" against a reproduction, check that the
+    reproduction actually exercises the *specific* scenario the staleness
+    risk depends on (a live global sitting uncommitted) rather than the
+    scenario where the bug happens to self-resolve (the value having
+    already been overwritten for an unrelated reason); two near-identical
+    functions sharing one risk can still need two separate, carefully-
+    scoped tests before either one is safe to call closed.
