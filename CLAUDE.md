@@ -10475,3 +10475,69 @@ Before considering a change to `SML_PMS_v14.html` done:
     #197/#198/#199/#200's own existing Calibration tests, all with zero
     regressions, plus the standard click-sweep (`nav pages clicked: 17
     errors: []`).
+
+202. **User reported "พอกดคำนวณแล้วเกรดเปลี่ยน แต่สักพักก็กลับมาเหมือนเดิม"
+    (after clicking compute the grade changes, but after a while it goes
+    back to how it was) — a genuine new bug, distinct from #199's display-
+    label fix. Traced `renderCalibQueue()`'s own comment: "`bellCurveResult`
+    ถูก invalidate ทุกครั้งที่ renderCalibQueue() รันใหม่ (เปิดหน้า/sync
+    อัตโนมัติ/แก้ไขคะแนน)" — this blanket `bellCurveResult = null` fired
+    on *every* re-render, including the one `startEvalAutoSync()` (#59)
+    triggers every 30 seconds via `ms365SyncAppraisals()` →
+    `renderWorkflowPages()` → `renderCalibQueue()`, completely independent
+    of whether HR actually edited anything. So the real sequence matching
+    the report: HR clicks "📊 คำนวณ Bell Curve" → grade cells correctly
+    show the computed result → within the next ~30 seconds, the background
+    auto-sync tick fires → `renderCalibQueue()` reruns, nulls
+    `bellCurveResult`, and rebuilds every `.calib-bc-cell` back to its
+    always-starts-blank "ยังไม่คำนวณ" markup (the cell HTML itself is
+    freshly generated on every tbody rebuild regardless of whether a result
+    exists — only `runBellCurveCalculation()`'s own explicit paint call
+    ever fills it in) — reading exactly like the grade "came back" to
+    before Calibration, with nobody having touched anything in between.
+    `onCalibScoreInput()`/`onCalibBellCurveFieldChange()`/
+    `onCalibBellCurveValueChange()` already correctly null the result on
+    a genuine user edit — the blanket reset inside `renderCalibQueue()`
+    itself was redundant for that case and solely responsible for wiping
+    an unconfirmed-but-still-correct result on every background tick.
+    Fixed by replacing the unconditional null with a real validity check:
+    keep `bellCurveResult` across a re-render only when the field/value
+    selection still matches what it was computed against **and** every
+    person in `bellCurveResult.byKey` is still in the `'ready'` roster
+    with the exact same `X` the calc used (so a genuine remote change —
+    e.g. another device advancing/editing that person — still correctly
+    invalidates it). Extracted the cell-painting logic shared by
+    `runBellCurveCalculation()` into one `applyBellCurveResultToCells(result)`
+    helper (CLAUDE.md #126/#127/#138's "one function, not a fourth copy"
+    discipline) so `renderCalibQueue()` can re-paint the freshly-rebuilt
+    cells from a still-valid preserved result, rather than leaving them
+    stuck at "ยังไม่คำนวณ" even though the underlying value survived.
+    Verified with a Playwright test that computes Bell Curve, simulates
+    the 30-second auto-sync tick by calling `renderWorkflowPages()`
+    directly, and confirms the grade cells and the unlocked confirm
+    button both survive — then edits one score for real and confirms the
+    result correctly invalidates and the table correctly reverts to
+    "ยังไม่คำนวณ" in that case. Confirmed the test reproduces the real bug
+    first (failed identically on the pre-fix code via `git stash`) before
+    confirming the fix — plus full re-runs of #197/#198/#199/#200/#201's
+    own existing Calibration tests, all with zero regressions, plus the
+    standard click-sweep (`nav pages clicked: 17 errors: []`). **The
+    group/section/division/department filter + Excel export for the main
+    calibration table the user also asked for in the same message was
+    already shipped in #201 one turn earlier** — confirmed still present
+    in the file (`calibFilterGroup`/`Section`/`Division`/`Dept`,
+    `exportCalibTableList()`), just not visible in the user's cropped
+    screenshot (which showed only the table rows, above the filter bar) —
+    no further work needed there. General lesson sharper than #155/#172's
+    own "must re-confirm after any edit" discipline: an invalidate-on-
+    every-render rule that's correct for "the user might have edited
+    something" is not automatically correct for "the page re-rendered for
+    any reason at all" — a page with a background auto-refresh timer
+    (#59) re-renders on a schedule completely unrelated to user action,
+    and a blanket invalidation tied to *rendering* rather than to the
+    *specific events that actually invalidate the data* will periodically
+    destroy a user's own uncommitted work with no visible cause; when a
+    "must recompute after X" rule is enforced inside a render function
+    rather than at the specific X event(s), check whether that render
+    function also fires for unrelated reasons (an auto-sync tick) before
+    assuming the blanket reset is safe.

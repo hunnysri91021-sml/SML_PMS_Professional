@@ -9725,9 +9725,29 @@ function renderCalibQueue(){
   /* เติม dropdown "เฉพาะค่า" ด้วยค่าจริงที่มีอยู่ในรอบนี้ทุกครั้งที่ render — รายชื่อ/จำนวนคนต่อกลุ่ม
      ต้องสดเสมอ (บทเรียน CLAUDE.md #3: เติม option จากข้อมูลจริง ไม่ใช่ static) */
   populateBellCurveValueOptions();
-  /* Bell Curve ถูก invalidate ทุกครั้งที่ renderCalibQueue() รันใหม่ (เปิดหน้า/sync อัตโนมัติ/แก้ไข
-     คะแนน) — บังคับให้ HR ต้องกด "คำนวณ Bell Curve" ใหม่เสมอก่อนยืนยัน เหมือนกลไก #133 */
-  bellCurveResult = null;
+  /* ผู้ใช้รายงาน "กดคำนวณแล้วเกรดเปลี่ยน แต่สักพักก็กลับมาเหมือนเดิม" — สาเหตุจริง: บรรทัดนี้เดิม
+     null ทิ้ง bellCurveResult แบบไม่มีเงื่อนไขทุกครั้งที่ renderCalibQueue() รันใหม่ ซึ่งไม่ได้รันแค่ตอน
+     HR แก้ไขคะแนนเท่านั้น (จุดนั้น onCalibScoreInput() ก็ null เองอยู่แล้วแยกต่างหาก) แต่ยังรันทุก 30
+     วินาทีจาก startEvalAutoSync() (ผ่าน ms365SyncAppraisals()→renderWorkflowPages()) ด้วย — ผลที่ HR
+     เพิ่งกด "คำนวณ Bell Curve" ไว้แต่ยังไม่ทันกดยืนยัน จึงถูกลบทิ้งเองกลางอากาศโดยไม่มีใครแก้ไขอะไรเลย
+     เซลล์เกรดในตารางก็ถูกสร้างใหม่เป็น "ยังไม่คำนวณ" เสมอตอน rebuild tbody.innerHTML (ไม่ว่า
+     bellCurveResult จะมีค่าอยู่หรือไม่) อ่านเหมือนเกรดเองที่ "กลับมาเป็นก่อนหน้า" เป๊ะ
+     แก้โดยเก็บผลไว้ถ้ายัง valid จริง — field/value ที่เลือกต้องตรงกับตอนคำนวณ และทุกคนในผล (byKey)
+     ต้องยังอยู่ในสถานะ ready พร้อม X เท่าเดิมกับตอนคำนวณ (ไม่มีใครถูกแก้ไข/เปลี่ยนสถานะจาก sync ระหว่างนี้)
+     — ถ้าผ่านทุกเงื่อนไขค่อย "ทาสี" กลับเข้าเซลล์ที่เพิ่งสร้างใหม่ด้วย applyBellCurveResultToCells()
+     ด้านล่าง ไม่ต้องให้ HR กดคำนวณซ้ำทั้งที่ไม่มีอะไรเปลี่ยน */
+  if(bellCurveResult){
+    const curField = groupSel ? groupSel.value : loadBellCurveGroupField();
+    const valSel = document.getElementById('calibBellCurveValue');
+    const curValue = valSel ? valSel.value : '';
+    const sameSelection = bellCurveResult.fieldKey===curField && (bellCurveResult.scopeValue||'')===curValue;
+    const stillValid = sameSelection && Object.keys(bellCurveResult.byKey).every(key=>{
+      const r = roster.find(x=>x.state==='ready' && draftKey(x.draft)===key);
+      if(!r) return false;
+      return (Number(r.draft[r.draft.length-3])||0) === bellCurveResult.byKey[key].X;
+    });
+    if(!stillValid) bellCurveResult = null;
+  }
   tbody.innerHTML = roster.length ? roster.map(r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
@@ -9763,6 +9783,10 @@ function renderCalibQueue(){
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)"></td>
       <td>${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${d[2]}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน แล้วเติมลงช่องให้อัตโนมัติ">🔄 คำนวณใหม่ (KPI)</button> `:''}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
+  /* ทาสีเซลล์เกรดกลับเข้าไปถ้า bellCurveResult ยัง valid (ดูคอมเมนต์ด้านบน) — เซลล์ที่เพิ่งสร้างใหม่
+     ทุกอันเริ่มจาก "ยังไม่คำนวณ" เสมอ ต้องเติมผลที่คำนวณไว้แล้วกลับเข้าไปเอง ไม่งั้นแม้ผลจะยังอยู่จริง
+     ในตัวแปรแต่หน้าจอก็จะโชว์เหมือนไม่เคยคำนวณ */
+  if(bellCurveResult) applyBellCurveResultToCells(bellCurveResult);
   /* ต้อง render preview รายชื่อ *หลัง* tbody.innerHTML เซ็ตเสร็จเท่านั้น — preview อ่านค่าจริงจากช่อง
      .calib-adj ที่เพิ่งถูกสร้าง ถ้าเรียกก่อนหน้านี้จะอ่านไม่เจอเลยสักแถว */
   renderCalibBellCurveNamesPreview();
@@ -9804,6 +9828,17 @@ function updateCalibConfirmLock(){
     }
   }
 }
+/* ใช้ร่วมกันโดย runBellCurveCalculation() (เพิ่งคำนวณเสร็จ) และ renderCalibQueue() (re-render ที่ผล
+   เดิมยัง valid อยู่ — ดูคอมเมนต์ใน renderCalibQueue()) เพื่อไม่ให้มีโค้ด "ทาสีเซลล์เกรด" สองชุดที่
+   อาจเพี้ยนแยกกันได้ (บทเรียน CLAUDE.md #126/#127/#138) */
+function applyBellCurveResultToCells(result){
+  document.querySelectorAll('.calib-bc-cell').forEach(cell=>{
+    const info = result.byKey[cell.dataset.key];
+    if(!info) return;
+    cell.innerHTML = `<span class="grade g${info.grade}">${info.grade}</span><br><small style="color:#64748b">อันดับ ${info.rank}/${info.n}<br>${info.groupLabel}</small>`;
+    cell.style.color = '';
+  });
+}
 function runBellCurveCalculation(){
   const sel = document.getElementById('calibBellCurveField');
   const fieldKey = sel ? sel.value : loadBellCurveGroupField();
@@ -9820,12 +9855,7 @@ function runBellCurveCalculation(){
   /* อัปเดตเฉพาะเซลล์ที่อยู่ในกลุ่ม/ค่าที่เลือกคำนวณรอบนี้ (result.byKey) — เซลล์นอกกลุ่มที่เลือก (เช่น
      เลือก "เฉพาะค่า" เป็นแผนกบัญชี) จะไม่ถูกแตะเลย ยังคงเป็น "ยังไม่คำนวณ" เดิม รอรอบถัดไปที่ HR เลือก
      กลุ่มอื่นแล้วกดคำนวณซ้ำ — ไม่ใช่ลบล้าง/เขียนทับทุกเซลล์เหมือนก่อนที่ยังไม่มีตัวกรอง "เฉพาะค่า" */
-  document.querySelectorAll('.calib-bc-cell').forEach(cell=>{
-    const info = result.byKey[cell.dataset.key];
-    if(!info) return;
-    cell.innerHTML = `<span class="grade g${info.grade}">${info.grade}</span><br><small style="color:#64748b">อันดับ ${info.rank}/${info.n}<br>${info.groupLabel}</small>`;
-    cell.style.color = '';
-  });
+  applyBellCurveResultToCells(result);
   renderCalibBellCurveNamesPreview();
   updateCalibConfirmLock();
   const totalReady = document.querySelectorAll('.calib-adj').length;
