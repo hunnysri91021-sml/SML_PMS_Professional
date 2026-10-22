@@ -10643,3 +10643,93 @@ Before considering a change to `SML_PMS_v14.html` done:
     already been overwritten for an unrelated reason); two near-identical
     functions sharing one risk can still need two separate, carefully-
     scoped tests before either one is safe to call closed.
+
+205. **User reported "ข้อมูลไม่ save ที่ calibration แล้ว" (data from
+    Calibration doesn't save) — confirmed via a clarifying question the
+    real split: the web app's own table correctly showed the new
+    Calibrated grade, but the real Excel `Appraisals` sheet did not
+    reflect it. Earlier in the same conversation the user had already
+    sent a screenshot of the real sheet showing duplicate rows per
+    employee — e.g. 90526 with both a "Submitted" row and an
+    "Acknowledged" row, same EmpID/รอบ/ระดับ — which turned out to be
+    the exact smoking gun.** Traced `graphUpsertTableRow()`/
+    `graphUpsertTableRowPartial()` (client, delegated path) and the
+    Worker's `upsertRow()`/`upsertRowPartial()` (used whenever the
+    Worker is configured, which per #31 is every device by default) and
+    found **two real, compounding bugs** in all four, all sharing one
+    root pattern:
+    1. **Only the first matching row ever got updated.**
+       `rows.findIndex(r => rowMatchesUpsertKey(...))` picks exactly one
+       row and PATCHes it; when a duplicate of the same composite key
+       already exists (any leftover from before #41's upsert existed,
+       or from the second bug below), the *other* duplicate is left
+       completely untouched forever. Whoever happens to be looking at
+       that specific stale duplicate row in Excel sees no change at all
+       after Calibration, confirming — even though the web app and one
+       of the two Excel rows are both genuinely correct.
+    2. **Neither function ever followed Microsoft Graph's
+       `@odata.nextLink` pagination when searching for the row to
+       update** — unlike `graphListTableRows()`/`listRows()`, already
+       fixed for this exact class of bug in #159, these four upsert
+       functions each called a single, unpaginated GET on `/rows` and
+       searched only that one page. If the real matching row happened
+       to sit on a later page (plausible the moment `Appraisals`
+       accumulates enough real rows, duplicates included), the search
+       would find nothing and silently **add a brand-new duplicate
+       row** instead of updating the existing one — actively
+       manufacturing more of the exact duplicate-row problem bug #1
+       already makes visible, on every single push from that point on.
+    Reproduced both independently with Playwright/Node tests before
+    fixing: (1) seeded two duplicate rows sharing one composite key and
+    confirmed the pre-fix client function PATCHes only the first,
+    leaving the second at its old status; (2) seeded a real match
+    sitting on page 2 behind a mocked `@odata.nextLink` and confirmed
+    the pre-fix Worker route (driven through the real `/rows/upsert`
+    HTTP endpoint end-to-end, not just the internal function in
+    isolation) never reaches it and instead calls `/add`, creating a
+    new duplicate. Fixed by extracting one shared pagination helper on
+    each side (`graphFetchAllTableRowsRaw()` client,
+    `fetchAllTableRowsRaw()` Worker — mirroring `graphListTableRows()`/
+    `listRows()`'s exact loop-until-no-`@odata.nextLink` pattern, #159)
+    and changing `findIndex` to `filter`: every real match now gets
+    PATCHed (full-row for the plain upsert, the same per-row
+    range-PATCH loop for the partial/formula-safe upsert, #106), and a
+    new row is only ever added when zero real matches exist anywhere
+    across every page. Kept the client and Worker implementations
+    byte-for-byte parallel in logic, per CLAUDE.md #41's own standing
+    rule for this exact pair of files that can't share code. Verified
+    with both reproduction tests now passing post-fix (both duplicates
+    PATCHed, zero spurious adds) plus full re-runs of every existing
+    Calibration/Appraisals-push Playwright test (`test_calib_flow`,
+    `test_calib_push_verify`, `test_export_grade_after_calib`, and 7
+    others) and the standard click-sweep (`nav pages clicked: 22
+    errors: []`), all with zero regressions. **This changes the
+    Worker's own code**, so per CLAUDE.md #41/#106/#147's own
+    established precedent **it needs a real redeploy** before the
+    duplicate-row/pagination fix has any live effect on a device
+    routing through the Worker (every device, by default, per #31) —
+    the client-side delegated-path fix goes live the moment GitHub
+    Pages updates, same as any other purely-client fix in this file.
+    **What this fix does and does not resolve, stated plainly**: going
+    forward, every push correctly updates every real existing duplicate
+    (so the symptom — "looks fine in the app, Excel doesn't match" —
+    cannot recur) and the Worker can no longer manufacture a *new*
+    duplicate from a pagination miss. It does **not** retroactively
+    merge or delete the duplicate rows already sitting in the user's
+    real Excel file from before this fix (there is still no
+    `graphDeleteTableRow()` anywhere in this codebase, per #39/#113's
+    own stated limit) — those pre-existing duplicates will now all stay
+    in sync with each other on every future push, but someone still
+    needs to manually clean up the stale historical rows in the Excel
+    file itself if a tidy sheet matters, which this fix doesn't attempt
+    to do automatically. General lesson sharper than #159's own
+    conclusion: when a pagination-follow fix is applied to one function
+    reading a table (`graphListTableRows()`), grep every *other*
+    function that independently GETs the same `/rows` endpoint before
+    assuming the fix is complete — an upsert function's own internal
+    "find the row to update" search is a second, easy-to-miss
+    unpaginated read hiding right next to the paginated one that
+    already got fixed, and a pagination miss there is strictly worse
+    than a pagination miss on a pure read (it doesn't just return stale
+    data, it actively writes a new duplicate row that makes the next
+    search miss again too).

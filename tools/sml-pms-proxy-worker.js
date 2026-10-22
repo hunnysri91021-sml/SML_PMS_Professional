@@ -675,13 +675,30 @@ function rowMatchesUpsertKey(rowVals, keyColIndex, keyValue) {
   }
   return String(rowVals?.[keyColIndex] ?? '').trim() === String(keyValue).trim();
 }
+// #159: ตารางแถวเยอะอาจแบ่งหน้าด้วย @odata.nextLink — upsertRow()/upsertRowPartial() เดิมอ่านแค่
+// หน้าแรกของ /rows ตรงๆ (ไม่วนเหมือน listRows() ที่แก้ไปแล้ว) ถ้าแถวจริงอยู่หน้าถัดไปจะหาไม่เจอ
+// แล้ว "add" แถวใหม่ซ้ำแทนอัปเดตแถวเดิม — สาเหตุหนึ่งที่ทำให้มีแถวซ้ำสะสมใน Appraisals
+async function fetchAllTableRowsRaw(token, base) {
+  let url = base, rows = [], guard = 0;
+  while (url && guard < 200) {
+    const data = await graphGet(token, url);
+    rows = rows.concat(data.value || []);
+    url = data['@odata.nextLink'] || null;
+    guard++;
+  }
+  return rows;
+}
 async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
-  const data = await graphGet(token, base);
-  const rows = data.value || [];
-  const idx = rows.findIndex((r) => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue));
-  if (idx >= 0 && rows[idx].index !== undefined) {
-    await graphSend(token, base + `/itemAt(index=${rows[idx].index})`, 'PATCH', { values: [values] });
+  const rows = await fetchAllTableRowsRaw(token, base);
+  // อัปเดต "ทุกแถว" ที่คีย์ตรงกัน ไม่ใช่แค่แถวแรก — ถ้ามีแถวซ้ำของคนเดิมค้างอยู่ (เช่นจากก่อน
+  // ตารางนี้เป็น upsert, หรือจาก bug อ่านไม่ครบหน้าข้างบน) การอัปเดตแค่แถวแรกจะทิ้งแถวซ้ำที่เหลือ
+  // ไว้เป็นค่าเก่าตลอดไป — ผู้ใช้ที่บังเอิญดูแถวซ้ำนั้นจะเห็นเหมือน "บันทึกไม่ขึ้น Excel"
+  const matches = rows.filter((r) => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue) && r.index !== undefined);
+  if (matches.length) {
+    for (const r of matches) {
+      await graphSend(token, base + `/itemAt(index=${r.index})`, 'PATCH', { values: [values] });
+    }
     return 'updated';
   }
   await graphSend(token, base + '/add', 'POST', { values: [values] });
@@ -715,23 +732,24 @@ function groupContiguous(nums) {
    เป็นแค่ตอนมีรหัสพนักงานใหม่เข้าตารางนี้ครั้งแรก) */
 async function upsertRowPartial(token, driveId, itemId, table, keyColIndex, keyValue, values, protectedCols) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
-  const data = await graphGet(token, base);
-  const rows = data.value || [];
-  const idx = rows.findIndex((r) => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue));
-  if (idx >= 0 && rows[idx].index !== undefined) {
-    const rangeData = await graphGet(token, base + `/itemAt(index=${rows[idx].index})/range`);
-    const m = /^(.+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rangeData.address);
-    if (!m) throw new Error('unexpected range address: ' + rangeData.address);
-    const sheetName = m[1], rowNum = m[3];
-    const startColIdx = colLetterToIndex(m[2]);
-    const cols = values.map((_, i) => i).filter((i) => !protectedCols.includes(i));
-    for (const group of groupContiguous(cols)) {
-      const fromLetter = colIndexToLetter(startColIdx + group[0]);
-      const toLetter = colIndexToLetter(startColIdx + group[group.length - 1]);
-      const rangeAddr = `${sheetName}!${fromLetter}${rowNum}:${toLetter}${rowNum}`;
-      const vals = group.map((i) => values[i]);
-      const rangeUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='${encodeURIComponent(rangeAddr)}')`;
-      await graphSend(token, rangeUrl, 'PATCH', { values: [vals] });
+  const rows = await fetchAllTableRowsRaw(token, base);
+  const matches = rows.filter((r) => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue) && r.index !== undefined);
+  if (matches.length) {
+    for (const r of matches) {
+      const rangeData = await graphGet(token, base + `/itemAt(index=${r.index})/range`);
+      const m = /^(.+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rangeData.address);
+      if (!m) throw new Error('unexpected range address: ' + rangeData.address);
+      const sheetName = m[1], rowNum = m[3];
+      const startColIdx = colLetterToIndex(m[2]);
+      const cols = values.map((_, i) => i).filter((i) => !protectedCols.includes(i));
+      for (const group of groupContiguous(cols)) {
+        const fromLetter = colIndexToLetter(startColIdx + group[0]);
+        const toLetter = colIndexToLetter(startColIdx + group[group.length - 1]);
+        const rangeAddr = `${sheetName}!${fromLetter}${rowNum}:${toLetter}${rowNum}`;
+        const vals = group.map((i) => values[i]);
+        const rangeUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='${encodeURIComponent(rangeAddr)}')`;
+        await graphSend(token, rangeUrl, 'PATCH', { values: [vals] });
+      }
     }
     return 'updated-partial';
   }
