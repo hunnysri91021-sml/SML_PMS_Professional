@@ -8015,7 +8015,12 @@ function onCalibBellCurveValueChange(){
 }
 /* ผู้ใช้ขอ "มีแถบ export เป็น excel ได้ด้วย" — export รายชื่อตามกลุ่ม/ค่าที่เลือกไว้ "ตอนนี้" (ช่อง
    เดียวกับที่ preview/คำนวณใช้) เป็น CSV (ไฟล์ Excel เปิดได้โดยตรง ตาม convention เดิมของไฟล์นี้ —
-   ไม่มี .xlsx writer จริง, #60/#156) ไม่ใช่ export ทั้งตารางเสมอ เพื่อให้ตรงกับคำว่า "ตามที่กำหนด" */
+   ไม่มี .xlsx writer จริง, #60/#156) ไม่ใช่ export ทั้งตารางเสมอ เพื่อให้ตรงกับคำว่า "ตามที่กำหนด"
+   แก้บั๊ก (รายงานว่า "export แล้ว ข้อมูลยังเป็นเกรดเดิม ก่อน calibration"): เดิมอ่าน grade จาก
+   r.draft[...] (ค่าเก่าที่ยังไม่ confirm) เสมอ แม้กด "คำนวณ Bell Curve" ไปแล้วก็ตาม — ต้องอ่านจาก
+   bellCurveResult.byKey[key] ก่อนเหมือนที่ renderCalibBellCurveNamesPreview() แก้ไปแล้ว (#200) แต่
+   ฟังก์ชัน export นี้ไม่เคยถูกแก้ตามให้ตรงกัน (บทเรียน CLAUDE.md #126/#127/#138/#156 — จุดเดียวกันที่
+   แสดงผลลัพธ์เดียวกัน ต้องอ่านจากที่เดียวกัน) */
 function exportCalibScopedList(){
   const fieldSel = document.getElementById('calibBellCurveField');
   const valSel = document.getElementById('calibBellCurveValue');
@@ -8025,18 +8030,22 @@ function exportCalibScopedList(){
   if(!roster.length){ smlToast('ไม่มีรายชื่อในกลุ่มที่เลือกให้ Export','warn'); return; }
   const inputs = {};
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
-  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','หน่วยงาน','ระดับฟอร์ม','คะแนน (X)','เกรดชั่วคราว'];
+  const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
+  const anyComputed = roster.some(r=>bcByKey[draftKey(r.draft)]);
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','หน่วยงาน','ระดับฟอร์ม','คะแนน (X)', anyComputed ? 'เกรด (Bell Curve)' : 'เกรดชั่วคราว', 'อันดับ'];
   const rows = roster.map(r=>{
     const key = draftKey(r.draft);
     const X = Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(r.draft[r.draft.length-3])||0;
-    const grade = r.draft[r.draft.length-2];
+    const bc = bcByKey[key];
+    const grade = bc ? bc.grade : r.draft[r.draft.length-2];
+    const rankTxt = bc ? (bc.rank+'/'+bc.n) : '';
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const lv = getAssignedEvalLevel(r.emp) || r.draft[3] || '';
-    return [r.emp[0], name, dept, lv, X, grade];
+    return [r.emp[0], name, dept, lv, X, grade, rankTxt];
   });
   const scopeTag = (specificValue || 'ทั้งหมด').replace(/[^฀-๿a-zA-Z0-9]+/g,'_');
   downloadCsv(`Calibration_${BELL_CURVE_GROUP_LABELS[fieldKey].split(' ')[0]}_${scopeTag}_${getCurrentEvalCycleYear()}.csv`, headers, rows);
-  smlToast('Export รายชื่อ '+roster.length+' คนแล้ว','ok');
+  smlToast('Export รายชื่อ '+roster.length+' คนแล้ว'+(anyComputed?' (เกรดจากผล Bell Curve ที่คำนวณไว้)':''),'ok');
 }
 
 /* คำนวณเกรดแบบ Bell Curve จากรายชื่อที่พร้อม Calibration (state==='ready') ในขอบเขตปัจจุบัน โดยอ่าน

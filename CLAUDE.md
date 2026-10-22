@@ -10541,3 +10541,54 @@ Before considering a change to `SML_PMS_v14.html` done:
     rather than at the specific X event(s), check whether that render
     function also fires for unrelated reasons (an auto-sync tick) before
     assuming the blanket reset is safe.
+
+203. **Follow-up to #202: user reported "export ทำไมไม่ใช่ ที่ calibration
+    แล้ว" (why doesn't export [show] what's already been calibrated), and
+    after being told the top "📥 Export Excel" button only exports people
+    still `'ready'` (not yet confirmed) — by design, per #198 — reported a
+    second, real bug: "export แล้ว ข้อมูลยังเป็นเกรดเดิม ก่อน calibration"
+    (after exporting, the data is still the old grade, from before
+    calibration). Reproduced with a Playwright test: ran the real
+    `runBellCurveCalculation()` (computing a real new grade, e.g. B/D) but
+    deliberately did NOT click "ยืนยันผล Calibration" yet, then called the
+    real `exportCalibScopedList()` — the exported CSV's grade column showed
+    the stale pre-calculation value ("C") instead of the just-computed
+    real Bell Curve grade.** Root cause: `exportCalibScopedList()` read
+    `grade = r.draft[r.draft.length-2]` unconditionally — the value still
+    stored in the draft from before this run's calculation — and never
+    checked `bellCurveResult.byKey[key]` for the real, just-computed
+    result, even though `renderCalibBellCurveNamesPreview()` sitting right
+    next to it on the same page had already been fixed to do exactly that
+    in #200. #200's own fix note explicitly named this discipline
+    ("CLAUDE.md #126/#127/#138" — "one function, not a fourth independent
+    query") but, being scoped to the preview table specifically, never
+    circled back to the export function showing the identical data one
+    button over. Fixed by making `exportCalibScopedList()` read
+    `bellCurveResult.byKey[key]` first (falling back to the stored draft's
+    provisional grade only for a row not yet computed this run), adding a
+    real "อันดับ" (rank) column from the same result object, and relabeling
+    the grade column header dynamically — "เกรด (Bell Curve)" once any row
+    in the export has a real computed result, "เกรดชั่วคราว" otherwise —
+    so the header's own claim never disagrees with what the column
+    actually holds (the same CLAUDE.md #34/#49/#67 "keep the UI's claim in
+    sync with the code" rule). Verified with a Playwright test reproducing
+    the exact report (compute, don't confirm, export) — CSV now shows the
+    real "B"/"D" grades with the correct rank ("1/2"/"2/2") instead of the
+    stale "C" — plus re-ran #198/#199/#200/#201/#202's own existing
+    Calibration tests (table-filter export, post-confirm export, grade-
+    revert, preview-update, auto-sync-persist), all with zero regressions,
+    plus the standard click-sweep (`nav pages clicked: 17 errors: []`).
+    **Confirmed, not a bug**: `exportCalibTableList()` (the bottom "Export
+    Excel (ตารางนี้)" button) was already reading the real post-`confirm`
+    grade correctly for `'done'` rows (`d[d.length-2]`, written directly by
+    `confirmCalibration()`) — verified with a second test that computes,
+    confirms, and exports via that button, confirming the real updated
+    grades appear. The bug was specific to the top button's *pre-confirm*
+    preview-style export. General lesson sharper than #200's own
+    conclusion: when a fix teaches one display (a preview table) to read a
+    live, not-yet-saved computation result instead of stale stored state,
+    grep every *other* function reading the exact same stored field
+    (`r.draft[r.draft.length-2]`, here) for the identical staleness risk —
+    an export button sitting right next to a just-fixed preview, built
+    from the same roster and the same "show what Bell Curve just computed"
+    intent, is exactly the kind of sibling a scoped fix walks past.
