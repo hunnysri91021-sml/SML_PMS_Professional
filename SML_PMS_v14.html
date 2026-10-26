@@ -1928,7 +1928,7 @@ tbody tr:hover{background:#f0f6ff!important}
   <!-- ========== CALIBRATION (HR) ========== -->
   <section class="page" id="pg-calib">
     <div class="ph"><div><h2>⚖️ Calibration — ปรับเทียบคะแนน (ขั้นที่ 6, HR)</h2><p>ปรับเทียบคะแนนของใบประเมินที่พนักงานรับทราบผลแล้ว (สถานะ Acknowledged) ก่อนส่งอนุมัติขั้นสุดท้าย AMD/MD — เกรดสุดท้ายคำนวณแบบ Bell Curve (A=10% B=20% C=40% D=20% E=10%) ตามระเบียบปฏิบัติข้อ 6.7 ไม่ใช่เกณฑ์ตัดคะแนนสัมบูรณ์แบบเดิม</p></div>
-    <div class="ph-act"><button class="btn btn-ok" id="confirmCalibBtn" style="opacity:.55" onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
+    <div class="ph-act"><button class="btn btn-dg" id="resetCalibBtn" onclick="resetCalibration()" title="ย้อนรายการที่ Calibrate แล้ว (ยังไม่ Approved) กลับมารอ Calibration ใหม่ — Admin/HR เท่านั้น">↩️ รีเซ็ต Calibration</button> <button class="btn btn-ok" id="confirmCalibBtn" style="opacity:.55" onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
 
     <div class="card calib-step-card" style="margin-bottom:18px">
       <div class="card-h"><h3>⚙️ ตั้งค่า Bell Curve</h3></div>
@@ -9904,6 +9904,26 @@ function runBellCurveCalculation(){
   updateCalibConfirmLock();
   const totalReady = document.querySelectorAll('.calib-adj').length;
   smlToast('คำนวณ Bell Curve แล้ว '+n+' รายการ'+(n<totalReady?` (เหลืออีก ${totalReady-n} รายการ รอเลือกกลุ่มถัดไป)`:''),'ok');
+}
+/* รีเซ็ต Calibration เพื่อทำใหม่ — Admin/HR เท่านั้น: ย้อนใบประเมินในรอบปัจจุบันที่สถานะ Calibrated
+   (เท่านั้น — Approved ถือว่าปิดจบแล้ว ไม่แตะ) กลับเป็น Acknowledged และคืนเกรดเป็นเกรดชั่วคราว
+   gradeFromX(X) แล้ว push เข้า Appraisals (upsert) + Approvals (log) + Audit Log ให้ Excel ตรงกับเว็บ */
+async function resetCalibration(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่รีเซ็ต Calibration ได้','warn'); return; }
+  const cycle = getCurrentEvalCycleYear();
+  const drafts = getDrafts();
+  const targets = drafts.filter(d=>d[2]===cycle && d[d.length-1]==='Calibrated');
+  if(!targets.length){ smlToast('ไม่มีรายการที่ Calibrate แล้วในรอบ '+cycle+' ให้รีเซ็ต (รายการที่ Approved แล้วย้อนไม่ได้)','warn'); return; }
+  if(!confirm('รีเซ็ต Calibration '+targets.length+' รายการ (รอบ '+cycle+')?\n\nสถานะจะย้อนกลับเป็น "รอ Calibration" เกรดจะกลับเป็นเกรดชั่วคราว และอัปเดตใน Excel ด้วย\n(รายการที่ Approved แล้วจะไม่ถูกแตะ)')) return;
+  targets.forEach(d=>{ d[d.length-2] = gradeFromX(Number(d[d.length-3])||0); d[d.length-1] = 'Acknowledged'; });
+  saveDrafts(drafts);
+  bellCurveResult = null;
+  renderWorkflowPages();
+  const results = await Promise.all(targets.map(d=>pushDraftRowToExcel(d,'reset')));
+  targets.forEach(d=>pushApprovalRecordToExcel(d[0], cycle, 'Acknowledged', 'รีเซ็ต Calibration เพื่อทำใหม่'));
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','รีเซ็ต Calibration', targets.length+' รายการ (รอบ '+cycle+')', targets.map(d=>d[0]).join(', '));
+  const ok = results.filter(r=>r&&r.ok).length, bad = results.filter(r=>!r||!r.ok);
+  smlToast('รีเซ็ต Calibration แล้ว '+targets.length+' รายการ — Excel (Appraisals) สำเร็จ '+ok+'/'+targets.length+(bad.length?' ⚠️ '+(bad[0].error||''):'')+' · กลับไปคำนวณ Bell Curve ใหม่ได้เลย', bad.length?'err':'ok');
 }
 /* ผู้ใช้ขอ "เลือกค่าเฉพาะเจาะจงได้" — ยืนยันทีละกลุ่มได้แล้ว ไม่ต้องรอให้ bellCurveResult ครอบคลุม
    ทุกแถวเหมือนเดิมอีกต่อไป: เดิมถ้าจำนวนผลคำนวณไม่เท่ากับจำนวน .calib-adj ทั้งหมด (byKey.length !==
