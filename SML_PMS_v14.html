@@ -9921,9 +9921,27 @@ function confirmCalibration(){
   const skippedCount = inputs.length - confirmInputs.length;
   const drafts=getDrafts();
   const changed=[];
+  /* ผู้ใช้รายงาน "กดแล้ว เกรดเปลี่ยน แต่ไม่ save ใน excel" — ตรวจโค้ดแล้วไม่พบ bug ชัดเจน แต่ไม่มีทาง
+     ยืนยันได้ว่า drafts.find(x=>draftKey(x)===key) หาใบประเมินเจอจริงทุกครั้งในเครื่อง/ข้อมูลจริงของ
+     ผู้ใช้ (ต่างจาก #163's drafts.find(x=>x[0]===...) ที่ไม่กรอง cycle — คีย์แบบเต็มตรงนี้ "ควร" ปลอดภัย
+     ตามที่ #163/#164 เคยสรุปไว้ แต่ยังไม่เคยพิสูจน์ด้วยข้อมูลจริงของเคสนี้) เพิ่ม fallback +
+     log ที่ชัดเจนไว้ที่นี่โดยเฉพาะ — ถ้าหาด้วยคีย์เต็มไม่เจอ (เช่น ข้อมูล local ถูก auto-sync
+     แก้ระหว่างเปิดหน้ากับตอนกดยืนยันจนคีย์ไม่ตรงเป๊ะอีกต่อไป) ให้ลอง findCurrentCycleDraft()
+     (empCode+cycle เท่านั้น ไม่กรอง level — ใบที่สถานะสูงสุด) เป็นทางสำรอง แล้ว log ผลไว้เสมอไม่ว่า
+     จะเจอหรือไม่ ให้การทดสอบครั้งถัดไปเห็นสาเหตุจริงได้จาก Sync Log panel โดยตรง ไม่ต้องเดาอีก */
+  if(typeof appendSyncLog==='function') appendSyncLog(`confirmCalibration: เริ่มยืนยัน ${confirmInputs.length} รายการ`, true);
   confirmInputs.forEach(inp=>{
     const key=inp.dataset.key, newX=Number(inp.value)||0;
-    const d=drafts.find(x=>draftKey(x)===key);
+    let d=drafts.find(x=>draftKey(x)===key);
+    if(!d){
+      const [empCode, cycle] = key.split('|');
+      const fallback = typeof findCurrentCycleDraft==='function' ? findCurrentCycleDraft(drafts, empCode, cycle) : null;
+      if(typeof appendSyncLog==='function'){
+        appendSyncLog(`confirmCalibration: หาใบประเมินด้วยคีย์ "${key}" ไม่เจอใน local — ` +
+          (fallback ? `ใช้ใบสำรองแทน (empCode+cycle ตรง, สถานะจริง: ${fallback[fallback.length-1]}, ระดับ: ${fallback[3]})` : `หาแบบสำรองก็ไม่เจอเลย — รายการนี้จะไม่ถูกบันทึก`), !!fallback);
+      }
+      d = fallback;
+    }
     const bc = bcByKey[key];
     if(d && bc){ d[d.length-3]=newX; d[d.length-2]=bc.grade; d[d.length-1]='Calibrated'; changed.push(d); }
   });

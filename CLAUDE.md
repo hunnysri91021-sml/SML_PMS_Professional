@@ -10733,3 +10733,86 @@ Before considering a change to `SML_PMS_v14.html` done:
     than a pagination miss on a pure read (it doesn't just return stale
     data, it actively writes a new duplicate row that makes the next
     search miss again too).
+
+206. **Follow-up to #205: user reported the *same* "ไม่ save เข้า Excel
+    เลย" symptom again — this time after confirming the Worker had
+    genuinely been redeployed with #205's fix. Investigated with real
+    Cloudflare Workers Observability logs (the first time this file has
+    used that diagnostic source directly, rather than the Sync Log panel
+    alone) rather than guessing a second time blind.** The Sync Log panel
+    itself was the first real clue: it showed only the 30-second
+    auto-sync's "ดึงข้อมูล...จาก Excel" pull entries, repeating
+    continuously, with **zero push entries at all** — not even a failure
+    entry — immediately after the user clicked "ยืนยันผล Calibration" on
+    3 real employees. Cloudflare's own Observability log for the Worker
+    confirmed the Worker itself was reachable and healthy (a real
+    `POST /rows/add` succeeded with `200`), but searching the log for
+    "upsert" returned **zero events, ever** — the `/rows/upsert` endpoint
+    (the one `pushDraftRowToExcel()`/`graphUpsertTableRow()` must hit to
+    actually update a Calibration grade) had never once been called on
+    the live Worker, even though the Worker's own route for it is coded
+    correctly (confirmed by reading `tools/sml-pms-proxy-worker.js`
+    directly — not a Worker-side bug this time).
+    Traced `confirmCalibration()` (line ~9908) for a reason the client
+    itself might never reach that endpoint: it matches each confirmed
+    row's real draft via `drafts.find(x=>draftKey(x)===key)` — a plain
+    `.find()` by the row's *full* composite key, which CLAUDE.md #163/
+    #164 previously reasoned was "inherently safe" since the key already
+    encodes code+cycle+level with no ambiguity left. That reasoning was
+    never actually tested against a live production scenario where the
+    30-second background auto-sync (`startEvalAutoSync()`, #59) can run
+    **between** the moment a Calibration row is rendered (fixing its
+    `data-key` in the DOM) and the moment HR actually clicks confirm
+    (which re-reads `getDrafts()` fresh, per #161's own "`getDrafts()`
+    always re-parses from `localStorage` on every call" note) — if
+    anything about that record's local copy shifts in that window (a
+    merged Excel row landing under a slightly different shape), the
+    exact-string match can silently find nothing, and `confirmCalibration()`
+    just **skips pushing that record's actual grade/status to Excel at
+    all** — while the *second*, independent loop a few lines below
+    (`confirmInputs.forEach(...)`, which pushes the Approvals-table
+    audit comment) runs **unconditionally** regardless of whether the
+    real draft was found, so a "ยืนยันผล Calibration แล้ว N รายการ" success
+    toast and a real `Approvals` log entry both still appear — exactly
+    matching what the user saw and reported as "เกรดเปลี่ยน" (the on-screen
+    preview, #200, does update live from the just-computed Bell Curve
+    result regardless) while the real `Appraisals` row underneath never
+    gets touched. Reproduced this exact race deterministically with a
+    Playwright test that renders the queue, computes Bell Curve, then
+    mutates the local draft's `level` field *after* render but *before*
+    calling `confirmCalibration()` (simulating the real-world auto-sync
+    race) — confirmed the plain `.find()` finds nothing in that case.
+    Fixed with a two-part defense, not just a diagnostic: (1) when the
+    exact-key `.find()` comes back empty, fall back to
+    `findCurrentCycleDraft(drafts, empCode, cycle)` (the #163-established
+    "safe" helper — matches by code+cycle only, picks whichever draft has
+    the highest real status rank) so the record's real grade/status still
+    gets written and pushed even when the exact composite key drifted;
+    (2) **always** log to the Sync Log — a "เริ่มยืนยัน N รายการ" entry the
+    instant the function starts doing real work, and, whenever the
+    primary key lookup fails, a specific entry naming the exact key that
+    didn't match and whether the fallback found a real record in its
+    place — so the *next* time this (or any future variant of it) happens,
+    the Sync Log panel the user already knows how to check shows the real
+    cause directly, with no need to escalate to Cloudflare's own
+    dashboard again. Verified with a test confirming the fallback
+    recovers the record and the log entry appears for the race case, and
+    that the normal (no-race) path logs cleanly with no fallback noise —
+    plus full re-runs of every existing Calibration Playwright test
+    (#155/#172/#187/#196-#205's own test suite) and the standard
+    click-sweep (`nav pages clicked: 22 errors: []`), all with zero
+    regressions. **This is purely a client-side fix** — it goes live the
+    moment GitHub Pages updates, no Worker redeploy needed this time,
+    since the bug and the fix are both entirely in `confirmCalibration()`
+    on the client. General lesson sharper than #163/#164's own
+    conclusion: "a `.find()` matching the full composite key is inherently
+    safe" is only true if nothing can ever change the underlying data
+    *between* the moment a UI element's key is fixed in the DOM and the
+    moment a later action reads that key back against fresh data — a
+    page with its own background auto-sync timer (#59) is exactly the
+    kind of environment where that assumption quietly stops holding, and
+    the right response is not just re-deriving why it "should" still be
+    safe, but adding both a real fallback match *and* an unconditional
+    diagnostic log at that exact lookup, so a live production report
+    that can't be reproduced locally still leaves a concrete trail the
+    next time it happens.
