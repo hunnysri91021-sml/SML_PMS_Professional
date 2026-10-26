@@ -219,6 +219,19 @@ export default {
         return json({ ok: true, result }, 200, cors);
       }
 
+      /* /rows/delete — ลบ "ทุกแถว" ในตารางที่คีย์ตรงกัน (ใช้ตรรกะจับคู่เดียวกับ /rows/upsert ทุกประการ:
+         rowMatchesUpsertKey, อ่านครบทุกหน้า) ใช้กับ KPI_Goals ตอนลบ KPI จากหน้าเว็บ — ปฏิเสธคีย์ว่าง
+         เพราะจะไปจับคู่กับ "เซลล์ว่าง" ของแถวอื่นแล้วลบผิดแถวได้ */
+      if (url.pathname === '/rows/delete' && request.method === 'POST') {
+        const { table, keyColIndex, keyValue } = await request.json();
+        const keys = Array.isArray(keyValue) ? keyValue : [keyValue];
+        if (!table || keyColIndex === undefined || keyValue === undefined || keys.some((k) => String(k ?? '').trim() === '')) {
+          return json({ error: 'missing table/keyColIndex/keyValue (คีย์ต้องไม่ว่าง)' }, 400, cors);
+        }
+        const deleted = await deleteRows(token, driveId, itemId, table, keyColIndex, keyValue);
+        return json({ ok: true, deleted }, 200, cors);
+      }
+
       return json({ error: 'not found' }, 404, cors);
     } catch (e) {
       return json({ error: String((e && e.message) || e) }, 500, cors);
@@ -703,6 +716,20 @@ async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, v
   }
   await graphSend(token, base + '/add', 'POST', { values: [values] });
   return 'added';
+}
+
+// ลบทุกแถวที่คีย์ตรงกัน — ลบจาก index มากไปน้อยเสมอ เพราะการลบแถวหนึ่งทำให้ index ของแถวที่อยู่ถัดลงไปเลื่อนขึ้น
+// (ลบจากน้อยไปมากจะลบผิดแถวตั้งแต่แถวที่สองเป็นต้นไป)
+async function deleteRows(token, driveId, itemId, table, keyColIndex, keyValue) {
+  const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
+  const rows = await fetchAllTableRowsRaw(token, base);
+  const matches = rows
+    .filter((r) => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue) && r.index !== undefined)
+    .sort((a, b) => b.index - a.index);
+  for (const r of matches) {
+    await graphSend(token, base + `/itemAt(index=${r.index})`, 'DELETE');
+  }
+  return matches.length;
 }
 
 function colIndexToLetter(idx) {

@@ -2761,6 +2761,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       </div>
       <div class="ph-act">
         <span class="bd b-y" style="font-size:11px;padding:5px 10px" id="goalDraftBadge">⚠️ ยังไม่ได้เปิดใช้งาน 0 รายการ</span>
+        <button class="btn" onclick="openKpiImportModal()">⬆️ Import KPI (CSV)</button>
         <button class="btn" onclick="openBulkKpiActivate()">🔓 เปิดใช้งาน KPI ในรอบนี้</button>
         <button class="btn btn-p" onclick="openAddKpiModal()">+ เพิ่ม KPI</button>
       </div>
@@ -3924,6 +3925,7 @@ function renderGoalKpi(data) {
     <td>
       <div style="display:flex;gap:4px;justify-content:center">
         <button class="btn btn-sm" onclick="editGoalKpi('${k.id}')">✏️</button>
+        ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteGoalKpi('${k.id}')" title="ลบ KPI นี้ (ทั้งในเว็บและ Excel)">🗑️</button>`:''}
         <button class="btn btn-sm" onclick="activateGoalKpi('${k.id}')"
           title="ผูกกับรอบ" style="color:${k.status==='active'?'#94a3b8':'#2563eb'}">
           ${k.status==='active'?'⏸️':'🔓'}
@@ -4088,19 +4090,19 @@ function confirmKpiActivate(){
    ตาม CLAUDE.md #5 (append ที่ปลายแถวเท่านั้น ไม่แทรกกลาง) เพราะยังไม่มีภาพหน้าจอ Excel จริงยืนยัน
    ตำแหน่งคอลัมน์เหล่านี้ — ขาอ่านด้านล่างต้องรองรับแถวเก่าที่มีแค่ 8 คอลัมน์ (ก่อน #184) ด้วย */
 function pushKpiToExcel(kpi){
-  if(!kpi || !kpi.id) return;
+  if(!kpi || !kpi.id) return Promise.resolve({ok:false,error:'ไม่มี KPI'});
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushKpiToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushKpiToExcel: ยังไม่ได้ตั้งค่า MS365', false); return Promise.resolve({ok:false,error:'ยังไม่ได้ตั้งค่า MS365'}); }
   /* #186: ลำดับคอลัมน์จริง ยืนยันจากภาพหน้าจอ header row จริงของ HR —
      KPI_ID·ชื่อ·หน่วยวัด·น้ำหนัก·เป้าหมาย·ประเภท·ขอบเขต·ใช้ในรอบ·Status·หมายเหตุ ครบ 10 คอลัมน์จริง
      (ไม่ใช่ 8 คอลัมน์ตามที่เคยสมมติไว้ก่อนหน้านี้ — "ประเภท"/"หมายเหตุ" เป็นคอลัมน์จริงที่มีอยู่แล้ว
      ไม่ใช่ field สมมติแบบที่ comment เดิมเข้าใจผิด) ฟิลด์ใหม่จาก #185 (EmpCode/ActualVal/TargetVal/
      Direction) จึงต้องต่อท้ายหลังคอลัมน์ที่ 10 นี้ ไม่ใช่หลังคอลัมน์ที่ 8 เหมือนที่เคยเขียนผิด */
-  graphUpsertTableRow('KPI_Goals', 0, kpi.id,
+  return graphUpsertTableRow('KPI_Goals', 0, kpi.id,
     [kpi.id, kpi.name, kpi.unit, kpi.pct, kpi.target, kpi.type||'ปริมาณ', kpi.scope, kpi.year||'', kpi.status, kpi.note||'',
      kpi.empCode||'', kpi.actualVal===''||kpi.actualVal==null?'':kpi.actualVal, kpi.targetVal===''||kpi.targetVal==null?'':kpi.targetVal, kpi.direction||'up'])
-    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) เข้า Excel`, true); })
-    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) ไม่สำเร็จ: `+(err?.message||err), false); });
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) เข้า Excel`, true); return {ok:true}; })
+    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push KPI (${kpi.id}) ไม่สำเร็จ: `+(err?.message||err), false); return {ok:false,error:err?.message||String(err)}; });
 }
 /* ดึง KPI ทั้งหมดจาก Excel มาแทนที่ goalKpiData ในเครื่องนี้ (เหมือน loadEmployeesFromMs365())
    #186: "ประเภท"(index 5)/"หมายเหตุ"(index 9) เป็นคอลัมน์จริงของตาราง — อ่านตรงจาก Excel เสมอ
@@ -4189,6 +4191,148 @@ function addKpiFromModal() {
   if(typeof pushKpiToExcel==='function') pushKpiToExcel(newKpi);
   if(typeof appendAuditLog==='function') appendAuditLog('kpi','เพิ่ม KPI ใหม่', newKpi.name, unit+' · น้ำหนัก '+pct+'%');
   smlToast('เพิ่ม KPI เรียบร้อย','ok');
+}
+
+/* ลบ KPI — ทั้งในเว็บและในตาราง KPI_Goals ของ Excel (Admin/HR เท่านั้น) ลบเว็บก่อนแล้วรอผลลบใน Excel จริง
+   ถ้าลบใน Excel ไม่สำเร็จจะบอกตรงๆ ว่า KPI นี้จะกลับมาเองตอน sync ครั้งถัดไป (ms365SyncKpiGoals() ดึงทั้งตารางมา
+   แทนที่ข้อมูลในเครื่อง) ไม่ปล่อยให้ผู้ใช้เข้าใจว่าลบเรียบร้อยแล้ว */
+async function deleteGoalKpi(id){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ลบ KPI ได้','warn'); return; }
+  const k = goalKpiData.find(x=>x.id===id);
+  if(!k){ smlToast('ไม่พบ KPI นี้ในระบบ (อาจถูกลบไปแล้ว)','warn'); return; }
+  if(!confirm('ลบ KPI "'+k.name+'" ?\n\nจะลบทั้งในเว็บและในตาราง KPI_Goals ของ Excel — ย้อนกลับไม่ได้')) return;
+  goalKpiData = goalKpiData.filter(x=>x.id!==id);
+  saveKpiData();
+  if(typeof cascadeData!=='undefined') cascadeData = cascadeData.filter(c=>c.kpiId!==id);
+  filterGoalKpi();
+  goalStatUpdate();
+  if(typeof renderCascadeRows==='function') renderCascadeRows();
+  if(typeof appendAuditLog==='function') appendAuditLog('kpi','ลบ KPI', k.name, 'id '+id);
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){ smlToast('ลบ KPI "'+k.name+'" ในเว็บแล้ว (ยังไม่ได้ตั้งค่า MS365 จึงยังไม่ได้ลบใน Excel)','warn'); return; }
+  try{
+    const n = await graphDeleteTableRows('KPI_Goals', 0, id);
+    if(typeof appendSyncLog==='function') appendSyncLog(`ลบ KPI (${id}) ออกจาก Excel ${n} แถว`, true);
+    smlToast('ลบ KPI "'+k.name+'" แล้ว — เว็บและ Excel'+(n?` (ลบ ${n} แถวใน Excel)`:' (ไม่พบแถวนี้ใน Excel อยู่แล้ว)'),'ok');
+  }catch(err){
+    const msg = err?.message||String(err);
+    if(typeof appendSyncLog==='function') appendSyncLog(`ลบ KPI (${id}) ออกจาก Excel ไม่สำเร็จ: `+msg, false);
+    smlToast('ลบ KPI ในเว็บแล้ว แต่ลบใน Excel ไม่สำเร็จ: '+msg+' — KPI นี้จะกลับมาตอน sync ครั้งถัดไป จนกว่าจะลบแถวใน Excel ได้','err');
+  }
+}
+
+/* ====== Import KPI จาก CSV ======
+   ตรวจทุกแถวก่อนเขียนจริง (CLAUDE.md #2/#77): ชื่อ/หน่วย/น้ำหนักต้องมี, ขอบเขตต้องเป็นค่าที่ระบบรู้จัก,
+   ขอบเขต person ต้องมี emp_code ที่มีอยู่จริงใน MASTER_USERS (ชื่อพนักงานไม่เชื่อจากไฟล์), kpi_id ซ้ำในไฟล์เดียวกัน
+   = ข้าม, kpi_id ที่มีอยู่แล้ว = อัปเดตแถวเดิม (ไม่สร้างซ้อน), ไม่ใส่ kpi_id = สร้างใหม่ — แสดงตัวอย่างให้ยืนยันก่อน */
+const KPI_IMPORT_HEADERS = ['kpi_id','name','unit','weight_pct','target_text','type','scope','year','status','note','emp_code','target_val','actual_val','direction'];
+const KPI_IMPORT_THAI = ['รหัส KPI (เว้นว่าง=สร้างใหม่)','ชื่อ KPI','หน่วยวัด','น้ำหนัก %','เป้าหมาย (ข้อความ)','ประเภท','ขอบเขต (org/dept/person)','ใช้ในรอบปี (เว้นว่าง=Draft)','สถานะ (draft/active/archived)','หมายเหตุ','รหัสพนักงาน (เฉพาะ person)','เป้าหมาย (ตัวเลข)','ผลงานจริง (ตัวเลข)','ทิศทาง (up=ยิ่งสูงดี/down=ยิ่งต่ำดี)'];
+const KPI_IMPORT_TYPES = ['ปริมาณ','คุณภาพ','ความปลอดภัย','ภาวะผู้นำ','วินัย'];
+let PENDING_KPI_IMPORT_ROWS = [];
+function openKpiImportModal(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ Import KPI ได้','warn'); return; }
+  PENDING_KPI_IMPORT_ROWS = [];
+  const box = document.getElementById('kpiImportPreview'); if(box){ box.classList.add('hide'); box.innerHTML=''; }
+  const inp = document.getElementById('kpiImportFile'); if(inp) inp.value='';
+  const btn = document.getElementById('kpiImportConfirmBtn'); if(btn) btn.disabled = true;
+  openM('mKpiImport');
+}
+function downloadKpiImportTemplate(){
+  downloadCsv('KPI_Import_Template.csv', KPI_IMPORT_HEADERS, [
+    KPI_IMPORT_THAI,
+    ['','ผลผลิตตามแผน','คัน','25','≥95%','ปริมาณ','org','2569','draft','ตัวอย่างระดับองค์กร','','','',''],
+    ['','ความปลอดภัย Zero Accident','ครั้ง','20','0 ครั้ง','ความปลอดภัย','person','2569','active','ตัวอย่างรายบุคคล','90526','0','0','down'],
+  ]);
+}
+function parseKpiImportRow(cells){
+  const g = i => String(cells[i]??'').trim();
+  const num = i => { const v = g(i); if(v==='') return ''; const n = Number(v.replace(/,/g,'')); return isNaN(n) ? NaN : n; };
+  const scopeMap = {org:'org', dept:'dept', person:'person', 'องค์กร':'org', 'แผนก':'dept', 'รายบุคคล':'person'};
+  const dirMap = {up:'up', down:'down', '':'up', 'ยิ่งสูงดี':'up', 'ยิ่งต่ำดี':'down'};
+  return {
+    id: g(0), name: g(1), unit: g(2), pctRaw: g(3), target: g(4)||'—', typeRaw: g(5), scopeRaw: g(6),
+    scope: scopeMap[g(6).toLowerCase()] || scopeMap[g(6)] || '', year: g(7), statusRaw: g(8).toLowerCase(), note: g(9),
+    empCode: g(10), targetVal: num(11), actualVal: num(12), direction: dirMap[g(13).toLowerCase()] ?? dirMap[g(13)] ?? null, directionRaw: g(13)
+  };
+}
+function previewKpiImport(input){
+  const f = input.files?.[0]; if(!f) return;
+  const box = document.getElementById('kpiImportPreview');
+  const btn = document.getElementById('kpiImportConfirmBtn'); if(btn) btn.disabled = true;
+  PENDING_KPI_IMPORT_ROWS = [];
+  box.classList.remove('hide'); box.innerHTML = '<div class="al al-i"><span>⏳</span><div>กำลังอ่านไฟล์...</div></div>';
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const buf = reader.result;
+      let text = new TextDecoder('utf-8').decode(buf).replace(/^\uFEFF/,'');
+      if(looksMojibake(text)){ try{ text = new TextDecoder('windows-874').decode(buf); }catch(e){} }
+      const lines = text.split(/\r\n|\n/).filter(l=>l.trim()!=='');
+      if(!lines.length){ box.innerHTML='<div class="al al-e"><span>❌</span><div>ไฟล์ว่างเปล่า</div></div>'; return; }
+      const delim = detectDelimiter(lines[0]);
+      const first = parseDelimitedLine(lines[0], delim).map(c=>c.toLowerCase());
+      let start = 0;
+      if(first[0]==='kpi_id'){ start = 1; if(lines[1] && parseDelimitedLine(lines[1], delim)[0]===KPI_IMPORT_THAI[0]) start = 2; }
+      else if(first[0]===KPI_IMPORT_THAI[0].toLowerCase()) start = 1;
+      const seen = new Set(), rows = [];
+      for(let i=start;i<lines.length;i++){
+        const p = parseKpiImportRow(parseDelimitedLine(lines[i], delim));
+        if(!p.id && !p.name) continue;
+        const pct = Number(p.pctRaw);
+        let action = p.id && goalKpiData.some(k=>k.id===p.id) ? 'update' : 'add', reason = '';
+        if(!p.name) { action='skip'; reason='ไม่มีชื่อ KPI'; }
+        else if(!p.unit){ action='skip'; reason='ไม่มีหน่วยวัด'; }
+        else if(!p.pctRaw || isNaN(pct) || pct<=0 || pct>100){ action='skip'; reason='น้ำหนัก % ต้องเป็นตัวเลข 1–100'; }
+        else if(!p.scope){ action='skip'; reason=`ขอบเขต "${p.scopeRaw||'(ว่าง)'}" ไม่ใช่ค่าที่รองรับ (org/dept/person)`; }
+        else if(p.typeRaw && !KPI_IMPORT_TYPES.includes(p.typeRaw)){ action='skip'; reason=`ประเภท "${p.typeRaw}" ไม่ใช่ค่าที่รองรับ (${KPI_IMPORT_TYPES.join('/')})`; }
+        else if(p.statusRaw && !['draft','active','archived'].includes(p.statusRaw)){ action='skip'; reason=`สถานะ "${p.statusRaw}" ไม่ใช่ค่าที่รองรับ (draft/active/archived)`; }
+        else if(p.year && !/^\d{4}$/.test(p.year)){ action='skip'; reason=`ปี "${p.year}" ต้องเป็นเลข 4 หลัก เช่น 2569`; }
+        else if(p.direction===null){ action='skip'; reason=`ทิศทาง "${p.directionRaw}" ไม่ใช่ up/down`; }
+        else if(Number.isNaN(p.targetVal) || Number.isNaN(p.actualVal)){ action='skip'; reason='เป้าหมาย/ผลงานจริง (ตัวเลข) ไม่ใช่ตัวเลข'; }
+        else if(p.scope==='person' && !p.empCode){ action='skip'; reason='ขอบเขต person ต้องระบุรหัสพนักงาน'; }
+        else if(p.scope==='person' && !MASTER_USERS.some(u=>u[0]===p.empCode)){ action='skip'; reason=`ไม่พบรหัสพนักงาน "${p.empCode}" ในระบบ`; }
+        else if(p.id && seen.has(p.id)){ action='skip'; reason='รหัส KPI ซ้ำในไฟล์นี้เอง'; }
+        if(p.id) seen.add(p.id);
+        rows.push({...p, pct, action, reason});
+      }
+      PENDING_KPI_IMPORT_ROWS = rows;
+      renderKpiImportPreview();
+    }catch(e){ box.innerHTML = `<div class="al al-e"><span>❌</span><div>อ่านไฟล์ไม่สำเร็จ: ${e.message}</div></div>`; }
+  };
+  reader.readAsArrayBuffer(f);
+}
+function renderKpiImportPreview(){
+  const box = document.getElementById('kpiImportPreview'); const btn = document.getElementById('kpiImportConfirmBtn');
+  const rows = PENDING_KPI_IMPORT_ROWS;
+  if(!rows.length){ box.innerHTML = '<div class="al al-e"><span>❌</span><div>ไม่พบข้อมูล KPI ในไฟล์นี้ (ตรวจว่าใช้ Header ตาม Template)</div></div>'; if(btn) btn.disabled = true; return; }
+  const add = rows.filter(r=>r.action==='add').length, upd = rows.filter(r=>r.action==='update').length, skip = rows.filter(r=>r.action==='skip').length;
+  const lab = { add:'<span class="bd b-g">➕ เพิ่มใหม่</span>', update:'<span class="bd b-b">🔄 จะอัปเดต</span>', skip:'<span class="bd b-r">❌ ข้าม</span>' };
+  const esc = t => String(t).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  box.innerHTML = `<div class="al ${skip?'al-w':'al-i'}"><span>📋</span><div>พบ ${rows.length} แถว — ➕ เพิ่มใหม่ ${add} · 🔄 อัปเดต ${upd} · ❌ ข้าม ${skip}</div></div>
+    <div style="max-height:280px;overflow:auto;margin-top:8px"><table class="tbl" style="font-size:12px"><thead><tr><th>ผล</th><th>ชื่อ KPI</th><th>น้ำหนัก</th><th>ขอบเขต</th><th>พนักงาน</th><th>หมายเหตุ</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>${lab[r.action]}</td><td>${esc(r.name||'—')}</td><td style="text-align:center">${esc(r.pctRaw)}</td><td>${esc(r.scope||r.scopeRaw)}</td><td>${r.empCode?esc(((MASTER_USERS.find(u=>u[0]===r.empCode)||[])[1]||'?')+' ('+r.empCode+')'):'—'}</td><td style="color:#b91c1c">${esc(r.reason)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  if(btn) btn.disabled = (add+upd)===0;
+}
+async function confirmKpiImport(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ Import KPI ได้','warn'); return; }
+  const todo = PENDING_KPI_IMPORT_ROWS.filter(r=>r.action!=='skip');
+  if(!todo.length){ smlToast('ไม่มีรายการที่ Import ได้','warn'); return; }
+  const btn = document.getElementById('kpiImportConfirmBtn'); if(btn) btn.disabled = true;
+  const written = [];
+  todo.forEach((r,i)=>{
+    const rec = { name:r.name, unit:r.unit, pct:r.pct, target:r.target, type:r.typeRaw||'ปริมาณ', scope:r.scope, year:r.year, note:r.note,
+      empCode: r.scope==='person' ? r.empCode : '', actualVal:r.actualVal, targetVal:r.targetVal, direction:r.direction };
+    const existing = r.id && goalKpiData.find(k=>k.id===r.id);
+    if(existing){ Object.assign(existing, rec, r.statusRaw ? {status:r.statusRaw} : {}); written.push(existing); }
+    else{ const k = { id: r.id || ('k'+Date.now()+'_'+i), status: r.statusRaw||'draft', ...rec }; goalKpiData.push(k); written.push(k); }
+  });
+  saveKpiData(); renderGoalKpi(goalKpiData); goalStatUpdate();
+  const results = await Promise.all(written.map(k=>pushKpiToExcel(k)));
+  const ok = results.filter(x=>x&&x.ok).length, bad = results.filter(x=>!x||!x.ok);
+  if(typeof appendAuditLog==='function') appendAuditLog('kpi','Import KPI จากไฟล์', todo.length+' รายการ', written.map(k=>k.id).join(', '));
+  closeM();
+  smlToast('Import KPI แล้ว '+todo.length+' รายการ — Excel (KPI_Goals) สำเร็จ '+ok+'/'+todo.length+(bad.length?' ⚠️ '+(bad[0].error||''):''), bad.length?'err':'ok');
 }
 
 /* ====== Cascade KPI — กำหนด KPI เฉพาะกลุ่ม/บุคคล ====== */
@@ -7641,6 +7785,26 @@ async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
   }
   await graphFetch(base + '/add', { method:'POST', body: JSON.stringify({ values: [rowValues] }) });
   return 'added';
+}
+
+/* ลบทุกแถวในตารางที่คีย์ตรงกัน คืนจำนวนแถวที่ลบจริง — ตรรกะต้องตรงกับ deleteRows() ฝั่ง Worker
+   (ลบ index มาก→น้อย เพราะลบแถวหนึ่งแล้ว index ของแถวถัดลงไปเลื่อนขึ้น) ปฏิเสธคีย์ว่างกันลบแถวผิด */
+async function graphDeleteTableRows(tableName, keyColIndex, keyValue){
+  const keys = Array.isArray(keyValue) ? keyValue : [keyValue];
+  if(keys.some(k=>String(k??'').trim()==='')) throw new Error('คีย์ว่าง — ไม่ลบเพื่อกันลบผิดแถว');
+  const cfg = loadMs365Config();
+  if(isWorkerConfigured(cfg)){
+    const data = await workerFetch(cfg, '/rows/delete', { method:'POST', body: JSON.stringify({ table: tableName, keyColIndex, keyValue }) });
+    return data.deleted || 0;
+  }
+  const { driveId, itemId } = await resolveMs365Site();
+  const base = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+    "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows";
+  const rows = await graphFetchAllTableRowsRaw(base);
+  const matches = rows.filter(r => rowMatchesUpsertKey(r.values && r.values[0], keyColIndex, keyValue) && r.index !== undefined)
+    .sort((a,b)=>b.index-a.index);
+  for(const r of matches){ await graphFetch(base + '/itemAt(index=' + r.index + ')', { method:'DELETE' }); }
+  return matches.length;
 }
 
 /* graphUpsertTableRowPartial() — เหมือน graphUpsertTableRow() แต่ "ไม่แตะ" คอลัมน์ที่อยู่ใน
@@ -13424,6 +13588,20 @@ async function confirmImportEmployees(){
 
 
 <!-- ===== Modal: Add/Edit KPI ===== -->
+<div class="ov" id="mKpiImport"><div class="md" style="max-width:760px">
+  <div class="md-h"><h3>⬆️ Import KPI จากไฟล์ CSV</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-b">
+    <div class="al al-i" style="margin-bottom:10px"><span>ℹ️</span><div>
+      1) ดาวน์โหลด Template แล้วกรอก (บันทึกเป็น CSV) · 2) เลือกไฟล์ — ระบบตรวจทุกแถวและแสดงตัวอย่างก่อนบันทึกจริง<br>
+      ใส่ <b>รหัส KPI</b> ที่มีอยู่แล้ว = อัปเดตของเดิม · เว้นว่าง = สร้างใหม่ · ขอบเขต <b>person</b> ต้องมีรหัสพนักงานที่มีอยู่จริงในระบบ ·
+      บันทึกแล้วจะส่งเข้า Excel (ตาราง KPI_Goals) อัตโนมัติ</div></div>
+    <button class="btn btn-sm" onclick="downloadKpiImportTemplate()">📥 ดาวน์โหลด Template</button>
+    <div style="margin-top:12px"><input type="file" id="kpiImportFile" accept=".csv,.txt" onchange="previewKpiImport(this)"></div>
+    <div id="kpiImportPreview" class="hide" style="margin-top:10px"></div>
+  </div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-ok" id="kpiImportConfirmBtn" disabled onclick="confirmKpiImport()">✅ ยืนยัน Import</button></div>
+</div></div>
+
 <div class="ov" id="mAddKpi"><div class="md" style="max-width:560px">
   <div class="md-h"><h3>📌 เพิ่ม / แก้ไข KPI</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">

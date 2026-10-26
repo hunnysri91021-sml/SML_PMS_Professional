@@ -8802,6 +8802,33 @@ touches employee/attendance/evaluation data.
     the same real-data resolution, not just whether their labels and
     icons look similar.
 
+207. **A `disabled` button is silent — "กดแล้วไม่มีอะไรเกิดขึ้น" can simply mean the button was never clickable.**
+    "ยืนยันผล Calibration" was `disabled` until Bell Curve was computed and re-locked on any score edit/group
+    change/auto-sync invalidation, so users clicked a dead button with zero feedback and reported "nothing
+    happens / Excel not saved." Fixed by never truly disabling it (only dimming) — `confirmCalibration()` already
+    toasts why it can't proceed. It also now `await`s `pushDraftRowToExcel()` (which returns `{ok,error}`) and
+    reports the real Excel result in the toast instead of a fire-and-forget "success." Added `resetCalibration()`
+    (admin-only; `Calibrated` → `Acknowledged`, grade back to provisional, pushed to Appraisals/Approvals/Audit
+    Log; `Approved` is never touched). General rule: for any "it doesn't save" report, first check whether the
+    control can actually fire, then make the action report its real outcome on screen.
+
+208. **Per-device `localStorage`-only config with an empty default disappears on every new device/cleared browser** —
+    `appUrl` (LINE/email result link) was `''` in `DEFAULT_MS365_CONFIG`, so Admin had to retype it everywhere.
+    Baked the real URL in as the default (it is not a secret; the page is public and the link only opens the PIN
+    login). Same lesson as #31.
+
+209. **KPI Import (CSV) + Delete (web and Excel).** `openKpiImportModal()`/`previewKpiImport()`/`confirmKpiImport()`
+    validate every row before writing (name/unit/weight required, scope in org/dept/person, `person` needs an
+    `emp_code` that exists in `MASTER_USERS`, duplicate `kpi_id` in file skipped, existing `kpi_id` = update in
+    place) and show a preview first (same shape as employee import #77). `pushKpiToExcel()` now returns a
+    promise so import can report real Excel success counts. `deleteGoalKpi()` (admin-only) removes the KPI locally
+    and calls the new `graphDeleteTableRows()` → Worker `POST /rows/delete` (also in the delegated path). Delete
+    matches **every** row with the key (duplicates included), deletes from the **highest `index` down** (deleting a
+    row shifts later indexes), and refuses an empty key (would match blank cells). If the Excel delete fails the
+    toast says the KPI will come back on the next `ms365SyncKpiGoals()` — never claims a clean delete.
+    **The Worker changed (`/rows/delete`) → it needs a redeploy**; until then web-side delete works but the Excel
+    delete reports "not found" via the Sync Log/toast.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
