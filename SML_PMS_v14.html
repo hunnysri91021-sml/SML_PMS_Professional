@@ -8051,7 +8051,10 @@ function calcCurrentEvalSummary(){
   }
   const rawY = rawMain + rawLeader;
   const maxY = maxMain + maxLeader;
-  const Z = cfg.Zmaxraw;
+  /* #210: เดิม Z = cfg.Zmaxraw (เต็มเสมอ) ทำให้คะแนนที่ "บันทึก/ส่ง" ไม่สนสถิติเวลาทำงานจริงเลย ทั้งที่หน้าจอ
+     (recalc) และฟอร์มผู้สอบทานใช้ Z จริงจาก computeZScore() — ใช้ค่าเดียวกันแล้ว */
+  const empCodeForZ2 = (document.getElementById('evalCode')?.value || '').trim();
+  const Z = empCodeForZ2 ? computeZScore(currentLevel, empCodeForZ2).score : cfg.Zmaxraw;
   /* #184: X = Y + Z + KPI (ไม่ใช่ Y + Z อย่างเดียวแล้ว) — ดูคำอธิบายที่ computeEvalXWithKpi() —
      ฟังก์ชันเดียวนี้คำนวณ Y จริงใหม่ด้วย เพราะสัดส่วน Y ที่แท้จริงขึ้นกับว่าคนนี้มี KPI จริงผูกไว้
      หรือไม่ (ถ้าไม่มี สัดส่วน KPI จะถูกคืนให้ Y ตามที่ผู้ใช้ยืนยัน) */
@@ -11653,11 +11656,31 @@ function applyScoreWeightsToConfigs(weights){
     if(SML_FORMS[lv]){ SML_FORMS[lv].ypct=w.ypct; SML_FORMS[lv].zpct=w.zpct; SML_FORMS[lv].zmax=w.zpct; SML_FORMS[lv].kpct=w.kpct||0; SML_FORMS[lv].maxY=w.ypct; }
   });
 }
-function loadScoreWeightsOverride(){
+/* #210: สัดส่วนต่อ "ปี/รอบ" — ค่าเดิม (KPI_SCORE_WEIGHTS_KEY) ยังเป็นค่าตั้งต้นของ "ทุกรอบ" เหมือนเดิมทุกประการ
+   แล้วเพิ่ม override ต่อรอบ {รหัสรอบ:{ระดับ:{ypct,zpct,kpct}}} (SCORE_WEIGHTS_BY_YEAR_KEY) — ถ้ารอบนั้นมีตั้งไว้ใช้ของรอบนั้น
+   ถ้าไม่มีตกมาใช้ค่าตั้งต้น จึงไม่กระทบรอบเก่า/ผู้ใช้เดิมเลยจนกว่า Admin จะตั้งเฉพาะปี */
+const SCORE_WEIGHTS_BY_YEAR_KEY = 'smlPmsScoreWeightsByYear';
+function loadScoreWeightsByYear(){
+  try{ const v = JSON.parse(localStorage.getItem(SCORE_WEIGHTS_BY_YEAR_KEY)||'{}'); return (v && typeof v==='object' && !Array.isArray(v)) ? v : {}; }catch(e){ return {}; }
+}
+function saveScoreWeightsByYear(obj){ localStorage.setItem(SCORE_WEIGHTS_BY_YEAR_KEY, JSON.stringify(obj)); }
+function getBaseScoreWeights(lv){
   let saved={};
   try{ saved=JSON.parse(localStorage.getItem(KPI_SCORE_WEIGHTS_KEY)||'{}'); }catch(e){ saved={}; }
+  return Object.assign({}, DEFAULT_SCORE_WEIGHTS[lv]||{ypct:0,zpct:0,kpct:0}, saved[lv]||{});
+}
+/* จุดเดียวที่ตอบว่า "ระดับนี้ รอบนี้ ใช้สัดส่วนเท่าไร" — ปี override ก่อน ไม่มีค่อยใช้ค่าตั้งต้น */
+function getScoreWeightsFor(lv, cycle){
+  const y = String(cycle==null?'':cycle).trim();
+  if(y){ const o = loadScoreWeightsByYear()[y]?.[lv]; if(o && isFinite(o.ypct) && isFinite(o.zpct)) return {ypct:Number(o.ypct), zpct:Number(o.zpct), kpct:Number(o.kpct)||0}; }
+  return getBaseScoreWeights(lv);
+}
+function loadScoreWeightsOverride(){
+  /* LEVEL_CONFIG/SML_FORMS (ตัวแสดงผล + ค่าเริ่มต้นของฟอร์ม) ถูก apply ด้วยสัดส่วนของ "รอบปัจจุบัน" —
+     สูตรคิด X จริง (computeEvalXWithKpi) ไม่อ่านจากตรงนี้ แต่ถามตามรอบของใบประเมินนั้นเองผ่าน getScoreWeightsFor() */
+  let cur=''; try{ cur = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : ''; }catch(e){ cur=''; }
   const merged={};
-  Object.keys(DEFAULT_SCORE_WEIGHTS).forEach(lv=>{ merged[lv]=Object.assign({}, DEFAULT_SCORE_WEIGHTS[lv], saved[lv]||{}); });
+  Object.keys(DEFAULT_SCORE_WEIGHTS).forEach(lv=>{ merged[lv]=getScoreWeightsFor(lv, cur); });
   applyScoreWeightsToConfigs(merged);
   return merged;
 }
@@ -11677,6 +11700,14 @@ function saveScoreWeightsForLevel(lv, ypct, zpct, kpct){
 /* ปุ่ม "บันทึกสัดส่วน" จริงที่หน้า "ตั้งค่าแบบประเมิน" — อ่านค่าจาก 3 ช่อง input ที่ผู้ใช้พิมพ์ไว้
    บังคับผลรวมต้อง = 100% เสมอ (กันคะแนนรวมเกิน/ไม่ถึง 100 ของทุกคนในระดับนี้) ไม่ปัดเศษ/บังคับให้
    ตรงเองเงียบๆ เพราะนั่นจะเปลี่ยนสัดส่วนที่ Admin ตั้งใจพิมพ์โดยไม่รู้ตัว */
+let tplWeightYear = '';   // '' = ทุกรอบ (ค่าตั้งต้น), ไม่งั้นรหัสรอบที่ Admin กำลังแก้อยู่ในหน้าตั้งค่าแบบประเมิน
+function saveScoreWeightsForYearSilent(year, lv, ypct, zpct, kpct){
+  const all = loadScoreWeightsByYear();
+  all[year] = all[year] || {};
+  all[year][lv] = {ypct, zpct, kpct};
+  saveScoreWeightsByYear(all);
+  loadScoreWeightsOverride();
+}
 function saveScoreWeightsFromForm(lv){
   if(!isSysadmin()){ smlToast('เฉพาะ Admin ระบบ (sysadmin) เท่านั้นที่ปรับสัดส่วนคะแนนได้','warn'); return; }
   const ypct = Number(document.getElementById('wY_'+lv)?.value);
@@ -11685,19 +11716,37 @@ function saveScoreWeightsFromForm(lv){
   if(![ypct,zpct,kpct].every(n=>isFinite(n) && n>=0)){ smlToast('กรุณากรอกสัดส่วนเป็นตัวเลข ≥ 0 ให้ครบทั้ง 3 ช่อง','warn'); return; }
   const total = ypct+zpct+kpct;
   if(Math.abs(total-100) > 0.001){ smlToast(`ผลรวม Y+Z+KPI ต้อง = 100% (ตอนนี้รวม ${total}%) — กรุณาแก้ให้ครบ 100 ก่อนบันทึก`,'warn'); return; }
-  saveScoreWeightsForLevel(lv, ypct, zpct, kpct);
+  const year = tplWeightYear;
+  if(year){ saveScoreWeightsForYearSilent(year, lv, ypct, zpct, kpct); if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel(); }
+  else saveScoreWeightsForLevel(lv, ypct, zpct, kpct);
   showTplDetail(lv);
-  if(typeof appendAuditLog==='function') appendAuditLog('settings','ปรับสัดส่วนคะแนน Y/Z/KPI', LEVEL_CONFIG[lv]?.label||lv, `Y=${ypct}% Z=${zpct}% KPI=${kpct}%`);
-  smlToast(`บันทึกสัดส่วนคะแนนของระดับ "${SML_FORMS[lv]?.short||lv}" แล้ว — Y=${ypct}% Z=${zpct}% KPI=${kpct}%`,'ok');
+  const scopeTxt = year ? `เฉพาะรอบ ${year}` : 'ทุกรอบ (ค่าตั้งต้น)';
+  if(typeof appendAuditLog==='function') appendAuditLog('settings','ปรับสัดส่วนคะแนน Y/Z/KPI', (LEVEL_CONFIG[lv]?.label||lv)+' · '+scopeTxt, `Y=${ypct}% Z=${zpct}% KPI=${kpct}%`);
+  smlToast(`บันทึกสัดส่วนคะแนนของระดับ "${SML_FORMS[lv]?.short||lv}" (${scopeTxt}) แล้ว — Y=${ypct}% Z=${zpct}% KPI=${kpct}%`,'ok');
 }
 function resetScoreWeightsForLevel(lv){
-  let saved={};
-  try{ saved=JSON.parse(localStorage.getItem(KPI_SCORE_WEIGHTS_KEY)||'{}'); }catch(e){ saved={}; }
-  delete saved[lv];
-  localStorage.setItem(KPI_SCORE_WEIGHTS_KEY, JSON.stringify(saved));
+  if(tplWeightYear){
+    const all = loadScoreWeightsByYear();
+    if(all[tplWeightYear]){ delete all[tplWeightYear][lv]; if(!Object.keys(all[tplWeightYear]).length) delete all[tplWeightYear]; }
+    saveScoreWeightsByYear(all);
+  }else{
+    let saved={};
+    try{ saved=JSON.parse(localStorage.getItem(KPI_SCORE_WEIGHTS_KEY)||'{}'); }catch(e){ saved={}; }
+    delete saved[lv];
+    localStorage.setItem(KPI_SCORE_WEIGHTS_KEY, JSON.stringify(saved));
+  }
   loadScoreWeightsOverride();
   if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel();
 }
+/* ตัวเลือกปีในหน้าตั้งค่า: ทุกรอบ + ทุกปีที่มีจริง (รอบในระบบ/รอบปัจจุบัน/ปีถัดไป/ปีที่เคยตั้งค่า) */
+function getWeightYearOptions(){
+  const ys = new Set();
+  try{ const c = getCurrentEvalCycleYear(); if(c){ ys.add(String(c)); const n=Number(c); if(isFinite(n)) ys.add(String(n+1)); } }catch(e){}
+  try{ (cyclesList||[]).forEach(c=>{ if(c && c.year) ys.add(String(c.year)); }); }catch(e){}
+  Object.keys(loadScoreWeightsByYear()).forEach(y=>ys.add(y));
+  return [...ys].filter(Boolean).sort();
+}
+function onWeightYearChange(lv, year){ tplWeightYear = year||''; showTplDetail(lv); }
 loadScoreWeightsOverride();
 
 /* คำนวณ % ความสำเร็จของ KPI หนึ่งตัว (0-100) จาก targetVal/actualVal/direction จริงที่ Admin/HR กรอกไว้
@@ -11735,15 +11784,21 @@ function computeKpiScoreForEmp(empCode, cycle){
    เตือนไว้สำหรับ logic ที่ซ้ำกันหลายที่) — ถ้าพนักงานคนนี้ไม่มี KPI จริงผูกไว้เลย (hasKpi=false) คืน
    สัดส่วน KPI ให้ Y ตามที่ผู้ใช้ยืนยัน ("คืนสัดส่วนให้ Y") แทนที่จะเสียคะแนนส่วนนั้นไปเฉยๆ */
 function computeEvalXWithKpi(lv, empCode, cycle, rawY, maxYraw, zScore){
-  const cfg = LEVEL_CONFIG[lv] || {Ypct:0,Zpct:0,Kpct:0};
-  const ypctBase = cfg.Ypct||0, kpct = cfg.Kpct||0;
+  /* #210: สัดส่วนตามรอบของใบประเมินนั้นเอง (ไม่ใช่รอบปัจจุบันของเครื่อง) — รอบเก่าคำนวณซ้ำแล้วไม่เปลี่ยน */
+  const w = getScoreWeightsFor(lv, cycle);
+  const ypctBase = w.ypct||0, kpct = w.kpct||0;
   const kpi = computeKpiScoreForEmp(empCode, cycle);
   const ypctEff = kpi.hasKpi ? ypctBase : (ypctBase + kpct);
   const kpctEff = kpi.hasKpi ? kpct : 0;
   const Y = maxYraw>0 ? (rawY/maxYraw)*ypctEff : 0;
   const KPI = kpctEff>0 ? (kpi.pct/100)*kpctEff : 0;
-  const X = Y + (zScore||0) + KPI;
-  return { Y, Z:(zScore||0), KPI, X, kpi };
+  /* คะแนน Z จากตารางเกณฑ์ (Z_TABLE) เต็ม 30/20/10 ตามระดับ — ถ้า Admin ตั้งสัดส่วน Z ไม่เท่าเต็มตาราง
+     (เช่น 30→25) ต้องย่อ/ขยายตามสัดส่วนด้วย ไม่งั้นช่อง Z% ที่ตั้งจะไม่มีผลกับคะแนนจริงเลย */
+  const zRaw = Number(zScore)||0;
+  const zTableMax = (Z_TABLE[zKeyForLevel(lv)]||[])[0] || 0;
+  const Zs = (zTableMax>0 && Math.abs((w.zpct||0)-zTableMax)>1e-9) ? zRaw/zTableMax*(w.zpct||0) : zRaw;
+  const X = Y + Zs + KPI;
+  return { Y, Z:Zs, KPI, X, kpi };
 }
 
 /* ====== น้ำหนักปัจจัยแบบประเมิน (SML_FORMS) — sync ขึ้น Excel ======
@@ -11762,7 +11817,12 @@ async function pushFormWeightsToExcel(){
       /* #184: เพิ่มสัดส่วน Y/Z/KPI เข้าไปในก้อน JSON เดียวกันนี้ (เดิมมีแค่ factors) — ยังเป็น
          ก้อนเดียวต่อแถวต่อระดับเหมือนเดิม เปลี่ยนแค่รูปร่างจาก array เปล่าๆ เป็น object ที่มี .factors
          ด้วย (ขาอ่านด้านล่างรองรับทั้งรูปแบบเก่า/ใหม่ กันแถวเก่าที่ยังไม่มีสัดส่วนพังตอนอ่าน) */
-      const payload = { factors: SML_FORMS[lv].factors, ypct: SML_FORMS[lv].ypct, zpct: SML_FORMS[lv].zpct, kpct: SML_FORMS[lv].kpct||0 };
+      /* ypct/zpct/kpct = ค่าตั้งต้น "ทุกรอบ" (getBaseScoreWeights ไม่ใช่ค่าของรอบปัจจุบันที่ apply บน SML_FORMS) +
+         byYear (#210) = สัดส่วนเฉพาะรอบของระดับนี้ — แถวเก่าที่ไม่มี byYear ยังอ่านได้ปกติ */
+      const base = getBaseScoreWeights(lv);
+      const byYear = {}; const allYears = loadScoreWeightsByYear();
+      Object.keys(allYears).forEach(y=>{ if(allYears[y]?.[lv]) byYear[y]=allYears[y][lv]; });
+      const payload = { factors: SML_FORMS[lv].factors, ypct: base.ypct, zpct: base.zpct, kpct: base.kpct||0, byYear };
       await graphUpsertTableRow(FORM_WEIGHTS_TABLE, 0, lv, [lv, JSON.stringify(payload), new Date().toISOString()]);
     }
     if(typeof appendSyncLog==='function') appendSyncLog('Push น้ำหนักแบบประเมินเข้า Excel', true);
@@ -11791,6 +11851,16 @@ async function ms365SyncFormWeights(silent=false){
           recalcFormTotals(SML_FORMS[lv]);
           if(!Array.isArray(parsed) && (parsed.ypct || parsed.zpct || parsed.kpct!=null)){
             saveScoreWeightsForLevelSilent(lv, Number(parsed.ypct)||SML_FORMS[lv].ypct, Number(parsed.zpct)||SML_FORMS[lv].zpct, Number(parsed.kpct)||0);
+          }
+          /* #210: สัดส่วนเฉพาะรอบ — ค่าจาก Excel ชนะเฉพาะ (ปี,ระดับ) เดียวกัน ปี/ระดับที่มีเฉพาะในเครื่องนี้ไม่ถูกลบทิ้ง */
+          if(!Array.isArray(parsed) && parsed.byYear && typeof parsed.byYear==='object'){
+            const all = loadScoreWeightsByYear();
+            Object.keys(parsed.byYear).forEach(y=>{
+              const o = parsed.byYear[y];
+              if(o && isFinite(o.ypct) && isFinite(o.zpct)){ all[y]=all[y]||{}; all[y][lv]={ypct:Number(o.ypct), zpct:Number(o.zpct), kpct:Number(o.kpct)||0}; }
+            });
+            saveScoreWeightsByYear(all);
+            loadScoreWeightsOverride();
           }
           applied++;
         }
@@ -11841,6 +11911,7 @@ function isSysadmin(){ return document.getElementById('roleSel')?.value === 'sys
 function showTplDetail(lv){
   const cfg=SML_FORMS[lv]; if(!cfg)return;
   tplDetailLv = lv;
+  const wEd = getScoreWeightsFor(lv, tplWeightYear);   // ค่าที่ช่องแก้ไขแสดง = ของรอบที่เลือก (ว่าง = ค่าตั้งต้น)
   const title=document.getElementById('tplDetailTitle');
   const badge=document.getElementById('tplDetailBadge');
   if(title)title.textContent='แบบประเมิน — '+cfg.label;
@@ -11880,11 +11951,12 @@ function showTplDetail(lv){
       (รองรับสูงสุด ${SML_FORM_MAIN_SLOTS} ข้อหลัก${cfg.leaderShow?` + ${SML_FORM_LEADER_SLOTS} ข้อหัวหน้า`:''} — ตามจำนวนคอลัมน์ m01–m${SML_FORM_MAIN_SLOTS}${cfg.leaderShow?`/l01–l${String(SML_FORM_LEADER_SLOTS).padStart(2,'0')}`:''} บนชีต Appraisals)</div>
     </div>
     <div class="form-detail-banner" style="margin-top:10px;--form-color:#9333ea">
-      <div><b>⚖️ สัดส่วนคะแนน Y / Z / KPI — ปรับได้ตามนโยบายบริษัท</b><span>ผลรวมทั้ง 3 ช่องต้อง = 100% เสมอ · ค่าเริ่มต้น KPI=0% (ไม่กระทบใครจนกว่าจะปรับที่นี่)</span></div>
+      <div><b>⚖️ สัดส่วนคะแนน Y / Z / KPI — ตั้งแยกตามรอบ/ปีได้</b><span>ผลรวมทั้ง 3 ช่องต้อง = 100% เสมอ · เลือก "ใช้กับรอบ" ก่อน แล้วกรอก/บันทึก — รอบที่ไม่ได้ตั้งเฉพาะจะใช้ "ทุกรอบ (ค่าตั้งต้น)" · รอบปัจจุบันของระบบ: ${(()=>{try{return getCurrentEvalCycleYear();}catch(e){return '—';}})()}</span></div>
       <div class="form-detail-badges" style="gap:8px">
-        <span>Y <input type="number" id="wY_${lv}" value="${cfg.ypct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
-        <span>Z <input type="number" id="wZ_${lv}" value="${cfg.zpct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
-        <span>KPI <input type="number" id="wK_${lv}" value="${cfg.kpct||0}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
+        <span>ใช้กับรอบ <select onchange="onWeightYearChange('${lv}', this.value)" style="border:none;background:transparent;font-weight:700;color:inherit"><option value="">ทุกรอบ (ค่าตั้งต้น)</option>${getWeightYearOptions().map(y=>`<option value="${y}" ${y===tplWeightYear?'selected':''}>${y}${loadScoreWeightsByYear()[y]?.[lv]?' ✓ ตั้งแล้ว':''}</option>`).join('')}</select></span>
+        <span>Y <input type="number" id="wY_${lv}" value="${wEd.ypct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
+        <span>Z <input type="number" id="wZ_${lv}" value="${wEd.zpct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
+        <span>KPI <input type="number" id="wK_${lv}" value="${wEd.kpct||0}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
       </div>
     </div>
     <div style="margin:8px 0 0;display:flex;gap:8px">
@@ -12438,6 +12510,7 @@ function resetCycleSetup(){
 function saveCycleSetup(){
   const data={name:document.getElementById('cycleNameSetup')?.value||'',year:document.getElementById('cycleYearSetup')?.value||'',status:document.getElementById('cycleStatusSetup')?.value||'',start:document.getElementById('cycleStartSetup')?.value||'',end:document.getElementById('cycleEndSetup')?.value||'',savedAt:new Date().toISOString()};
   localStorage.setItem('smlPmsCycleSetup',JSON.stringify(data));
+  if(typeof loadScoreWeightsOverride==='function') loadScoreWeightsOverride();   // #210: รอบปัจจุบันเปลี่ยน → apply สัดส่วนของรอบใหม่
   const title=document.querySelector('#pg-cycle .ph h2');
   if(title && data.name) title.dataset.cycleName=data.name;
   if(typeof renderCycleStats==='function') renderCycleStats();
@@ -12657,6 +12730,7 @@ async function ms365SyncCycleSetup(silent=false){
     if(!row || !row[1]) return;
     const data = { name: row[1]||'', start: row[2]||'', end: row[3]||'', status: row[4]||'', savedAt: row[5]||new Date().toISOString(), year: row[6]||'' };
     localStorage.setItem('smlPmsCycleSetup', JSON.stringify(data));
+    if(typeof loadScoreWeightsOverride==='function') loadScoreWeightsOverride();
     const n=document.getElementById('cycleNameSetup'), y=document.getElementById('cycleYearSetup'), s=document.getElementById('cycleStatusSetup'), a=document.getElementById('cycleStartSetup'), b=document.getElementById('cycleEndSetup');
     if(n) n.value=data.name; if(y && data.year) y.value=data.year; if(s) s.value=data.status; if(a) a.value=data.start; if(b) b.value=data.end;
     const title=document.querySelector('#pg-cycle .ph h2');

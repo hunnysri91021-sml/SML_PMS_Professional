@@ -8829,6 +8829,13 @@ touches employee/attendance/evaluation data.
     **The Worker changed (`/rows/delete`) → it needs a redeploy**; until then web-side delete works but the Excel
     delete reports "not found" via the Sync Log/toast.
 
+210. **Y/Z/KPI weights per year/cycle.** `getScoreWeightsFor(lv,cycle)` is the single resolver (year override in
+    `smlPmsScoreWeightsByYear` -> base weights). `computeEvalXWithKpi` uses the *record's own cycle*, so 2569=60/30/10
+    never changes 2568 records. Z is scaled (`zRaw/tableMax*zpct`) only when `zpct` differs from the Z-table max.
+    Admin picks "ใช้กับรอบ" in ตั้งค่าแบบประเมิน; FormWeights payload gained `byYear` (pull merges, remote wins).
+    Also fixed `calcCurrentEvalSummary` using max Z instead of real attendance Z. Labels on LEVEL_CONFIG/SML_FORMS
+    show the *current* cycle's %.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
