@@ -3528,6 +3528,9 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
      ทุกครั้งที่ navigate เข้าหน้านี้ เหมือนหน้าอื่นๆ ที่มี dispatch entry ของตัวเอง — จะได้ scope จริง
      ของผู้ล็อกอินปัจจุบันเสมอ (renderOrg() เอง filter ผ่าน getMyScopedEmpCodes() อยู่แล้ว) และข้อมูล
      ที่ sync ล่าสุดจาก Excel เสมอ ไม่ใช่ snapshot ค้างจากตอนเปิดเว็บครั้งแรก */
+  /* ตาราง KPI วาดครั้งเดียวตอนโหลดหน้า (ก่อน login) ซึ่งตอนนั้นยังไม่รู้บทบาท ปุ่ม 🗑️ ลบ (เฉพาะ Admin/HR)
+     จึงไม่ขึ้นจนกว่าจะมีอะไรวาดตารางใหม่ — วาดใหม่ทุกครั้งที่เข้าหน้านี้ */
+  if(p==='goal' && typeof renderGoalKpi==='function'){ filterGoalKpi(); goalStatUpdate(); }
   if(p==='org'){
     if(typeof renderOrg==='function') renderOrg(MASTER_USERS);
     if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
@@ -4623,6 +4626,7 @@ async function sha256Hex(str){
 
 function applySession(u){
   CURRENT_SESSION_USER = u;
+  if(typeof renderGoalKpi==='function') setTimeout(()=>{ try{ filterGoalKpi(); }catch(e){} },0);
   document.getElementById('loginGate').style.display = 'none';
   const roleSel = document.getElementById('roleSel');
   if(roleSel) roleSel.value = u[2];
