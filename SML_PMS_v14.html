@@ -9276,11 +9276,13 @@ var pendingPushKeys = new Set();
 function pushDraftRowToExcel(d, label){
   const cfg = loadMs365Config();
   const key = draftKey(d);
-  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog(`pushDraftRowToExcel (${label||d[d.length-1]}): ยังไม่ได้ตั้งค่า MS365`, false); return; }
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog(`pushDraftRowToExcel (${label||d[d.length-1]}): ยังไม่ได้ตั้งค่า MS365`, false); return Promise.resolve({ok:false, error:'ยังไม่ได้ตั้งค่า MS365'}); }
   pendingPushKeys.add(key);
-  graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d)
-    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) เข้า Appraisals`, true); })
-    .catch(err=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) ไม่สำเร็จ: `+(err?.message||err), false); })
+  /* คืน Promise<{ok,error}> เสมอ (ไม่ reject) — ผู้เรียกที่อยากรู้ผลจริง (confirmCalibration) await ได้
+     ผู้เรียกเดิมที่ไม่สน ก็เรียกทิ้งไว้เหมือนเดิมได้ ไม่กระทบ */
+  return graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d)
+    .then(res=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) เข้า Appraisals (${res})`, true); return {ok:true, result:res}; })
+    .catch(err=>{ const msg = err?.message||String(err); if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) ไม่สำเร็จ: `+msg, false); return {ok:false, error:msg}; })
     .finally(()=>{ pendingPushKeys.delete(key); });
 }
 function updateDraftStatus(keys, newStatus){
@@ -9905,7 +9907,7 @@ function runBellCurveCalculation(){
    ทุกแถวเหมือนเดิมอีกต่อไป: เดิมถ้าจำนวนผลคำนวณไม่เท่ากับจำนวน .calib-adj ทั้งหมด (byKey.length !==
    inputs.length) จะปฏิเสธการยืนยันทั้งหมด — ตอนนี้ confirm เฉพาะแถวที่มีผลคำนวณจริง (bcByKey[key] มีค่า)
    เท่านั้น แถวที่เหลือ (ยังไม่ถูกเลือกคำนวณรอบนี้) ยังคงเป็น 'ready'/Acknowledged ต่อไป รอรอบถัดไป */
-function confirmCalibration(){
+async function confirmCalibration(){
   const inputs=[...document.querySelectorAll('.calib-adj')];
   if(!inputs.length){ smlToast('ไม่มีรายการรอ Calibration','warn'); return; }
   if(!bellCurveResult || !Object.keys(bellCurveResult.byKey).length){
@@ -9954,7 +9956,13 @@ function confirmCalibration(){
   const notesByKey = {};
   noteInputs.forEach(ni => { notesByKey[ni.dataset.notekey] = ni.value; saveEvalHrNote(ni.dataset.notekey, ni.value); });
   renderWorkflowPages();
-  changed.forEach(d=>pushDraftRowToExcel(d));
+  /* รอผล push เข้า Appraisals จริงก่อนแจ้งผู้ใช้ — เดิม fire-and-forget แล้ว toast "ยืนยันแล้ว" ทันที
+     ทำให้ถ้า push ล้มเหลว/ไม่เกิดขึ้น ผู้ใช้เห็นแต่เกรดใหม่บนเว็บ แล้ว Excel ไม่เปลี่ยน โดยไม่มีสัญญาณ
+     ใดบอกเลย ตอนนี้ toast ระบุตรงๆ ว่าเข้า Excel กี่รายการ/ล้มเหลวกี่รายการ และเหตุผลจริง */
+  const pushResults = await Promise.all(changed.map(d=>pushDraftRowToExcel(d)));
+  const pushOk = pushResults.filter(r=>r && r.ok).length;
+  const pushFail = pushResults.filter(r=>!r || !r.ok);
+  const notFoundCount = confirmInputs.length - changed.length;
   confirmInputs.forEach(inp=>{
     const [empCode,cycle]=inp.dataset.key.split('|');
     const note = notesByKey[empCode+'|'+cycle] || '';
@@ -9963,7 +9971,13 @@ function confirmCalibration(){
     pushApprovalRecordToExcel(empCode,cycle,'Calibrated',comment);
   });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration (Bell Curve)', confirmInputs.length+' รายการ', confirmInputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
-  smlToast('ยืนยันผล Calibration แล้ว '+confirmInputs.length+' รายการ (เกรดจาก Bell Curve)'+(skippedCount?` — เหลืออีก ${skippedCount} รายการ รอเลือกกลุ่มถัดไป`:''),'ok');
+  const baseMsg = 'ยืนยันผล Calibration แล้ว '+confirmInputs.length+' รายการ (เกรดจาก Bell Curve)'+(skippedCount?` — เหลืออีก ${skippedCount} รายการ รอเลือกกลุ่มถัดไป`:'');
+  if(pushFail.length || notFoundCount > 0){
+    const why = pushFail.length ? (pushFail[0] && pushFail[0].error || 'ไม่ทราบสาเหตุ') : `หาใบประเมินในเครื่องไม่เจอ ${notFoundCount} รายการ`;
+    smlToast(baseMsg+` — ⚠️ บันทึกเข้า Excel (Appraisals) สำเร็จ ${pushOk}/${confirmInputs.length} รายการ: ${why} (ดูรายละเอียดที่ Sync Log)`,'err');
+  } else {
+    smlToast(baseMsg+` — ✓ บันทึกเข้า Excel (Appraisals) แล้ว ${pushOk} รายการ`,'ok');
+  }
 }
 /* ข้อยกเว้นจากผู้ใช้ (#155): "Admin ปรับเกรดรายคนเองได้ด้วยเหตุผลพิเศษ" — ไม่ใช่ Bell Curve ทั้งหน่วยงาน
    แต่เป็นการแก้ไขเกรดเฉพาะรายคนเดียว ต้องระบุเหตุผลเสมอ (ห้ามเงียบ) และบันทึกลง Audit Log + Approvals
