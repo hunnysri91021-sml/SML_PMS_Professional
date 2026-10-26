@@ -11739,14 +11739,22 @@ function resetScoreWeightsForLevel(lv){
   if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel();
 }
 /* ตัวเลือกปีในหน้าตั้งค่า: ทุกรอบ + ทุกปีที่มีจริง (รอบในระบบ/รอบปัจจุบัน/ปีถัดไป/ปีที่เคยตั้งค่า) */
+const extraWeightYears = new Set();
 function getWeightYearOptions(){
-  const ys = new Set();
+  const ys = new Set(extraWeightYears);
   try{ const c = getCurrentEvalCycleYear(); if(c){ ys.add(String(c)); const n=Number(c); if(isFinite(n)) ys.add(String(n+1)); } }catch(e){}
   try{ (cyclesList||[]).forEach(c=>{ if(c && c.year) ys.add(String(c.year)); }); }catch(e){}
   Object.keys(loadScoreWeightsByYear()).forEach(y=>ys.add(y));
   return [...ys].filter(Boolean).sort();
 }
-function onWeightYearChange(lv, year){ tplWeightYear = year||''; showTplDetail(lv); }
+function onWeightYearChange(lv, year){
+  if(year==='__new__'){
+    const v = (prompt('ระบุรหัสรอบ/ปีที่ต้องการตั้งสัดส่วน (เช่น 2571)','')||'').trim();
+    if(!/^\d{4}$/.test(v)){ if(v) smlToast('รหัสรอบต้องเป็นตัวเลข 4 หลัก เช่น 2571','warn'); showTplDetail(lv); return; }
+    tplWeightYear = v; extraWeightYears.add(v); showTplDetail(lv); return;
+  }
+  tplWeightYear = year||''; showTplDetail(lv);
+}
 loadScoreWeightsOverride();
 
 /* คำนวณ % ความสำเร็จของ KPI หนึ่งตัว (0-100) จาก targetVal/actualVal/direction จริงที่ Admin/HR กรอกไว้
@@ -11953,7 +11961,7 @@ function showTplDetail(lv){
     <div class="form-detail-banner" style="margin-top:10px;--form-color:#9333ea">
       <div><b>⚖️ สัดส่วนคะแนน Y / Z / KPI — ตั้งแยกตามรอบ/ปีได้</b><span>ผลรวมทั้ง 3 ช่องต้อง = 100% เสมอ · เลือก "ใช้กับรอบ" ก่อน แล้วกรอก/บันทึก — รอบที่ไม่ได้ตั้งเฉพาะจะใช้ "ทุกรอบ (ค่าตั้งต้น)" · รอบปัจจุบันของระบบ: ${(()=>{try{return getCurrentEvalCycleYear();}catch(e){return '—';}})()}</span></div>
       <div class="form-detail-badges" style="gap:8px">
-        <span>ใช้กับรอบ <select onchange="onWeightYearChange('${lv}', this.value)" style="border:none;background:transparent;font-weight:700;color:inherit"><option value="">ทุกรอบ (ค่าตั้งต้น)</option>${getWeightYearOptions().map(y=>`<option value="${y}" ${y===tplWeightYear?'selected':''}>${y}${loadScoreWeightsByYear()[y]?.[lv]?' ✓ ตั้งแล้ว':''}</option>`).join('')}</select></span>
+        <span>ใช้กับรอบ <select onchange="onWeightYearChange('${lv}', this.value)" style="border:none;background:transparent;font-weight:700;color:inherit"><option value="">ทุกรอบ (ค่าตั้งต้น)</option>${getWeightYearOptions().map(y=>`<option value="${y}" ${y===tplWeightYear?'selected':''}>${y}${loadScoreWeightsByYear()[y]?.[lv]?' ✓ ตั้งแล้ว':''}</option>`).join('')}<option value="__new__">＋ เพิ่มรอบ/ปีอื่น…</option></select></span>
         <span>Y <input type="number" id="wY_${lv}" value="${wEd.ypct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
         <span>Z <input type="number" id="wZ_${lv}" value="${wEd.zpct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
         <span>KPI <input type="number" id="wK_${lv}" value="${wEd.kpct||0}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
