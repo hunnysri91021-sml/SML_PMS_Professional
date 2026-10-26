@@ -1928,7 +1928,7 @@ tbody tr:hover{background:#f0f6ff!important}
   <!-- ========== CALIBRATION (HR) ========== -->
   <section class="page" id="pg-calib">
     <div class="ph"><div><h2>⚖️ Calibration — ปรับเทียบคะแนน (ขั้นที่ 6, HR)</h2><p>ปรับเทียบคะแนนของใบประเมินที่พนักงานรับทราบผลแล้ว (สถานะ Acknowledged) ก่อนส่งอนุมัติขั้นสุดท้าย AMD/MD — เกรดสุดท้ายคำนวณแบบ Bell Curve (A=10% B=20% C=40% D=20% E=10%) ตามระเบียบปฏิบัติข้อ 6.7 ไม่ใช่เกณฑ์ตัดคะแนนสัมบูรณ์แบบเดิม</p></div>
-    <div class="ph-act"><button class="btn btn-ok" id="confirmCalibBtn" disabled onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
+    <div class="ph-act"><button class="btn btn-ok" id="confirmCalibBtn" style="opacity:.55" onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
 
     <div class="card calib-step-card" style="margin-bottom:18px">
       <div class="card-h"><h3>⚙️ ตั้งค่า Bell Curve</h3></div>
@@ -9856,7 +9856,9 @@ function updateCalibConfirmLock(){
   const totalReady = document.querySelectorAll('.calib-adj').length;
   const computedCount = bellCurveResult ? Object.keys(bellCurveResult.byKey).length : 0;
   const ok = totalReady > 0 && computedCount > 0;
-  if(btn) btn.disabled = !ok;
+  /* ไม่ใช้ disabled จริงอีกต่อไป — ปุ่ม disabled กดแล้วเงียบสนิท ผู้ใช้รายงาน "กดแล้วไม่มีอะไรเกิดขึ้น"
+     เปลี่ยนเป็นแค่ทำให้ดูจางเมื่อยังไม่พร้อม แต่กดได้เสมอ confirmCalibration() จะบอกเหตุผลเองด้วย toast */
+  if(btn){ btn.disabled = false; btn.style.opacity = ok ? '' : '.55'; btn.textContent = ok ? '✅ ยืนยันผล Calibration' : '🔒 ยืนยันผล Calibration'; }
   if(status){
     if(!totalReady){
       status.innerHTML = '';
