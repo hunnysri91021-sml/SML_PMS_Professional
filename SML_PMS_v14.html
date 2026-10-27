@@ -1825,10 +1825,9 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="al al-s" id="myResultBanner" style="display:none"><span>🎉</span><div id="myResultBannerText"></div></div>
     <div class="al al-i" id="myResultEmptyNotice" style="display:none"><span>ℹ️</span><div>ยังไม่มีผลการประเมินที่อนุมัติเสร็จสิ้นของคุณในระบบ — ตัวเลขด้านล่างจะแสดงทันทีที่มีผลประเมินสถานะ "Approved" บันทึกไว้</div></div>
 
-    <div class="grid g4" style="margin-bottom:18px">
+    <div class="grid g3" style="margin-bottom:18px">
       <div class="stat s-ok"><div class="lb">🏆 เกรดล่าสุด</div><div class="vl" id="myResultGrade" style="color:#16a34a">—</div><div class="sb" id="myResultGradeSub">—</div></div>
       <div class="stat"><div class="lb">📊 คะแนนรวม</div><div class="vl" id="myResultX">—</div><div class="sb" id="myResultXSub">(Y+Z)</div></div>
-      <div class="stat s-i"><div class="lb">📈 อันดับในฝ่าย</div><div class="vl" id="myResultRank">—</div><div class="sb" id="myResultRankSub">—</div></div>
       <div class="stat s-w"><div class="lb">✅ สถานะอนุมัติ</div><div class="vl" id="myResultApproval" style="font-size:16px">—</div><div class="sb" id="myResultApprovalSub">—</div></div>
     </div>
 
@@ -5606,6 +5605,13 @@ function _levelCells(w, sc, allApproved) {
    เงินเดือนเก็บอยู่ที่ไหนในระบบเลย) จึงตัดออกแทนที่ด้วย "สถานะอนุมัติ" ซึ่งเป็นข้อมูลจริง (#14) และ
    "ความเห็นจากผู้ประเมิน" แบบข้อความเดิมก็เป็นข้อความที่ไม่มีอยู่จริงเช่นกัน (ไม่มีที่เก็บ comment ต่อ
    ขั้นตอนที่นี่) ตัดออก เหลือแค่ชื่อผู้ลงนามอนุมัติจริงจาก getApprovalSignature() (คีย์เดียวกับ #39) */
+/* พนักงานเห็นแค่สถานะภาพรวม ไม่เห็นว่าติดอยู่ขั้นไหน/ใครสอบทานอยู่ (ข้อมูลอ่อนไหวของกระบวนการ) */
+function myResultStatusLabel(st){
+  if(st==='Draft') return 'ร่าง';
+  if(isFinalStatus(st)) return 'เสร็จสมบูรณ์';
+  if(hasVisibleResult(st)) return evalStatusRank(st)>=evalStatusRank('Acknowledged') ? 'รับทราบแล้ว' : 'รอรับทราบ';
+  return 'อยู่ระหว่างพิจารณา';
+}
 function renderMyResult(){
   const box = document.getElementById('pg-myresult');
   if(!box) return;
@@ -5630,11 +5636,10 @@ function renderMyResult(){
     emptyEl.style.display='';
     set('myResultGrade','—'); set('myResultGradeSub','—');
     set('myResultX','—'); set('myResultXSub','(Y+Z)');
-    set('myResultRank','—'); set('myResultRankSub','—');
     set('myResultApproval','—'); set('myResultApprovalSub','—');
     document.getElementById('myResultBreakdownArea').innerHTML = '<span style="color:#94a3b8;font-size:12px">ยังไม่มีข้อมูล</span>';
     document.getElementById('myResultHistoryRows').innerHTML = myDrafts.length
-      ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>`<tr><td><b>รอบ ${d[2]}</b></td><td>—</td><td>—</td><td>${d[d.length-1]}</td></tr>`).join('')
+      ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>`<tr><td><b>รอบ ${d[2]}</b></td><td>—</td><td>—</td><td>${myResultStatusLabel(d[d.length-1])}</td></tr>`).join('')
       : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีประวัติ</td></tr>';
     approverCard.style.display='none';
     return;
@@ -5672,21 +5677,10 @@ function renderMyResult(){
     set('myResultXSub', (delta>=0?'▲ ':'▼ ')+Math.abs(delta).toFixed(2)+' จากรอบก่อน · (Y+Z)');
   } else set('myResultXSub', '(Y+Z) · ยังไม่มีรอบก่อนหน้าให้เทียบ');
 
-  const scoped = (typeof getMyScopedEmpCodes==='function') ? getMyScopedEmpCodes() : null;
-  const myDept = me[6]||me[4]||'—';
-  const deptPeers = getDrafts().filter(d=>{
-    if(!hasVisibleResult(d[d.length-1]) || d[2]!==latest[2]) return false;
-    if(scoped && !scoped.has(d[0])) return false;
-    const emp = MASTER_USERS.find(u=>u[0]===d[0]);
-    return emp && (emp[6]||emp[4]||'—')===myDept;
-  }).map(d=>Number(d[d.length-3])||0).sort((a,b)=>b-a);
-  const rank = deptPeers.indexOf(X)+1;
-  if(rank>0 && deptPeers.length){ set('myResultRank', rank+'/'+deptPeers.length); set('myResultRankSub', myDept); }
-  else { set('myResultRank','—'); set('myResultRankSub', myDept); }
-
+  /* อันดับในฝ่าย/การเทียบกับเพื่อนร่วมงานเป็นข้อมูลอ่อนไหว — ไม่แสดงให้พนักงานเห็น (CLAUDE.md #211) */
   const sigKey = me[0]+'|'+latest[2];
   const sig = (typeof getApprovalSignature==='function') ? getApprovalSignature(sigKey) : null;
-  const stageLabel = {GMApproved:'GM อนุมัติแล้ว — รอรับทราบ', Acknowledged:'รับทราบแล้ว — รอ Calibration', Calibrated:'ผ่าน Calibration — รอ AMD/MD อนุมัติ', Approved:'อนุมัติขั้นสุดท้ายแล้ว'}[latestStatus] || latestStatus;
+  const stageLabel = {GMApproved:'GM อนุมัติแล้ว — รอรับทราบ', Acknowledged:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Calibrated:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Approved:'อนุมัติขั้นสุดท้ายแล้ว'}[latestStatus] || latestStatus;
   set('myResultApproval', stageLabel);
   if(sig){
     set('myResultApprovalSub', new Date(sig.signedAt).toLocaleDateString('th-TH'));
@@ -5707,7 +5701,8 @@ function renderMyResult(){
         const gx = Number(d[d.length-3])||0, gg = d[d.length-2], gs = d[d.length-1];
         const rowFinal = (typeof isFinalStatus==='function') ? isFinalStatus(gs) : gs==='Approved';
         const gradeCell = !gg ? '—' : (rowFinal ? `<span class="grade g${gg}">${gg}</span>` : '<span title="รอ MD อนุมัติขั้นสุดท้าย">🔒</span>');
-        return `<tr><td><b>รอบ ${d[2]}</b></td><td>${gg? gx.toFixed(2) : '—'}</td><td>${gradeCell}</td><td>${gs}</td></tr>`;
+        const vis = hasVisibleResult(gs);
+        return `<tr><td><b>รอบ ${d[2]}</b></td><td>${(vis&&gg)? gx.toFixed(2) : '—'}</td><td>${vis?gradeCell:'—'}</td><td>${myResultStatusLabel(gs)}</td></tr>`;
       }).join('')
     : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีประวัติ</td></tr>';
 }

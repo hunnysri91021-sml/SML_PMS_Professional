@@ -8836,6 +8836,12 @@ touches employee/attendance/evaluation data.
     Also fixed `calcCurrentEvalSummary` using max Z instead of real attendance Z. Labels on LEVEL_CONFIG/SML_FORMS
     show the *current* cycle's %.
 
+211. **Employee-facing "ผลประเมินของฉัน" must not expose sensitive process/peer data.** Removed "อันดับในฝ่าย"
+    (peer ranking), the raw internal status strings in history (now `myResultStatusLabel()`: ร่าง / อยู่ระหว่างพิจารณา /
+    รอรับทราบ / รับทราบแล้ว / เสร็จสมบูรณ์), scores/grades of rounds not yet GM-approved, and stage names that reveal
+    Calibration/Bell Curve. Employee sees only own X/Y/Z after GM approval; grade letter only after final approval (#156).
+    When adding any new field to this page, ask "would an employee learn about peers or internal review stages from it?"
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
