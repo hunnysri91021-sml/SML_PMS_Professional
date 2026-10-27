@@ -8874,6 +8874,16 @@ touches employee/attendance/evaluation data.
     และปุ่ม "📤 ยืนยันส่งผลไป MD/AMD" = `confirmAndSendToMd()` (confirm แล้วเรียก `confirmCalibration()` ตัวเดิม — สถานะ Calibrated คือเข้าคิว MD/AMD
     ไม่มีสถานะใหม่). เกรด Bell Curve ยังไม่เปลี่ยนจนกว่าจะกดยืนยัน.
 
+217. **ขั้น "ตรวจสอบหลัง Calibration" ก่อนส่ง MD/AMD.** เพิ่มสถานะ `CalibChecked` ต่อจาก `Calibrated` ใน
+    `EVAL_STATUS_ORDER` (client + Worker ต้องตรงกันเป๊ะ): `Acknowledged → Calibrated → CalibChecked → Approved`.
+    `confirmCalibration()` ยังตั้ง `Calibrated` (เกรด Bell Curve จริงแล้ว) แต่ไม่เข้าคิว MD อีก; การ์ด "🔎 ตรวจสอบหลัง Calibration"
+    บน `pg-calib` (`renderCalibCheckQueue`, `approveCalibCheckSelected` → `CalibChecked`, `rejectCalibCheckSelected` → `Acknowledged`
+    พร้อมคืนเกรดชั่วคราว; admin/sysadmin เท่านั้น). คิว MD/AMD (`renderApproveQueue`, `approveAllFinal`, `rejectApproveAll`,
+    `mApprove` count, nav badge, notifications, dashboard steps) อ่านเฉพาะ `CalibChecked`; MD ตีกลับ → `Calibrated` (กลับขั้นตรวจ).
+    `resetCalibration` ย้อนทั้ง `Calibrated` และ `CalibChecked`. เมื่อเพิ่มสถานะใหม่ ต้อง grep `'Calibrated'` ทุกจุดที่เป็น filter
+    ตรงตัว + แผนที่ป้ายสถานะ (stageLabel, CYCLE_PARTICIPANT_STATUS_TH) — Worker ที่มี EVAL_STATUS_ORDER ควร redeploy ให้ตรงกัน
+    (ฟังก์ชันไม่ขึ้นกับมัน แต่ต้องไม่ให้สองไฟล์ drift).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

@@ -1983,6 +1983,19 @@ tbody tr:hover{background:#f0f6ff!important}
         <tbody id="calibRows"></tbody>
       </table></div>
     </div>
+
+    <div class="card" id="calibCheckCard" style="margin-top:14px">
+      <div class="card-h"><h3>🔎 ตรวจสอบหลัง Calibration ก่อนส่ง MD/AMD</h3><div class="r"><span class="bd b-b" id="calibCheckCount">0 รายการ</span></div></div>
+      <div style="font-size:12px;color:#64748b;margin:0 0 8px">ผลที่ยืนยัน Calibration แล้วจะมาอยู่ที่นี่ก่อน — HR ตรวจคะแนน/เกรด/หมายเหตุให้ถูกต้อง แล้วเลือกรายการเพื่อ "ตรวจผ่าน ส่ง MD/AMD" หรือ "ตีกลับไปปรับ Calibration ใหม่"</div>
+      <div class="tw"><table>
+        <thead><tr><th style="width:34px"><input type="checkbox" id="calibCheckAll" onchange="toggleAllCalibCheck(this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนหลังปรับ (X)</th><th>Z</th><th>เกรด Bell Curve</th><th>หมายเหตุ HR</th></tr></thead>
+        <tbody id="calibCheckRows"></tbody>
+      </table></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-ok" onclick="approveCalibCheckSelected()">✅ ตรวจผ่าน — ส่งให้ MD/AMD</button>
+        <button class="btn btn-dg" onclick="rejectCalibCheckSelected()">↩️ ตีกลับไปปรับ Calibration</button>
+      </div>
+    </div>
   </section>
 
   <!-- ========== APPROVE (AMD/MD) ========== -->
@@ -5699,7 +5712,7 @@ function renderMyResult(){
   /* อันดับในฝ่าย/การเทียบกับเพื่อนร่วมงานเป็นข้อมูลอ่อนไหว — ไม่แสดงให้พนักงานเห็น (CLAUDE.md #211) */
   const sigKey = me[0]+'|'+latest[2];
   const sig = (typeof getApprovalSignature==='function') ? getApprovalSignature(sigKey) : null;
-  const stageLabel = {GMApproved:'GM อนุมัติแล้ว — รอรับทราบ', Acknowledged:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Calibrated:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Approved:'อนุมัติขั้นสุดท้ายแล้ว'}[latestStatus] || latestStatus;
+  const stageLabel = {GMApproved:'GM อนุมัติแล้ว — รอรับทราบ', Acknowledged:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Calibrated:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', CalibChecked:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Approved:'อนุมัติขั้นสุดท้ายแล้ว'}[latestStatus] || latestStatus;
   set('myResultApproval', stageLabel);
   if(sig){
     set('myResultApprovalSub', new Date(sig.signedAt).toLocaleDateString('th-TH'));
@@ -6501,7 +6514,7 @@ function openM(id){
   if(id==='mReminder' && typeof renderReminderPreview==='function') renderReminderPreview();
   if(id==='mResultNotify' && typeof renderResultNotifyPreview==='function') renderResultNotifyPreview();
   if(id==='mApprove'){
-    const n = getDrafts().filter(d=>d[d.length-1]==='Calibrated').length;
+    const n = getDrafts().filter(d=>d[d.length-1]==='CalibChecked').length;
     const el = document.getElementById('mApproveCount'); if(el) el.textContent = n+' ใบ';
   }
   if(id==='mCascadeKpi' && typeof populateCascadeModal==='function') populateCascadeModal();
@@ -8288,7 +8301,7 @@ function renderCalibBellCurveNamesPreview(){
     return `<tr><td>${name}</td><td style="color:#94a3b8;font-size:11px">${r.emp[0]}</td><td style="font-size:11px">${dept}</td><td style="text-align:center">${X}</td><td style="text-align:center">${Zs}</td><td style="text-align:center">${gradeCell}</td></tr>`;
   }).join('');
   const sendBtn = computed
-    ? `<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-ok" onclick="confirmAndSendToMd()">📤 ยืนยันส่งผลไป MD/AMD (${computed} รายการ)</button><span style="font-size:11.5px;color:#64748b">กดแล้วจะบันทึกเกรด Bell Curve + คะแนนหลังปรับ และส่งเข้าคิวอนุมัติขั้นสุดท้าย MD/AMD</span></div>`
+    ? `<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-ok" onclick="confirmAndSendToMd()">📤 ยืนยันผล Calibration (${computed} รายการ)</button><span style="font-size:11.5px;color:#64748b">กดแล้วจะบันทึกเกรด Bell Curve + คะแนนหลังปรับ และส่งเข้าขั้น "ตรวจสอบหลัง Calibration" (HR ตรวจผ่านแล้วจึงส่งต่อ MD/AMD)</span></div>`
     : `<div style="margin-top:8px;font-size:11.5px;color:#94a3b8">กด "📊 คำนวณ Bell Curve" ก่อน แล้วปุ่มยืนยันส่งผลไป MD/AMD จะแสดงที่นี่</div>`;
   box.innerHTML = `<div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px">ผลเปรียบเทียบในกลุ่มที่เลือก (${roster.length} คน${computed?` · คำนวณแล้ว ${computed} คน`:''})</div>
     <div class="tw" style="max-height:260px;overflow-y:auto"><table>
@@ -8301,7 +8314,7 @@ function renderCalibBellCurveNamesPreview(){
 function confirmAndSendToMd(){
   const n = bellCurveResult ? Object.keys(bellCurveResult.byKey).length : 0;
   if(!n){ smlToast('กรุณากด "📊 คำนวณ Bell Curve" ก่อน','warn'); return; }
-  if(!confirm('ยืนยันส่งผล Calibration '+n+' รายการไปให้ MD/AMD อนุมัติขั้นสุดท้าย?\n\nเกรดตาม Bell Curve และคะแนนหลังปรับจะถูกบันทึก (ถ้าต้องแก้ภายหลังใช้ปุ่ม "รีเซ็ต Calibration" ได้ก่อน MD/AMD อนุมัติ)')) return;
+  if(!confirm('ยืนยันผล Calibration '+n+' รายการ?\n\nเกรดตาม Bell Curve และคะแนนหลังปรับจะถูกบันทึก แล้วเข้าขั้น "ตรวจสอบหลัง Calibration" ก่อนส่ง MD/AMD (แก้ภายหลังได้ด้วยปุ่ม "รีเซ็ต Calibration")')) return;
   return confirmCalibration();
 }
 /* เปลี่ยน field (กลุ่ม/แผนก/ส่วน/ฝ่าย) ต้องเติม dropdown ค่าใหม่ทันที (ค่าของ field เดิมใช้กับ field
@@ -9233,7 +9246,7 @@ function deleteDraftByKey(key){
    (ดู CLAUDE.md #58 ที่เคยออกแบบ Acknowledged ไว้ผิดตำแหน่ง ก่อนที่ผู้ใช้จะอธิบาย flow จริงทั้งหมด) */
 /* เพิ่ม 'L1Reviewed' คั่นระหว่าง Submitted/L2Reviewed (#92) — หัวหน้าแผนก (role l1) สอบทานทั้งแผนก
    ก่อนส่งต่อผู้จัดการส่วน (role l2) ต่อจาก CLAUDE.md #61's GM/Acknowledge ที่เพิ่มไว้ก่อนหน้า */
-const EVAL_STATUS_ORDER = ['Draft','Submitted','L1Reviewed','L2Reviewed','GMApproved','Acknowledged','Calibrated','Approved'];
+const EVAL_STATUS_ORDER = ['Draft','Submitted','L1Reviewed','L2Reviewed','GMApproved','Acknowledged','Calibrated','CalibChecked','Approved'];
 function evalStatusRank(status){ const i = EVAL_STATUS_ORDER.indexOf(status); return i<0 ? 0 : i; }
 /* "จบกระบวนการทั้งหมดแล้ว จริงๆ" (พร้อมพิมพ์ทางการ/นับเป็นค้าง Push เข้า Excel/พร้อม Export
    Payroll) = อนุมัติขั้นสุดท้ายโดย AMD/MD เท่านั้น — คืนความหมายเดิมของคำว่า "Approved" ให้ตรงกับ
@@ -10050,6 +10063,7 @@ function renderCalibQueue(){
      ต้องสดเสมอ (บทเรียน CLAUDE.md #3: เติม option จากข้อมูลจริง ไม่ใช่ static) */
   populateBellCurveValueOptions();
   renderCalibTieOrderUi();
+  renderCalibCheckQueue();
   /* ผู้ใช้รายงาน "กดคำนวณแล้วเกรดเปลี่ยน แต่สักพักก็กลับมาเหมือนเดิม" — สาเหตุจริง: บรรทัดนี้เดิม
      null ทิ้ง bellCurveResult แบบไม่มีเงื่อนไขทุกครั้งที่ renderCalibQueue() รันใหม่ ซึ่งไม่ได้รันแค่ตอน
      HR แก้ไขคะแนนเท่านั้น (จุดนั้น onCalibScoreInput() ก็ null เองอยู่แล้วแยกต่างหาก) แต่ยังรันทุก 30
@@ -10119,7 +10133,7 @@ function renderCalibQueue(){
   renderCalibBellCurveNamesPreview();
   updateCalibConfirmLock();
   if(distBox){
-    const calibrated = getDrafts().filter(d=>['Calibrated','Approved'].includes(d[d.length-1])).filter(d=>!scoped || scoped.has(d[0]));
+    const calibrated = getDrafts().filter(d=>['Calibrated','CalibChecked','Approved'].includes(d[d.length-1])).filter(d=>!scoped || scoped.has(d[0]));
     const counts = {};
     calibrated.forEach(d=>{ const g=d[d.length-2]; counts[g]=(counts[g]||0)+1; });
     const grades = ['A','B','C','D','E'];
@@ -10197,7 +10211,7 @@ async function resetCalibration(){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่รีเซ็ต Calibration ได้','warn'); return; }
   const cycle = getCurrentEvalCycleYear();
   const drafts = getDrafts();
-  const targets = drafts.filter(d=>d[2]===cycle && d[d.length-1]==='Calibrated');
+  const targets = drafts.filter(d=>d[2]===cycle && ['Calibrated','CalibChecked'].includes(d[d.length-1]));
   if(!targets.length){ smlToast('ไม่มีรายการที่ Calibrate แล้วในรอบ '+cycle+' ให้รีเซ็ต (รายการที่ Approved แล้วย้อนไม่ได้)','warn'); return; }
   if(!confirm('รีเซ็ต Calibration '+targets.length+' รายการ (รอบ '+cycle+')?\n\nสถานะจะย้อนกลับเป็น "รอ Calibration" เกรดจะกลับเป็นเกรดชั่วคราว และอัปเดตใน Excel ด้วย\n(รายการที่ Approved แล้วจะไม่ถูกแตะ)')) return;
   targets.forEach(d=>{ d[d.length-2] = gradeFromX(Number(d[d.length-3])||0); d[d.length-1] = 'Acknowledged'; });
@@ -10278,7 +10292,7 @@ async function confirmCalibration(){
     pushApprovalRecordToExcel(empCode,cycle,'Calibrated',comment);
   });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration (Bell Curve)', confirmInputs.length+' รายการ', confirmInputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
-  const baseMsg = 'ยืนยันผล Calibration แล้ว '+confirmInputs.length+' รายการ (เกรดจาก Bell Curve) — ส่งเข้าคิวอนุมัติขั้นสุดท้าย MD/AMD แล้ว'+(skippedCount?` — เหลืออีก ${skippedCount} รายการ รอเลือกกลุ่มถัดไป`:'');
+  const baseMsg = 'ยืนยันผล Calibration แล้ว '+confirmInputs.length+' รายการ (เกรดจาก Bell Curve) — เข้าคิว "ตรวจสอบหลัง Calibration" ของ HR แล้ว (ตรวจผ่านแล้วจึงส่งต่อ MD/AMD)'+(skippedCount?` — เหลืออีก ${skippedCount} รายการ รอเลือกกลุ่มถัดไป`:'');
   if(pushFail.length || notFoundCount > 0){
     const why = pushFail.length ? (pushFail[0] && pushFail[0].error || 'ไม่ทราบสาเหตุ') : `หาใบประเมินในเครื่องไม่เจอ ${notFoundCount} รายการ`;
     smlToast(baseMsg+` — ⚠️ บันทึกเข้า Excel (Appraisals) สำเร็จ ${pushOk}/${confirmInputs.length} รายการ: ${why} (ดูรายละเอียดที่ Sync Log)`,'err');
@@ -10309,6 +10323,53 @@ function overrideEmployeeGrade(code, cycle){
   smlToast('ปรับเกรด '+code+' เป็น '+grade+' แล้ว (บันทึกเหตุผลลง Audit Log)','ok');
 }
 
+/* #217: ขั้น "ตรวจสอบหลัง Calibration" — Calibrated → CalibChecked (HR ตรวจผ่าน) → MD/AMD อนุมัติ
+   ใช้ status field เดียวกับทุกขั้น (CLAUDE.md #11); MD/AMD queue อ่านเฉพาะ CalibChecked */
+function renderCalibCheckQueue(){
+  const tbody = document.getElementById('calibCheckRows'); if(!tbody) return;
+  const cnt = document.getElementById('calibCheckCount');
+  const keep = new Set(getCheckedKeys('calib-chk'));
+  const cycle = getCurrentEvalCycleYear();
+  const rows = buildTierRoster(null, null, 'Calibrated', cycle).filter(r=>r.state==='ready');
+  if(cnt) cnt.textContent = rows.length+' รายการ';
+  tbody.innerHTML = rows.length ? rows.map(r=>{
+    const d = r.draft, key = draftKey(d), {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
+    const note = (typeof getEvalHrNote==='function' ? getEvalHrNote(r.emp[0]+'|'+d[2]) : '') || '';
+    return `<tr><td><input type="checkbox" class="calib-chk" value="${key}"></td>
+      <td><b>${name}</b><small style="display:block;color:#94a3b8">${r.emp[0]}</small></td>
+      <td style="font-size:12px">${dept}</td>
+      <td style="text-align:center"><b>${(Number(d[d.length-3])||0).toFixed(2)}</b></td>
+      <td style="text-align:center">${(Number(d[d.length-4])||0).toFixed(2)}</td>
+      <td style="text-align:center"><span class="grade g${d[d.length-2]}">${d[d.length-2]}</span></td>
+      <td style="font-size:11.5px;color:#64748b">${note||'—'}</td></tr>`;
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:14px">ไม่มีรายการรอตรวจสอบ</td></tr>';
+  if(typeof restoreCheckedKeys==='function') restoreCheckedKeys('calib-chk', keep);
+}
+function toggleAllCalibCheck(on){ document.querySelectorAll('.calib-chk').forEach(c=>c.checked=on); }
+function approveCalibCheckSelected(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ตรวจสอบได้','warn'); return; }
+  const keys = getCheckedKeys('calib-chk');
+  if(!keys.length){ smlToast('กรุณาเลือกรายการที่ตรวจแล้ว','warn'); return; }
+  if(!confirm('ตรวจสอบผ่าน '+keys.length+' รายการ แล้วส่งให้ MD/AMD อนุมัติขั้นสุดท้าย?')) return;
+  updateDraftStatus(keys,'CalibChecked');
+  keys.forEach(k=>{ const [c,cy]=k.split('|'); pushApprovalRecordToExcel(c,cy,'CalibChecked','HR ตรวจสอบหลัง Calibration แล้ว ส่ง MD/AMD'); });
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตรวจสอบหลัง Calibration (ส่ง MD/AMD)', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
+  smlToast('ตรวจผ่านแล้ว '+keys.length+' รายการ — ส่งเข้าคิวอนุมัติขั้นสุดท้าย MD/AMD','ok');
+}
+function rejectCalibCheckSelected(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ตีกลับได้','warn'); return; }
+  const keys = getCheckedKeys('calib-chk');
+  if(!keys.length){ smlToast('กรุณาเลือกรายการที่จะตีกลับ','warn'); return; }
+  if(!confirm('ตีกลับ '+keys.length+' รายการ ไปทำ Calibration ใหม่?\n(เกรดจะกลับเป็นเกรดชั่วคราว)')) return;
+  const drafts = getDrafts();
+  keys.forEach(k=>{ const d=drafts.find(x=>draftKey(x)===k); if(d) d[d.length-2]=gradeFromX(Number(d[d.length-3])||0); });
+  saveDrafts(drafts);
+  bellCurveResult = null;
+  updateDraftStatus(keys,'Acknowledged');
+  keys.forEach(k=>{ const [c,cy]=k.split('|'); pushApprovalRecordToExcel(c,cy,'RejectedCalibCheck','ตีกลับจากการตรวจสอบหลัง Calibration'); });
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากการตรวจสอบหลัง Calibration', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
+  smlToast('ตีกลับแล้ว '+keys.length+' รายการ — กลับไปคำนวณ/ยืนยัน Calibration ใหม่','warn');
+}
 function renderApproveQueue(){
   const tbody=document.getElementById('approveRows'); const cnt=document.getElementById('approveCount');
   const btn=document.getElementById('approveAllBtn');
@@ -10316,7 +10377,7 @@ function renderApproveQueue(){
   /* resolverFn=null เหมือน renderCalibQueue() — AMD/MD scope ทั้งบริษัทผ่าน getMyScopedEmpCodes()
      อยู่แล้ว ไม่มี field สายบังคับบัญชาเฉพาะขั้นนี้ให้ resolve รายคน */
   const cycle = getCurrentEvalCycleYear();
-  const roster = buildTierRoster(null, null, 'Calibrated', cycle);
+  const roster = buildTierRoster(null, null, 'CalibChecked', cycle);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state!=='ready' && r.state!=='done').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -10593,7 +10654,7 @@ async function ms365SyncAckChannel(silent=true){
 async function approveAllFinal(){
   const sign=(document.getElementById('mApproveSign')?.value||'').trim();
   if(!sign){ smlToast('กรุณาพิมพ์ชื่อ-สกุลเพื่อยืนยันลายเซ็นอิเล็กทรอนิกส์','warn'); return; }
-  const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
+  const rows = getDrafts().filter(d=>d[d.length-1]==='CalibChecked');
   if(!rows.length){ smlToast('ไม่มีรายการรออนุมัติ','warn'); closeM(); return; }
   rows.forEach(d=>saveApprovalSignature(d[0]+'|'+d[2], sign));
   updateDraftStatus(rows.map(draftKey),'Approved');
@@ -10603,12 +10664,12 @@ async function approveAllFinal(){
   smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+') — พร้อม Export เข้า Payroll','ok');
 }
 function rejectApproveAll(){
-  const rows = getDrafts().filter(d=>d[d.length-1]==='Calibrated');
+  const rows = getDrafts().filter(d=>d[d.length-1]==='CalibChecked');
   if(!rows.length){ smlToast('ไม่มีรายการให้ตีกลับ','warn'); return; }
   /* ตีกลับหลังอนุมัติขั้นสุดท้ายไม่ผ่าน ต้องส่งกลับไปที่ HR (Calibration) ไม่ใช่ L2 — พนักงานรับทราบ
      ผลไปแล้วตั้งแต่ก่อน Calibration (#61) ย้อนไปไกลถึง L2 จะทำให้ขั้นที่พนักงานรับทราบไปแล้วเสียเปล่า */
-  if(!confirm('ตีกลับรายการที่ผ่าน Calibration ทั้งหมด '+rows.length+' รายการ ให้ HR ทำ Calibration ใหม่อีกครั้ง?')) return;
-  updateDraftStatus(rows.map(draftKey),'Acknowledged');
+  if(!confirm('ตีกลับรายการที่รออนุมัติขั้นสุดท้ายทั้งหมด '+rows.length+' รายการ กลับไปขั้น "ตรวจหลัง Calibration" ให้ HR ตรวจ/ปรับใหม่?')) return;
+  updateDraftStatus(rows.map(draftKey),'Calibrated');
   rows.forEach(d=>pushApprovalRecordToExcel(d[0], d[2], 'RejectedFinalApproval', ''));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากอนุมัติขั้นสุดท้าย', rows.length+' รายการ', rows.map(d=>d[0]).join(', '));
   smlToast('ตีกลับแล้ว '+rows.length+' รายการ','warn');
@@ -10655,7 +10716,7 @@ function renderNavBadges(){
     navBadgeReview: readyCount(resolveL2Reviewer, 'L1Reviewed'),
     navBadgeGm: readyCount(resolveGmReviewer, 'L2Reviewed'),
     navBadgeCalib: readyCount(null, 'Acknowledged'),
-    navBadgeApprove: readyCount(null, 'Calibrated'),
+    navBadgeApprove: readyCount(null, 'CalibChecked'),
   };
   Object.keys(counts).forEach(id=>{
     const el = document.getElementById(id);
@@ -11367,6 +11428,7 @@ function renderDashboardWorkflowSteps(participants, drafts){
     { label:'ผ่านอนุมัติ GM', count: countAtLeast('GMApproved') },
     { label:'พนักงานรับทราบผลแล้ว', count: countAtLeast('Acknowledged') },
     { label:'ผ่าน Calibration (HR)', count: countAtLeast('Calibrated') },
+    { label:'HR ตรวจสอบก่อนส่ง MD/AMD', count: countAtLeast('CalibChecked') },
     { label:'อนุมัติขั้นสุดท้าย (AMD/MD)', count: countAtLeast('Approved') },
   ];
   let curFound = false;
@@ -11443,10 +11505,12 @@ function getNotifications(){
   const submitted = readyCount(resolveL1Reviewer, 'Submitted');
   const l1reviewed = readyCount(resolveL2Reviewer, 'L1Reviewed');
   const l2reviewed = readyCount(resolveGmReviewer, 'L2Reviewed');
-  const calibrated = readyCount(null, 'Calibrated');
+  const calibrated = readyCount(null, 'CalibChecked');
+  const toCheck = readyCount(null, 'Calibrated');
   if(submitted) items.push({ icon:'📝', text:`มีใบประเมิน ${submitted} รายการ รอสอบทานหัวหน้าแผนก`, page:'reviewl1' });
   if(l1reviewed) items.push({ icon:'🔍', text:`มีใบประเมิน ${l1reviewed} รายการ รอสอบทานผู้จัดการส่วน`, page:'review' });
   if(l2reviewed) items.push({ icon:'🏢', text:`มีใบประเมิน ${l2reviewed} รายการ รออนุมัติ GM`, page:'gmapprove' });
+  if(toCheck) items.push({ icon:'🔎', text:`มีใบประเมิน ${toCheck} รายการ รอ HR ตรวจสอบหลัง Calibration ก่อนส่ง MD/AMD`, page:'calib' });
   if(calibrated) items.push({ icon:'✅', text:`มีใบประเมิน ${calibrated} รายการ รออนุมัติขั้นสุดท้าย`, page:'approve' });
 
   /* #194: "ข้อมูลสายบังคับบัญชาไม่ครบ" เดิมไม่มีการกรอง role เลย — checkHierarchyIssues() เอง
@@ -12862,7 +12926,8 @@ const CYCLE_PARTICIPANT_STATUS_TH = {
   L2Reviewed:'ผ่านสอบทานผู้จัดการส่วน (L3) แล้ว',
   GMApproved:'ผ่านอนุมัติ GM (L4) แล้ว',
   Acknowledged:'พนักงานรับทราบผลแล้ว',
-  Calibrated:'ผ่าน Calibration แล้ว',
+  Calibrated:'ผ่าน Calibration แล้ว — รอ HR ตรวจสอบ',
+  CalibChecked:'HR ตรวจสอบแล้ว — รอ MD/AMD อนุมัติ',
   Approved:'<b style="color:#16a34a">อนุมัติเสร็จสิ้น</b>'
 };
 function openCycleParticipantsModal(cycleId){

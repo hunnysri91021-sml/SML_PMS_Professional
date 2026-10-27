@@ -408,7 +408,7 @@ async function verifyLineSignature(channelSecret, rawBody, signatureHeader) {
    (CLAUDE.md #41's precedent: client/Worker คนละที่ แชร์โค้ดกันไม่ได้ ต้องคัดลอกให้ตรงกันเองแล้ว
    แก้คู่กันเสมอถ้าฝั่งใดฝั่งหนึ่งเปลี่ยน) ใช้แค่เพื่อแยก "สถานะยังไม่ถึง GMApproved" (จริงๆ ไม่ควรเกิด
    เพราะปุ่มนี้ส่งหลัง GM อนุมัติเท่านั้น) ออกจาก "ผ่าน GMApproved ไปแล้ว" (รับทราบไปแล้วก่อนหน้านี้) */
-const EVAL_STATUS_ORDER = ['Draft', 'Submitted', 'L1Reviewed', 'L2Reviewed', 'GMApproved', 'Acknowledged', 'Calibrated', 'Approved'];
+const EVAL_STATUS_ORDER = ['Draft', 'Submitted', 'L1Reviewed', 'L2Reviewed', 'GMApproved', 'Acknowledged', 'Calibrated', 'CalibChecked', 'Approved'];
 function evalStatusRank(status) {
   const i = EVAL_STATUS_ORDER.indexOf(status);
   return i < 0 ? -1 : i;
