@@ -8889,6 +8889,8 @@ touches employee/attendance/evaluation data.
     sidebar มี backdrop (`.sb-backdrop`) และปิดเองเมื่อกดเมนู. ทดสอบด้วย `mob.js` (วัด overflow ทุกหน้าที่ 360/390/768px) + screenshot —
     หน้าใหม่ควรเช็กที่ 390px เสมอ และใช้ `minmax(0,…)` กับ grid ที่มี input.
 
+219. **ตรวจจอ Laptop (1280/1366/1440px).** ไม่มีหน้าไหน overflow ทั้งหน้า แต่พบ 2 จุด: แถบขั้นตอนบน Dashboard (`.wf-s` min-width 125px x 9 ขั้น ล้นขวา ขั้น 9 ถูกตัด) และตารางผังองค์กร (12+ คอลัมน์ ตัวหนังสือห่อหลายบรรทัด). แก้ด้วยบล็อก `#219` ท้าย `<style>` เฉพาะ 1000-1500px (ลด min-width/padding/ฟอนต์). เมื่อเพิ่มจำนวนขั้นใน workflow ให้เช็กแถบ `.wf` ที่ 1280px ด้วย — ใช้ `lap.js` (screenshot 1366x768) ในการดู.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

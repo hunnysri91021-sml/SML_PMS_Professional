@@ -1512,6 +1512,18 @@ img,svg,canvas{max-width:100%}
   .ph h2{font-size:18px}
 }
 @media(min-width:1800px){.content{max-width:1760px}}
+
+/* #219 — Laptop (1000-1500px): แถบขั้นตอน 9 ขั้นไม่ล้น, ตารางหนาแน่นขึ้น */
+@media (min-width:1000px) and (max-width:1500px){
+  .wf-s{min-width:0}
+  .wf-t{font-size:10.5px;line-height:1.25;padding:0 2px}
+  .wf-d{font-size:10px}
+  .wf-c{width:32px;height:32px}
+  .wf-s::after{top:16px}
+  #pg-org table th,#pg-org table td{padding:8px 7px;font-size:12px}
+  #pg-org .card-b,#pg-org .tbl-wrap{overflow-x:auto}
+  #pg-calib select{max-width:300px;min-width:200px}
+}
 </style>
 
 </head>
