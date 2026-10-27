@@ -8848,6 +8848,12 @@ touches employee/attendance/evaluation data.
     cycle settings page (`gradeVisSetup`) and syncs via the FormWeights payload (`gradeVis`). Scores X/Y/Z are unaffected;
     reviewers/admin viewing others are unaffected. Even when enabled, the grade shows only after final approval (#156).
 
+213. **Other roles (unit/L1/L2/GM/emp) must not see provisional grades of other people in aggregates.** The report page
+    (`departmentSummary`/`getReportData`), Dashboard grade bars (`renderDashGradeBars`) and the individual-summary Excel export
+    counted/showed `gradeFromX()` provisional grades from any stage. `canSeeGradeForStatus(status)` now gates them: admin/sysadmin
+    always; others only at `Approved`, or at `Calibrated` if the role has the `viewCalibGrade` permission (#180). X/Y/Z are
+    unaffected. Any new aggregate/export that reads `d[len-2]` must go through this helper.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

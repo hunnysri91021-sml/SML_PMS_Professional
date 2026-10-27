@@ -5485,6 +5485,14 @@ function _gc(g){return{A:'#15803d','A+':'#14532d',B:'#1d4ed8',C:'#b45309',D:'#c2
 /* ผู้ใช้ขอ (ยืนยันผ่านคำถาม): "ส่วนตัดเกรดหลัง Calibration" ให้ตั้งค่าได้โดย admin ว่าใครเห็น — เช็คสิทธิ์
    viewCalibGrade ของบทบาทผู้ใช้ที่ล็อกอินจริง (ROLE_PERMS, ด้านบน) sysadmin/admin ผ่านเสมอเหมือนทุก
    จุดอื่นในไฟล์นี้ (ดูงาน/ตั้งค่าได้ไม่ว่า perms จะตั้งไว้อย่างไร) */
+/* #213: ผู้ดู (ไม่ใช่ admin/sysadmin) เห็นเกรดของคนอื่นได้เมื่อ Approved แล้ว หรือถึง Calibrated และบทบาทมีสิทธิ์
+   viewCalibGrade เท่านั้น — กันหัวหน้า/พนักงานเห็นเกรดชั่วคราว (gradeFromX) ที่ยังไม่ผ่าน Bell Curve ในรายงาน/แดชบอร์ด/Export */
+function canSeeGradeForStatus(status){
+  const role = CURRENT_SESSION_USER ? CURRENT_SESSION_USER[2] : null;
+  if(role==='admin'||role==='sysadmin') return true;
+  if(isFinalStatus(status)) return true;
+  return evalStatusRank(status)>=evalStatusRank('Calibrated') && canViewCalibGrade();
+}
 function canViewCalibGrade(){
   const role = CURRENT_SESSION_USER ? CURRENT_SESSION_USER[2] : null;
   if(!role) return false;
@@ -10703,7 +10711,7 @@ function getReportData(){
       Y: d ? Number(d[d.length-5]) : null,
       Z: d ? Number(d[d.length-4]) : null,
       X: d ? Number(d[d.length-3]) : null,
-      grade: d ? d[d.length-2] : null,
+      grade: (d && canSeeGradeForStatus(d[d.length-1])) ? d[d.length-2] : null,
       status: d ? d[d.length-1] : 'ยังไม่ประเมิน'
     };
   });
@@ -11208,7 +11216,7 @@ function renderDashDeptProgress(participants, drafts){
 function renderDashGradeBars(drafts){
   const box = document.getElementById('dashGradeBars');
   if(!box) return;
-  const graded = drafts.filter(d=>d[d.length-2]);
+  const graded = drafts.filter(d=>d[d.length-2] && canSeeGradeForStatus(d[d.length-1]));
   if(!graded.length){
     box.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:20px 0;text-align:center">ยังไม่มีผลประเมินที่มีเกรดในรอบนี้</div>';
     return;
