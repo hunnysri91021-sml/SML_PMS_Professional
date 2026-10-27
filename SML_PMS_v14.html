@@ -11715,22 +11715,32 @@ function createCustomForm(){
   if(typeof appendAuditLog==='function') appendAuditLog('settings','สร้างแบบฟอร์มประเมินใหม่', name, key);
   smlToast('สร้างแบบฟอร์ม "'+name+'" แล้ว — แก้ปัจจัย/น้ำหนักได้ที่ปุ่ม "ปัจจัย/น้ำหนัก" และกำหนดให้พนักงานที่หน้าแก้ไขพนักงาน','ok');
 }
-function deleteCustomForm(key){
+async function deleteCustomForm(key){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin','warn'); return; }
   const used=MASTER_USERS.filter(u=>u[18]===key).length;
   if(used){ smlToast('ลบไม่ได้ — มีพนักงาน '+used+' คนถูกกำหนดให้ใช้แบบฟอร์มนี้ (เปลี่ยนก่อน)','warn'); return; }
   if(getDrafts().some(d=>d[3]===key)){ smlToast('ลบไม่ได้ — มีใบประเมินที่ใช้แบบฟอร์มนี้แล้ว','warn'); return; }
-  if(!confirm('ลบแบบฟอร์ม "'+(SML_FORMS[key]?.label||key)+'" ? (ข้อมูลแถวใน Excel ตาราง FormWeights ต้องลบมือ)')) return;
+  if(!confirm('ลบแบบฟอร์ม "'+(SML_FORMS[key]?.label||key)+'" ? (จะลบแถวของแบบฟอร์มนี้ใน Excel ตาราง FormWeights ด้วย)')) return;
   const defs=loadCustomFormDefs(); delete defs[key]; saveCustomFormDefs(defs);
   delete SML_FORMS[key]; delete LEVEL_CONFIG[key]; delete LV_IDX[key]; delete DEFAULT_SCORE_WEIGHTS[key];
   const i=LV_KEYS.indexOf(key); if(i>=0) LV_KEYS.splice(i,1);
-  saveFormOverrides(); renderCustomFormUi(); pushCustomFormDefsToExcel();
-  smlToast('ลบแบบฟอร์มแล้ว','ok');
+  saveFormOverrides(); renderCustomFormUi();
+  const cfg=loadMs365Config();
+  if(!isMs365Configured(cfg)){ smlToast('ลบแบบฟอร์มในเว็บแล้ว (ยังไม่ได้ตั้งค่า MS365 จึงไม่ได้ลบใน Excel)','warn'); return; }
+  try{
+    await pushCustomFormDefsToExcel(true); /* อัปเดตรายการนิยามก่อน เพื่อไม่ให้ sync ดึงฟอร์มที่ลบแล้วกลับมา */
+    const n=await graphDeleteTableRows('FormWeights',0,key);
+    if(typeof appendSyncLog==='function') appendSyncLog('ลบแบบฟอร์ม '+key+' ใน Excel FormWeights ('+n+' แถว)',true);
+    smlToast('ลบแบบฟอร์มแล้ว (เว็บ + Excel '+n+' แถว)','ok');
+  }catch(e){
+    if(typeof appendSyncLog==='function') appendSyncLog('ลบแบบฟอร์ม '+key+' ใน Excel ไม่สำเร็จ: '+e.message,false);
+    smlToast('ลบในเว็บแล้ว แต่ลบใน Excel ไม่สำเร็จ: '+e.message,'warn');
+  }
 }
-async function pushCustomFormDefsToExcel(){
+async function pushCustomFormDefsToExcel(rethrow){
   const cfg=loadMs365Config(); if(!isMs365Configured(cfg)) return;
   try{ await graphUpsertTableRow('FormWeights',0,'__custom__',['__custom__',JSON.stringify({defs:loadCustomFormDefs()}),new Date().toISOString()]); if(typeof appendSyncLog==='function') appendSyncLog('Push นิยามแบบฟอร์มใหม่เข้า Excel',true); }
-  catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('Push นิยามแบบฟอร์มใหม่ไม่สำเร็จ: '+e.message,false); }
+  catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('Push นิยามแบบฟอร์มใหม่ไม่สำเร็จ: '+e.message,false); if(rethrow) throw e; }
 }
 registerAllCustomForms();
 loadFormOverrides();

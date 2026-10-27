@@ -8862,6 +8862,8 @@ touches employee/attendance/evaluation data.
     self-eval level button, `mu_evallevel` option. Delete is refused while any employee/draft uses the key. Removed the fake "คัดลอกจากรอบก่อน" button.
     Any new level-keyed list must iterate `LV_KEYS`/`SML_FORMS`, never a literal `['op','of','ldr','mgr']`.
 
+215. **Deleting a custom form (#214) now deletes its Excel rows too.** `deleteCustomForm()` is async: after local removal it first re-pushes the `__custom__` defs row (so the next `ms365SyncFormWeights()` union-merge cannot resurrect the form) and then calls `graphDeleteTableRows('FormWeights',0,key)`; both log to the Sync Log and a failure toasts honestly ("ลบในเว็บแล้ว แต่ลบใน Excel ไม่สำเร็จ"). Needs the Worker `/rows/delete` endpoint (#209) redeployed to work in production.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
