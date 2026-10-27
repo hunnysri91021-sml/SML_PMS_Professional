@@ -3136,6 +3136,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
           <div class="cycle-field-grid">
             <div class="cycle-field"><label>ชื่อรอบประเมิน <b style="color:#c73535">*</b></label><input id="cycleNameSetup" value="FY2026 – ประจำปี 2569 (รอบประเมิน พ.ย.–ธ.ค.)"></div>
             <div class="cycle-field"><label>รหัสรอบ (ใช้อ้างอิงในข้อมูลจริง เช่น 2569) <b style="color:#c73535">*</b></label><input id="cycleYearSetup" value="2569" placeholder="เช่น 2569"></div>
+            <div class="cycle-field"><label>แสดงเกรด (A–E) ให้พนักงานเห็น</label><select id="gradeVisSetup" onchange="onGradeVisSettingChange()"><option value="0">ไม่แสดง (ค่าเริ่มต้น)</option><option value="1">แสดงเมื่ออนุมัติขั้นสุดท้ายแล้ว</option></select></div>
             <div class="cycle-field"><label>สถานะรอบ</label><select id="cycleStatusSetup"><option>กำลังดำเนินการ</option><option>แบบร่าง</option><option>ปิดรอบ</option></select></div>
             <div class="cycle-field"><label>วันที่เริ่มรอบ <b style="color:#c73535">*</b></label><input id="cycleStartSetup" type="date" value="2026-11-01"></div>
             <div class="cycle-field"><label>วันที่สิ้นสุดรอบ <b style="color:#c73535">*</b></label><input id="cycleEndSetup" type="date" value="2026-12-31"></div>
@@ -3510,6 +3511,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
+  if(p==='cycle' && typeof syncGradeVisSettingUi==='function') syncGradeVisSettingUi();
   if(p==='myresult' && typeof renderMyResult==='function') renderMyResult();
   if(p==='orgmaster' && typeof renderOrgMasterLists==='function') renderOrgMasterLists();
   if(p==='orgmaster' && typeof ms365SyncOrgMaster==='function') ms365SyncOrgMaster(true);
@@ -5665,9 +5667,10 @@ function renderMyResult(){
      Acknowledged/Calibrated) เพราะเกรดจริงอาจยังถูกปรับจาก Bell Curve ที่ขั้น Calibration อยู่ —
      printEvalForm()/buildEvalPrintPage() (#121/#123) ซ่อนแบบนี้อยู่แล้วผ่าน allApproved, จุดนี้คือ
      ที่เดียวที่ยังโชว์เกรดดิบก่อนอนุมัติจริง */
-  const isFinalResult = (typeof isFinalStatus==='function') ? isFinalStatus(latestStatus) : latestStatus==='Approved';
+  const isFinalResult = ((typeof isFinalStatus==='function') ? isFinalStatus(latestStatus) : latestStatus==='Approved') && !isGradeHiddenFor(latest[0], latest[2]);
+  const gradeHidden = isGradeHiddenFor(latest[0], latest[2]);
   set('myResultGrade', isFinalResult ? (grade||'—') : '🔒');
-  set('myResultGradeSub', isFinalResult ? ('รอบ '+latest[2]+' · ระดับ '+(latest[3]||'—')) : 'จะแสดงหลัง MD อนุมัติขั้นสุดท้าย');
+  set('myResultGradeSub', isFinalResult ? ('รอบ '+latest[2]+' · ระดับ '+(latest[3]||'—')) : (gradeHidden ? 'ไม่เปิดเผยเกรดในรอบนี้' : 'จะแสดงหลัง MD อนุมัติขั้นสุดท้าย'));
   set('myResultX', X.toFixed(2));
 
   const prev = approvedDrafts[1];
@@ -5699,7 +5702,7 @@ function renderMyResult(){
   document.getElementById('myResultHistoryRows').innerHTML = myDrafts.length
     ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>{
         const gx = Number(d[d.length-3])||0, gg = d[d.length-2], gs = d[d.length-1];
-        const rowFinal = (typeof isFinalStatus==='function') ? isFinalStatus(gs) : gs==='Approved';
+        const rowFinal = ((typeof isFinalStatus==='function') ? isFinalStatus(gs) : gs==='Approved') && !isGradeHiddenFor(d[0], d[2]);
         const gradeCell = !gg ? '—' : (rowFinal ? `<span class="grade g${gg}">${gg}</span>` : '<span title="รอ MD อนุมัติขั้นสุดท้าย">🔒</span>');
         const vis = hasVisibleResult(gs);
         return `<tr><td><b>รอบ ${d[2]}</b></td><td>${(vis&&gg)? gx.toFixed(2) : '—'}</td><td>${vis?gradeCell:'—'}</td><td>${myResultStatusLabel(gs)}</td></tr>`;
@@ -5930,8 +5933,8 @@ function printEvalForm() {
     คะแนนรวม &nbsp; X = Y + Z
   </div>
   <div class="F-result">
-    <div class="F-grade-circle" style="background:${allApproved?_gc(grade):'#94a3b8'}">
-      ${allApproved?grade:'?'}
+    <div class="F-grade-circle" style="background:${(allApproved&&!isGradeHiddenFor(empCode,printCycle))?_gc(grade):'#94a3b8'}">
+      ${(allApproved&&!isGradeHiddenFor(empCode,printCycle))?grade:'?'}
     </div>
     <div>
       <div class="F-score-main">X = ${yScore.toFixed(2)} + ${zScore.toFixed(2)} = <b>${xScore.toFixed(2)}</b> คะแนน</div>
@@ -10909,7 +10912,7 @@ function buildEvalPrintPage(d, printDate){
 
     <div class="F-sec s3"><span class="sec-num">∑</span> คะแนนรวม &nbsp; X = Y + Z</div>
     <div class="F-result">
-      <div class="F-grade-circle" style="background:${allApproved?_gc(grade):'#94a3b8'}">${allApproved?grade:'?'}</div>
+      <div class="F-grade-circle" style="background:${(allApproved&&!isGradeHiddenFor(code,cycle))?_gc(grade):'#94a3b8'}">${(allApproved&&!isGradeHiddenFor(code,cycle))?grade:'?'}</div>
       <div>
         <div class="F-score-main">X = ${yScore.toFixed(2)} + ${zScore.toFixed(2)} = <b>${xScore.toFixed(2)}</b> คะแนน</div>
         <div class="F-score-sub">${allApproved?`เกรด <b>${grade}</b>`:'รอการอนุมัติครบทุกขั้นตอน'}</div>
@@ -11734,6 +11737,28 @@ function resetScoreWeightsForLevel(lv){
   if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel();
 }
 /* ตัวเลือกปีในหน้าตั้งค่า: ทุกรอบ + ทุกปีที่มีจริง (รอบในระบบ/รอบปัจจุบัน/ปีถัดไป/ปีที่เคยตั้งค่า) */
+/* #212: Admin กำหนดว่าจะให้พนักงานเห็นเกรด (A-E) ของตัวเองหรือไม่ แยกตามรอบ — ค่าเริ่มต้น "ไม่แสดง" ทุกคน */
+const GRADE_VIS_KEY='smlPmsGradeVisibility';
+function loadGradeVisibility(){ try{ const o=JSON.parse(localStorage.getItem(GRADE_VIS_KEY)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
+function saveGradeVisibility(o){ try{ localStorage.setItem(GRADE_VIS_KEY, JSON.stringify(o)); }catch(e){} }
+function isGradeShownToEmployee(cycle){ return loadGradeVisibility()[String(cycle==null?'':cycle).trim()]===true; }
+/* ซ่อนเกรดเมื่อผู้ดูคือเจ้าของผลเอง (หรือ role พนักงานทั่วไป) และ Admin ยังไม่เปิดให้แสดงของรอบนั้น */
+function isGradeHiddenFor(empCode, cycle){
+  const me=(typeof CURRENT_SESSION_USER!=='undefined')?CURRENT_SESSION_USER:null;
+  const viewerIsOwnerOrEmp = !me || me[0]===empCode || me[2]==='emp';
+  return viewerIsOwnerOrEmp && !isGradeShownToEmployee(cycle);
+}
+function onGradeVisSettingChange(){
+  const y=(document.getElementById('cycleYearSetup')?.value||'').trim();
+  const v=document.getElementById('gradeVisSetup')?.value==='1';
+  const o=loadGradeVisibility(); if(y){ o[y]=v; saveGradeVisibility(o); }
+  if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel();
+  smlToast(v?'เปิดให้พนักงานเห็นเกรดของรอบ '+y+' แล้ว':'ซ่อนเกรดจากพนักงาน รอบ '+y+' แล้ว','ok');
+}
+function syncGradeVisSettingUi(){
+  const sel=document.getElementById('gradeVisSetup'); if(!sel) return;
+  sel.value = isGradeShownToEmployee((document.getElementById('cycleYearSetup')?.value||'').trim())?'1':'0';
+}
 const extraWeightYears = new Set();
 function getWeightYearOptions(){
   const ys = new Set(extraWeightYears);
@@ -11825,7 +11850,7 @@ async function pushFormWeightsToExcel(){
       const base = getBaseScoreWeights(lv);
       const byYear = {}; const allYears = loadScoreWeightsByYear();
       Object.keys(allYears).forEach(y=>{ if(allYears[y]?.[lv]) byYear[y]=allYears[y][lv]; });
-      const payload = { factors: SML_FORMS[lv].factors, ypct: base.ypct, zpct: base.zpct, kpct: base.kpct||0, byYear };
+      const payload = { factors: SML_FORMS[lv].factors, ypct: base.ypct, zpct: base.zpct, kpct: base.kpct||0, byYear, gradeVis: loadGradeVisibility() };
       await graphUpsertTableRow(FORM_WEIGHTS_TABLE, 0, lv, [lv, JSON.stringify(payload), new Date().toISOString()]);
     }
     if(typeof appendSyncLog==='function') appendSyncLog('Push น้ำหนักแบบประเมินเข้า Excel', true);
@@ -11864,6 +11889,9 @@ async function ms365SyncFormWeights(silent=false){
             });
             saveScoreWeightsByYear(all);
             loadScoreWeightsOverride();
+          }
+          if(!Array.isArray(parsed) && parsed.gradeVis && typeof parsed.gradeVis==='object'){
+            const gv=loadGradeVisibility(); Object.keys(parsed.gradeVis).forEach(y=>{ gv[y]=parsed.gradeVis[y]===true; }); saveGradeVisibility(gv); syncGradeVisSettingUi();
           }
           applied++;
         }
@@ -12518,6 +12546,7 @@ function saveCycleSetup(){
   if(title && data.name) title.dataset.cycleName=data.name;
   if(typeof renderCycleStats==='function') renderCycleStats();
   if(typeof pushCycleSetupToExcel==='function') pushCycleSetupToExcel();
+  if(typeof syncGradeVisSettingUi==='function') syncGradeVisSettingUi();
   smlToast('บันทึกการตั้งค่ารอบประเมินเรียบร้อย','ok');
 }
 /* ค่า "รอบ" จริงที่ทุกการบันทึกผลประเมินใหม่ต้องใช้ — อ่านจากรหัสรอบที่ Admin ตั้งไว้ในหน้า "ตั้งค่ารอบ

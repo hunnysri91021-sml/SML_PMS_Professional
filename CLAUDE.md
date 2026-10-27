@@ -8842,6 +8842,12 @@ touches employee/attendance/evaluation data.
     Calibration/Bell Curve. Employee sees only own X/Y/Z after GM approval; grade letter only after final approval (#156).
     When adding any new field to this page, ask "would an employee learn about peers or internal review stages from it?"
 
+212. **Admin-controlled grade visibility for employees (default hidden).** `GRADE_VIS_KEY` map `{cycle:true}`,
+    `isGradeHiddenFor(empCode,cycle)` hides the A-E letter when the viewer is the record's owner (or role `emp`) and Admin
+    has not enabled it for that cycle. Used in `renderMyResult` (tile + history) and both print builders. Toggle lives on the
+    cycle settings page (`gradeVisSetup`) and syncs via the FormWeights payload (`gradeVis`). Scores X/Y/Z are unaffected;
+    reviewers/admin viewing others are unaffected. Even when enabled, the grade shows only after final approval (#156).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
