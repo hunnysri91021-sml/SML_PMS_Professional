@@ -8884,6 +8884,11 @@ touches employee/attendance/evaluation data.
     ตรงตัว + แผนที่ป้ายสถานะ (stageLabel, CYCLE_PARTICIPANT_STATUS_TH) — Worker ที่มี EVAL_STATUS_ORDER ควร redeploy ให้ตรงกัน
     (ฟังก์ชันไม่ขึ้นกับมัน แต่ต้องไม่ให้สองไฟล์ drift).
 
+218. **ปรับ responsive มือถือ/แท็บเล็ต.** บล็อก `#218` ท้าย `<style>` สุด (ไม่แก้กฎเดิม): `.cycle-layout` ใช้ `minmax(0,1fr)` (เดิม 1fr ทำให้ input
+    ดันเกินจอ), `#evalSummary` เลิก sticky บนจอ ≤900px (4 การ์ดซ้อนทับเนื้อหา), grid/stat/ปุ่ม/ตัวกรอง/modal ย่อให้พอดีจอ, input 16px กัน iOS zoom,
+    sidebar มี backdrop (`.sb-backdrop`) และปิดเองเมื่อกดเมนู. ทดสอบด้วย `mob.js` (วัด overflow ทุกหน้าที่ 360/390/768px) + screenshot —
+    หน้าใหม่ควรเช็กที่ 390px เสมอ และใช้ `minmax(0,…)` กับ grid ที่มี input.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
