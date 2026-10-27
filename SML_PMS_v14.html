@@ -2033,11 +2033,10 @@ tbody tr:hover{background:#f0f6ff!important}
   <div class="ph">
     <div>
       <h2>แบบฟอร์มประเมิน</h2>
-      <p>แบบฟอร์มมาตรฐาน SML PMS แบ่งตามระดับและลักษณะงาน จำนวน 4 แบบฟอร์ม</p>
+      <p>แบบฟอร์มมาตรฐาน SML PMS แบ่งตามระดับและลักษณะงาน จำนวน 4 แบบฟอร์มมาตรฐาน + แบบฟอร์มใหม่ที่ Admin สร้างเอง</p>
     </div>
     <div class="ph-act">
-      <button class="btn" onclick="smlToast('ฟังก์ชันคัดลอกแบบฟอร์มพร้อมใช้งานในโหมด Demo','info')">📋 คัดลอกจากรอบก่อน</button>
-      <button class="btn btn-p" onclick="smlToast('กรุณาเลือก 1 ใน 4 แบบฟอร์มมาตรฐานก่อนสร้างรอบใหม่','info')">＋ สร้างแบบฟอร์ม</button>
+      <button class="btn btn-p" onclick="createCustomForm()">＋ สร้างแบบฟอร์ม</button>
     </div>
   </div>
 
@@ -4946,7 +4945,7 @@ function computeZDays(att){
   const raw = (att.sickDay||0) + (att.personalDay||0) + (att.absentDay||0)*3 + lateDays;
   return Math.min(30, Math.round(raw*1000)/1000);
 }
-function zKeyForLevel(lv){ return lv==='mgr' ? 'mgr' : (lv==='ldr'||lv==='super') ? 'ldr' : 'emp'; }
+function zKeyForLevel(lv){ lv=(typeof LEVEL_CONFIG!=='undefined'&&LEVEL_CONFIG[lv]&&LEVEL_CONFIG[lv].base)||lv; return lv==='mgr' ? 'mgr' : (lv==='ldr'||lv==='super') ? 'ldr' : 'emp'; }
 function computeZScore(lv, empCode){
   const att = getAttendanceFor(empCode);
   const zDaysExact = computeZDays(att);
@@ -5912,7 +5911,7 @@ function printEvalForm() {
     </tbody>
   </table>
 
-  ${['ldr','mgr'].includes(lv)?`
+  ${(LEVEL_CONFIG[lv]?.leaderShow||['ldr','mgr'].includes(lv))?`
   <!-- Leadership section heading -->
   <div class="F-sec s1b">
     <span class="sec-num">↳</span>
@@ -10903,7 +10902,7 @@ function buildEvalPrintPage(d, printDate){
       </tbody>
     </table>
 
-    ${['ldr','mgr'].includes(level)?`<div class="F-sec s1b"><span class="sec-num">↳</span> ด้านความสามารถในการบังคับบัญชา ( Leadership Skill )</div>`:''}
+    ${(LEVEL_CONFIG[level]?.leaderShow||['ldr','mgr'].includes(level))?`<div class="F-sec s1b"><span class="sec-num">↳</span> ด้านความสามารถในการบังคับบัญชา ( Leadership Skill )</div>`:''}
 
     <div class="F-sec s2"><span class="sec-num">2</span> ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${lcfg?.Zpct||0}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO</div>
     <div class="F-zbox">
@@ -11655,6 +11654,87 @@ const DEFAULT_SCORE_WEIGHTS = {
   mgr:{ypct:90, zpct:10, kpct:0},
 };
 const KPI_SCORE_WEIGHTS_KEY = 'smlPmsKpiScoreWeights';
+
+/* #214: แบบฟอร์มระดับใหม่ (ฟอร์มที่ 5+) — โคลนจากฟอร์มมาตรฐาน 1 ใน 4 (base) ได้ key ใหม่ (c1,c2,..) ชื่อ/สีของตัวเอง
+   ปัจจัย/น้ำหนัก/สัดส่วน Y-Z-KPI แก้ได้เอง และ Z ใช้ตารางตามฟอร์มต้นแบบ (zKeyForLevel) — นิยามเก็บ localStorage + sync
+   ผ่านตาราง FormWeights (แถว key '__custom__') */
+const CUSTOM_FORMS_KEY='smlPmsCustomForms';
+function loadCustomFormDefs(){ try{ const v=JSON.parse(localStorage.getItem(CUSTOM_FORMS_KEY)||'{}'); return (v&&typeof v==='object'&&!Array.isArray(v))?v:{}; }catch(e){ return {}; } }
+function saveCustomFormDefs(o){ localStorage.setItem(CUSTOM_FORMS_KEY, JSON.stringify(o)); }
+function registerCustomForm(key, def){
+  const b=def&&def.base; if(!SML_FORMS[b]||!LEVEL_CONFIG[b]) return false;
+  if(!SML_FORMS[key]){
+    SML_FORMS[key]=JSON.parse(JSON.stringify(SML_FORMS[b]));
+    LEVEL_CONFIG[key]=Object.assign({}, LEVEL_CONFIG[b]);
+    LV_IDX[key]=LV_IDX[b];
+    LV_KEYS.push(key);
+    DEFAULT_SCORE_WEIGHTS[key]=Object.assign({}, DEFAULT_SCORE_WEIGHTS[b]);
+  }
+  const label=String(def.label||key), color=def.color||'#7c3aed';
+  SML_FORMS[key].label=label; SML_FORMS[key].short=label; SML_FORMS[key].color=color; SML_FORMS[key].isCustom=true;
+  LEVEL_CONFIG[key].label=label; LEVEL_CONFIG[key].color=color; LEVEL_CONFIG[key].base=b;
+  return true;
+}
+function registerAllCustomForms(){ const d=loadCustomFormDefs(); Object.keys(d).forEach(k=>registerCustomForm(k,d[k])); }
+function renderCustomFormUi(){
+  const defs=loadCustomFormDefs();
+  const btns=document.getElementById('levelBtns');
+  if(btns){
+    btns.querySelectorAll('.lv-custom').forEach(e=>e.remove());
+    Object.keys(defs).forEach(k=>{ if(!LEVEL_CONFIG[k]) return; const b=document.createElement('button'); b.className='btn lv-custom'; b.id='lv-'+k; b.style.borderLeft='4px solid '+LEVEL_CONFIG[k].color; b.textContent='🆕 '+LEVEL_CONFIG[k].label; b.onclick=()=>setEvalLevel(k); btns.appendChild(b); });
+  }
+  const sel=document.getElementById('mu_evallevel');
+  if(sel){ sel.querySelectorAll('option.opt-custom').forEach(e=>e.remove()); Object.keys(defs).forEach(k=>{ if(!LEVEL_CONFIG[k]) return; const o=document.createElement('option'); o.value=k; o.className='opt-custom'; o.textContent='🆕 '+LEVEL_CONFIG[k].label; sel.appendChild(o); }); }
+  const grid=document.querySelector('#pg-tpl .form4-grid');
+  if(grid){
+    grid.querySelectorAll('.form4-custom').forEach(e=>e.remove());
+    Object.keys(defs).forEach(k=>{ const c=SML_FORMS[k]; if(!c) return;
+      const d=document.createElement('div'); d.className='form4-card form4-custom'; d.style.setProperty('--form-color',c.color); d.style.borderTop='4px solid '+c.color;
+      const base=SML_FORMS[defs[k].base]?.short||defs[k].base;
+      d.innerHTML=`<div class="form4-head"><div class="form4-color" style="background:${c.color}">★</div><div class="form4-title"><b>${c.label}</b><span>แบบฟอร์มใหม่ • อิงโครงสร้าง ${base}</span></div><span class="form4-status">Active</span></div>
+      <div class="form4-meta"><div><span>ปัจจัย</span><b>${c.factors.length} ข้อ</b></div><div><span>หน่วยรวม</span><b>${c.total}</b></div><div><span>Y / Z</span><b>${c.ypct}% / ${c.zpct}%</b></div><div><span>รหัสฟอร์ม</span><b>${k}</b></div></div>
+      <div class="form4-actions"><button class="btn btn-sm" onclick="openTplPreview('${k}')">ดูแบบฟอร์ม</button><button class="btn btn-sm btn-p" onclick="showTplDetail('${k}');document.getElementById('tplDetailArea').scrollIntoView({behavior:'smooth'})">ปัจจัย/น้ำหนัก</button><button class="btn btn-sm btn-dg" onclick="deleteCustomForm('${k}')">🗑️ ลบ</button></div>`;
+      grid.appendChild(d); });
+  }
+}
+function createCustomForm(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin เท่านั้นที่สร้างแบบฟอร์มได้','warn'); return; }
+  const name=(prompt('ชื่อแบบฟอร์มใหม่ (เช่น พนักงานขับรถ)')||'').trim();
+  if(!name) return;
+  const names=['op','of','ldr','mgr'].map((k,i)=>(i+1)+' = '+SML_FORMS[k].short).join('\n');
+  const n=parseInt(prompt('เลือกฟอร์มต้นแบบที่จะคัดลอกปัจจัยมาเป็นจุดเริ่มต้น (พิมพ์เลข 1-4)\n'+names+'\n\n(ฟอร์ม 3-4 มีส่วนภาวะผู้นำและตาราง Z ของหัวหน้า/ผจก.)','1')||'',10);
+  if(!(n>=1&&n<=4)){ smlToast('ยกเลิก — ต้องพิมพ์เลข 1-4','warn'); return; }
+  const defs=loadCustomFormDefs();
+  let i=1; while(defs['c'+i]||SML_FORMS['c'+i]) i++;
+  const key='c'+i;
+  const palette=['#7c3aed','#0d9488','#e11d48','#ca8a04','#2563eb','#9333ea'];
+  defs[key]={base:['op','of','ldr','mgr'][n-1], label:name, color:palette[(i-1)%palette.length]};
+  saveCustomFormDefs(defs); registerCustomForm(key,defs[key]);
+  saveFormOverrides(); loadScoreWeightsOverride();
+  renderCustomFormUi(); pushCustomFormDefsToExcel();
+  if(typeof appendAuditLog==='function') appendAuditLog('settings','สร้างแบบฟอร์มประเมินใหม่', name, key);
+  smlToast('สร้างแบบฟอร์ม "'+name+'" แล้ว — แก้ปัจจัย/น้ำหนักได้ที่ปุ่ม "ปัจจัย/น้ำหนัก" และกำหนดให้พนักงานที่หน้าแก้ไขพนักงาน','ok');
+}
+function deleteCustomForm(key){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin','warn'); return; }
+  const used=MASTER_USERS.filter(u=>u[18]===key).length;
+  if(used){ smlToast('ลบไม่ได้ — มีพนักงาน '+used+' คนถูกกำหนดให้ใช้แบบฟอร์มนี้ (เปลี่ยนก่อน)','warn'); return; }
+  if(getDrafts().some(d=>d[3]===key)){ smlToast('ลบไม่ได้ — มีใบประเมินที่ใช้แบบฟอร์มนี้แล้ว','warn'); return; }
+  if(!confirm('ลบแบบฟอร์ม "'+(SML_FORMS[key]?.label||key)+'" ? (ข้อมูลแถวใน Excel ตาราง FormWeights ต้องลบมือ)')) return;
+  const defs=loadCustomFormDefs(); delete defs[key]; saveCustomFormDefs(defs);
+  delete SML_FORMS[key]; delete LEVEL_CONFIG[key]; delete LV_IDX[key]; delete DEFAULT_SCORE_WEIGHTS[key];
+  const i=LV_KEYS.indexOf(key); if(i>=0) LV_KEYS.splice(i,1);
+  saveFormOverrides(); renderCustomFormUi(); pushCustomFormDefsToExcel();
+  smlToast('ลบแบบฟอร์มแล้ว','ok');
+}
+async function pushCustomFormDefsToExcel(){
+  const cfg=loadMs365Config(); if(!isMs365Configured(cfg)) return;
+  try{ await graphUpsertTableRow('FormWeights',0,'__custom__',['__custom__',JSON.stringify({defs:loadCustomFormDefs()}),new Date().toISOString()]); if(typeof appendSyncLog==='function') appendSyncLog('Push นิยามแบบฟอร์มใหม่เข้า Excel',true); }
+  catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('Push นิยามแบบฟอร์มใหม่ไม่สำเร็จ: '+e.message,false); }
+}
+registerAllCustomForms();
+loadFormOverrides();
+setTimeout(()=>{ try{ renderCustomFormUi(); }catch(e){} },300);
 function applyScoreWeightsToConfigs(weights){
   Object.keys(weights).forEach(lv=>{
     const w = weights[lv]; if(!w) return;
@@ -11873,6 +11953,10 @@ async function ms365SyncFormWeights(silent=false){
     const rows = await graphListTableRows(FORM_WEIGHTS_TABLE);
     if(!rows.length) return;
     let applied = 0;
+    rows.forEach(r=>{
+      if(String(r[0]??'').trim()!=='__custom__') return;
+      try{ const remote=JSON.parse(r[1])?.defs||{}; const local=loadCustomFormDefs(); Object.keys(remote).forEach(k=>{ if(!local[k]) local[k]=remote[k]; }); saveCustomFormDefs(local); registerAllCustomForms(); renderCustomFormUi(); }catch(e){}
+    });
     rows.forEach(r=>{
       const lv = String(r[0]??'').trim();
       if(!SML_FORMS[lv]) return;

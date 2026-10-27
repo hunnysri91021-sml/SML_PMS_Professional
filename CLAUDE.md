@@ -8854,6 +8854,14 @@ touches employee/attendance/evaluation data.
     always; others only at `Approved`, or at `Calibrated` if the role has the `viewCalibGrade` permission (#180). X/Y/Z are
     unaffected. Any new aggregate/export that reads `d[len-2]` must go through this helper.
 
+214. **"สร้างแบบฟอร์ม" button on the template page was a fake toast (CLAUDE.md #10).** Now `createCustomForm()` (admin-only) clones one of
+    the 4 standard forms (op/of/ldr/mgr = `base`) into a new level key `c1,c2,…` with its own name/colour: `registerCustomForm()` adds it to
+    `SML_FORMS`, `LEVEL_CONFIG` (with `.base`), `LV_IDX`, `LV_KEYS`, `DEFAULT_SCORE_WEIGHTS`. Z table follows the base (`zKeyForLevel`), leader
+    section follows `LEVEL_CONFIG[lv].leaderShow` (not a hardcoded ldr/mgr list). Definitions live in `smlPmsCustomForms` and sync via the
+    FormWeights row `__custom__` (Excel level column is a free string, so records work unchanged). UI (`renderCustomFormUi`): template card,
+    self-eval level button, `mu_evallevel` option. Delete is refused while any employee/draft uses the key. Removed the fake "คัดลอกจากรอบก่อน" button.
+    Any new level-keyed list must iterate `LV_KEYS`/`SML_FORMS`, never a literal `['op','of','ldr','mgr']`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
