@@ -8864,6 +8864,16 @@ touches employee/attendance/evaluation data.
 
 215. **Deleting a custom form (#214) now deletes its Excel rows too.** `deleteCustomForm()` is async: after local removal it first re-pushes the `__custom__` defs row (so the next `ms365SyncFormWeights()` union-merge cannot resurrect the form) and then calls `graphDeleteTableRows('FormWeights',0,key)`; both log to the Sync Log and a failure toasts honestly ("ลบในเว็บแล้ว แต่ลบใน Excel ไม่สำเร็จ"). Needs the Worker `/rows/delete` endpoint (#209) redeployed to work in production.
 
+216. **Calibration/ใบประเมินรอบใหญ่ 4 ข้อ.** (1) ช่อง "ผู้ถูกประเมิน ลงนามรับทราบ" ในใบพิมพ์/ฟอร์มหน้าจอแสดง **วันที่รับทราบ** จริง
+    ผ่าน `ackDateText(code,cycle)` = `getStageSigner(...,'Acknowledged').at` (เว็บบันทึกเองตอนกด, LINE มากับแถว Approvals ที่ Worker เขียน
+    แล้ว `ms365SyncStageSigners` ดึงกลับ) ไม่มีข้อมูล = ว่าง ไม่เดาวันที่. (2) หน้า L3 (`renderReviewQueue`) และ L4 (`renderGmApproveQueue`)
+    ไม่แสดงเกรดชั่วคราวแล้ว (ตัดคอลัมน์ + colspan) — L2 หน้าเดิมยังแสดง. (3) Calibration แสดง Z (`d[len-4]`) ทั้งตาราง/preview/Export;
+    ลำดับตัดสินเมื่อคะแนนเท่ากันตั้งได้: `BELL_TIE_KEY` + `BELL_TIE_CATALOG` (คะแนนดิบ=Y, Z, วันเข้างาน, รหัส, วินัย, ขาด, สาย, วันลารวม)
+    เพิ่ม/ลบ/เลื่อนได้ (Admin), รหัสพนักงานเป็นตัวตัดท้ายเสมอ, เปลี่ยนลำดับแล้ว invalidate `bellCurveResult`, sync ผ่าน FormWeights แถว
+    `__tie__` (ใหม่กว่าชนะด้วย `at`), อยู่ในการ์ด "การคำนวณเกรด (Bell Curve)". (4) ส่วนเปรียบเทียบแสดงคะแนนหลังปรับ+Z+เกรด+อันดับ (เรียงตามกลุ่ม/อันดับ)
+    และปุ่ม "📤 ยืนยันส่งผลไป MD/AMD" = `confirmAndSendToMd()` (confirm แล้วเรียก `confirmCalibration()` ตัวเดิม — สถานะ Calibrated คือเข้าคิว MD/AMD
+    ไม่มีสถานะใหม่). เกรด Bell Curve ยังไม่เปลี่ยนจนกว่าจะกดยืนยัน.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

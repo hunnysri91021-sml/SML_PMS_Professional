@@ -1903,7 +1903,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewFilter" onchange="renderReviewQueue()" title="กรองตามหัวหน้าแผนก เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
       <div class="al al-w" id="reviewFilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.review-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.review-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
         <tbody id="reviewRows"></tbody>
       </table></div>
     </div>
@@ -1918,7 +1918,7 @@ tbody tr:hover{background:#f0f6ff!important}
       <div class="card-h"><h3>ใบประเมินรออนุมัติ GM</h3><div class="r"><select class="btn" id="gmApproveFilter" onchange="renderGmApproveQueue()" title="กรองตามผู้จัดการส่วน เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="gmApproveCount">0 รายการ</span></div></div>
       <div class="al al-w" id="gmApproveFilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
         <tbody id="gmApproveRows"></tbody>
       </table></div>
     </div>
@@ -1930,7 +1930,7 @@ tbody tr:hover{background:#f0f6ff!important}
     <div class="ph-act"><button class="btn btn-dg" id="resetCalibBtn" onclick="resetCalibration()" title="ย้อนรายการที่ Calibrate แล้ว (ยังไม่ Approved) กลับมารอ Calibration ใหม่ — Admin/HR เท่านั้น">↩️ รีเซ็ต Calibration</button> <button class="btn btn-ok" id="confirmCalibBtn" style="opacity:.55" onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
 
     <div class="card calib-step-card" style="margin-bottom:18px">
-      <div class="card-h"><h3>⚙️ ตั้งค่า Bell Curve</h3></div>
+      <div class="card-h"><h3>⚙️ การคำนวณเกรด (Bell Curve)</h3></div>
       <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <label style="font-size:13px;color:#475569;font-weight:700">เทียบกันภายในระดับ:</label>
         <select id="calibBellCurveField" onchange="onCalibBellCurveFieldChange()" style="padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px">
@@ -1948,6 +1948,7 @@ tbody tr:hover{background:#f0f6ff!important}
         <span id="calibBellCurveStatus" class="calib-bc-status"></span>
       </div>
       <div style="padding:0 18px 14px;font-size:12px;color:#94a3b8">แยกจัดอันดับตามระดับฟอร์มประเมิน (ปฏิบัติการ/สำนักงาน/หัวหน้า/ผจก.ส่วน) ภายในหน่วยงานเดียวกันก่อนจัดสัดส่วนเกรด — เลือก "เฉพาะค่า" เป็นกลุ่ม/แผนก/ส่วน/ฝ่ายใดกลุ่มหนึ่งเพื่อคำนวณและยืนยันทีละกลุ่มได้ (รายการนอกกลุ่มที่เลือกจะรอรอบถัดไป) ถ้าแก้ไข "คะแนนหลังปรับ" หรือเปลี่ยนกลุ่ม/ค่าหลังคำนวณแล้ว ต้องกดคำนวณใหม่อีกครั้งก่อนยืนยัน</div>
+      <div id="calibTieOrderBox" style="padding:4px 18px 14px"></div>
       <div id="calibBellCurveNamesPreview" style="padding:0 18px 16px"></div>
     </div>
 
@@ -1978,7 +1979,7 @@ tbody tr:hover{background:#f0f6ff!important}
         <button class="btn btn-sm" onclick="exportCalibTableList()" title="Export ตารางนี้ (ตามตัวกรองที่เลือกไว้) เป็นไฟล์ Excel (CSV)" style="margin-left:auto">📥 Export Excel (ตารางนี้)</button>
       </div>
       <div class="tw calib-table-wrap"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงาน<br>รับทราบ (X)</th><th>เกรดเดิม<br><small>(ชั่วคราว)</small></th><th>คะแนนหลังปรับ</th><th>เกรด<br>Bell Curve</th><th>ใบเตือน /<br>หมายเหตุวินัย (HR)</th><th>การดำเนินการ</th></tr></thead>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงาน<br>รับทราบ (X)</th><th>คะแนน<br>การมาทำงาน (Z)</th><th>เกรดเดิม<br><small>(ชั่วคราว)</small></th><th>คะแนนหลังปรับ</th><th>เกรด<br>Bell Curve</th><th>ใบเตือน /<br>หมายเหตุวินัย (HR)</th><th>การดำเนินการ</th></tr></thead>
         <tbody id="calibRows"></tbody>
       </table></div>
     </div>
@@ -5536,6 +5537,14 @@ function _lbl(sc,w){
    (officialTitle) เลย แปลว่าขั้นนี้ไม่มีผู้สอบทานจริงอยู่เลย (ถูกข้ามอัตโนมัติ ตาม
    skipEmptyReviewStages()/CLAUDE.md #128) — เดิมจะขึ้น "✓ ยืนยันแล้ว (—)" หลอกว่ามีคนลงนามจริง
    เปลี่ยนเป็นชิปสีอื่น "⏩ ข้ามขั้นตอน" พร้อมเหตุผลจริงแทน ไม่โชว์ชื่อ/วันที่ปลอม */
+/* วันที่พนักงานรับทราบผล — อ่านจาก per-stage signer ของขั้น Acknowledged (บันทึกทั้งตอนกดบนเว็บและ
+   ตอนซิงก์กลับจากตาราง Approvals ซึ่งรวมการรับทราบผ่าน LINE ด้วย) ไม่มีข้อมูล = คืนค่าว่าง ไม่เดาวันที่ */
+function ackDateText(code, cycle){
+  const rec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'Acknowledged') : null;
+  if(!rec || !rec.at) return '';
+  const dt = new Date(rec.at);
+  return isNaN(dt) ? '' : dt.toLocaleDateString('th-TH');
+}
 function _sign(roleTh, officialTitle, ok, signedName, signedDate, channelLabel, skippedNote) {
   const hasRealSigner = !!(signedName && signedName!=='—');
   const hasChainName = !!(officialTitle && officialTitle!=='—');
@@ -5584,7 +5593,7 @@ function buildReviewerSignFlowHtml(code, cycle, lv){
   const gmNoReviewer = (typeof resolveGmReviewer==='function') && !resolveGmReviewer(emp);
   const gmVisible = (typeof hasVisibleResult==='function') ? hasVisibleResult(status||'') : rank>=4;
   return `<div class="F-signs s4">
-    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=(typeof evalStatusRank==='function'?evalStatusRank('Acknowledged'):0), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):'')}
+    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=(typeof evalStatusRank==='function'?evalStatusRank('Acknowledged'):0), empName, ackDateText(code,cycle), (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):'')}
     ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
     ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
     ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, gmVisible, gmSignerRec?gmSignerRec.name:'', gmSignerRec?new Date(gmSignerRec.at).toLocaleDateString('th-TH'):'', '', gmNoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
@@ -5996,7 +6005,7 @@ function printEvalForm() {
          จริงที่ #61 ส่ง) และพนักงานกดรับทราบเองที่หน้า "6. ผลประเมิน" ทำให้สถานะขยับเป็น Acknowledged
          (acknowledgeMyResult(), #60/#61) — ผู้ใช้ขอให้ลงชื่อพนักงานเฉพาะตอนที่ส่งให้รับทราบแล้วจริงๆ
          จึงเปลี่ยนเงื่อนไขเป็น liveRank>=evalStatusRank('Acknowledged') ตรงตามความหมายของป้ายเอง */
-    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=evalStatusRank('Acknowledged'), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(empCode+'|'+printCycle):'')}
+    ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=evalStatusRank('Acknowledged'), empName, ackDateText(empCode,printCycle), (typeof ackChannelLabel==='function')?ackChannelLabel(empCode+'|'+printCycle):'')}
     ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, liveRank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
     ${_sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, liveRank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
     ${_sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, gmVisible, gmSignerRec?gmSignerRec.name:'', gmSignerRec?new Date(gmSignerRec.at).toLocaleDateString('th-TH'):'', '', gmNoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
@@ -8101,22 +8110,101 @@ function saveBellCurveGroupField(v){ try{ localStorage.setItem(BELL_CURVE_GROUP_
    ที่คำนวณจากคะแนนคนละค่ากับที่กำลังจะบันทึกจริง */
 let bellCurveResult = null; // {fieldKey, cycle, byKey: {draftKey: {grade, rank, n, groupLabel}}}
 
-/* เกณฑ์ตัดสินเมื่อคะแนน X เท่ากัน ตามข้อ 6.8 ของระเบียบจริง เรียงลำดับ:
-   1) คะแนนดิบก่อนแปลงอัตราส่วน — ระบบนี้ไม่ได้เก็บคะแนนดิบก่อนคูณน้ำหนักฟอร์มแยกจาก Y ไว้ต่างหาก จึงใช้
-      Y (คะแนนผลการปฏิบัติงานที่ถ่วงน้ำหนักแล้ว) เป็นค่าใกล้เคียงที่สุดที่มีจริง — เป็นข้อจำกัดที่ทราบแล้ว
-   2) คะแนนการมาปฏิบัติงาน (Z)
-   3) อายุงาน (จาก u[14] วันเริ่มงาน — ยิ่งเริ่มงานมาก่อนยิ่งอาวุโสกว่า)
-   4) วันเริ่มงาน (ซ้ำกับข้อ 3 ในทางปฏิบัติ แต่ใส่ไว้ตามระเบียบ)
-   5) รหัสพนักงาน (เรียงจากน้อยไปมาก เพื่อให้ผลลัพธ์กำหนดแน่นอนเสมอ) */
+/* เกณฑ์ตัดสินเมื่อคะแนน X เท่ากัน — Admin/HR กำหนดลำดับเองได้ (ผู้ใช้สั่ง) เก็บใน BELL_TIE_KEY แล้ว sync ผ่านตาราง
+   FormWeights (แถว '__tie__') ให้ทุกเครื่องใช้ลำดับเดียวกัน ค่าเริ่มต้นตามระเบียบข้อ 6.8:
+   1) คะแนนดิบ — ระบบไม่ได้เก็บคะแนนดิบก่อนคูณน้ำหนักแยกจาก Y จึงใช้ Y (ผลปฏิบัติงานถ่วงน้ำหนัก) เป็นค่าใกล้เคียงสุด
+   2) คะแนนการมาทำงาน (Z) 3) วันเข้างาน (เริ่มก่อน=อาวุโสกว่า) 4) รหัสพนักงาน — และมีรหัสพนักงานเป็นตัวตัดสินท้ายสุด
+   เสมอ (ไม่ซ้ำกัน) ผลลัพธ์จึงกำหนดแน่นอนทุกครั้ง; เพิ่ม "เงื่อนไขอื่น" ได้จาก BELL_TIE_CATALOG */
+const BELL_TIE_KEY = 'smlPmsBellTieOrder';
+const BELL_TIE_DEFAULT = ['raw','z','start','code'];
+function _tn(v){ return Number(v)||0; }
+const BELL_TIE_CATALOG = {
+  raw:        { label:'คะแนนดิบ (Y ผลปฏิบัติงาน) — มากกว่าก่อน', cmp:(a,b)=>_tn(b.draft[b.draft.length-5])-_tn(a.draft[a.draft.length-5]) },
+  z:          { label:'คะแนนการมาทำงาน (Z) — มากกว่าก่อน', cmp:(a,b)=>_tn(b.draft[b.draft.length-4])-_tn(a.draft[a.draft.length-4]) },
+  start:      { label:'วันเข้างาน — เริ่มงานก่อน(อาวุโสกว่า)มาก่อน', cmp:(a,b)=>{ const x=thaiDateToIso(a.emp[14]||''), y=thaiDateToIso(b.emp[14]||''); return (x&&y&&x!==y) ? (x<y?-1:1) : 0; } },
+  code:       { label:'รหัสพนักงาน — น้อยไปมาก', cmp:(a,b)=>String(a.emp[0]||'').localeCompare(String(b.emp[0]||''),undefined,{numeric:true}) },
+  discipline: { label:'คะแนนด้านวินัย (ปัจจัยที่ 7) — มากกว่าก่อน', cmp:(a,b)=>_tn(b.draft[10])-_tn(a.draft[10]) },
+  absent:     { label:'วันขาดงาน — น้อยกว่าก่อน', cmp:(a,b)=>_tn(getAttendanceFor(a.emp[0]).absentDay)-_tn(getAttendanceFor(b.emp[0]).absentDay) },
+  late:       { label:'จำนวนครั้งมาสาย+กลับก่อน — น้อยกว่าก่อน', cmp:(a,b)=>{ const f=e=>{const t=getAttendanceFor(e[0]); return _tn(t.lateCount)+_tn(t.earlyCount);}; return f(a.emp)-f(b.emp); } },
+  leave:      { label:'วันลารวม (สูตร Z) — น้อยกว่าก่อน', cmp:(a,b)=>computeZDays(getAttendanceFor(a.emp[0]))-computeZDays(getAttendanceFor(b.emp[0])) }
+};
+function loadBellTieStore(){
+  try{ const v=JSON.parse(localStorage.getItem(BELL_TIE_KEY)||'null'); if(v && Array.isArray(v.order)) return v; }catch(e){}
+  return null;
+}
+function loadBellTieOrder(){
+  const st = loadBellTieStore();
+  const seen = new Set(), out = [];
+  (st ? st.order : BELL_TIE_DEFAULT).forEach(k=>{ if(BELL_TIE_CATALOG[k] && !seen.has(k)){ seen.add(k); out.push(k); } });
+  return out.length ? out : BELL_TIE_DEFAULT.slice();
+}
+function saveBellTieOrder(order){
+  try{ localStorage.setItem(BELL_TIE_KEY, JSON.stringify({ order, at:new Date().toISOString() })); }catch(e){}
+  bellCurveResult = null;
+  if(typeof pushBellTieToExcel==='function') pushBellTieToExcel();
+  renderCalibTieOrderUi();
+  if(typeof updateCalibConfirmLock==='function') updateCalibConfirmLock();
+  if(typeof applyBellCurveResultToCells==='function') document.querySelectorAll('.calib-bc-cell').forEach(c=>{ c.innerHTML='<span class="calib-bc-pending">ยังไม่คำนวณ</span>'; });
+  if(typeof renderCalibBellCurveNamesPreview==='function') renderCalibBellCurveNamesPreview();
+}
+function moveBellTie(i, delta){
+  const o = loadBellTieOrder(), j = i+delta;
+  if(j<0 || j>=o.length) return;
+  [o[i],o[j]] = [o[j],o[i]];
+  saveBellTieOrder(o);
+}
+function removeBellTie(i){
+  const o = loadBellTieOrder();
+  if(o.length<=1){ smlToast('ต้องมีเงื่อนไขอย่างน้อย 1 ข้อ','warn'); return; }
+  o.splice(i,1);
+  saveBellTieOrder(o);
+}
+function addBellTie(){
+  const sel = document.getElementById('calibTieAddSel');
+  const k = sel ? sel.value : '';
+  if(!k || !BELL_TIE_CATALOG[k]) { smlToast('เลือกเงื่อนไขที่จะเพิ่มก่อน','warn'); return; }
+  const o = loadBellTieOrder();
+  if(o.includes(k)) return;
+  o.push(k);
+  saveBellTieOrder(o);
+}
+function resetBellTieOrder(){
+  if(!confirm('รีเซ็ตลำดับเงื่อนไขกรณีคะแนนเท่ากันเป็นค่าเริ่มต้น (คะแนนดิบ → คะแนนการมาทำงาน → วันเข้างาน → รหัสพนักงาน)?')) return;
+  saveBellTieOrder(BELL_TIE_DEFAULT.slice());
+}
+function renderCalibTieOrderUi(){
+  const box = document.getElementById('calibTieOrderBox');
+  if(!box) return;
+  const o = loadBellTieOrder();
+  const canEdit = isAdminOrSysadmin();
+  const items = o.map((k,i)=>`<li style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed #e2e8f0">
+      <b style="min-width:22px;color:#1d4ed8">${i+1}.</b><span style="flex:1;font-size:12.5px">${BELL_TIE_CATALOG[k].label}</span>
+      ${canEdit?`<button class="btn btn-sm" onclick="moveBellTie(${i},-1)" ${i===0?'disabled':''} title="เลื่อนขึ้น">▲</button><button class="btn btn-sm" onclick="moveBellTie(${i},1)" ${i===o.length-1?'disabled':''} title="เลื่อนลง">▼</button><button class="btn btn-sm btn-dg" onclick="removeBellTie(${i})" title="เอาออก">✖</button>`:''}</li>`).join('');
+  const addable = Object.keys(BELL_TIE_CATALOG).filter(k=>!o.includes(k));
+  const codeIdx = o.indexOf('code');
+  const warn = (codeIdx>=0 && codeIdx<o.length-1) ? `<div style="margin-top:6px;font-size:11.5px;color:#b45309">⚠️ เงื่อนไขที่อยู่หลัง "รหัสพนักงาน" จะไม่ถูกใช้ เพราะรหัสพนักงานไม่ซ้ำกัน — ควรย้ายรหัสพนักงานไว้ท้ายสุด</div>` : '';
+  box.innerHTML = `<div style="font-size:13px;font-weight:700;color:#475569;margin-bottom:4px">⚖️ เงื่อนไขเมื่อคะแนนเท่ากัน (พิจารณาตามลำดับ)</div>
+    <ol style="list-style:none;margin:0;padding:0">${items}</ol>${warn}
+    ${canEdit?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <select id="calibTieAddSel" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:12.5px"><option value="">+ เพิ่มเงื่อนไขอื่น…</option>${addable.map(k=>`<option value="${k}">${BELL_TIE_CATALOG[k].label}</option>`).join('')}</select>
+      <button class="btn btn-sm btn-p" onclick="addBellTie()">เพิ่ม</button>
+      <button class="btn btn-sm" onclick="resetBellTieOrder()">↩️ รีเซ็ตเป็นค่าเริ่มต้น</button></div>`:'<div style="margin-top:6px;font-size:11.5px;color:#94a3b8">เฉพาะ Admin/HR ที่แก้ลำดับเงื่อนไขได้</div>'}
+    <div style="margin-top:6px;font-size:11.5px;color:#94a3b8">คะแนนเท่ากันจะตัดสินตามเงื่อนไขข้อ 1 ก่อน ถ้ายังเท่ากันจึงดูข้อ 2, 3 … ตามลำดับ (ใช้รหัสพนักงานเป็นตัวตัดสินท้ายสุดเสมอ) — ถ้าเปลี่ยนลำดับหลังคำนวณแล้ว ต้องกดคำนวณ Bell Curve ใหม่</div>`;
+}
+async function pushBellTieToExcel(){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)) return;
+  const st = loadBellTieStore() || { order:BELL_TIE_DEFAULT.slice(), at:new Date().toISOString() };
+  try{ await graphUpsertTableRow('FormWeights',0,'__tie__',['__tie__',JSON.stringify(st),new Date().toISOString()]); if(typeof appendSyncLog==='function') appendSyncLog('Push ลำดับเงื่อนไขตัดสินคะแนนเท่ากันเข้า Excel',true); }
+  catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('Push ลำดับเงื่อนไขตัดสินคะแนนเท่ากันไม่สำเร็จ: '+(e&&e.message||e),false); }
+}
 function compareBellCurveTie(a, b){
-  const dA = a.draft, dB = b.draft;
-  const yA = Number(dA[dA.length-5])||0, yB = Number(dB[dB.length-5])||0;
-  if(yB !== yA) return yB - yA;
-  const zA = Number(dA[dA.length-4])||0, zB = Number(dB[dB.length-4])||0;
-  if(zB !== zA) return zB - zA;
-  const startA = thaiDateToIso(a.emp[14]||''), startB = thaiDateToIso(b.emp[14]||'');
-  if(startA && startB && startA !== startB) return startA < startB ? -1 : 1; // เริ่มงานก่อน = อาวุโสกว่า = มาก่อน
-  return (a.emp[0]||'').localeCompare(b.emp[0]||'');
+  const order = loadBellTieOrder();
+  for(const k of order){
+    const r = BELL_TIE_CATALOG[k].cmp(a,b);
+    if(r) return r;
+  }
+  return BELL_TIE_CATALOG.code.cmp(a,b);
 }
 
 function getBellCurveGroupValue(emp, fieldKey){
@@ -8179,21 +8267,42 @@ function renderCalibBellCurveNamesPreview(){
      เหมือนก่อนหน้านี้ — ถ้า key นี้ยังไม่มีผลคำนวณ (ยังไม่กดคำนวณ หรืออยู่นอกกลุ่ม/ค่าที่เลือกคำนวณรอบนี้)
      ยังคงแสดงเกรดชั่วคราวเดิมไปก่อน (ตรงกับที่ตารางหลักก็ยังโชว์ "ยังไม่คำนวณ" อยู่) */
   const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
-  const rows = roster.map(r=>{
-    const key = draftKey(r.draft);
+  /* ผู้ใช้สั่ง: ส่วนเปรียบเทียบต้องแสดงข้อมูลที่ผ่านการปรับ/คำนวณเกรดแล้ว (คะแนนหลังปรับ + Z + เกรด Bell Curve +
+     อันดับ) และมีปุ่มยืนยันส่งผลไป MD/AMD — เรียงตามกลุ่มเทียบแล้วอันดับเมื่อคำนวณแล้ว */
+  const decorated = roster.map(r=>({ r, key:draftKey(r.draft), bc:bcByKey[draftKey(r.draft)] }));
+  if(Object.keys(bcByKey).length){
+    decorated.sort((x,y)=>{
+      if(!!x.bc!==!!y.bc) return x.bc ? -1 : 1;
+      if(x.bc && y.bc){ if(x.bc.groupLabel!==y.bc.groupLabel) return x.bc.groupLabel.localeCompare(y.bc.groupLabel,'th'); return x.bc.rank-y.bc.rank; }
+      return 0;
+    });
+  }
+  const computed = decorated.filter(x=>x.bc).length;
+  const rows = decorated.map(({r,key,bc})=>{
     const X = Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(r.draft[r.draft.length-3])||0;
-    const bc = bcByKey[key];
     const gradeCell = bc
       ? `<span class="grade g${bc.grade}">${bc.grade}</span><br><small style="color:#64748b;font-size:10px">อันดับ ${bc.rank}/${bc.n}</small>`
       : provisionalGradeCell(r.draft[r.draft.length-2]);
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
-    return `<tr><td>${name}</td><td style="color:#94a3b8;font-size:11px">${r.emp[0]}</td><td style="font-size:11px">${dept}</td><td style="text-align:center">${X}</td><td style="text-align:center">${gradeCell}</td></tr>`;
+    const Zs = (Number(r.draft[r.draft.length-4])||0).toFixed(2);
+    return `<tr><td>${name}</td><td style="color:#94a3b8;font-size:11px">${r.emp[0]}</td><td style="font-size:11px">${dept}</td><td style="text-align:center">${X}</td><td style="text-align:center">${Zs}</td><td style="text-align:center">${gradeCell}</td></tr>`;
   }).join('');
-  box.innerHTML = `<div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px">รายชื่อในกลุ่มที่เลือก (${roster.length} คน)</div>
-    <div class="tw" style="max-height:220px;overflow-y:auto"><table>
-      <thead><tr><th>ชื่อ</th><th>รหัส</th><th>หน่วยงาน</th><th>X</th><th>เกรด${Object.keys(bcByKey).length?'':'ชั่วคราว'}</th></tr></thead>
+  const sendBtn = computed
+    ? `<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="btn btn-ok" onclick="confirmAndSendToMd()">📤 ยืนยันส่งผลไป MD/AMD (${computed} รายการ)</button><span style="font-size:11.5px;color:#64748b">กดแล้วจะบันทึกเกรด Bell Curve + คะแนนหลังปรับ และส่งเข้าคิวอนุมัติขั้นสุดท้าย MD/AMD</span></div>`
+    : `<div style="margin-top:8px;font-size:11.5px;color:#94a3b8">กด "📊 คำนวณ Bell Curve" ก่อน แล้วปุ่มยืนยันส่งผลไป MD/AMD จะแสดงที่นี่</div>`;
+  box.innerHTML = `<div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px">ผลเปรียบเทียบในกลุ่มที่เลือก (${roster.length} คน${computed?` · คำนวณแล้ว ${computed} คน`:''})</div>
+    <div class="tw" style="max-height:260px;overflow-y:auto"><table>
+      <thead><tr><th>ชื่อ</th><th>รหัส</th><th>หน่วยงาน</th><th>คะแนนหลังปรับ (X)</th><th>คะแนนการมาทำงาน (Z)</th><th>เกรด${computed?'':'ชั่วคราว'}</th></tr></thead>
       <tbody>${rows}</tbody>
-    </table></div>`;
+    </table></div>${sendBtn}`;
+}
+/* ปุ่มยืนยันส่งผลไป MD/AMD ในส่วนเปรียบเทียบ — ถามยืนยันก่อน แล้วเรียก confirmCalibration() ตัวเดียวกับปุ่ม
+   ด้านบน (สถานะ Calibrated = เข้าคิว "อนุมัติขั้นสุดท้าย MD/AMD" ทันที ไม่มีกลไกส่งซ้ำแยกอีกชุด) */
+function confirmAndSendToMd(){
+  const n = bellCurveResult ? Object.keys(bellCurveResult.byKey).length : 0;
+  if(!n){ smlToast('กรุณากด "📊 คำนวณ Bell Curve" ก่อน','warn'); return; }
+  if(!confirm('ยืนยันส่งผล Calibration '+n+' รายการไปให้ MD/AMD อนุมัติขั้นสุดท้าย?\n\nเกรดตาม Bell Curve และคะแนนหลังปรับจะถูกบันทึก (ถ้าต้องแก้ภายหลังใช้ปุ่ม "รีเซ็ต Calibration" ได้ก่อน MD/AMD อนุมัติ)')) return;
+  return confirmCalibration();
 }
 /* เปลี่ยน field (กลุ่ม/แผนก/ส่วน/ฝ่าย) ต้องเติม dropdown ค่าใหม่ทันที (ค่าของ field เดิมใช้กับ field
    ใหม่ไม่ได้) และ invalidate ผล Bell Curve เดิม — เหมือนกลไก "ต้องคำนวณใหม่หลังแก้ไข" ของ #133/#155 */
@@ -8229,7 +8338,7 @@ function exportCalibScopedList(){
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
   const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
   const anyComputed = roster.some(r=>bcByKey[draftKey(r.draft)]);
-  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','หน่วยงาน','ระดับฟอร์ม','คะแนน (X)', anyComputed ? 'เกรด (Bell Curve)' : 'เกรดชั่วคราว', 'อันดับ'];
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','หน่วยงาน','ระดับฟอร์ม','คะแนน (X)','คะแนนการมาทำงาน (Z)', anyComputed ? 'เกรด (Bell Curve)' : 'เกรดชั่วคราว', 'อันดับ'];
   const rows = roster.map(r=>{
     const key = draftKey(r.draft);
     const X = Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(r.draft[r.draft.length-3])||0;
@@ -8238,7 +8347,7 @@ function exportCalibScopedList(){
     const rankTxt = bc ? (bc.rank+'/'+bc.n) : '';
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const lv = getAssignedEvalLevel(r.emp) || r.draft[3] || '';
-    return [r.emp[0], name, dept, lv, X, grade, rankTxt];
+    return [r.emp[0], name, dept, lv, X, (Number(r.draft[r.draft.length-4])||0).toFixed(2), grade, rankTxt];
   });
   const scopeTag = (specificValue || 'ทั้งหมด').replace(/[^฀-๿a-zA-Z0-9]+/g,'_');
   downloadCsv(`Calibration_${BELL_CURVE_GROUP_LABELS[fieldKey].split(' ')[0]}_${scopeTag}_${getCurrentEvalCycleYear()}.csv`, headers, rows);
@@ -9686,24 +9795,23 @@ function renderReviewQueue(){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="3" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
-    const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
+    /* L3/L4 ไม่แสดงเกรด (ผู้ใช้สั่ง) — เกรดที่เห็นระหว่างทางเป็นเกรดชั่วคราว อาจทำให้เข้าใจผิดว่าเป็นเกรดจริง */
+    const d = r.draft, X = d[d.length-3];
     if(r.state==='done'){
       return `<tr><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td style="text-align:center">${provisionalGradeCell(grade)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}"></td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center">${provisionalGradeCell(grade)}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('review-chk', checkedKeys);
 }
 /* Push ประวัติการอนุมัติ/ตีกลับแต่ละขั้นขึ้น Excel ตาราง Approvals แบบ append (เหตุการณ์ 1 ครั้ง =
@@ -9778,24 +9886,23 @@ function renderGmApproveQueue(){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="3" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
-    const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
+    /* L3/L4 ไม่แสดงเกรด (ผู้ใช้สั่ง) — เกรดที่เห็นระหว่างทางเป็นเกรดชั่วคราว อาจทำให้เข้าใจผิดว่าเป็นเกรดจริง */
+    const d = r.draft, X = d[d.length-3];
     if(r.state==='done'){
       return `<tr><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td style="text-align:center">${provisionalGradeCell(grade)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="gm-chk" value="${draftKey(d)}"></td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center">${provisionalGradeCell(grade)}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
 }
 /* อนุมัติ GM แล้ว = พร้อมส่งผลให้พนักงานรับทราบ — จึงส่งอีเมลแจ้งพนักงานตรงนี้เลย (ย้ายมาจาก
@@ -9894,12 +10001,12 @@ function exportCalibTableList(){
   const inputs = {};
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
   const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
-  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','เกรด','อันดับ'];
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','คะแนนการมาทำงาน (Z)','เกรด','อันดับ'];
   const rows = roster.map(r=>{
     const code = r.emp[0], name = r.emp[1]||'';
     const group = getBellCurveGroupValue(r.emp,'group'), section = getBellCurveGroupValue(r.emp,'section');
     const division = getBellCurveGroupValue(r.emp,'division'), dept = getBellCurveGroupValue(r.emp,'department');
-    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', '', ''];
+    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', '', '', ''];
     const d = r.draft;
     const key = draftKey(d);
     const X = r.state==='ready' && Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(d[d.length-3])||0;
@@ -9907,7 +10014,7 @@ function exportCalibTableList(){
     const bc = bcByKey[key];
     const grade = bc ? bc.grade : d[d.length-2];
     const rankTxt = bc ? (bc.rank+'/'+bc.n) : '';
-    return [code, name, group, section, division, dept, statusLabel, X, grade, rankTxt];
+    return [code, name, group, section, division, dept, statusLabel, X, (Number(d[d.length-4])||0).toFixed(2), grade, rankTxt];
   });
   const filterTag = CALIB_TABLE_FILTER_SELECTS
     .map(({id})=>(document.getElementById(id)||{}).value)
@@ -9942,6 +10049,7 @@ function renderCalibQueue(){
   /* เติม dropdown "เฉพาะค่า" ด้วยค่าจริงที่มีอยู่ในรอบนี้ทุกครั้งที่ render — รายชื่อ/จำนวนคนต่อกลุ่ม
      ต้องสดเสมอ (บทเรียน CLAUDE.md #3: เติม option จากข้อมูลจริง ไม่ใช่ static) */
   populateBellCurveValueOptions();
+  renderCalibTieOrderUi();
   /* ผู้ใช้รายงาน "กดคำนวณแล้วเกรดเปลี่ยน แต่สักพักก็กลับมาเหมือนเดิม" — สาเหตุจริง: บรรทัดนี้เดิม
      null ทิ้ง bellCurveResult แบบไม่มีเงื่อนไขทุกครั้งที่ renderCalibQueue() รันใหม่ ซึ่งไม่ได้รันแค่ตอน
      HR แก้ไขคะแนนเท่านั้น (จุดนั้น onCalibScoreInput() ก็ null เองอยู่แล้วแยกต่างหาก) แต่ยังรันทุก 30
@@ -9971,9 +10079,9 @@ function renderCalibQueue(){
     if(r.state==='pending'){
       return `<tr class="calib-row-pending" style="color:#94a3b8"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="6" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="7" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
-    const d = r.draft, X = Number(d[d.length-3]), grade = d[d.length-2], statusReal = d[d.length-1];
+    const d = r.draft, X = Number(d[d.length-3]), Zs = (Number(d[d.length-4])||0).toFixed(2), grade = d[d.length-2], statusReal = d[d.length-1];
     if(r.state==='done'){
       /* #187: ปุ่ม "คำนวณใหม่ (KPI)" ให้เฉพาะใบที่ยังไม่ Approved จริงๆ — ใบที่ผ่าน Calibrated มาแล้ว
          (roster ตรงนี้ปน Approved กับ Calibrated ด้วยกันในสถานะ 'done') ถือว่า "ยังไม่ปิดจบ" ตามที่
@@ -9984,6 +10092,7 @@ function renderCalibQueue(){
       return `<tr class="calib-row-done"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
+        <td style="text-align:center">${Zs}</td>
         <td style="text-align:center"><span class="grade g${grade}" title="เกรดจริงจาก Bell Curve/การปรับเอง ณ ขั้น Calibration — ไม่ใช่เกรดชั่วคราวอีกต่อไป">${grade}</span><br><small style="color:#16a34a;font-size:10px">(ผ่าน Calibration แล้ว)</small></td>
         <td colspan="3" style="text-align:center"><span class="calib-done-pill">✓ ผ่าน Calibration แล้ว</span></td>
         <td>${recalcBtn}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
@@ -9994,12 +10103,13 @@ function renderCalibQueue(){
     return `<tr class="calib-row-ready"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
+      <td style="text-align:center">${Zs}</td>
       <td style="text-align:center">${provisionalGradeCell(grade)}</td>
       <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()"></td>
       <td class="calib-bc-cell" data-key="${key}" style="text-align:center"><span class="calib-bc-pending">ยังไม่คำนวณ</span></td>
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)"></td>
       <td>${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${d[2]}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน แล้วเติมลงช่องให้อัตโนมัติ">🔄 คำนวณใหม่ (KPI)</button> `:''}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
+  }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
   /* ทาสีเซลล์เกรดกลับเข้าไปถ้า bellCurveResult ยัง valid (ดูคอมเมนต์ด้านบน) — เซลล์ที่เพิ่งสร้างใหม่
      ทุกอันเริ่มจาก "ยังไม่คำนวณ" เสมอ ต้องเติมผลที่คำนวณไว้แล้วกลับเข้าไปเอง ไม่งั้นแม้ผลจะยังอยู่จริง
      ในตัวแปรแต่หน้าจอก็จะโชว์เหมือนไม่เคยคำนวณ */
@@ -10168,7 +10278,7 @@ async function confirmCalibration(){
     pushApprovalRecordToExcel(empCode,cycle,'Calibrated',comment);
   });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration (Bell Curve)', confirmInputs.length+' รายการ', confirmInputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
-  const baseMsg = 'ยืนยันผล Calibration แล้ว '+confirmInputs.length+' รายการ (เกรดจาก Bell Curve)'+(skippedCount?` — เหลืออีก ${skippedCount} รายการ รอเลือกกลุ่มถัดไป`:'');
+  const baseMsg = 'ยืนยันผล Calibration แล้ว '+confirmInputs.length+' รายการ (เกรดจาก Bell Curve) — ส่งเข้าคิวอนุมัติขั้นสุดท้าย MD/AMD แล้ว'+(skippedCount?` — เหลืออีก ${skippedCount} รายการ รอเลือกกลุ่มถัดไป`:'');
   if(pushFail.length || notFoundCount > 0){
     const why = pushFail.length ? (pushFail[0] && pushFail[0].error || 'ไม่ทราบสาเหตุ') : `หาใบประเมินในเครื่องไม่เจอ ${notFoundCount} รายการ`;
     smlToast(baseMsg+` — ⚠️ บันทึกเข้า Excel (Appraisals) สำเร็จ ${pushOk}/${confirmInputs.length} รายการ: ${why} (ดูรายละเอียดที่ Sync Log)`,'err');
@@ -10860,7 +10970,7 @@ function buildEvalPrintPage(d, printDate){
   const gmNoReviewer = (typeof resolveGmReviewer==='function') && !resolveGmReviewer(emp);
   const gmVisible = (typeof hasVisibleResult==='function') ? hasVisibleResult(status||'') : rank>=4;
   const sigLines = [
-    _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=evalStatusRank('Acknowledged'), empName, '', (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):''),
+    _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=evalStatusRank('Acknowledged'), empName, ackDateText(code,cycle), (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):''),
     _sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':''),
     _sign('ผู้ยืนยันผลการประเมิน ( MGR. )', empL2, rank>=3, l2SignerRec?l2SignerRec.name:'', l2SignerRec?new Date(l2SignerRec.at).toLocaleDateString('th-TH'):'', '', l2NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':''),
     _sign('ผู้อนุมัติ ( GM. / AGM. / MD )', empExec, gmVisible, gmSignerRec?gmSignerRec.name:'', gmSignerRec?new Date(gmSignerRec.at).toLocaleDateString('th-TH'):'', '', gmNoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')
@@ -11966,6 +12076,16 @@ async function ms365SyncFormWeights(silent=false){
     rows.forEach(r=>{
       if(String(r[0]??'').trim()!=='__custom__') return;
       try{ const remote=JSON.parse(r[1])?.defs||{}; const local=loadCustomFormDefs(); Object.keys(remote).forEach(k=>{ if(!local[k]) local[k]=remote[k]; }); saveCustomFormDefs(local); registerAllCustomForms(); renderCustomFormUi(); }catch(e){}
+    });
+    rows.forEach(r=>{
+      if(String(r[0]??'').trim()!=='__tie__') return;
+      try{
+        const remote=JSON.parse(r[1]); const local=loadBellTieStore();
+        if(remote && Array.isArray(remote.order) && (!local || !local.at || (remote.at && remote.at>local.at))){
+          localStorage.setItem(BELL_TIE_KEY, JSON.stringify({order:remote.order, at:remote.at||''}));
+          if(typeof renderCalibTieOrderUi==='function') renderCalibTieOrderUi();
+        }
+      }catch(e){}
     });
     rows.forEach(r=>{
       const lv = String(r[0]??'').trim();
