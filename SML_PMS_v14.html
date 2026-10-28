@@ -8596,8 +8596,22 @@ function computeBellCurveGrades(specificValue){
       return compareBellCurveTie(a, b);
     });
     const n = sorted.length;
-    const cumPct = BELL_CURVE_PCT.reduce((acc,[,p],i)=>{ acc.push((acc[i-1]||0)+p); return acc; }, []);
-    const boundaries = cumPct.map(p => Math.round(p/100*n));
+    /* #228: กลุ่มตั้งแต่ 5 คนขึ้นไปต้องมีครบทั้ง 5 เกรด (A-E อย่างน้อยเกรดละ 1 คน) — เดิมปัดเศษสะสม
+       (n=5 → A1 B1 C2 D1 E0) ทำให้ไม่มีเกรด E; ตอนนี้จัดสรรจำนวนต่อเกรดด้วย largest-remainder ที่บังคับ min 1
+       กลุ่มเล็กกว่า 5 คนใช้การปัดเศษสะสมแบบเดิม (ไม่บังคับให้ครบ เพราะไม่พอแจกจริง) */
+    let counts;
+    if(n>=BELL_CURVE_PCT.length){
+      const ideal = BELL_CURVE_PCT.map(([,p])=>p*n/100);
+      counts = ideal.map(x=>Math.max(1,Math.floor(x)));
+      let sum = counts.reduce((a,c)=>a+c,0);
+      while(sum<n){ let bi=0,bv=-1e9; ideal.forEach((x,i)=>{ const v=x-counts[i]; if(v>bv){bv=v;bi=i;} }); counts[bi]++; sum++; }
+      while(sum>n){ let bi=-1,bv=-1e9; ideal.forEach((x,i)=>{ if(counts[i]>1){ const v=counts[i]-x; if(v>bv){bv=v;bi=i;} } }); counts[bi]--; sum--; }
+    } else {
+      const cumPct0 = BELL_CURVE_PCT.reduce((acc,[,p],i)=>{ acc.push((acc[i-1]||0)+p); return acc; }, []);
+      const bnd = cumPct0.map(p => Math.round(p/100*n));
+      counts = bnd.map((b,i)=>b-(i?bnd[i-1]:0));
+    }
+    const boundaries = counts.reduce((acc,c,i)=>{ acc.push((acc[i-1]||0)+c); return acc; }, []);
     sorted.forEach((row, idx)=>{
       const rank = idx+1;
       let gradeIdx = BELL_CURVE_PCT.length-1;

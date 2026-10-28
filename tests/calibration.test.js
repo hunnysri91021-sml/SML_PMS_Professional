@@ -32,8 +32,19 @@ const {open,ok,done,INJECT}=require('./helpers');
     out.status=[...new Set(after.map(d=>d[d.length-1]))].join();
     out.finalGrades=after.sort((a,c)=>c[c.length-3]-a[a.length-3]).map(d=>d[d.length-2]).join('');
     out.pushed=window.__pushes.filter(d=>d[0].startsWith('BC')).length;
+    // #228: ทุกขนาดกลุ่ม ≥5 ต้องมีครบ 5 เกรด และผลรวมเท่ากับ n
+    out.dist={};
+    [5,6,7,8,9,10,11,13,20,37].forEach(n=>{
+      const ids=[...Array(n)].map((_,i)=>{ const c='DS'+n+'_'+i; __emp(c,{group:'DSG'+n}); __draft(c,'Acknowledged',99-i); return c; });
+      saveBellCurveGroupField('group');
+      const res=computeBellCurveGrades('DSG'+n);
+      const cnt={A:0,B:0,C:0,D:0,E:0}; Object.values(res.byKey).forEach(v=>cnt[v.grade]++);
+      out.dist[n]=cnt;
+    });
     return out;
   });
+  ok(Object.entries(r.dist).every(([n,c])=>Object.values(c).every(v=>v>=1)&&Object.values(c).reduce((a,b)=>a+b,0)==n),'#228 กลุ่ม ≥5 คนมีครบ 5 เกรดและรวมเท่า n: '+JSON.stringify(r.dist[5])+JSON.stringify(r.dist[10]));
+  ok(JSON.stringify(Object.values(r.dist[10]))==='[1,2,4,2,1]','n=10 → 1/2/4/2/1');
   ok(r.grades==='ABCCDE','Bell Curve n=6 → '+r.grades);
   ok(r.cellsFilled,'ช่องเกรดถูกเติมหลังคำนวณ');
   ok(r.survive,'#202 ผลคำนวณรอดการ re-render จาก auto-sync');
