@@ -3311,10 +3311,10 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <div class="cycle-card">
         <div class="cycle-card-head"><h3>การมอบหมายผู้ประเมิน (Evaluation Assignment)</h3><div class="r"><span class="bd b-b" id="assignCount">0 คน</span><button class="btn btn-sm" onclick="exportAssignments()">📥 Export</button></div></div>
         <div class="cycle-card-body">
-          <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>ระบบดึงผู้ประเมินแต่ละคนอัตโนมัติจากสายบังคับบัญชาจริงในทะเบียนพนักงาน (หัวหน้า L1 / L2 / ผู้อนุมัติ) — HR ไม่ต้องมอบหมายเองทีละคน หากมีรายชื่อขาดหัวหน้า ระบบจะเตือนไว้ด้านล่าง</div></div>
+          <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>ระบบดึงสายผู้ประเมิน L1–L4 จากทะเบียนพนักงาน (หน้า "ผู้ใช้ & สิทธิ์" เป็นข้อมูลหลัก) — Admin กด ✏️ แก้ไขสายได้ที่นี่ ระบบจะถามยืนยัน แล้วอัปเดตทะเบียนพนักงาน + Excel + ทุกหน้าให้ตรงกัน หากมีรายชื่อขาดหัวหน้า ระบบจะเตือนไว้ด้านล่าง</div></div>
           <div id="assignMissingWarn"></div>
           <div class="tw"><table>
-            <thead><tr><th>พนักงาน</th><th>แบบฟอร์มที่ใช้</th><th>หัวหน้า L1</th><th>หัวหน้า L2</th><th>ผู้อนุมัติ</th><th style="text-align:center">สถานะการมอบหมาย</th></tr></thead>
+            <thead><tr><th>พนักงาน</th><th>แบบฟอร์มที่ใช้</th><th>หัวหน้าหน่วย (L1)</th><th>หัวหน้าแผนก (L2)</th><th>ผู้ตรวจ MGR (L3)</th><th>ผู้อนุมัติ GM (L4)</th><th style="text-align:center">สถานะการมอบหมาย</th><th></th></tr></thead>
             <tbody id="assignRows"></tbody>
           </table></div>
         </div>
@@ -5023,8 +5023,10 @@ async function pushSingleEmployeeToExcel(code){
     const row = EXCEL_EMPLOYEE_COLS.map(k => byKey[k]);
     await graphUpsertTableRow(cfg.employeeTable, EXCEL_EMPLOYEE_COLS.indexOf('id'), code, row);
     if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
+    return true;
   }catch(e){
     if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) ไม่สำเร็จ: ${e.message}`, false);
+    return false;
   }
 }
 
@@ -11423,6 +11425,8 @@ function getEvaluationAssignments(participants){
        ("L2 หัวหน้าแผนก") แล้ว — ตรงกับ resolveL2Reviewer()/getMyScopedEmpCodes() ที่แก้ไปแล้ว */
     const l2 = (u[19]||'').trim() && u[19].trim()!=='—' ? u[19].trim() : '';
     const approver = (u[11]||'').trim() && u[11].trim()!=='—' ? u[11].trim() : '';
+    /* #222: แสดงครบ L1–L4 ตามป้ายหน้า "ผู้ใช้ & สิทธิ์": L1=u[9], L2=u[10], L3=u[19], L4=u[11] */
+    const chainL1 = (u[9]||'').trim(), chainL2 = (u[10]||'').trim(), chainL3 = (u[19]||'').trim(), chainL4 = (u[11]||'').trim();
     let missing = false, missingReason = '';
     if(u[2]==='emp' || u[2]==='unit'){
       /* หัวหน้าหน่วยเองก็ต้องมีคนเหนือขึ้นไปประเมินรอบแรกเหมือนพนักงานทั่วไป (คือหัวหน้าแผนก/l1 —
@@ -11437,37 +11441,87 @@ function getEvaluationAssignments(participants){
       missingReason = 'ขาดผู้อนุมัติขั้นสุดท้าย';
     }
     const evalLevel = getAssignedEvalLevel(u);
-    return { code:u[0], name:u[1], role:u[2], l1, l2, approver, missing, missingReason, evalLevel };
+    return { code:u[0], name:u[1], role:u[2], l1, l2, approver, missing, missingReason, evalLevel, chainL1, chainL2, chainL3, chainL4 };
   });
+}
+let editingAssignCode = null;
+const ASSIGN_CHAIN_FIELDS = [
+  {key:'chainL1', idx:9,  label:'หัวหน้าหน่วย (L1)'},
+  {key:'chainL2', idx:10, label:'หัวหน้าแผนก (L2)'},
+  {key:'chainL3', idx:19, label:'ผู้ตรวจ MGR (L3)'},
+  {key:'chainL4', idx:11, label:'ผู้อนุมัติ GM (L4)'}
+];
+function assignChainSelect(i, current, excludeCode){
+  const names = MASTER_USERS.filter(u=>u[12]==='active' && u[0]!==excludeCode).map(u=>(u[1]||'').trim());
+  const uniq = [...new Set(names)].sort();
+  if(current && !uniq.includes(current)) uniq.unshift(current);
+  return `<select id="assignSel${i}" style="max-width:150px;font-size:12px"><option value="">—</option>${uniq.map(n=>`<option value="${n.replace(/"/g,'&quot;')}"${n===current?' selected':''}>${n}</option>`).join('')}</select>`;
 }
 function renderAssignments(participants){
   const tbody = document.getElementById('assignRows');
   if(!tbody) return;
   const rows = getEvaluationAssignments(participants);
+  const canEdit = isAdminOrSysadmin();
   const cnt = document.getElementById('assignCount'); if(cnt) cnt.textContent = rows.length+' คน';
-  tbody.innerHTML = rows.length ? rows.map(r=>`
-    <tr style="${r.missing?'background:#fef2f2':''}">
+  const dash = '<span style="color:#cbd5e1">—</span>';
+  tbody.innerHTML = rows.length ? rows.map(r=>{
+    const editing = canEdit && editingAssignCode===r.code;
+    const cells = ASSIGN_CHAIN_FIELDS.map((f,i)=> editing ? `<td>${assignChainSelect(i, r[f.key], r.code)}</td>` : `<td>${r[f.key]||dash}</td>`).join('');
+    const act = !canEdit ? '' : editing
+      ? `<button class="btn btn-sm btn-ok" onclick="saveAssignmentRow('${r.code}')">💾 บันทึก</button> <button class="btn btn-sm" onclick="cancelAssignmentEdit()">✖️</button>`
+      : `<button class="btn btn-sm" onclick="editAssignmentRow('${r.code}')">✏️ แก้ไข</button>`;
+    return `<tr style="${r.missing?'background:#fef2f2':''}">
       <td><b>${r.name}</b><small style="display:block;color:#94a3b8">${r.code}</small></td>
       <td>${r.evalLevel ? LEVEL_CONFIG[r.evalLevel].label : '<span style="color:#dc2626">— ยังไม่กำหนด —</span>'}</td>
-      <td>${r.l1 || '<span style="color:#cbd5e1">—</span>'}</td>
-      <td>${r.l2 || '<span style="color:#cbd5e1">—</span>'}</td>
-      <td>${r.approver || '<span style="color:#cbd5e1">—</span>'}</td>
+      ${cells}
       <td style="text-align:center">${r.missing ? `<span class="bd b-r">⚠️ ${r.missingReason}</span>` : '<span class="bd b-g">✓ ครบถ้วน</span>'}</td>
-    </tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในรอบ</td></tr>';
+      <td style="white-space:nowrap">${act}</td>
+    </tr>`;}).join('') : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในรอบ</td></tr>';
   const missingCount = rows.filter(r=>r.missing).length;
   const warnBox = document.getElementById('assignMissingWarn');
   if(warnBox){
     warnBox.innerHTML = missingCount
-      ? `<div class="al al-e" style="margin-bottom:12px"><span>⚠️</span><div><b>พบ ${missingCount} คนที่สายบังคับบัญชายังไม่ครบ</b> — ระบบจะมอบหมายผู้ประเมินให้ไม่ได้จนกว่าจะแก้ไขที่หน้า "ผังองค์กร & พนักงาน"</div></div>`
+      ? `<div class="al al-e" style="margin-bottom:12px"><span>⚠️</span><div><b>พบ ${missingCount} คนที่สายบังคับบัญชายังไม่ครบ</b> — กด ✏️ แก้ไข ในตารางนี้ หรือแก้ที่หน้า "ผู้ใช้ & สิทธิ์"</div></div>`
       : '';
   }
+}
+function editAssignmentRow(code){ if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin เท่านั้น','warn'); return; } editingAssignCode = code; renderAssignments(); }
+function cancelAssignmentEdit(){ editingAssignCode = null; renderAssignments(); }
+/* #222: บันทึกสาย L1–L4 → เขียนลง MASTER_USERS (ข้อมูลหลักเดียวกับหน้า "ผู้ใช้ & สิทธิ์") → ถามยืนยันก่อน → push Excel → refresh ทุกหน้า */
+async function saveAssignmentRow(code){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin เท่านั้น','warn'); return; }
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  if(!emp){ smlToast('ไม่พบพนักงานรหัสนี้','err'); return; }
+  const changes = [];
+  const next = ASSIGN_CHAIN_FIELDS.map((f,i)=>{
+    const v = (document.getElementById('assignSel'+i)?.value||'').trim();
+    const old = (emp[f.idx]||'').trim();
+    if(v===code || v===(emp[1]||'').trim()){ changes.push(null); }
+    if(v!==old) changes.push(`${f.label}: ${old||'—'} → ${v||'—'}`);
+    return v;
+  });
+  if(changes.includes(null)){ smlToast('ไม่สามารถเลือกตัวเองเป็นผู้ประเมินได้','warn'); return; }
+  if(!changes.length){ smlToast('ไม่มีการเปลี่ยนแปลง','info'); cancelAssignmentEdit(); return; }
+  if(!confirm(`ยืนยันแก้ไขสายผู้ประเมินของ ${emp[1]} (${code})?\n\n${changes.join('\n')}\n\nระบบจะอัปเดตข้อมูลพนักงาน (หน้าผู้ใช้ & สิทธิ์), Excel และทุกหน้าที่เกี่ยวข้อง`)) return;
+  ASSIGN_CHAIN_FIELDS.forEach((f,i)=>{ emp[f.idx] = next[i]; });
+  appendAuditLog('employee','แก้ไขสายผู้ประเมิน (หน้ามอบหมาย)',`${emp[1]} (${code})`, changes.join(' | '));
+  editingAssignCode = null;
+  const ok = await pushSingleEmployeeToExcel(code);
+  if(typeof filterUsers==='function') filterUsers();
+  if(typeof filterOrg==='function') filterOrg();
+  if(typeof checkHierarchyIssues==='function') checkHierarchyIssues(false);
+  if(typeof populateTeamManagerSelect==='function'){ try{ populateTeamManagerSelect(); }catch(e){} }
+  if(typeof renderWorkflowPages==='function'){ try{ renderWorkflowPages(); }catch(e){} }
+  renderCycleStats();
+  renderNavBadges();
+  smlToast(ok ? 'บันทึกสายผู้ประเมินแล้ว และอัปเดต Excel เรียบร้อย' : 'บันทึกในระบบแล้ว แต่ส่งเข้า Excel ไม่สำเร็จ — ดู Sync Log', ok?'ok':'warn');
 }
 function exportAssignments(){
   const rows = getEvaluationAssignments();
   if(!rows.length){ smlToast('ไม่มีข้อมูลให้ Export','warn'); return; }
   downloadCsv('Evaluation_Assignment_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท','แบบฟอร์มที่ใช้','หัวหน้า L1','หัวหน้า L2','ผู้อนุมัติ','สถานะ'],
-    rows.map(r=>[r.code,r.name,r.role, r.evalLevel?LEVEL_CONFIG[r.evalLevel].label:'ยังไม่กำหนด', r.l1,r.l2,r.approver, r.missing?r.missingReason:'ครบถ้วน']));
+    ['รหัสพนักงาน','ชื่อ-สกุล','บทบาท','แบบฟอร์มที่ใช้','หัวหน้าหน่วย (L1)','หัวหน้าแผนก (L2)','ผู้ตรวจ MGR (L3)','ผู้อนุมัติ GM (L4)','สถานะ'],
+    rows.map(r=>[r.code,r.name,r.role, r.evalLevel?LEVEL_CONFIG[r.evalLevel].label:'ยังไม่กำหนด', r.chainL1,r.chainL2,r.chainL3,r.chainL4, r.missing?r.missingReason:'ครบถ้วน']));
   smlToast('Export การมอบหมายผู้ประเมินแล้ว ('+rows.length+' คน)','ok');
 }
 
