@@ -1455,7 +1455,8 @@ tbody tr:hover{background:#f0f6ff!important}
   .sml-system-footer{padding:9px 13px}
 }
 /* #218: ปรับการแสดงผลมือถือ/แท็บเล็ต — เพิ่มทับท้ายสุด ไม่แก้กฎเดิม */
-html,body{overflow-x:hidden}
+html{overflow-x:hidden}
+body{overflow-x:clip} /* clip ไม่สร้าง scroll container — กัน sticky sidebar พัง */
 img,svg,canvas{max-width:100%}
 .main,.content,.card,.card-b{min-width:0}
 .cycle-layout{grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr)}

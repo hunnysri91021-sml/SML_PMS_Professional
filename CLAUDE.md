@@ -8891,6 +8891,8 @@ touches employee/attendance/evaluation data.
 
 219. **ตรวจจอ Laptop (1280/1366/1440px).** ไม่มีหน้าไหน overflow ทั้งหน้า แต่พบ 2 จุด: แถบขั้นตอนบน Dashboard (`.wf-s` min-width 125px x 9 ขั้น ล้นขวา ขั้น 9 ถูกตัด) และตารางผังองค์กร (12+ คอลัมน์ ตัวหนังสือห่อหลายบรรทัด). แก้ด้วยบล็อก `#219` ท้าย `<style>` เฉพาะ 1000-1500px (ลด min-width/padding/ฟอนต์). เมื่อเพิ่มจำนวนขั้นใน workflow ให้เช็กแถบ `.wf` ที่ 1280px ด้วย — ใช้ `lap.js` (screenshot 1366x768) ในการดู.
 
+226. **`html,body{overflow-x:hidden}` (#218) ทำให้ `position:sticky` ของ sidebar พัง** — body กลายเป็น scroll container ที่ไม่เลื่อน sidebar จึงเลื่อนหลุดพร้อมหน้า เหลือช่องว่างสีขาวใต้เมนูซ้าย. แก้เป็น `html{overflow-x:hidden}` + `body{overflow-x:clip}` (clip ไม่สร้าง scroll container). ห้ามใส่ overflow:hidden/auto บน ancestor ของ sticky element; ทดสอบด้วยการ scroll แล้ววัด `#sb` getBoundingClientRect.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
