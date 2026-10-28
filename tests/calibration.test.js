@@ -29,6 +29,13 @@ const {open,ok,done,INJECT}=require('./helpers');
     window.__pushes.length=0;
     await confirmCalibration();
     out.blocked=getDrafts().filter(d=>d[0].startsWith('BC')).every(d=>d[d.length-1]==='Acknowledged')&&window.__pushes.length===0;
+    // Admin ข้ามได้ต้องมีเหตุผล: ไม่กรอก → ยกเลิก
+    const op=window.prompt; window.prompt=()=>''; renderCalibQueue(); runBellCurveCalculation(); await confirmCalibration();
+    out.noReason=getDrafts().filter(d=>d[0].startsWith('BC')).every(d=>d[d.length-1]==='Acknowledged');
+    window.prompt=()=>'รอข้อมูลจาก HRGO'; renderCalibQueue(); runBellCurveCalculation(); await confirmCalibration();
+    out.override=getDrafts().filter(d=>d[0].startsWith('BC')).every(d=>d[d.length-1]==='Calibrated')&&getAuditLog().some(a=>String(a.detail).includes('รอข้อมูลจาก HRGO'));
+    getDrafts().forEach(()=>{}); const dd=getDrafts(); dd.filter(d=>d[0].startsWith('BC')).forEach(d=>d[d.length-1]='Acknowledged'); saveDrafts(dd);
+    window.prompt=op; window.__pushes.length=0;
     // มีข้อมูลเวลาครบแล้ว → ยืนยัน → Calibrated + push Excel
     xs.forEach((x,i)=>{ ATTENDANCE['BC'+i]={lateCount:0,earlyCount:0,sickDay:0,personalDay:0,absentDay:0}; });
     renderCalibQueue(); runBellCurveCalculation();
@@ -56,6 +63,8 @@ const {open,ok,done,INJECT}=require('./helpers');
   ok(r.invalidated,'แก้คะแนนแล้วผลถูก invalidate');
   ok(r.exportHasBC,'#203 export ก่อนยืนยันใช้เกรด/อันดับ Bell Curve');
   ok(r.blocked,'#230 ไม่มีข้อมูลเวลา → ยืนยันถูกบล็อก ไม่ push');
+  ok(r.noReason,'#230 Admin ไม่ระบุเหตุผล → ยังบล็อก');
+  ok(r.override,'#230 Admin ระบุเหตุผล → ยืนยันข้ามได้ + บันทึก Audit Log');
   ok(r.status==='Calibrated','ยืนยันแล้วสถานะ = Calibrated ('+r.status+')');
   ok(r.finalGrades.length===6&&/^[ABCDE]{6}$/.test(r.finalGrades),'เกรดสุดท้ายเป็นเกรด Bell Curve '+r.finalGrades);
   ok(r.pushed===6,'#205/206 push Appraisals ครบ 6 ใบ ('+r.pushed+')');

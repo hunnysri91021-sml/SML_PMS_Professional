@@ -10537,7 +10537,9 @@ async function resetCalibration(){
    ทุกแถวเหมือนเดิมอีกต่อไป: เดิมถ้าจำนวนผลคำนวณไม่เท่ากับจำนวน .calib-adj ทั้งหมด (byKey.length !==
    inputs.length) จะปฏิเสธการยืนยันทั้งหมด — ตอนนี้ confirm เฉพาะแถวที่มีผลคำนวณจริง (bcByKey[key] มีค่า)
    เท่านั้น แถวที่เหลือ (ยังไม่ถูกเลือกคำนวณรอบนี้) ยังคงเป็น 'ready'/Acknowledged ต่อไป รอรอบถัดไป */
+let calibAttOverrideReason='';
 async function confirmCalibration(){
+  calibAttOverrideReason='';
   const inputs=[...document.querySelectorAll('.calib-adj')];
   if(!inputs.length){ smlToast('ไม่มีรายการรอ Calibration','warn'); return; }
   if(!bellCurveResult || !Object.keys(bellCurveResult.byKey).length){
@@ -10558,9 +10560,17 @@ async function confirmCalibration(){
   { const noAtt = confirmInputs.map(i=>i.dataset.key.split('|')[0]).filter(c=>!ATTENDANCE[c]);
     if(noAtt.length){
       const nm = noAtt.slice(0,5).map(c=>{ const e=MASTER_USERS.find(u=>u[0]===c); return e?e[1]:c; }).join(', ') + (noAtt.length>5?` และอีก ${noAtt.length-5} คน`:'');
-      smlToast(`ยืนยันไม่ได้: ${noAtt.length} คนยังไม่มีข้อมูลเวลา (${nm}) — ดึงจาก Excel หรือกรอกที่หน้านำเข้าข้อมูลเวลาก่อน`,'warn');
-      if(typeof appendSyncLog==='function') appendSyncLog(`confirmCalibration: ถูกบล็อก — ไม่มีข้อมูลเวลา ${noAtt.length} คน`, false);
-      return;
+      if(!isAdminOrSysadmin()){
+        smlToast(`ยืนยันไม่ได้: ${noAtt.length} คนยังไม่มีข้อมูลเวลา (${nm}) — ดึงจาก Excel หรือกรอกที่หน้านำเข้าข้อมูลเวลาก่อน`,'warn');
+        if(typeof appendSyncLog==='function') appendSyncLog(`confirmCalibration: ถูกบล็อก — ไม่มีข้อมูลเวลา ${noAtt.length} คน`, false);
+        return;
+      }
+      /* Admin ยืนยันข้ามได้กรณีพิเศษ — ต้องระบุเหตุผล (บังคับ) และบันทึก Audit Log + Approvals comment */
+      const reason = (prompt(`⚠️ ${noAtt.length} คนยังไม่มีข้อมูลเวลา (${nm})\nคะแนน Z ของคนเหล่านี้ไม่ใช่ข้อมูลจริง\n\nถ้าจำเป็นต้องยืนยันข้าม ให้ระบุเหตุผล (บังคับ):`)||'').trim();
+      if(!reason){ smlToast('ยกเลิกการยืนยัน — ไม่ได้ระบุเหตุผลที่ยืนยันข้ามข้อมูลเวลา','warn'); return; }
+      calibAttOverrideReason = reason;
+      appendAuditLog('approval','ยืนยัน Calibration ข้ามข้อมูลเวลา',`${noAtt.length} คน: ${nm}`,'เหตุผล: '+reason);
+      if(typeof appendSyncLog==='function') appendSyncLog(`confirmCalibration: Admin ยืนยันข้ามข้อมูลเวลา ${noAtt.length} คน — ${reason}`, true);
     } }
   const drafts=getDrafts();
   const changed=[];
@@ -10608,7 +10618,7 @@ async function confirmCalibration(){
     const [empCode,cycle]=inp.dataset.key.split('|');
     const note = notesByKey[empCode+'|'+cycle] || '';
     const bc = bcByKey[inp.dataset.key];
-    const comment = 'X='+inp.value+' | เกรด Bell Curve='+(bc?bc.grade:'—')+' (อันดับ '+(bc?bc.rank+'/'+bc.n:'—')+', '+(bc?bc.groupLabel:'—')+')' + (note.trim() ? ' | หมายเหตุ: '+note.trim() : '');
+    const comment = 'X='+inp.value+' | เกรด Bell Curve='+(bc?bc.grade:'—')+' (อันดับ '+(bc?bc.rank+'/'+bc.n:'—')+', '+(bc?bc.groupLabel:'—')+')' + (note.trim() ? ' | หมายเหตุ: '+note.trim() : '') + (calibAttOverrideReason && !ATTENDANCE[inp.dataset.key.split('|')[0]] ? ' | ยืนยันข้ามข้อมูลเวลา: '+calibAttOverrideReason : '');
     pushApprovalRecordToExcel(empCode,cycle,'Calibrated',comment);
   });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผล Calibration (Bell Curve)', confirmInputs.length+' รายการ', confirmInputs.map(i=>i.dataset.key.split('|')[0]).join(', '));
