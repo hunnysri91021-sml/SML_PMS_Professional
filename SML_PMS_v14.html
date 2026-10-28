@@ -6105,6 +6105,7 @@ function printEvalForm() {
     <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zDays} วัน</span></div>
     <div class="ztotal">Z = ${zScore.toFixed(2)}</div>
   </div>
+  ${buildKpiPrintBoxHtml(empCode, (typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'), lv)}
   ${(()=>{ const note=(typeof getEvalHrNote==='function')?getEvalHrNote(empCode+'|'+(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569')):''; return note.trim()?`<div class="F-zbox" style="background:#fef2f2;border-color:#fecaca"><div class="zc" style="grid-column:1/-1"><span class="zl">ใบเตือน/หมายเหตุวินัย (HR):</span><span class="zv">${note}</span></div></div>`:''; })()}
 
   <!-- ===== สรุปคะแนนรวม ===== -->
@@ -11297,6 +11298,27 @@ let _batchPrinting = false;
    ประเมินตนเองเอง (ดูคอมเมนต์ "จำลอง — เชื่อม workflow จริงในอนาคต" เหนือ EVAL_STS — ไม่เอามาใช้ตรงนี้
    เพราะเป็นชื่อ/วันที่ปลอมล้วนๆ) — ใช้ _sign() ตัวจริงตัวเดียวกับที่ printEvalForm() เพิ่งแก้ให้ใช้
    ของจริงแล้ว ไม่สร้างฟังก์ชันซ้ำสอง */
+/* #231: กล่อง KPI บนใบประเมินพิมพ์ — แสดงเฉพาะ KPI รายบุคคลที่ผูกรหัสพนักงานนี้จริง (scope=person, active, ปีตรงรอบ)
+   หรือเมื่อระดับนี้ตั้งสัดส่วน KPI > 0; ไม่มีข้อมูล = ไม่แสดงกล่อง (ไม่เดา, #14). ใช้ร่วมกันทั้ง printEvalForm/buildEvalPrintPage */
+function buildKpiPrintBoxHtml(code, cycle, level){
+  if(typeof computeKpiScoreForEmp!=='function' || typeof goalKpiData==='undefined') return '';
+  const w = getScoreWeightsFor(level, cycle), kpct = w.kpct||0;
+  const mine = goalKpiData.filter(k=>k.scope==='person' && k.empCode===code && k.status==='active' && String(k.year||'')===String(cycle||''));
+  if(!mine.length && !(kpct>0)) return '';
+  const esc = t=>String(t==null?'':t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const rows = mine.map(k=>{
+    const a = computeKpiAchievementPct(k);
+    return `<tr><td>${esc(k.name)}</td><td class="tc">${esc(k.target||k.targetVal||'—')}</td><td class="tc">${k.actualVal===''||k.actualVal==null?'—':esc(k.actualVal)}</td><td class="tc">${a===null?'ยังไม่มีผลจริง':a.toFixed(1)+'%'}</td><td class="tc">${Number(k.pct)||0}%</td></tr>`;
+  }).join('');
+  const r = computeKpiScoreForEmp(code, cycle);
+  const pts = (r.hasKpi && kpct>0) ? (r.pct/100*kpct) : 0;
+  const summary = r.hasKpi
+    ? `ความสำเร็จ KPI เฉลี่ยถ่วงน้ำหนัก = <b>${r.pct.toFixed(1)}%</b>${kpct>0?` · คะแนน KPI = <b>${pts.toFixed(2)}</b> จาก ${kpct}`:' · (ระดับนี้ยังไม่ได้ตั้งสัดส่วน KPI — ไม่นับเข้า X)'}`
+    : (kpct>0 ? `ยังไม่มีผลจริงของ KPI รายบุคคล — สัดส่วน KPI ${kpct}% ถูกคืนให้ Y` : 'ยังไม่มีผลจริงของ KPI');
+  return `<div class="F-sec s2"><span class="sec-num">K</span> KPI รายบุคคล</div>
+    ${rows?`<table class="F-tbl"><thead><tr><th class="left">KPI</th><th>เป้าหมาย</th><th>ผลจริง</th><th>% สำเร็จ</th><th>น้ำหนัก</th></tr></thead><tbody>${rows}</tbody></table>`:''}
+    <div class="F-zbox"><div class="zc" style="grid-column:1/-1"><span class="zv">${summary}</span></div></div>`;
+}
 function buildEvalPrintPage(d, printDate){
   const code = d[0], name = d[1], cycle = d[2], level = d[3];
   const cfg = SML_FORMS[level], lcfg = LEVEL_CONFIG[level];
@@ -11422,6 +11444,7 @@ function buildEvalPrintPage(d, printDate){
     </div>
     ${hrNoteBox}
     ${lastActorBox}
+    ${buildKpiPrintBoxHtml(code, cycle, level)}
 
     <div class="F-sec s3"><span class="sec-num">∑</span> คะแนนรวม &nbsp; X = Y + Z</div>
     <div class="F-result">

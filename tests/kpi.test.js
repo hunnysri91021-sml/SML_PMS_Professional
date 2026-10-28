@@ -21,8 +21,13 @@ const {open,ok,done}=require('./helpers');
     const w=getScoreWeightsFor('of',cy);
     out.base=[w.kpct,Math.abs(x.X-(x.Y+x.Z))<1e-9,x.KPI];
     out.noKpiRedistribute=Math.abs(computeEvalXWithKpi('of','NOBODY',cy,20,20,0).Y-(w.ypct+w.kpct))<1e-9;
+    // #231 กล่อง KPI บนใบพิมพ์
+    out.boxPerson=buildKpiPrintBoxHtml('KP1',cy,'of');
+    out.boxNone=buildKpiPrintBoxHtml('NOBODY',cy,'of');
     return out;
   });
+  ok(r.boxPerson.includes('KPI รายบุคคล')&&r.boxPerson.includes('75.0%')&&r.boxPerson.includes('>a<')&&!r.boxPerson.includes('>d<'),'ใบพิมพ์แสดง KPI รายบุคคล (เฉพาะ person ของคนนี้ ผลจริง 75%)');
+  ok(r.boxNone==='','ไม่มี KPI และ kpct=0 → ไม่แสดงกล่อง');
   ok(r.up[0]===70&&r.up[1]===100,'KPI ยิ่งมากยิ่งดี capped 100: '+r.up);
   ok(r.down[0]===50&&r.down[1]===100,'KPI ยิ่งน้อยยิ่งดี: '+r.down);
   ok(r.blank===null,'ไม่มีค่าจริง → null ไม่เดา');
