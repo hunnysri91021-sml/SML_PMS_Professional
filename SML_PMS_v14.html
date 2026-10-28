@@ -1558,6 +1558,19 @@ img,svg,canvas{max-width:100%}
   #mReview .reviewer-table th,#mReview .reviewer-table td{padding:7px 8px;font-size:12px}
   #mReview .review-score{min-width:42px;padding:6px 6px}
 }
+/* #223 — มือถือ: ตารางมอบหมายผู้ประเมิน L1–L4 เป็นการ์ดต่อคน (ไม่ต้องเลื่อนข้าง) */
+@media (max-width:700px){
+  #assignRows{display:block}
+  #assignRows tr{display:block;margin:0 0 10px;padding:10px 12px;border:1px solid #e3eaf2;border-radius:10px;background:#fff}
+  #assignRows td{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border:0;text-align:right !important;font-size:13px}
+  #assignRows td:first-child{display:block;text-align:left !important;font-size:15px;padding-bottom:6px;border-bottom:1px solid #eef2f7;margin-bottom:4px}
+  #assignRows td[data-label]::before{content:attr(data-label);flex:0 0 42%;text-align:left;font-size:11.5px;font-weight:700;color:#64748b}
+  #assignRows td:last-child{justify-content:flex-end;padding-top:8px}
+  #assignRows select{max-width:100% !important;flex:1 1 55%;font-size:16px}
+  #assignRows td:last-child .btn{padding:8px 14px;font-size:13px}
+  table:has(#assignRows) thead{display:none}
+  table:has(#assignRows){display:block}
+}
 </style>
 
 </head>
@@ -11466,15 +11479,15 @@ function renderAssignments(participants){
   const dash = '<span style="color:#cbd5e1">—</span>';
   tbody.innerHTML = rows.length ? rows.map(r=>{
     const editing = canEdit && editingAssignCode===r.code;
-    const cells = ASSIGN_CHAIN_FIELDS.map((f,i)=> editing ? `<td>${assignChainSelect(i, r[f.key], r.code)}</td>` : `<td>${r[f.key]||dash}</td>`).join('');
+    const cells = ASSIGN_CHAIN_FIELDS.map((f,i)=> editing ? `<td data-label="${f.label}">${assignChainSelect(i, r[f.key], r.code)}</td>` : `<td data-label="${f.label}">${r[f.key]||dash}</td>`).join('');
     const act = !canEdit ? '' : editing
       ? `<button class="btn btn-sm btn-ok" onclick="saveAssignmentRow('${r.code}')">💾 บันทึก</button> <button class="btn btn-sm" onclick="cancelAssignmentEdit()">✖️</button>`
       : `<button class="btn btn-sm" onclick="editAssignmentRow('${r.code}')">✏️ แก้ไข</button>`;
     return `<tr style="${r.missing?'background:#fef2f2':''}">
       <td><b>${r.name}</b><small style="display:block;color:#94a3b8">${r.code}</small></td>
-      <td>${r.evalLevel ? LEVEL_CONFIG[r.evalLevel].label : '<span style="color:#dc2626">— ยังไม่กำหนด —</span>'}</td>
+      <td data-label="แบบฟอร์มที่ใช้">${r.evalLevel ? LEVEL_CONFIG[r.evalLevel].label : '<span style="color:#dc2626">— ยังไม่กำหนด —</span>'}</td>
       ${cells}
-      <td style="text-align:center">${r.missing ? `<span class="bd b-r">⚠️ ${r.missingReason}</span>` : '<span class="bd b-g">✓ ครบถ้วน</span>'}</td>
+      <td data-label="สถานะ" style="text-align:center">${r.missing ? `<span class="bd b-r">⚠️ ${r.missingReason}</span>` : '<span class="bd b-g">✓ ครบถ้วน</span>'}</td>
       <td style="white-space:nowrap">${act}</td>
     </tr>`;}).join('') : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในรอบ</td></tr>';
   const missingCount = rows.filter(r=>r.missing).length;
