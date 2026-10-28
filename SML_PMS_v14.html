@@ -3317,7 +3317,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="cycle-summary">
     <div class="cycle-stat"><span>รอบปัจจุบัน</span><b>FY2026</b></div>
     <div class="cycle-stat"><span>พนักงานในรอบ</span><b id="csTotalCount">0 คน</b></div>
-    <div class="cycle-stat"><span>ขั้นตอน</span><b>6 ขั้นตอน</b></div>
+    <div class="cycle-stat"><span>ขั้นตอน</span><b id="csStepCount">—</b></div>
     <div class="cycle-stat"><span>ความคืบหน้า</span><b style="color:#138a4b" id="csProgressPct">0%</b></div>
   </div>
 
@@ -3341,16 +3341,10 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       </div>
 
       <div class="cycle-card">
-        <div class="cycle-card-head"><h3>กำหนดขั้นตอนและช่วงเวลา</h3><span class="bd b-b">6 ขั้นตอน</span></div>
+        <div class="cycle-card-head"><h3>กำหนดขั้นตอนและช่วงเวลา</h3><span class="bd b-b" id="csStepBadge">— ขั้นตอน</span></div>
         <div class="cycle-card-body">
-          <div class="cycle-timeline">
-            <div class="cycle-step done"><div class="cycle-dot">✓</div><b>Self Assessment</b><span>1–15 ธ.ค.</span></div>
-            <div class="cycle-step current"><div class="cycle-dot">2</div><b>Leader L1</b><span>16–25 ธ.ค.</span></div>
-            <div class="cycle-step"><div class="cycle-dot">3</div><b>Manager L2</b><span>26–31 ธ.ค.</span></div>
-            <div class="cycle-step"><div class="cycle-dot">4</div><b>Calibration</b><span>2–5 ม.ค.</span></div>
-            <div class="cycle-step"><div class="cycle-dot">5</div><b>AGM/MD</b><span>6–8 ม.ค.</span></div>
-            <div class="cycle-step"><div class="cycle-dot">6</div><b>Acknowledgement</b><span>9–15 ม.ค.</span></div>
-          </div>
+          <div class="cycle-timeline" id="cycleSetupTimeline"></div>
+          <div style="font-size:11.5px;color:#64748b;margin-top:6px">ดึงจาก "กำหนดการขั้นตอน" ของรอบปัจจุบัน — <a href="#" onclick="event.preventDefault();document.querySelector('.nav-item[data-pg=&quot;cycle&quot;]').click()" style="color:#0b63ce;font-weight:700">✏️ แก้ไขที่หน้า "รอบประเมิน"</a> (Admin เท่านั้น)</div>
         </div>
       </div>
 
@@ -3718,6 +3712,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   }
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
+  if(p==='cyclesetup' && typeof renderCycleSetupTimeline==='function') renderCycleSetupTimeline();
   if(p==='cycle' && typeof renderCyclesTable==='function'){ renderCyclesTable(); populateCycleStepsCycleSel(); renderCycleSteps(); }
   if(p==='cycle' && typeof syncGradeVisSettingUi==='function') syncGradeVisSettingUi();
   if(p==='myresult' && typeof renderMyResult==='function') renderMyResult();
@@ -13614,7 +13609,22 @@ function loadCycleStepsStore(){ try{ return JSON.parse(localStorage.getItem(CYCL
 function saveCycleStepsStore(o){ localStorage.setItem(CYCLE_STEPS_KEY, JSON.stringify(o)); }
 function defaultCycleSteps(){ return CYCLE_STEP_DEFAULTS.map((d,i)=>({id:'s'+Date.now().toString(36)+i, order:i+1, name:d[0], owner:d[1], start:'', end:'', canReject:!!d[2], remind:d[3], status:'wait'})); }
 function getCycleSteps(cid){ const o=loadCycleStepsStore(); return (o[cid]&&Array.isArray(o[cid].steps))?o[cid].steps.slice().sort((a,b)=>(a.order||0)-(b.order||0)):null; }
-function putCycleSteps(cid,steps){ const o=loadCycleStepsStore(); o[cid]={steps, at:new Date().toISOString()}; saveCycleStepsStore(o); pushCycleStepsToExcel(cid); }
+function putCycleSteps(cid,steps){ const o=loadCycleStepsStore(); o[cid]={steps, at:new Date().toISOString()}; saveCycleStepsStore(o); pushCycleStepsToExcel(cid); try{ renderCycleSetupTimeline(); }catch(e){} }
+/* ไทม์ไลน์ในหน้า "ตั้งค่ารอบประเมิน" ดึงจากกำหนดการจริงของรอบปัจจุบัน (ชุดเดียวกับตารางในหน้า "รอบประเมิน") — เดิมเป็น HTML ตายตัว 6 ขั้นตอน */
+function renderCycleSetupTimeline(){
+  const box=document.getElementById('cycleSetupTimeline'); if(!box) return;
+  const yr=(typeof getCurrentEvalCycleYear==='function')?getCurrentEvalCycleYear():'';
+  const cyc=(typeof cyclesList!=='undefined'&&cyclesList.find(c=>String(c.year)===String(yr)))||(typeof cyclesList!=='undefined'?cyclesList[0]:null);
+  const badge=document.getElementById('csStepBadge'), cnt=document.getElementById('csStepCount');
+  if(!cyc){ box.innerHTML='<div style="color:#94a3b8;font-size:12px;padding:8px">ยังไม่มีรอบประเมิน</div>'; if(badge) badge.textContent='0 ขั้นตอน'; if(cnt) cnt.textContent='0 ขั้นตอน'; return; }
+  let steps=getCycleSteps(cyc.id);
+  if(!steps){ steps=defaultCycleSteps(); const o=loadCycleStepsStore(); o[cyc.id]={steps,at:''}; saveCycleStepsStore(o); }
+  const fd=v=>v?new Date(v).toLocaleDateString('th-TH',{day:'numeric',month:'short'}):'';
+  const range=st=>st.start&&st.end?fd(st.start)+'–'+fd(st.end):(st.end?'ภายใน '+fd(st.end):(st.start?'เริ่ม '+fd(st.start):'ยังไม่กำหนดวัน'));
+  box.innerHTML=steps.length?steps.map(st=>{ const cls=st.status==='done'?'done':(st.status==='active'?'current':''); return '<div class="cycle-step '+cls+'"><div class="cycle-dot">'+(cls==='done'?'✓':st.order)+'</div><b>'+escapeAttrCs(st.name)+'</b><span>'+escapeAttrCs(range(st))+'</span></div>'; }).join(''):'<div style="color:#94a3b8;font-size:12px;padding:8px">ยังไม่มีขั้นตอน — เพิ่มที่หน้า "รอบประเมิน"</div>';
+  if(badge) badge.textContent=steps.length+' ขั้นตอน'; if(cnt) cnt.textContent=steps.length+' ขั้นตอน';
+}
+
 function selectedStepCycleId(){ return document.getElementById('cycleStepsCycleSel')?.value||''; }
 function populateCycleStepsCycleSel(){
   const sel=document.getElementById('cycleStepsCycleSel'); if(!sel) return;
