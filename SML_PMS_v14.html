@@ -2764,6 +2764,7 @@ img,svg,canvas{max-width:100%}
           <div class="card-b">
             <div style="font-size:12px;color:#475569;margin-bottom:10px">Pending: <b id="appraisalPending">0 รายการ</b></div>
             <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAppraisals()">📤 Push ผลประเมิน → Excel</button>
+            <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ลบแถวซ้ำเก่า (รหัส+รอบ+ระดับเดียวกัน) เก็บแถวสถานะล่าสุด — Admin/HR เท่านั้น" onclick="ms365DedupeAppraisals()">🧹 ลบแถวซ้ำเก่าใน Appraisals</button>
             <div id="pendingListArea" style="margin-top:10px;max-height:180px;overflow:auto"></div>
           </div>
         </div>
@@ -7959,6 +7960,71 @@ async function graphDeleteTableRows(tableName, keyColIndex, keyValue){
   return matches.length;
 }
 
+/* #224: ลบแถวซ้ำเก่าในตาราง (1 คีย์ผสม = เก็บแถวสถานะก้าวหน้าสุดแถวเดียว) — ตรรกะ planDedupeRows() ต้องตรงกับ
+   planDedupe() ฝั่ง Worker ทุกประการ (CLAUDE.md #41: สองไฟล์ใช้โค้ดร่วมกันไม่ได้ ต้องแก้คู่กันเสมอ)
+   dryRun=true คืนจำนวนที่จะลบโดยไม่ลบจริง */
+function planDedupeRows(rows, keyCols){
+  const groups = new Map();
+  for(const r of rows){
+    if(r.index===undefined || !r.values) continue;
+    const v = r.values[0] || []; /* Graph ส่ง values เป็น 2 มิติ ([[...แถว...]]) เหมือน rowMatchesUpsertKey */
+    const parts = keyCols.map(c=>String(v[c]??'').trim());
+    if(parts.some(p=>p==='')) continue;
+    const k = parts.join('|');
+    if(!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  const toDelete = []; let dupGroups = 0;
+  for(const list of groups.values()){
+    if(list.length<2) continue;
+    dupGroups++;
+    let keep = list[0];
+    for(const r of list){
+      const rv = r.values[0] || [], kv = keep.values[0] || [];
+      const rr = evalStatusRank(String(rv[rv.length-1]??'').trim());
+      const kr = evalStatusRank(String(kv[kv.length-1]??'').trim());
+      if(rr>kr || (rr===kr && r.index>keep.index)) keep = r;
+    }
+    for(const r of list) if(r!==keep) toDelete.push(r.index);
+  }
+  toDelete.sort((a,b)=>b-a);
+  return { dupGroups, toDelete };
+}
+async function graphDedupeTableRows(tableName, keyCols, dryRun){
+  const cfg = loadMs365Config();
+  if(isWorkerConfigured(cfg)){
+    return await workerFetch(cfg, '/rows/dedupe', { method:'POST', body: JSON.stringify({ table: tableName, keyCols, dryRun: !!dryRun }) });
+  }
+  const { driveId, itemId } = await resolveMs365Site();
+  const base = 'https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
+    "/workbook/tables('" + encodeURIComponent(tableName) + "')/rows";
+  const rows = await graphFetchAllTableRowsRaw(base);
+  const plan = planDedupeRows(rows, keyCols);
+  if(!dryRun){ for(const idx of plan.toDelete){ await graphFetch(base + '/itemAt(index=' + idx + ')', { method:'DELETE' }); } }
+  return { totalRows: rows.length, dupGroups: plan.dupGroups, toDelete: plan.toDelete.length, deleted: dryRun ? 0 : plan.toDelete.length, dryRun: !!dryRun };
+}
+/* ปุ่ม Admin: ลบแถวซ้ำเก่าใน Appraisals — นับก่อน (dry-run) → confirm บอกจำนวน+ให้สำรองไฟล์ → ลบจริง → ดึงข้อมูลใหม่ */
+async function ms365DedupeAppraisals(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){ smlToast('ยังไม่ได้ตั้งค่า MS365','warn'); return; }
+  try{
+    const keyCols = [0,2,3];
+    const pre = await graphDedupeTableRows(cfg.evaluationTable, keyCols, true);
+    if(!pre.toDelete){ smlToast('ไม่พบแถวซ้ำใน '+cfg.evaluationTable+' (ตรวจ '+pre.totalRows+' แถว)','ok'); appendSyncLog('ลบแถวซ้ำ Appraisals: ไม่พบแถวซ้ำ ('+pre.totalRows+' แถว)', true); return; }
+    if(!confirm('พบแถวซ้ำ '+pre.dupGroups+' คีย์ (รหัส+รอบ+ระดับ) รวม '+pre.toDelete+' แถวที่จะลบ จากทั้งหมด '+pre.totalRows+' แถว\n\nระบบเก็บไว้ 1 แถวต่อคีย์ คือแถวที่สถานะก้าวหน้าที่สุด\n⚠️ แนะนำให้สำรองไฟล์ Excel ก่อน — การลบย้อนกลับไม่ได้\n\nยืนยันลบ?')) return;
+    const res = await graphDedupeTableRows(cfg.evaluationTable, keyCols, false);
+    appendSyncLog('ลบแถวซ้ำ Appraisals สำเร็จ: ลบ '+res.deleted+' แถว ('+res.dupGroups+' คีย์)', true);
+    if(typeof appendAuditLog==='function') appendAuditLog('ms365','ลบแถวซ้ำใน Appraisals (Excel)', res.deleted+' แถว', res.dupGroups+' คีย์');
+    smlToast('ลบแถวซ้ำแล้ว '+res.deleted+' แถว — เก็บแถวสถานะล่าสุดไว้','ok');
+    await ms365SyncAppraisals(true);
+  }catch(e){
+    const msg = e?.message||String(e);
+    appendSyncLog('ลบแถวซ้ำ Appraisals ไม่สำเร็จ: '+msg, false);
+    smlToast('ลบแถวซ้ำไม่สำเร็จ: '+msg+(/not found|404/i.test(msg)?' (ต้อง redeploy Worker ตัวล่าสุดก่อน)':''),'err');
+  }
+}
+
 /* graphUpsertTableRowPartial() — เหมือน graphUpsertTableRow() แต่ "ไม่แตะ" คอลัมน์ที่อยู่ใน
    protectedColIndexes เลยตอนอัปเดตแถวเดิม (PATCH เฉพาะช่วงคอลัมน์ที่ไม่ถูกป้องกัน ผ่าน worksheet
    range address แทนการ PATCH ทั้งแถว) — ใช้กับตารางที่มีคอลัมน์สูตร Excel คำนวณสดอยู่ (เช่น
@@ -9703,6 +9769,31 @@ function pushDraftRowToExcel(d, label){
     .catch(err=>{ const msg = err?.message||String(err); if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) ไม่สำเร็จ: `+msg, false); return {ok:false, error:msg}; })
     .finally(()=>{ pendingPushKeys.delete(key); });
 }
+/* #224: ตรวจสถานะล่าสุดก่อนกดอนุมัติ/ตีกลับ/ส่งต่อ — ดึง Appraisals จาก Excel ก่อน แล้วเทียบสถานะจริงของแต่ละใบ
+   กับสถานะที่หน้านั้นคาดไว้ (expectedStatus) ใบที่คนอื่นเลื่อนขั้นไปแล้วจะถูกข้าม (ไม่ทับ) พร้อมแจ้งเตือน
+   และ re-render คิวให้ตรงข้อมูลล่าสุด คืนเฉพาะ key ที่ยังอยู่ขั้นเดิมจริง
+   ข้อจำกัดจริง: ms365SyncAppraisals() merge เฉพาะ "ขั้นที่ก้าวหน้ากว่า" (#58) — จึงจับกรณีมีคนเลื่อนขั้นไปแล้วได้
+   แต่ไม่จับกรณีมีคนตีกลับย้อนลงจากอีกเครื่อง */
+async function guardFreshStatus(keys, expectedStatus){
+  try{
+    const cfg = loadMs365Config();
+    if(typeof isMs365Configured==='function' && isMs365Configured(cfg)) await ms365SyncAppraisals(true);
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ตรวจสถานะล่าสุด: ดึงข้อมูลไม่สำเร็จ — ใช้ข้อมูลในเครื่อง: '+(e?.message||e), false); }
+  const drafts = getDrafts();
+  const ok = [], stale = [];
+  keys.forEach(k=>{
+    const d = drafts.find(x=>draftKey(x)===k);
+    const st = d ? d[d.length-1] : null;
+    if(st===expectedStatus) ok.push(k); else stale.push({k, st});
+  });
+  if(stale.length){
+    const names = stale.map(x=>{ const c=x.k.split('|')[0]; return (MASTER_USERS.find(u=>u[0]===c)?.[1]||c); }).join(', ');
+    smlToast(`ข้าม ${stale.length} รายการ — สถานะเปลี่ยนไปแล้วโดยคนอื่น (${names}) หน้าจอรีเฟรชให้แล้ว`,'warn');
+    if(typeof appendSyncLog==='function') appendSyncLog(`ตรวจสถานะล่าสุด: ข้าม ${stale.length} รายการที่ไม่ได้อยู่ขั้น ${expectedStatus} แล้ว (${stale.map(x=>x.k.split('|')[0]+'='+x.st).join(', ')})`, false);
+    renderWorkflowPages();
+  }
+  return ok;
+}
 function updateDraftStatus(keys, newStatus){
   const keySet = new Set(keys);
   const drafts = getDrafts();
@@ -9890,8 +9981,10 @@ function renderReviewL1Queue(){
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
 }
 async function approveReviewL1Selected(){
-  const keys=getCheckedKeys('reviewl1-chk');
+  let keys=getCheckedKeys('reviewl1-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  keys = await guardFreshStatus(keys,'Submitted');
+  if(!keys.length) return;
   /* #114b: อ่าน prevActor ของทุก key ไว้ "ก่อน" pushApprovalRecordToExcel() ทับ แล้วแจ้งทีหลัง */
   const prevActors = {};
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
@@ -9901,9 +9994,11 @@ async function approveReviewL1Selected(){
   smlToast('ผ่านสอบทานหัวหน้าแผนกแล้ว '+keys.length+' รายการ — เข้าสู่ขั้นสอบทานผู้จัดการส่วน','ok');
   for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
 }
-function rejectReviewL1Selected(){
-  const keys=getCheckedKeys('reviewl1-chk');
+async function rejectReviewL1Selected(){
+  let keys=getCheckedKeys('reviewl1-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  keys = await guardFreshStatus(keys,'Submitted');
+  if(!keys.length) return;
   updateDraftStatus(keys,'Draft');
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedL1Review',''); markNeedsReconfirm(k); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากสอบทานหัวหน้าแผนก', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
@@ -9974,8 +10069,10 @@ function pushApprovalRecordToExcel(empCode, cycle, step, comment){
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push Approvals (${empCode} · ${step}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
 async function approveReviewSelected(){
-  const keys=getCheckedKeys('review-chk');
+  let keys=getCheckedKeys('review-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  keys = await guardFreshStatus(keys,'L1Reviewed');
+  if(!keys.length) return;
   const prevActors = {};
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
   updateDraftStatus(keys,'L2Reviewed');
@@ -9984,9 +10081,11 @@ async function approveReviewSelected(){
   smlToast('ผ่านสอบทาน L2 แล้ว '+keys.length+' รายการ — เข้าสู่ขั้น Calibration','ok');
   for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
 }
-function rejectReviewSelected(){
-  const keys=getCheckedKeys('review-chk');
+async function rejectReviewSelected(){
+  let keys=getCheckedKeys('review-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  keys = await guardFreshStatus(keys,'L1Reviewed');
+  if(!keys.length) return;
   /* #92: ตีกลับ 1 ขั้นตามหลักการเดียวกับ rejectGmSelected()/#61 — ส่งกลับไปที่ 'Submitted' (ให้หัวหน้า
      แผนกสอบทานใหม่) ไม่ใช่ 'Draft' (ย้อนไปทั้งหมดถึงพนักงาน) เพราะตอนนี้มีขั้นสอบทานหัวหน้าแผนกคั่นอยู่
      ก่อนขั้นนี้แล้ว */
@@ -10043,8 +10142,10 @@ function renderGmApproveQueue(){
    approveAllFinal() เดิมที่เคยแจ้งตอนอนุมัติขั้นสุดท้าย เพราะตอนนี้พนักงานต้องรับทราบ *ก่อน*
    Calibration/อนุมัติขั้นสุดท้าย ไม่ใช่หลัง — ดู CLAUDE.md #61) */
 async function approveGmSelected(){
-  const keys=getCheckedKeys('gm-chk');
+  let keys=getCheckedKeys('gm-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  keys = await guardFreshStatus(keys,'L2Reviewed');
+  if(!keys.length) return;
   const drafts = getDrafts();
   const rows = keys.map(k=>drafts.find(d=>draftKey(d)===k)).filter(Boolean);
   const prevActors = {};
@@ -10073,9 +10174,11 @@ async function approveGmSelected(){
   const notifNote = notifParts.length ? ` · แจ้งพนักงานแล้ว (${notifParts.join(' · ')})` : '';
   smlToast('อนุมัติ GM แล้ว '+keys.length+' รายการ — แจ้งพนักงานรับทราบต่อไป'+notifNote,'ok');
 }
-function rejectGmSelected(){
-  const keys=getCheckedKeys('gm-chk');
+async function rejectGmSelected(){
+  let keys=getCheckedKeys('gm-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
+  keys = await guardFreshStatus(keys,'L2Reviewed');
+  if(!keys.length) return;
   /* #92: ตีกลับ 1 ขั้นเช่นกัน — เดิม (ก่อนมีขั้นสอบทานหัวหน้าแผนก) ส่งกลับ 'Submitted' ให้ L2 สอบทาน
      ใหม่โดยตรง ตอนนี้ต้องส่งกลับ 'L1Reviewed' (ขั้นก่อนหน้า L2Reviewed) เพื่อให้ landing ตรงคิว
      สอบทานผู้จัดการส่วนอีกครั้ง ไม่ใช่ย้อนไปถึงคิวหัวหน้าแผนกที่ไม่ได้ทำอะไรผิด */
@@ -10361,8 +10464,11 @@ async function confirmCalibration(){
      render ใหม่ ถ้าไปอ่าน bellCurveResult.byKey หลังจากนั้นจะพังเปล่าๆ (ครั้งแรกพลาดจุดนี้ ตรวจพบจาก
      Playwright test ของฟีเจอร์นี้เอง ไม่ใช่สมมติ) */
   const bcByKey = { ...bellCurveResult.byKey };
-  const confirmInputs = inputs.filter(inp=>bcByKey[inp.dataset.key]);
+  let confirmInputs = inputs.filter(inp=>bcByKey[inp.dataset.key]);
   const skippedCount = inputs.length - confirmInputs.length;
+  /* #224: ตรวจสถานะล่าสุดก่อนยืนยัน — ข้ามใบที่ไม่ได้อยู่ขั้น Acknowledged แล้ว */
+  { const okCal = new Set(await guardFreshStatus(confirmInputs.map(i=>i.dataset.key),'Acknowledged')); confirmInputs = confirmInputs.filter(i=>okCal.has(i.dataset.key)); }
+  if(!confirmInputs.length) return;
   const drafts=getDrafts();
   const changed=[];
   /* ผู้ใช้รายงาน "กดแล้ว เกรดเปลี่ยน แต่ไม่ save ใน excel" — ตรวจโค้ดแล้วไม่พบ bug ชัดเจน แต่ไม่มีทาง
@@ -10467,20 +10573,24 @@ function renderCalibCheckQueue(){
   if(typeof restoreCheckedKeys==='function') restoreCheckedKeys('calib-chk', keep);
 }
 function toggleAllCalibCheck(on){ document.querySelectorAll('.calib-chk').forEach(c=>c.checked=on); }
-function approveCalibCheckSelected(){
+async function approveCalibCheckSelected(){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ตรวจสอบได้','warn'); return; }
-  const keys = getCheckedKeys('calib-chk');
+  let keys = getCheckedKeys('calib-chk');
   if(!keys.length){ smlToast('กรุณาเลือกรายการที่ตรวจแล้ว','warn'); return; }
+  keys = await guardFreshStatus(keys,'Calibrated');
+  if(!keys.length) return;
   if(!confirm('ตรวจสอบผ่าน '+keys.length+' รายการ แล้วส่งให้ MD/AMD อนุมัติขั้นสุดท้าย?')) return;
   updateDraftStatus(keys,'CalibChecked');
   keys.forEach(k=>{ const [c,cy]=k.split('|'); pushApprovalRecordToExcel(c,cy,'CalibChecked','HR ตรวจสอบหลัง Calibration แล้ว ส่ง MD/AMD'); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตรวจสอบหลัง Calibration (ส่ง MD/AMD)', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตรวจผ่านแล้ว '+keys.length+' รายการ — ส่งเข้าคิวอนุมัติขั้นสุดท้าย MD/AMD','ok');
 }
-function rejectCalibCheckSelected(){
+async function rejectCalibCheckSelected(){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ตีกลับได้','warn'); return; }
-  const keys = getCheckedKeys('calib-chk');
+  let keys = getCheckedKeys('calib-chk');
   if(!keys.length){ smlToast('กรุณาเลือกรายการที่จะตีกลับ','warn'); return; }
+  keys = await guardFreshStatus(keys,'Calibrated');
+  if(!keys.length) return;
   if(!confirm('ตีกลับ '+keys.length+' รายการ ไปทำ Calibration ใหม่?\n(เกรดจะกลับเป็นเกรดชั่วคราว)')) return;
   const drafts = getDrafts();
   keys.forEach(k=>{ const d=drafts.find(x=>draftKey(x)===k); if(d) d[d.length-2]=gradeFromX(Number(d[d.length-3])||0); });
@@ -10775,7 +10885,8 @@ async function ms365SyncAckChannel(silent=true){
 async function approveAllFinal(){
   const sign=(document.getElementById('mApproveSign')?.value||'').trim();
   if(!sign){ smlToast('กรุณาพิมพ์ชื่อ-สกุลเพื่อยืนยันลายเซ็นอิเล็กทรอนิกส์','warn'); return; }
-  const rows = getDrafts().filter(d=>d[d.length-1]==='CalibChecked');
+  const okFinal = new Set(await guardFreshStatus(getDrafts().filter(d=>d[d.length-1]==='CalibChecked').map(draftKey),'CalibChecked'));
+  const rows = getDrafts().filter(d=>d[d.length-1]==='CalibChecked' && okFinal.has(draftKey(d)));
   if(!rows.length){ smlToast('ไม่มีรายการรออนุมัติ','warn'); closeM(); return; }
   rows.forEach(d=>saveApprovalSignature(d[0]+'|'+d[2], sign));
   updateDraftStatus(rows.map(draftKey),'Approved');
@@ -10784,8 +10895,9 @@ async function approveAllFinal(){
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติขั้นสุดท้าย', rows.length+' รายการ', 'ลงนามโดย '+sign+' — '+rows.map(d=>d[0]).join(', '));
   smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+') — พร้อม Export เข้า Payroll','ok');
 }
-function rejectApproveAll(){
-  const rows = getDrafts().filter(d=>d[d.length-1]==='CalibChecked');
+async function rejectApproveAll(){
+  const okRej = new Set(await guardFreshStatus(getDrafts().filter(d=>d[d.length-1]==='CalibChecked').map(draftKey),'CalibChecked'));
+  const rows = getDrafts().filter(d=>d[d.length-1]==='CalibChecked' && okRej.has(draftKey(d)));
   if(!rows.length){ smlToast('ไม่มีรายการให้ตีกลับ','warn'); return; }
   /* ตีกลับหลังอนุมัติขั้นสุดท้ายไม่ผ่าน ต้องส่งกลับไปที่ HR (Calibration) ไม่ใช่ L2 — พนักงานรับทราบ
      ผลไปแล้วตั้งแต่ก่อน Calibration (#61) ย้อนไปไกลถึง L2 จะทำให้ขั้นที่พนักงานรับทราบไปแล้วเสียเปล่า */
@@ -12549,6 +12661,7 @@ let currentReviewerLevel=null;
 let currentReviewerZ=0;
 let currentReviewerCode=null;
 let currentReviewerCycle=null;
+let currentReviewerOpenStatus=null; /* #224: สถานะของใบตอนเปิดฟอร์ม — เทียบกับสถานะล่าสุดก่อนบันทึก/ตีกลับ */
 /* #169: ผู้ใช้กดปุ่ม "🔄 Sync จาก Excel แล้วลองใหม่" (#168) แล้วแบนเนอร์ขึ้นข้อความเดิมเป๊ะๆ ไม่เปลี่ยน
    เลย — เดิม retrySyncAndReopenReviewer() แค่เรียก sync แล้วเปิดฟอร์มซ้ำ ไม่ได้บอกเลยว่า sync รอบนั้น
    จริงๆ เจออะไร (ยังไม่ได้ตั้งค่า MS365 เลย? sync สำเร็จแต่ดึงมาได้ 0 แถวทั้งตาราง? sync สำเร็จดึงมาได้
@@ -12598,6 +12711,7 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
   /* เดิมไม่เคยรับ/จำ cycle เลย — ปุ่ม "บันทึกและส่งต่อ"/"ตีกลับ" ในหน้าต่างนี้จึงไม่มีทางรู้ว่ากำลัง
      แก้ไข/อนุมัติใบของรอบไหน (CLAUDE.md #108's ชุดเดียวกัน ตามด้วยการเชื่อมปุ่มให้ทำงานจริงด้านล่าง) */
   currentReviewerCycle = cycle || ((typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569');
+  { const _od = getDrafts().find(d=>d[0]===code && d[2]===currentReviewerCycle && d[3]===lv); currentReviewerOpenStatus = _od ? _od[_od.length-1] : 'Draft'; }
   const zr = (typeof computeZScore==='function') ? computeZScore(lv, code) : {att:{},zDaysExact:0,score:0};
   currentReviewerZ = zr.score;
   const att = zr.att||{};
@@ -12834,6 +12948,17 @@ async function submitReviewerForm(){
   const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
   const cfg = LEVEL_CONFIG[lv];
   if(!code || !cycle || !lv || !cfg){ smlToast('ไม่พบข้อมูลพนักงานสำหรับฟอร์มนี้','warn'); return; }
+  /* #224: ตรวจสถานะล่าสุดก่อน — ถ้าใบถูกเลื่อนขั้นโดยคนอื่นหลังเปิดฟอร์มนี้ ไม่บันทึกทับ */
+  { const _k = code+'|'+cycle+'|'+lv;
+    if(currentReviewerOpenStatus && currentReviewerOpenStatus!=='Draft'){
+      const _ok = await guardFreshStatus([_k], currentReviewerOpenStatus);
+      if(!_ok.length){ closeM(); return; }
+    } else {
+      try{ if(isMs365Configured(loadMs365Config())) await ms365SyncAppraisals(true); }catch(e){}
+      const _ex = getDrafts().find(d=>d[0]===code && d[2]===cycle && d[3]===lv);
+      if(_ex && _ex[_ex.length-1]!=='Draft'){ smlToast('ใบนี้ถูกส่งเข้าสายอนุมัติไปแล้วโดยคนอื่น — หน้าจอรีเฟรชให้แล้ว','warn'); renderWorkflowPages(); closeM(); return; }
+    }
+  }
   /* ป้องกันซ้ำ (defense-in-depth) เผื่อปุ่ม disabled ถูกข้ามมาด้วยวิธีใดก็ตาม — ตัวเช็คจริงอยู่ที่ UI
      (openReviewerForm()/unlockReviewerSubmit()) แต่ฟังก์ชันที่เขียนข้อมูลจริงต้องกันเองด้วยเสมอ */
   if(typeof needsReconfirm==='function' && needsReconfirm(code+'|'+cycle+'|'+lv)){
@@ -12909,9 +13034,13 @@ async function submitReviewerForm(){
   closeM();
   if(typeof renderWorkflowPages==='function') renderWorkflowPages();
 }
-function rejectReviewerForm(){
+async function rejectReviewerForm(){
   const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
   if(!code || !cycle || !lv) return;
+  if(currentReviewerOpenStatus && currentReviewerOpenStatus!=='Draft'){
+    const _ok = await guardFreshStatus([code+'|'+cycle+'|'+lv], currentReviewerOpenStatus);
+    if(!_ok.length){ closeM(); return; }
+  }
   const existing = getDrafts().find(d => d[0]===code && d[2]===cycle && d[3]===lv);
   if(!existing){ smlToast('ยังไม่มีใบประเมินที่จะตีกลับสำหรับคนนี้','warn'); return; }
   const curStatus = existing[existing.length-1];

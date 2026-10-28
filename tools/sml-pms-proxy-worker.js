@@ -232,6 +232,19 @@ export default {
         return json({ ok: true, deleted }, 200, cors);
       }
 
+      /* /rows/dedupe — ลบ "แถวซ้ำเก่า" ของตารางที่ถือ 1 เรื่อง = 1 แถวตามคีย์ผสม (เช่น Appraisals: EmpID+รอบ+ระดับ)
+         เก็บไว้แถวเดียวต่อคีย์ = แถวที่ "สถานะก้าวหน้าที่สุด" (คอลัมน์สุดท้ายของแถว เทียบ EVAL_STATUS_ORDER)
+         ถ้าสถานะเท่ากันเก็บแถวล่างสุด (เพิ่มทีหลังสุด) — dryRun=true คืนจำนวนที่จะลบโดยไม่ลบจริง
+         ตรรกะวางแผน planDedupe() ต้องตรงกับฝั่งเว็บ (graphDedupeTableRows ใน SML_PMS_v14.html) ทุกประการ */
+      if (url.pathname === '/rows/dedupe' && request.method === 'POST') {
+        const { table, keyCols, dryRun } = await request.json();
+        if (!table || !Array.isArray(keyCols) || !keyCols.length) {
+          return json({ error: 'missing table/keyCols' }, 400, cors);
+        }
+        const result = await dedupeRows(token, driveId, itemId, table, keyCols, !!dryRun);
+        return json({ ok: true, ...result }, 200, cors);
+      }
+
       return json({ error: 'not found' }, 404, cors);
     } catch (e) {
       return json({ error: String((e && e.message) || e) }, 500, cors);
@@ -730,6 +743,45 @@ async function deleteRows(token, driveId, itemId, table, keyColIndex, keyValue) 
     await graphSend(token, base + `/itemAt(index=${r.index})`, 'DELETE');
   }
   return matches.length;
+}
+
+/* วางแผนลบแถวซ้ำ: คืน {groups, toDelete:[index...]} — ไม่แตะแถวที่คีย์ใดคีย์หนึ่งว่าง (ไม่ใช่แถวจริง) */
+function planDedupe(rows, keyCols) {
+  const groups = new Map();
+  for (const r of rows) {
+    if (r.index === undefined || !r.values) continue;
+    const v = r.values[0] || []; // Graph ส่ง values เป็น 2 มิติ ([[...แถว...]]) เหมือน rowMatchesUpsertKey
+    const parts = keyCols.map((c) => String(v[c] ?? '').trim());
+    if (parts.some((p) => p === '')) continue;
+    const k = parts.join('|');
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  const toDelete = [];
+  let dupGroups = 0;
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    dupGroups++;
+    let keep = list[0];
+    for (const r of list) {
+      const rv = r.values[0] || [], kv = keep.values[0] || [];
+      const rr = evalStatusRank(String(rv[rv.length - 1] ?? '').trim());
+      const kr = evalStatusRank(String(kv[kv.length - 1] ?? '').trim());
+      if (rr > kr || (rr === kr && r.index > keep.index)) keep = r;
+    }
+    for (const r of list) if (r !== keep) toDelete.push(r.index);
+  }
+  toDelete.sort((a, b) => b - a); // ลบ index มาก→น้อย (ลบแล้ว index แถวถัดลงไปเลื่อนขึ้น)
+  return { dupGroups, toDelete };
+}
+async function dedupeRows(token, driveId, itemId, table, keyCols, dryRun) {
+  const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
+  const rows = await fetchAllTableRowsRaw(token, base);
+  const plan = planDedupe(rows, keyCols);
+  if (!dryRun) {
+    for (const idx of plan.toDelete) await graphSend(token, base + `/itemAt(index=${idx})`, 'DELETE');
+  }
+  return { totalRows: rows.length, dupGroups: plan.dupGroups, toDelete: plan.toDelete.length, deleted: dryRun ? 0 : plan.toDelete.length, dryRun };
 }
 
 function colIndexToLetter(idx) {

@@ -10913,3 +10913,14 @@ Before considering a change to `SML_PMS_v14.html` done:
 222. **ตารางมอบหมายผู้ประเมิน (Dashboard) แสดงครบ L1–L4 และแก้ไขได้ — ข้อมูลหลักคือ `MASTER_USERS` (หน้า "ผู้ใช้ & สิทธิ์").** คอลัมน์ L1=u[9], L2=u[10], L3=u[19], L4=u[11] (ตรงป้ายใน Add/Edit Employee; เดิมตารางโชว์แค่ 3 คอลัมน์และป้าย "L2" ชี้ u[19] ผิดความหมาย). Admin/sysadmin กด ✏️ แก้ไข → dropdown รายชื่อพนักงาน active → `saveAssignmentRow()` `confirm()` แสดงค่าเดิม→ใหม่ก่อน, เขียน `MASTER_USERS` ฟิลด์เดียวกับหน้าผู้ใช้ (ไม่มี store แยก), Audit Log, `await pushSingleEmployeeToExcel()` (ตอนนี้ return true/false) แล้ว refresh ทุกหน้า (`filterUsers`/`filterOrg`/`checkHierarchyIssues`/`renderWorkflowPages`/`renderCycleStats`/`renderNavBadges`). ห้ามเลือกตัวเอง. Export CSV มีครบ 4 ระดับ.
 
 223. **มือถือ: ตารางมอบหมายผู้ประเมิน L1–L4 (`#assignRows`, หน้า "ตั้งค่ารอบประเมิน") เป็นการ์ดต่อคนที่ ≤700px.** แต่ละ `<td>` มี `data-label` (ป้าย L1–L4/แบบฟอร์ม/สถานะ) แสดงผ่าน `::before`, ซ่อน thead, dropdown/ปุ่มบันทึก-ยกเลิกเต็มความกว้างอ่านและกดได้ ตรวจที่ 390px ทั้งโหมดอ่านและโหมดแก้ไข ไม่มี overflow แนวนอน. ตารางนี้อยู่หน้า cycle ไม่ใช่ Dashboard — ตอนทดสอบต้องเปิดหน้าให้ถูก.
+
+224. **ตรวจสถานะล่าสุดก่อนอนุมัติ/ตีกลับ/ส่งต่อทุกขั้น (กันทับกันเมื่อมีคนเลื่อนขั้นไปแล้ว).** `guardFreshStatus(keys, expectedStatus)` ดึง Appraisals จาก Excel
+    (`ms365SyncAppraisals(true)`) แล้วเทียบสถานะจริงของแต่ละใบกับขั้นที่หน้านั้นคาดไว้ — ใบที่ไม่ตรงถูกข้าม + toast + Sync Log + รีเฟรชคิว คืนเฉพาะ key ที่ยังอยู่ขั้นเดิม
+    ใช้ใน approve/reject ของ L2/L3/GM, ตรวจหลัง Calibration, MD อนุมัติ/ตีกลับ, `confirmCalibration`, และ `submitReviewerForm`/`rejectReviewerForm` (จำสถานะตอนเปิดฟอร์มไว้ใน
+    `currentReviewerOpenStatus`). ฟังก์ชัน reject ที่เคย sync ตอนนี้เป็น async. **ข้อจำกัดจริง:** sync merge เฉพาะ "ขั้นที่ก้าวหน้ากว่า" (#58) จึงจับกรณีมีคนเลื่อนขั้นไปแล้ว
+    แต่ไม่จับกรณีมีคนตีกลับย้อนลงจากอีกเครื่อง; ถ้าดึง Excel ไม่ได้จะใช้ข้อมูลในเครื่องและ log ไว้.
+
+225. **ลบแถวซ้ำเก่าใน Appraisals (Excel).** Worker `POST /rows/dedupe` {table, keyCols:[0,2,3], dryRun} + `planDedupe()`; ฝั่งเว็บ `planDedupeRows()`/`graphDedupeTableRows()`
+    (ต้องตรงกันทุกประการ #41). เก็บ 1 แถวต่อคีย์ (รหัส+รอบ+ระดับ) = แถวสถานะก้าวหน้าสุด (คอลัมน์สุดท้ายของแถว เทียบ EVAL_STATUS_ORDER), เท่ากันเก็บแถวล่างสุด, ข้ามแถวที่คีย์ว่าง,
+    ลบ index มาก→น้อย. **Graph ส่ง `row.values` เป็น 2 มิติ (`[[...]]`) — ต้องอ่าน `values[0]`** (ทดสอบแรกพลาดเพราะใช้ array แบนจนผ่านโดยบังเอิญ). ปุ่ม "🧹 ลบแถวซ้ำเก่าใน Appraisals"
+    (หน้า MS365, Admin/HR) นับก่อน (dry-run) → confirm บอกจำนวน+เตือนให้สำรองไฟล์ → ลบจริง → ดึงข้อมูลใหม่. **Worker เปลี่ยน → ต้อง redeploy** ก่อนปุ่มนี้ทำงานจริง.
