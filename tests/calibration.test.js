@@ -24,7 +24,7 @@ const {open,ok,done,INJECT}=require('./helpers');
     runBellCurveCalculation();
     let csv=null; const orig=window.downloadCsv; window.downloadCsv=(name,h,rows)=>{ csv=rows; };
     exportCalibTableList(); window.downloadCsv=orig;
-    out.exportHasBC=!!csv&&csv.some(r=>String(r[10]).endsWith("/6"))&&csv.some(r=>/^[ABCDE]$/.test(r[9]));
+    out.exportHasBC=!!csv&&csv.some(r=>String(r[11]).endsWith("/6"))&&csv.some(r=>/^[ABCDE]$/.test(r[10]));
     // #230: ไม่มีข้อมูลเวลา → ห้ามยืนยัน
     window.__pushes.length=0;
     await confirmCalibration();

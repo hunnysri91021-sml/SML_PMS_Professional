@@ -8568,7 +8568,7 @@ function exportCalibScopedList(){
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
   const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
   const anyComputed = roster.some(r=>bcByKey[draftKey(r.draft)]);
-  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','หน่วยงาน','ระดับฟอร์ม','คะแนน (X)','คะแนนการมาทำงาน (Z)', anyComputed ? 'เกรด (Bell Curve)' : 'เกรดชั่วคราว', 'อันดับ'];
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','หน่วยงาน','ระดับฟอร์ม','คะแนน (X)','คะแนนการมาทำงาน (Z)', 'คะแนน KPI', anyComputed ? 'เกรด (Bell Curve)' : 'เกรดชั่วคราว', 'อันดับ'];
   const rows = roster.map(r=>{
     const key = draftKey(r.draft);
     const X = Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(r.draft[r.draft.length-3])||0;
@@ -8577,7 +8577,7 @@ function exportCalibScopedList(){
     const rankTxt = bc ? (bc.rank+'/'+bc.n) : '';
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const lv = getAssignedEvalLevel(r.emp) || r.draft[3] || '';
-    return [r.emp[0], name, dept, lv, X, (Number(r.draft[r.draft.length-4])||0).toFixed(2), grade, rankTxt];
+    return [r.emp[0], name, dept, lv, X, (Number(r.draft[r.draft.length-4])||0).toFixed(2), appraisalExcelRow(r.draft)[23], grade, rankTxt];
   });
   const scopeTag = (specificValue || 'ทั้งหมด').replace(/[^฀-๿a-zA-Z0-9]+/g,'_');
   downloadCsv(`Calibration_${BELL_CURVE_GROUP_LABELS[fieldKey].split(' ')[0]}_${scopeTag}_${getCurrentEvalCycleYear()}.csv`, headers, rows);
@@ -10298,12 +10298,12 @@ function exportCalibTableList(){
   const inputs = {};
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
   const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
-  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','คะแนนการมาทำงาน (Z)','เกรด','อันดับ'];
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','คะแนนการมาทำงาน (Z)','คะแนน KPI','เกรด','อันดับ'];
   const rows = roster.map(r=>{
     const code = r.emp[0], name = r.emp[1]||'';
     const group = getBellCurveGroupValue(r.emp,'group'), section = getBellCurveGroupValue(r.emp,'section');
     const division = getBellCurveGroupValue(r.emp,'division'), dept = getBellCurveGroupValue(r.emp,'department');
-    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', '', '', ''];
+    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', '', '', '', ''];
     const d = r.draft;
     const key = draftKey(d);
     const X = r.state==='ready' && Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(d[d.length-3])||0;
@@ -10311,7 +10311,7 @@ function exportCalibTableList(){
     const bc = bcByKey[key];
     const grade = bc ? bc.grade : d[d.length-2];
     const rankTxt = bc ? (bc.rank+'/'+bc.n) : '';
-    return [code, name, group, section, division, dept, statusLabel, X, (Number(d[d.length-4])||0).toFixed(2), grade, rankTxt];
+    return [code, name, group, section, division, dept, statusLabel, X, (Number(d[d.length-4])||0).toFixed(2), appraisalExcelRow(d)[23], grade, rankTxt];
   });
   const filterTag = CALIB_TABLE_FILTER_SELECTS
     .map(({id})=>(document.getElementById(id)||{}).value)
