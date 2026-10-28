@@ -2145,18 +2145,15 @@ img,svg,canvas{max-width:100%}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>กำหนดการขั้นตอน — FY2026-ANNUAL</h3><div class="r"><button class="btn btn-sm">+ เพิ่มขั้นตอน</button></div></div>
+      <div class="card-h"><h3>กำหนดการขั้นตอน — <span id="cycleStepsTitle">—</span></h3>
+        <div class="r"><select id="cycleStepsCycleSel" onchange="renderCycleSteps()" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px"></select>
+        <button class="btn btn-sm btn-p" id="cycleStepAddBtn" onclick="openCycleStepModal()">+ เพิ่มขั้นตอน</button>
+        <button class="btn btn-sm" id="cycleStepResetBtn" onclick="resetCycleStepsToDefault()">↩️ รีเซ็ตเป็นขั้นตอนมาตรฐาน</button></div></div>
       <div class="tw"><table>
-        <thead><tr><th>ลำดับ</th><th>ขั้นตอน</th><th>ผู้รับผิดชอบ</th><th>เริ่ม</th><th>ครบกำหนด</th><th>ตีกลับได้</th><th>เตือนล่วงหน้า</th><th>สถานะ</th></tr></thead>
-        <tbody>
-          <tr><td>1</td><td><b>พนักงานประเมินตนเอง</b></td><td>พนักงานทุกคน (ผ่านทดลองงาน)</td><td>ก.ย. 2569</td><td>ก.ย. 2569</td><td>—</td><td>7,3,1 วัน</td><td><span class="bd b-g">เสร็จสิ้น</span></td></tr>
-          <tr style="background:#eff6ff"><td>2</td><td><b>หัวหน้าแผนก / Leader ประเมิน</b></td><td>หัวหน้าทางตรง</td><td>ก.ย. 2569</td><td>ต.ค. 2569</td><td>✓</td><td>7,3,1 วัน</td><td><span class="bd b-b">กำลังดำเนินการ</span></td></tr>
-          <tr><td>3</td><td><b>ผู้จัดการส่วน สอบทาน (L2)</b></td><td>ผู้จัดการส่วน</td><td>ธ.ค. 2568</td><td>ธ.ค. 2568</td><td>✓</td><td>5,2 วัน</td><td><span class="bd b-s">รอ</span></td></tr>
-          <tr><td>4</td><td><b>Calibration</b></td><td>ผู้จัดการส่วน + HR&GA</td><td>ธ.ค. 2568</td><td>ธ.ค. 2568</td><td>—</td><td>3 วัน</td><td><span class="bd b-s">รอ</span></td></tr>
-          <tr><td>5</td><td><b>MD-SML อนุมัติ</b></td><td>คุณเชิดชัย (AGM/MD)</td><td>ธ.ค. 2568</td><td>ธ.ค. 2568</td><td>✓</td><td>3,1 วัน</td><td><span class="bd b-s">รอ</span></td></tr>
-          <tr><td>6</td><td><b>พนักงานรับทราบผล</b></td><td>พนักงานทุกคน</td><td>ธ.ค. 2568</td><td>ธ.ค. 2568</td><td>—</td><td>7,3 วัน</td><td><span class="bd b-s">รอ</span></td></tr>
-        </tbody>
+        <thead><tr><th>ลำดับ</th><th>ขั้นตอน</th><th>ผู้รับผิดชอบ</th><th>เริ่ม</th><th>ครบกำหนด</th><th>ตีกลับได้</th><th>เตือนล่วงหน้า</th><th>สถานะ</th><th></th></tr></thead>
+        <tbody id="cycleStepsRows"></tbody>
       </table></div>
+      <div style="padding:8px 14px;font-size:11.5px;color:#94a3b8">กำหนดการนี้เป็นข้อมูลที่ Admin กรอกเอง (ไม่ผูกกับสถานะใบประเมินจริง) — เก็บแยกตามรอบ และ sync ขึ้น Excel ตาราง FormWeights (แถว __steps__&lt;รหัสรอบ&gt;)</div>
     </div>
   </section>
 
@@ -3522,6 +3519,20 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="saveCycleFromModal()">💾 บันทึก</button></div>
 </div></div>
 
+<div class="ov" id="mCycleStep"><div class="md" style="max-width:560px">
+  <div class="md-h"><h3 id="mCycleStepTitle">➕ เพิ่มขั้นตอน</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-b">
+    <div class="fr"><div class="fg" style="max-width:100px"><label>ลำดับ</label><input id="cs_order" type="number" min="1"></div>
+      <div class="fg"><label>ชื่อขั้นตอน <i>*</i></label><input id="cs_name"></div></div>
+    <div class="fg"><label>ผู้รับผิดชอบ</label><input id="cs_owner"></div>
+    <div class="fr"><div class="fg"><label>เริ่ม</label><input id="cs_start" type="date"></div>
+      <div class="fg"><label>ครบกำหนด</label><input id="cs_end" type="date"></div></div>
+    <div class="fr"><div class="fg"><label>เตือนล่วงหน้า (วัน เช่น 7,3,1)</label><input id="cs_remind"></div>
+      <div class="fg"><label>สถานะ</label><select id="cs_status"><option value="wait">รอ</option><option value="active">กำลังดำเนินการ</option><option value="done">เสร็จสิ้น</option></select></div></div>
+    <label style="font-size:13px"><input type="checkbox" id="cs_reject"> ตีกลับได้</label>
+  </div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="saveCycleStepFromModal()">💾 บันทึก</button></div>
+</div></div>
 <div class="ov" id="mCycleParticipants"><div class="md" style="max-width:640px">
   <div class="md-h"><h3 id="mCycleParticipantsTitle">👥 รายชื่อผู้เข้าร่วมประเมิน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
@@ -3644,7 +3655,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   }
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
-  if(p==='cycle' && typeof renderCyclesTable==='function') renderCyclesTable();
+  if(p==='cycle' && typeof renderCyclesTable==='function'){ renderCyclesTable(); populateCycleStepsCycleSel(); renderCycleSteps(); }
   if(p==='cycle' && typeof syncGradeVisSettingUi==='function') syncGradeVisSettingUi();
   if(p==='myresult' && typeof renderMyResult==='function') renderMyResult();
   if(p==='orgmaster' && typeof renderOrgMasterLists==='function') renderOrgMasterLists();
@@ -12427,6 +12438,7 @@ async function ms365SyncFormWeights(silent=false){
       if(String(r[0]??'').trim()!=='__custom__') return;
       try{ const remote=JSON.parse(r[1])?.defs||{}; const local=loadCustomFormDefs(); Object.keys(remote).forEach(k=>{ if(!local[k]) local[k]=remote[k]; }); saveCustomFormDefs(local); registerAllCustomForms(); renderCustomFormUi(); }catch(e){}
     });
+    applyCycleStepsRows(rows);
     rows.forEach(r=>{
       if(String(r[0]??'').trim()!=='__tie__') return;
       try{
@@ -13306,6 +13318,7 @@ function saveCycleFromModal(){
   }
   saveCyclesList();
   renderCyclesTable();
+  populateCycleStepsCycleSel(); renderCycleSteps();
   document.getElementById('cy_code')?.removeAttribute('disabled');
   editingCycleId = null;
   closeM();
@@ -13322,6 +13335,102 @@ function pushCycleToExcel(c){
   graphUpsertTableRow('Cycles', 0, c.id, [c.id, c.name, c.start||'', c.end||'', c.status||'', new Date().toISOString()])
     .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) เข้า Excel`, true); })
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) ไม่สำเร็จ: `+(err?.message||err), false); });
+}
+
+/* ===== กำหนดการขั้นตอนของรอบประเมิน (แก้ไข/ลบ/เพิ่มได้จริง) =====
+   เดิมเป็นตาราง HTML ฝังตายตัวชื่อ "FY2026-ANNUAL" ที่ไม่เคยตรงกับรอบจริง (CLAUDE.md #16/#10)
+   เก็บแยกตามรหัสรอบใน localStorage แล้ว sync ผ่านตาราง FormWeights แถว '__steps__<id>' (JSON) */
+const CYCLE_STEPS_KEY='smlPmsCycleSteps';
+const CYCLE_STEP_DEFAULTS=[
+  ['พนักงานประเมินตนเอง','พนักงานทุกคน',false,'7,3,1'],
+  ['หัวหน้าแผนก / Leader ประเมิน','หัวหน้าทางตรง',true,'7,3,1'],
+  ['ผู้จัดการส่วน สอบทาน','ผู้จัดการส่วน',true,'5,2'],
+  ['GM อนุมัติ','GM',true,'5,2'],
+  ['Calibration','HR + ผู้จัดการส่วน',false,'3'],
+  ['MD-SML อนุมัติ','AMD/MD',true,'3,1'],
+  ['พนักงานรับทราบผล','พนักงานทุกคน',false,'7,3']
+];
+let cycleStepEditing=null;
+function loadCycleStepsStore(){ try{ return JSON.parse(localStorage.getItem(CYCLE_STEPS_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function saveCycleStepsStore(o){ localStorage.setItem(CYCLE_STEPS_KEY, JSON.stringify(o)); }
+function defaultCycleSteps(){ return CYCLE_STEP_DEFAULTS.map((d,i)=>({id:'s'+Date.now().toString(36)+i, order:i+1, name:d[0], owner:d[1], start:'', end:'', canReject:!!d[2], remind:d[3], status:'wait'})); }
+function getCycleSteps(cid){ const o=loadCycleStepsStore(); return (o[cid]&&Array.isArray(o[cid].steps))?o[cid].steps.slice().sort((a,b)=>(a.order||0)-(b.order||0)):null; }
+function putCycleSteps(cid,steps){ const o=loadCycleStepsStore(); o[cid]={steps, at:new Date().toISOString()}; saveCycleStepsStore(o); pushCycleStepsToExcel(cid); }
+function selectedStepCycleId(){ return document.getElementById('cycleStepsCycleSel')?.value||''; }
+function populateCycleStepsCycleSel(){
+  const sel=document.getElementById('cycleStepsCycleSel'); if(!sel) return;
+  const cur=sel.value; const curYear=(typeof getCurrentEvalCycleYear==='function')?getCurrentEvalCycleYear():'';
+  sel.innerHTML=cyclesList.map(c=>`<option value="${escapeAttrCs(c.id)}">${escapeAttrCs(c.id)} — ${escapeAttrCs(c.name)}</option>`).join('');
+  const want=cyclesList.some(c=>c.id===cur)?cur:(cyclesList.find(c=>String(c.year)===String(curYear))||cyclesList[0]||{}).id;
+  if(want) sel.value=want;
+}
+function escapeAttrCs(v){ return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+const CYCLE_STEP_STATUS={wait:'<span class="bd b-s">รอ</span>',active:'<span class="bd b-b">กำลังดำเนินการ</span>',done:'<span class="bd b-g">เสร็จสิ้น</span>'};
+function renderCycleSteps(){
+  const tb=document.getElementById('cycleStepsRows'); if(!tb) return;
+  if(!document.getElementById('cycleStepsCycleSel')?.options.length) populateCycleStepsCycleSel();
+  const cid=selectedStepCycleId(); const t=document.getElementById('cycleStepsTitle'); if(t) t.textContent=cid||'—';
+  const admin=isAdminOrSysadmin();
+  ['cycleStepAddBtn','cycleStepResetBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=admin?'':'none'; });
+  if(!cid){ tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:14px">ยังไม่มีรอบประเมิน</td></tr>'; return; }
+  let steps=getCycleSteps(cid);
+  if(!steps){ steps=defaultCycleSteps(); const o=loadCycleStepsStore(); o[cid]={steps,at:''}; saveCycleStepsStore(o); }
+  if(!steps.length){ tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:14px">ยังไม่มีขั้นตอน — กด "+ เพิ่มขั้นตอน"</td></tr>'; return; }
+  const fd=v=>v?new Date(v).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}):'—';
+  tb.innerHTML=steps.map(st=>`<tr${st.status==='active'?' style="background:#eff6ff"':''}><td>${st.order}</td><td><b>${escapeAttrCs(st.name)}</b></td><td>${escapeAttrCs(st.owner)||'—'}</td><td>${fd(st.start)}</td><td>${fd(st.end)}</td><td>${st.canReject?'✓':'—'}</td><td>${st.remind?escapeAttrCs(st.remind)+' วัน':'—'}</td><td>${CYCLE_STEP_STATUS[st.status]||CYCLE_STEP_STATUS.wait}</td><td style="white-space:nowrap">${admin?`<button class="btn btn-sm" onclick="openCycleStepModal('${st.id}')">✏️</button> <button class="btn btn-sm" onclick="deleteCycleStep('${st.id}')">🗑️</button>`:''}</td></tr>`).join('');
+}
+function openCycleStepModal(id){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin ที่แก้กำหนดการได้','warn'); return; }
+  const cid=selectedStepCycleId(); if(!cid){ smlToast('ยังไม่มีรอบประเมิน','warn'); return; }
+  cycleStepEditing=id||null; const steps=getCycleSteps(cid)||[]; const st=id?steps.find(x=>x.id===id):null;
+  if(id&&!st){ smlToast('ไม่พบขั้นตอนนี้','warn'); return; }
+  const set=(k,v)=>{ const e=document.getElementById(k); if(e) e.value=v??''; };
+  set('cs_order', st?st.order:(steps.reduce((m,x)=>Math.max(m,x.order||0),0)+1)); set('cs_name',st?.name); set('cs_owner',st?.owner);
+  set('cs_start',st?.start); set('cs_end',st?.end); set('cs_remind',st?.remind); set('cs_status',st?.status||'wait');
+  document.getElementById('cs_reject').checked=!!st?.canReject;
+  document.getElementById('mCycleStepTitle').textContent=st?'✏️ แก้ไขขั้นตอน':'➕ เพิ่มขั้นตอน';
+  openM('mCycleStep');
+}
+function saveCycleStepFromModal(){
+  if(!isAdminOrSysadmin()) return;
+  const cid=selectedStepCycleId(); const g=k=>document.getElementById(k)?.value||'';
+  const name=g('cs_name').trim(); if(!name){ smlToast('กรุณากรอกชื่อขั้นตอน','warn'); return; }
+  const start=g('cs_start'), end=g('cs_end');
+  if(start&&end&&end<start){ smlToast('วันครบกำหนดต้องไม่ก่อนวันเริ่ม','warn'); return; }
+  const steps=getCycleSteps(cid)||[];
+  const data={order:parseInt(g('cs_order'))||steps.length+1, name, owner:g('cs_owner').trim(), start, end, canReject:document.getElementById('cs_reject').checked, remind:g('cs_remind').trim(), status:g('cs_status')||'wait'};
+  if(cycleStepEditing){ const st=steps.find(x=>x.id===cycleStepEditing); if(!st){ smlToast('ไม่พบขั้นตอนนี้','warn'); return; } Object.assign(st,data); }
+  else steps.push({id:'s'+Date.now().toString(36), ...data});
+  putCycleSteps(cid,steps); cycleStepEditing=null; closeM(); renderCycleSteps();
+  if(typeof appendAuditLog==='function') appendAuditLog('cycle','บันทึกกำหนดการขั้นตอน',cid,name);
+  smlToast('บันทึกขั้นตอนเรียบร้อย','ok');
+}
+function deleteCycleStep(id){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin','warn'); return; }
+  const cid=selectedStepCycleId(); const steps=getCycleSteps(cid)||[]; const st=steps.find(x=>x.id===id); if(!st) return;
+  if(!confirm('ลบขั้นตอน "'+st.name+'" ?')) return;
+  putCycleSteps(cid,steps.filter(x=>x.id!==id)); renderCycleSteps();
+  if(typeof appendAuditLog==='function') appendAuditLog('cycle','ลบกำหนดการขั้นตอน',cid,st.name);
+  smlToast('ลบขั้นตอนแล้ว','ok');
+}
+function resetCycleStepsToDefault(){
+  if(!isAdminOrSysadmin()) return; const cid=selectedStepCycleId(); if(!cid) return;
+  if(!confirm('รีเซ็ตกำหนดการของรอบ '+cid+' เป็นขั้นตอนมาตรฐาน? (ข้อมูลที่แก้ไว้จะหาย)')) return;
+  putCycleSteps(cid,defaultCycleSteps()); renderCycleSteps();
+}
+function pushCycleStepsToExcel(cid){
+  const cfg=loadMs365Config();
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushCycleStepsToExcel: ยังไม่ได้ตั้งค่า MS365',false); return; }
+  const rec=loadCycleStepsStore()[cid]; if(!rec) return;
+  graphUpsertTableRow('FormWeights',0,'__steps__'+cid,['__steps__'+cid,JSON.stringify(rec),new Date().toISOString()])
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog('Push กำหนดการขั้นตอน ('+cid+') เข้า Excel',true); })
+    .catch(e=>{ if(typeof appendSyncLog==='function') appendSyncLog('Push กำหนดการขั้นตอน ('+cid+') ไม่สำเร็จ: '+(e&&e.message||e),false); });
+}
+function applyCycleStepsRows(rows){
+  const o=loadCycleStepsStore(); let ch=false;
+  rows.forEach(r=>{ const k=String(r[0]??'').trim(); if(!k.startsWith('__steps__')) return; const cid=k.slice(9);
+    try{ const rem=JSON.parse(r[1]); if(rem&&Array.isArray(rem.steps)&&(!o[cid]||!o[cid].at||(rem.at&&rem.at>o[cid].at))){ o[cid]={steps:rem.steps,at:rem.at||''}; ch=true; } }catch(e){} });
+  if(ch){ saveCycleStepsStore(o); renderCycleSteps(); }
 }
 async function ms365SyncCyclesList(silent=false){
   const cfg = loadMs365Config();

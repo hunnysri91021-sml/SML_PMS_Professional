@@ -8893,6 +8893,8 @@ touches employee/attendance/evaluation data.
 
 226. **`html,body{overflow-x:hidden}` (#218) ทำให้ `position:sticky` ของ sidebar พัง** — body กลายเป็น scroll container ที่ไม่เลื่อน sidebar จึงเลื่อนหลุดพร้อมหน้า เหลือช่องว่างสีขาวใต้เมนูซ้าย. แก้เป็น `html{overflow-x:hidden}` + `body{overflow-x:clip}` (clip ไม่สร้าง scroll container). ห้ามใส่ overflow:hidden/auto บน ancestor ของ sticky element; ทดสอบด้วยการ scroll แล้ววัด `#sb` getBoundingClientRect.
 
+227. **ตาราง "กำหนดการขั้นตอน" หน้ารอบประเมินเป็น HTML ฝังตายตัวชื่อ FY2026-ANNUAL (#16/#10) — ตอนนี้ใช้งานจริง.** เก็บแยกตามรหัสรอบใน `smlPmsCycleSteps` (`getCycleSteps/putCycleSteps`), เลือกรอบได้ด้วย `#cycleStepsCycleSel`, เพิ่ม/แก้ไข/ลบ/รีเซ็ตผ่าน `mCycleStep` (Admin/sysadmin เท่านั้น, ตรวจ end>=start), sync ขึ้น Excel ตาราง FormWeights แถว `__steps__<id>` (JSON, ใหม่กว่าชนะด้วย `at`, hook ใน `ms365SyncFormWeights`). ไม่เติมวันที่/สถานะปลอม — ค่าเริ่มต้นวันที่ว่าง สถานะ "รอ". ชุดทดสอบ Playwright ย้ายเข้า `tests/` (`node tests/run-all.js`) — เพิ่มเทสต์ใหม่ที่นั่นแทน scratchpad.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
