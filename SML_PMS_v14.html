@@ -9950,6 +9950,19 @@ function resolveUnitHeadFor(emp){
 }
 /* #233: ตัวกรองตามโครงสร้างองค์กร (กลุ่มงาน/แผนก/ส่วน/ฝ่าย → ค่าย่อย) ใช้ร่วมกันทุกหน้าคิว L1-L4 —
    ค่าในตัวเลือกย่อยมาจากรายชื่อจริงในคิวนั้น (ไม่ hardcode, #3) และใช้ฟิลด์เดียวกับ Bell Curve (BELL_CURVE_GROUP_FIELDS) */
+/* #234: แสดงคิวแยกเป็นฝ่ายๆ (department = u[6]) — เรียงตามฝ่ายแล้วแทรกแถวหัวฝ่าย (พร้อมจำนวนคน) ก่อนกลุ่มพนักงานของฝ่ายนั้น */
+function deptGroupMap(roster, colspan, fn){
+  const dep = r=>((r.emp[6]||'').trim()||'(ไม่ระบุฝ่าย)');
+  const sorted = roster.map((r,i)=>({r,i})).sort((a,b)=>dep(a.r).localeCompare(dep(b.r),'th')||a.i-b.i).map(x=>x.r);
+  const cnt = {}; sorted.forEach(r=>{ const k=dep(r); cnt[k]=(cnt[k]||0)+1; });
+  const out = []; let last = null;
+  sorted.forEach(r=>{
+    const k = dep(r);
+    if(k!==last){ out.push('<tr class="org-grp-row"><td colspan="'+colspan+'" style="background:#eef2ff;color:#3730a3;font-weight:700;font-size:13px;padding:8px 12px;border-top:2px solid #c7d2fe">🏢 ฝ่าย: '+k+' <span style="font-weight:500;color:#64748b">('+cnt[k]+' คน)</span></td></tr>'); last=k; }
+    out.push(fn(r));
+  });
+  return out;
+}
 function applyOrgFilter(key, countId, roster, rerender){
   const anchor = document.getElementById(countId);
   if(!anchor) return roster;
@@ -10050,7 +10063,7 @@ function renderReviewL1Queue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? roster.map(r=>{
+  tbody.innerHTML = roster.length ? deptGroupMap(roster,6,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
@@ -10115,7 +10128,7 @@ function renderReviewQueue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? roster.map(r=>{
+  tbody.innerHTML = roster.length ? deptGroupMap(roster,5,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
@@ -10211,7 +10224,7 @@ function renderGmApproveQueue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? roster.map(r=>{
+  tbody.innerHTML = roster.length ? deptGroupMap(roster,5,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
@@ -10450,7 +10463,7 @@ function renderCalibQueue(){
     });
     if(!stillValid) bellCurveResult = null;
   }
-  tbody.innerHTML = roster.length ? roster.map(r=>{
+  tbody.innerHTML = roster.length ? deptGroupMap(roster,9,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
@@ -10770,7 +10783,7 @@ function renderApproveQueue(){
   const pendingCount = roster.filter(r=>r.state!=='ready' && r.state!=='done').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
   if(btn) btn.textContent = '✅ อนุมัติทั้งหมด ('+readyCount+')';
-  tbody.innerHTML = roster.length ? roster.map(r=>{
+  tbody.innerHTML = roster.length ? deptGroupMap(roster,5,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
