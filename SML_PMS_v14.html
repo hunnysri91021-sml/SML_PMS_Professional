@@ -4741,6 +4741,7 @@ function getMyScopedEmpCodes(){
        หัวหน้าหน่วยเหล่านั้นอีกที (u[9]===ชื่อหัวหน้าหน่วย) */
     const direct = MASTER_USERS.filter(u=>(u[9]||'').trim()===myName);
     const codes = direct.map(u=>u[0]);
+    MASTER_USERS.forEach(u=>{ if((u[10]||'').trim()===myName) codes.push(u[0]); }); // #233: ช่อง "หัวหน้าแผนก (L2)" ที่ Admin กำหนดตรง
     direct.filter(u=>u[2]==='unit').forEach(unitHead=>{
       const unitName = (unitHead[1]||'').trim();
       MASTER_USERS.forEach(u=>{ if((u[9]||'').trim()===unitName) codes.push(u[0]); });
@@ -5670,6 +5671,7 @@ function canViewCalibGrade(){
    ขั้นสุดท้ายจริงตาม #156/#161 — ส่วนนี้เป็นกล่องแยกต่างหาก ไม่แก้เงื่อนไขเดิมของกล่องนั้น) */
 function buildCalibGradeSectionHtml(draft, sectionNum, includeHeader){
   if(!canViewCalibGrade()) return '';
+  if(draft && isGradeHiddenFor(draft[0], draft[2])) return ''; // #233: เจ้าของผล/พนักงานต้องไม่เห็นเกรดถ้า Admin ยังไม่เปิดให้แสดง
   const rank = draft ? evalStatusRank(draft[draft.length-1]) : -1;
   const calibrated = rank >= evalStatusRank('Calibrated');
   const grade = calibrated ? draft[draft.length-2] : '';
@@ -9501,6 +9503,15 @@ function hasVisibleResult(status){ return evalStatusRank(status) >= evalStatusRa
 function resolveL1Reviewer(emp){
   if(!emp) return null;
   if(['l1','l2','gm','exec','admin','sysadmin'].includes(emp[2])) return null; // อยู่ระดับนี้หรือสูงกว่าแล้ว ไม่ต้องมีใครสอบทานขั้น L1
+  /* #233: ช่อง "หัวหน้าแผนก (L2)" (u[10]) ที่ Admin กำหนดไว้ในตารางมอบหมายผู้ประเมิน/ข้อมูลพนักงาน คือผู้สอบทาน
+     ขั้น L1Reviewed โดยตรง — เดิม resolver อ่านแต่ u[9] แล้วไต่ขึ้นหาหัวหน้าแผนก ทำให้ถ้า HR กรอกช่อง L2 ไว้แต่
+     ช่อง L1 ว่าง/ไม่ใช่หัวหน้าหน่วย ระบบหาผู้ประเมินไม่เจอ ("ข้อมูลดึงมาไม่ถูก") จึงใช้ u[10] ก่อน แล้วค่อย
+     fallback ไปวิธีเดิม (ไต่จาก u[9]) */
+  const nameDept = (emp[10]||'').trim();
+  if(nameDept && nameDept!=='—'){
+    const dh = MASTER_USERS.find(u=>(u[1]||'').trim()===nameDept && u[12]==='active' && u[0]!==emp[0]);
+    if(dh) return dh;
+  }
   const name1 = (emp[9]||'').trim();
   if(!name1 || name1==='—') return null;
   const sup = MASTER_USERS.find(u=>(u[1]||'').trim()===name1 && u[12]==='active');
@@ -9937,6 +9948,31 @@ function resolveUnitHeadFor(emp){
   if(!name || name==='—') return null;
   return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[2]==='unit') || null;
 }
+/* #233: ตัวกรองตามโครงสร้างองค์กร (กลุ่มงาน/แผนก/ส่วน/ฝ่าย → ค่าย่อย) ใช้ร่วมกันทุกหน้าคิว L1-L4 —
+   ค่าในตัวเลือกย่อยมาจากรายชื่อจริงในคิวนั้น (ไม่ hardcode, #3) และใช้ฟิลด์เดียวกับ Bell Curve (BELL_CURVE_GROUP_FIELDS) */
+function applyOrgFilter(key, countId, roster, rerender){
+  const anchor = document.getElementById(countId);
+  if(!anchor) return roster;
+  if(!document.getElementById('orgf_'+key+'_f')){
+    const wrap = document.createElement('span');
+    wrap.style.cssText = 'display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center';
+    wrap.innerHTML = '<select class="btn" id="orgf_'+key+'_f" title="เลือกระดับโครงสร้างองค์กรที่จะกรอง">'
+      + Object.keys(BELL_CURVE_GROUP_FIELDS).map(k=>'<option value="'+k+'">'+(k==='group'?'กลุ่มงาน':BELL_CURVE_GROUP_LABELS[k].split(' ')[0])+'</option>').join('')
+      + '</select><select class="btn" id="orgf_'+key+'_v" title="เลือกค่าย่อย"></select>';
+    anchor.parentNode.insertBefore(wrap, anchor);
+    document.getElementById('orgf_'+key+'_f').onchange = ()=>{ document.getElementById('orgf_'+key+'_v').value=''; rerender(); };
+    document.getElementById('orgf_'+key+'_v').onchange = ()=>rerender();
+  }
+  const f = document.getElementById('orgf_'+key+'_f'), v = document.getElementById('orgf_'+key+'_v');
+  const idx = BELL_CURVE_GROUP_FIELDS[f.value];
+  const cur = v.value;
+  const counts = {};
+  roster.forEach(r=>{ const x=(r.emp[idx]||'').trim()||'(ไม่ระบุ)'; counts[x]=(counts[x]||0)+1; });
+  const vals = Object.keys(counts).sort();
+  v.innerHTML = '<option value="">ทุกค่า ('+roster.length+' คน)</option>' + vals.map(x=>'<option value="'+x.replace(/"/g,'&quot;')+'">'+x+' ('+counts[x]+' คน)</option>').join('');
+  v.value = vals.includes(cur) ? cur : '';
+  return v.value ? roster.filter(r=>((r.emp[idx]||'').trim()||'(ไม่ระบุ)')===v.value) : roster;
+}
 function populateReviewManagerFilter(selectId, roster, resolverFn){
   const sel = document.getElementById(selectId);
   if(!sel) return;
@@ -10007,9 +10043,10 @@ function renderReviewL1Queue(){
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveL1Reviewer, me[2]), me[0], 'Submitted', cycle) : [];
-  populateReviewManagerFilter('reviewl1Filter', fullRoster, resolveUnitHeadFor);
+  const orgRoster = applyOrgFilter('reviewl1','reviewl1Count', fullRoster, renderReviewL1Queue);
+  populateReviewManagerFilter('reviewl1Filter', orgRoster, resolveUnitHeadFor);
   renderReviewerFilterDiagNote('reviewl1FilterDiag', fullRoster, resolveUnitHeadFor, 9, 'หัวหน้าหน่วย (L1)');
-  const roster = filterRosterByManager('reviewl1Filter', fullRoster, resolveUnitHeadFor);
+  const roster = filterRosterByManager('reviewl1Filter', orgRoster, resolveUnitHeadFor);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -10071,9 +10108,10 @@ function renderReviewQueue(){
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveL2Reviewer, me[2]), me[0], 'L1Reviewed', cycle) : [];
-  populateReviewManagerFilter('reviewFilter', fullRoster, resolveL1Reviewer);
-  renderReviewerFilterDiagNote('reviewFilterDiag', fullRoster, resolveL1Reviewer, 9, 'หัวหน้าหน่วย (L1)');
-  const roster = filterRosterByManager('reviewFilter', fullRoster, resolveL1Reviewer);
+  const orgRoster = applyOrgFilter('review','reviewCount', fullRoster, renderReviewQueue);
+  populateReviewManagerFilter('reviewFilter', orgRoster, resolveL1Reviewer);
+  renderReviewerFilterDiagNote('reviewFilterDiag', fullRoster, resolveL1Reviewer, 10, 'หัวหน้าแผนก (L2)');
+  const roster = filterRosterByManager('reviewFilter', orgRoster, resolveL1Reviewer);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -10166,9 +10204,10 @@ function renderGmApproveQueue(){
   const me = CURRENT_SESSION_USER;
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveGmReviewer, me[2]), me[0], 'L2Reviewed', cycle) : [];
-  populateReviewManagerFilter('gmApproveFilter', fullRoster, resolveL2Reviewer);
+  const orgRoster = applyOrgFilter('gmapprove','gmApproveCount', fullRoster, renderGmApproveQueue);
+  populateReviewManagerFilter('gmApproveFilter', orgRoster, resolveL2Reviewer);
   renderReviewerFilterDiagNote('gmApproveFilterDiag', fullRoster, resolveL2Reviewer, 19, 'ผู้ตรวจ MGR (L3)');
-  const roster = filterRosterByManager('gmApproveFilter', fullRoster, resolveL2Reviewer);
+  const roster = filterRosterByManager('gmApproveFilter', orgRoster, resolveL2Reviewer);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -10726,7 +10765,7 @@ function renderApproveQueue(){
   /* resolverFn=null เหมือน renderCalibQueue() — AMD/MD scope ทั้งบริษัทผ่าน getMyScopedEmpCodes()
      อยู่แล้ว ไม่มี field สายบังคับบัญชาเฉพาะขั้นนี้ให้ resolve รายคน */
   const cycle = getCurrentEvalCycleYear();
-  const roster = buildTierRoster(null, null, 'CalibChecked', cycle);
+  const roster = applyOrgFilter('approve','approveCount', buildTierRoster(null, null, 'CalibChecked', cycle), renderApproveQueue);
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state!=='ready' && r.state!=='done').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -12447,7 +12486,12 @@ function resetScoreWeightsForLevel(lv){
 const GRADE_VIS_KEY='smlPmsGradeVisibility';
 function loadGradeVisibility(){ try{ const o=JSON.parse(localStorage.getItem(GRADE_VIS_KEY)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
 function saveGradeVisibility(o){ try{ localStorage.setItem(GRADE_VIS_KEY, JSON.stringify(o)); }catch(e){} }
-function isGradeShownToEmployee(cycle){ return loadGradeVisibility()[String(cycle==null?'':cycle).trim()]===true; }
+/* #233: เวลาที่ Admin ตั้งค่าล่าสุดต่อรอบ — ตอน sync ยอมรับค่าจาก Excel เฉพาะที่ "ใหม่กว่า" เท่านั้น เดิมทุกเครื่อง push gradeVis
+   เต็มก้อนทุกครั้ง (ทุกแถวระดับ) เครื่องที่ค่าเก่าเป็น "แสดง" จึงเขียนทับตอนที่ Admin สั่ง "ไม่แสดง" แล้วได้ ทำให้พนักงานเห็นเกรดอีก */
+const GRADE_VIS_AT_KEY='smlPmsGradeVisibilityAt';
+function loadGradeVisAt(){ try{ const o=JSON.parse(localStorage.getItem(GRADE_VIS_AT_KEY)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
+function saveGradeVisAt(o){ try{ localStorage.setItem(GRADE_VIS_AT_KEY, JSON.stringify(o)); }catch(e){} }
+function isGradeShownToEmployee(cycle){ const y=String(cycle==null?'':cycle).trim(); return loadGradeVisibility()[y]===true && !!loadGradeVisAt()[y]; /* #233: ค่า true ที่ไม่มีเวลาตั้งค่า (ตกค้างจาก sync เก่า) ถือว่าไม่แสดง */ }
 /* ซ่อนเกรดเมื่อผู้ดูคือเจ้าของผลเอง (หรือ role พนักงานทั่วไป) และ Admin ยังไม่เปิดให้แสดงของรอบนั้น */
 function isGradeHiddenFor(empCode, cycle){
   const me=(typeof CURRENT_SESSION_USER!=='undefined')?CURRENT_SESSION_USER:null;
@@ -12457,7 +12501,7 @@ function isGradeHiddenFor(empCode, cycle){
 function onGradeVisSettingChange(){
   const y=(document.getElementById('cycleYearSetup')?.value||'').trim();
   const v=document.getElementById('gradeVisSetup')?.value==='1';
-  const o=loadGradeVisibility(); if(y){ o[y]=v; saveGradeVisibility(o); }
+  const o=loadGradeVisibility(); if(y){ o[y]=v; saveGradeVisibility(o); const at=loadGradeVisAt(); at[y]=Date.now(); saveGradeVisAt(at); }
   if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel();
   smlToast(v?'เปิดให้พนักงานเห็นเกรดของรอบ '+y+' แล้ว':'ซ่อนเกรดจากพนักงาน รอบ '+y+' แล้ว','ok');
 }
@@ -12556,7 +12600,7 @@ async function pushFormWeightsToExcel(){
       const base = getBaseScoreWeights(lv);
       const byYear = {}; const allYears = loadScoreWeightsByYear();
       Object.keys(allYears).forEach(y=>{ if(allYears[y]?.[lv]) byYear[y]=allYears[y][lv]; });
-      const payload = { factors: SML_FORMS[lv].factors, ypct: base.ypct, zpct: base.zpct, kpct: base.kpct||0, byYear, gradeVis: loadGradeVisibility() };
+      const payload = { factors: SML_FORMS[lv].factors, ypct: base.ypct, zpct: base.zpct, kpct: base.kpct||0, byYear, gradeVis: loadGradeVisibility(), gradeVisAt: loadGradeVisAt() };
       await graphUpsertTableRow(FORM_WEIGHTS_TABLE, 0, lv, [lv, JSON.stringify(payload), new Date().toISOString()]);
     }
     if(typeof appendSyncLog==='function') appendSyncLog('Push น้ำหนักแบบประเมินเข้า Excel', true);
@@ -12612,7 +12656,11 @@ async function ms365SyncFormWeights(silent=false){
             loadScoreWeightsOverride();
           }
           if(!Array.isArray(parsed) && parsed.gradeVis && typeof parsed.gradeVis==='object'){
-            const gv=loadGradeVisibility(); Object.keys(parsed.gradeVis).forEach(y=>{ gv[y]=parsed.gradeVis[y]===true; }); saveGradeVisibility(gv); syncGradeVisSettingUi();
+            /* #233: รับค่าจาก Excel เฉพาะรอบที่มีเวลาตั้งค่าใหม่กว่าในเครื่องนี้ — แถวเก่าที่ไม่มีเวลา (gradeVisAt) ถูกละเลย
+               ไม่ให้เปิดเผยเกรดโดยไม่ได้ตั้งใจ */
+            const gv=loadGradeVisibility(), gat=loadGradeVisAt(); const rat=parsed.gradeVisAt||{};
+            Object.keys(parsed.gradeVis).forEach(y=>{ const t=Number(rat[y])||0; if(t>(Number(gat[y])||0)){ gv[y]=parsed.gradeVis[y]===true; gat[y]=t; } });
+            saveGradeVisibility(gv); saveGradeVisAt(gat); syncGradeVisSettingUi();
           }
           applied++;
         }
