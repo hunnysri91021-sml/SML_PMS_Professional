@@ -25,8 +25,13 @@ const {open,ok,done,INJECT}=require('./helpers');
     let csv=null; const orig=window.downloadCsv; window.downloadCsv=(name,h,rows)=>{ csv=rows; };
     exportCalibTableList(); window.downloadCsv=orig;
     out.exportHasBC=!!csv&&csv.some(r=>String(r[10]).endsWith("/6"))&&csv.some(r=>/^[ABCDE]$/.test(r[9]));
-    // ยืนยัน → Calibrated + push Excel
+    // #230: ไม่มีข้อมูลเวลา → ห้ามยืนยัน
     window.__pushes.length=0;
+    await confirmCalibration();
+    out.blocked=getDrafts().filter(d=>d[0].startsWith('BC')).every(d=>d[d.length-1]==='Acknowledged')&&window.__pushes.length===0;
+    // มีข้อมูลเวลาครบแล้ว → ยืนยัน → Calibrated + push Excel
+    xs.forEach((x,i)=>{ ATTENDANCE['BC'+i]={lateCount:0,earlyCount:0,sickDay:0,personalDay:0,absentDay:0}; });
+    renderCalibQueue(); runBellCurveCalculation();
     await confirmCalibration();
     const after=getDrafts().filter(d=>d[0].startsWith('BC'));
     out.status=[...new Set(after.map(d=>d[d.length-1]))].join();
@@ -50,6 +55,7 @@ const {open,ok,done,INJECT}=require('./helpers');
   ok(r.survive,'#202 ผลคำนวณรอดการ re-render จาก auto-sync');
   ok(r.invalidated,'แก้คะแนนแล้วผลถูก invalidate');
   ok(r.exportHasBC,'#203 export ก่อนยืนยันใช้เกรด/อันดับ Bell Curve');
+  ok(r.blocked,'#230 ไม่มีข้อมูลเวลา → ยืนยันถูกบล็อก ไม่ push');
   ok(r.status==='Calibrated','ยืนยันแล้วสถานะ = Calibrated ('+r.status+')');
   ok(r.finalGrades.length===6&&/^[ABCDE]{6}$/.test(r.finalGrades),'เกรดสุดท้ายเป็นเกรด Bell Curve '+r.finalGrades);
   ok(r.pushed===6,'#205/206 push Appraisals ครบ 6 ใบ ('+r.pushed+')');

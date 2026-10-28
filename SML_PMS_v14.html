@@ -10554,6 +10554,14 @@ async function confirmCalibration(){
   /* #224: ตรวจสถานะล่าสุดก่อนยืนยัน — ข้ามใบที่ไม่ได้อยู่ขั้น Acknowledged แล้ว */
   { const okCal = new Set(await guardFreshStatus(confirmInputs.map(i=>i.dataset.key),'Acknowledged')); confirmInputs = confirmInputs.filter(i=>okCal.has(i.dataset.key)); }
   if(!confirmInputs.length) return;
+  /* #230: ห้ามยืนยัน Calibration ถ้าคนที่จะยืนยันยังไม่มีข้อมูลเวลาในระบบ — Z จะมาจากค่าตัวอย่าง ไม่ใช่ข้อมูลจริง */
+  { const noAtt = confirmInputs.map(i=>i.dataset.key.split('|')[0]).filter(c=>!ATTENDANCE[c]);
+    if(noAtt.length){
+      const nm = noAtt.slice(0,5).map(c=>{ const e=MASTER_USERS.find(u=>u[0]===c); return e?e[1]:c; }).join(', ') + (noAtt.length>5?` และอีก ${noAtt.length-5} คน`:'');
+      smlToast(`ยืนยันไม่ได้: ${noAtt.length} คนยังไม่มีข้อมูลเวลา (${nm}) — ดึงจาก Excel หรือกรอกที่หน้านำเข้าข้อมูลเวลาก่อน`,'warn');
+      if(typeof appendSyncLog==='function') appendSyncLog(`confirmCalibration: ถูกบล็อก — ไม่มีข้อมูลเวลา ${noAtt.length} คน`, false);
+      return;
+    } }
   const drafts=getDrafts();
   const changed=[];
   /* ผู้ใช้รายงาน "กดแล้ว เกรดเปลี่ยน แต่ไม่ save ใน excel" — ตรวจโค้ดแล้วไม่พบ bug ชัดเจน แต่ไม่มีทาง
