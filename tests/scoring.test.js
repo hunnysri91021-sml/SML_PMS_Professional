@@ -13,7 +13,7 @@ const {open,ok,done}=require('./helpers');
     out.zDrop=['emp','ldr','mgr'].map(k=>Z_TABLE[k][6]<Z_TABLE[k][5]);
     // #61: สถานะ
     out.final=[isFinalStatus('Approved'),isFinalStatus('Calibrated')];
-    out.vis=[hasVisibleResult('Submitted'),hasVisibleResult('GMApproved'),hasVisibleResult('Approved')];
+    out.gmv=hasVisibleResult('GMApproved'); out.vis=[hasVisibleResult('Submitted'),hasVisibleResult('ResultSent'),hasVisibleResult('Approved')];
     out.rank=evalStatusRank('Submitted')<evalStatusRank('L1Reviewed')&&evalStatusRank('L2Reviewed')<evalStatusRank('GMApproved')&&evalStatusRank('Acknowledged')<evalStatusRank('Calibrated')&&evalStatusRank('Calibrated')<evalStatusRank('Approved');
     // #160/#170: Graph ส่ง EmpID/รอบ เป็น number
     const row=normalizeAppraisalRow([90526,'x',2569,'of',1,2,3,4,5,6,7,8,9,10,null,null,null,null,50,20,70]);
@@ -31,7 +31,7 @@ const {open,ok,done}=require('./helpers');
   ok(JSON.stringify(r.zMax)==='[30,20,10]','Z max 30/20/10: '+r.zMax);
   ok(r.zDrop.every(Boolean),'Z drops at day 6');
   ok(r.final[0]&&!r.final[1],'isFinalStatus only Approved');
-  ok(!r.vis[0]&&r.vis[1]&&r.vis[2],'hasVisibleResult from GMApproved');
+  ok(!r.gmv,'GMApproved ยังไม่ถึงพนักงาน'); ok(!r.vis[0]&&r.vis[1]&&r.vis[2],'hasVisibleResult from ResultSent (not GMApproved)');
   ok(r.rank,'status order');
   ok(r.norm.join()==='string,string,string,number','normalizeAppraisalRow types: '+r.norm);
   ok(r.heal.join()==='string,string','getDrafts self-heal: '+r.heal);

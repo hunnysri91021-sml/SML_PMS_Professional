@@ -18,9 +18,9 @@ const {open,ok,done,INJECT}=require('./helpers');
     window.isWorkerConfigured=()=>true; a[21]='Uaaa';
     const l=await sendLineReminder([a,c],'hello'); out.line=[l.sent,JSON.stringify(window.__calls.at(-1).body.userIds)];
     const l0=await sendLineReminder([c],'hello'); out.lineNone=l0.sent===0&&!!l0.reason;
-    // #181/#182: เป้าหมายแจ้งผล = GMApproved ขึ้นไป และยังไม่ถูกแจ้ง; แจ้งแล้วย้ายไปรายการ "แจ้งไปแล้ว"
+    // #181/#182: เป้าหมายแจ้งผล = ResultSent ขึ้นไป และยังไม่ถูกแจ้ง; แจ้งแล้วย้ายไปรายการ "แจ้งไปแล้ว"
     const cy=getCurrentEvalCycleYear();
-    const d1=__draft('N1','GMApproved',80), d2=__draft('N2','Submitted',80);
+    const d1=__draft('N1','ResultSent',80), d2=__draft('N2','Submitted',80);
     out.t1=getResultNotifyTargets().map(t=>t.emp[0]).filter(x=>/^N/.test(x)).join();
     markResultNotified(draftKey(d1),'auto');
     out.t2=getResultNotifyTargets().map(t=>t.emp[0]).filter(x=>/^N/.test(x)).join();
@@ -31,7 +31,7 @@ const {open,ok,done,INJECT}=require('./helpers');
   ok(r.noWorker[0]===false&&r.noWorker[1]===0,'ไม่ตั้ง Worker → configured:false ไม่ยิง');
   ok(r.line[0]===1&&r.line[1]==='["Uaaa"]','LINE ส่งเฉพาะคนที่มี LINE ID: '+r.line);
   ok(r.lineNone,'ไม่มีใครมี LINE ID → แจ้งเหตุผล ไม่แกล้งว่าส่ง');
-  ok(r.t1==='N1','เป้าหมายแจ้งผล = GMApproved ขึ้นไปเท่านั้น: '+r.t1);
+  ok(r.t1==='N1','เป้าหมายแจ้งผล = ResultSent (ส่งผลให้พนักงานแล้ว) ขึ้นไปเท่านั้น: '+r.t1);
   ok(r.t2===''&&r.already==='auto','แจ้งแล้ว (auto) ออกจากเป้าหมายและขึ้นรายการ "แจ้งไปแล้ว"');
   ok(errs.length===0,'no page errors '+errs);
   await b.close(); done();

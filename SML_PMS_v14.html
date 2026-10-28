@@ -2091,7 +2091,7 @@ img,svg,canvas{max-width:100%}
 
   <!-- ========== GM APPROVE ========== -->
   <section class="page" id="pg-gmapprove">
-    <div class="ph"><div><h2>อนุมัติ GM (ขั้นที่ 5)</h2><p>ใบประเมินที่ผ่านสอบทานผู้จัดการส่วนแล้ว (สถานะ L2Reviewed) — GM อนุมัติก่อนจะส่งผลให้พนักงานรับทราบ</p></div>
+    <div class="ph"><div><h2>อนุมัติ GM (ขั้นที่ 5)</h2><p>ใบประเมินที่ผ่านสอบทานผู้จัดการส่วนแล้ว (สถานะ L2Reviewed) — GM อนุมัติ แล้วกด “ยืนยันส่งผลให้พนักงาน” (ตารางล่าง) ก่อนพนักงานจึงจะเห็นผลและรับทราบได้</p></div>
     <div class="ph-act"><button class="btn" onclick="rejectGmSelected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveGmSelected()">✓ อนุมัติที่เลือก</button></div></div>
 
     <div class="card">
@@ -2100,6 +2100,15 @@ img,svg,canvas{max-width:100%}
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
         <tbody id="gmApproveRows"></tbody>
+      </table></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="card-h"><h3>📤 ผลที่ GM อนุมัติแล้ว — ยืนยันส่งผลให้พนักงาน</h3><div class="r"><span class="bd b-y" id="gmSendCount">0 รอส่ง</span><button class="btn btn-p" onclick="sendResultToEmployeesSelected()">📤 ยืนยันส่งผลให้พนักงาน (ที่เลือก)</button></div></div>
+      <div class="al al-i" style="margin:10px 14px"><span>ℹ️</span><div>พนักงานจะเห็นผลและลงชื่อรับทราบได้ <span style="font-weight:700">หลังกดยืนยันส่ง</span> เท่านั้น — เลือกรายการแล้วกดปุ่มด้านบนขวา ระบบจะแจ้งพนักงานทางอีเมล/LINE ให้ด้วย</div></div>
+      <div class="tw"><table>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gmsend-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>สถานะการส่งผล</th></tr></thead>
+        <tbody id="gmSendRows"></tbody>
       </table></div>
     </div>
   </section>
@@ -2182,7 +2191,7 @@ img,svg,canvas{max-width:100%}
 
   <!-- ========== APPROVE (AMD/MD) ========== -->
   <section class="page" id="pg-approve">
-    <div class="ph"><div><h2>อนุมัติขั้นสุดท้าย (AMD/MD) — ขั้นที่ 7</h2><p>ใบประเมินที่ผ่าน Calibration แล้ว รอการอนุมัติจาก MD-SML (คุณเชิดชัย) ก่อนส่งต่อให้ HR นำเข้าระบบ Payroll</p></div>
+    <div class="ph"><div><h2>อนุมัติขั้นสุดท้าย (AMD/MD) — ขั้นที่ 7</h2><p>ใบประเมินที่ผ่าน Calibration แล้ว รอการอนุมัติจาก MD-SML (คุณเชิดชัย) — อนุมัติแล้วระบบแจ้ง HR/Admin เพื่อนำผลไปคำนวณเงินเดือน (ไม่ส่งให้พนักงานในขั้นนี้)</p></div>
     <div class="ph-act"><button class="btn" onclick="exportPayrollData()">💰 Export ข้อมูล Payroll</button><button class="btn" onclick="rejectApproveAll()">↩️ ตีกลับทั้งหมด</button><button class="btn btn-ok" id="approveAllBtn" onclick="openM('mApprove')">✅ อนุมัติทั้งหมด (0)</button></div></div>
 
     <div class="card">
@@ -3556,7 +3565,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     <div class="kv"><span>จำนวนใบประเมิน</span><b id="mApproveCount">0 ใบ</b></div>
     <div class="kv"><span>ช่วงผลงาน</span><b>1 ม.ค. 2568 – วันที่ประเมิน</b></div>
     <div class="kv"><span>ช่วงเวลา (Z)</span><b>1 ธ.ค. 2567 – 30 พ.ย. 2568</b></div>
-    <div class="al al-i" style="margin:15px 0 0"><span>ℹ️</span><div>หลังอนุมัติ HR&GA จะแจ้งผลการประเมินให้พนักงานรับทราบและลงนาม</div></div>
+    <div class="al al-i" style="margin:15px 0 0"><span>ℹ️</span><div>หลังอนุมัติ ระบบจะส่งอีเมลแจ้ง HR/Admin เพื่อนำผลไปคำนวณเงินเดือน (ไม่แจ้งพนักงานในขั้นนี้ — พนักงานรับทราบผลไปแล้วก่อนหน้า)</div></div>
     <div class="fg" style="margin-top:15px"><label>ลายเซ็นอิเล็กทรอนิกส์ <i>*</i></label><input id="mApproveSign" placeholder="พิมพ์ชื่อ-สกุลเพื่อยืนยัน"></div>
   </div>
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-ok" onclick="approveAllFinal()">ยืนยันอนุมัติ</button></div>
@@ -3647,14 +3656,14 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
      กับช่องลายเซ็น GM./AGM./MD) — ยังไม่เคยถูกแจ้ง (RESULT_NOTIFIED_KEY) เหมือนเดิม ไม่รวมกับ mReminder
      (ซึ่งเป็นการเตือนให้ "ไปทำ" ไม่ใช่ "แจ้งผล") เพราะเป้าหมาย/ข้อความ/ความถี่ในการใช้ต่างกันโดยสิ้นเชิง -->
 <div class="ov" id="mResultNotify"><div class="md" style="max-width:470px">
-  <div class="md-h"><h3>📬 แจ้งผลการประเมิน (GM อนุมัติแล้ว)</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-h"><h3>📬 แจ้งผลการประเมิน (ส่งผลให้พนักงานแล้ว)</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
     <div class="fg"><label>ช่องทาง</label>
       <label style="font-weight:400"><input type="checkbox" id="rn_ch_email" checked style="width:auto;margin-right:5px">อีเมล</label>
       <label style="font-weight:400;margin-left:14px"><input type="checkbox" id="rn_ch_line" checked style="width:auto;margin-right:5px">LINE <small style="color:#64748b">(เฉพาะคนที่มี LINE User ID บันทึกไว้แล้ว)</small></label>
     </div>
     <div class="fg"><label>ข้อความ <small style="color:#64748b">(ระบบจะแนบลิงก์เข้าเว็บแอปต่อท้ายให้อัตโนมัติ ถ้าตั้งค่าไว้ที่หน้า MS365 Proxy)</small></label><textarea id="rn_message" rows="4">ผลการประเมินผลการปฏิบัติงานของท่านได้รับการอนุมัติจาก GM แล้ว กรุณาเข้าดูผลที่หน้า "6. ผลประเมิน" ในระบบ SML PMS</textarea></div>
-    <div class="fg"><label>รายชื่อที่ GM อนุมัติแล้วแต่ยังไม่ได้แจ้ง</label>
+    <div class="fg"><label>รายชื่อที่ส่งผลให้พนักงานแล้วแต่ยังไม่ได้แจ้งทางอีเมล/LINE</label>
       <div id="rn_preview" style="max-height:160px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
     </div>
     <!-- #182: รายชื่อที่แจ้งไปแล้ว (ทั้งแจ้งอัตโนมัติตอน GM อนุมัติ และแจ้งด้วยมือจากปุ่มนี้เอง) —
@@ -5813,7 +5822,7 @@ function buildReviewerSignFlowHtml(code, cycle, lv){
      แทนลายเซ็นอนุมัติขั้นสุดท้าย (getApprovalSignature, #39) ซึ่งเป็นคนละขั้นกัน */
   const gmSignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'GMApproved') : null;
   const gmNoReviewer = (typeof resolveGmReviewer==='function') && !resolveGmReviewer(emp);
-  const gmVisible = (typeof hasVisibleResult==='function') ? hasVisibleResult(status||'') : rank>=4;
+  const gmVisible = (typeof isGmApprovedOrBeyond==='function') ? isGmApprovedOrBeyond(status||'') : rank>=4;
   return `<div class="F-signs s4">
     ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=(typeof evalStatusRank==='function'?evalStatusRank('Acknowledged'):0), empName, ackDateText(code,cycle), (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):'')}
     ${_sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':'')}
@@ -5890,7 +5899,7 @@ function renderMyResult(){
      ไปไกลกว่านั้น (Acknowledged/Calibrated/Approved) = รับทราบแล้ว → โชว์แค่ข้อความยืนยัน ไม่มีปุ่มซ้ำ
      (กดซ้ำไม่ได้ ไม่มีประโยชน์ที่จะกดซ้ำ) — ดู CLAUDE.md #61 เรื่องลำดับขั้นจริง */
   const latestStatus = latest[latest.length-1];
-  const ackBtn = latestStatus==='GMApproved'
+  const ackBtn = latestStatus==='ResultSent'
     ? ` <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="acknowledgeMyResult('${latest[0]}','${latest[2]}')">✅ รับทราบผลการประเมิน</button>`
     : (evalStatusRank(latestStatus) >= evalStatusRank('Acknowledged') ? ` <span class="bd b-g" style="margin-left:8px">✓ รับทราบแล้ว</span>` : '');
   /* #173: พนักงานขอ "save เก็บข้อมูลไว้เอง" — ใช้ printSingleDraft()/buildEvalPrintPage() ตัวเดียวกับทุก
@@ -5921,7 +5930,7 @@ function renderMyResult(){
   /* อันดับในฝ่าย/การเทียบกับเพื่อนร่วมงานเป็นข้อมูลอ่อนไหว — ไม่แสดงให้พนักงานเห็น (CLAUDE.md #211) */
   const sigKey = me[0]+'|'+latest[2];
   const sig = (typeof getApprovalSignature==='function') ? getApprovalSignature(sigKey) : null;
-  const stageLabel = {GMApproved:'GM อนุมัติแล้ว — รอรับทราบ', Acknowledged:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Calibrated:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', CalibChecked:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Approved:'อนุมัติขั้นสุดท้ายแล้ว'}[latestStatus] || latestStatus;
+  const stageLabel = {ResultSent:'ส่งผลให้ท่านแล้ว — รอรับทราบ', Acknowledged:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Calibrated:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', CalibChecked:'รับทราบแล้ว — รอผลอนุมัติขั้นสุดท้าย', Approved:'อนุมัติขั้นสุดท้ายแล้ว'}[latestStatus] || latestStatus;
   set('myResultApproval', stageLabel);
   if(sig){
     set('myResultApprovalSub', new Date(sig.signedAt).toLocaleDateString('th-TH'));
@@ -5996,7 +6005,7 @@ function printEvalForm() {
      buildReviewerSignFlowHtml() เพิ่งแก้ไว้ด้านบน (hasVisibleResult + getStageSigner(...,'GMApproved')) */
   const gmSignerRec = (typeof getStageSigner==='function') ? getStageSigner(empCode, printCycle, 'GMApproved') : null;
   const gmNoReviewer = (typeof resolveGmReviewer==='function') && !resolveGmReviewer(u);
-  const gmVisible = (typeof hasVisibleResult==='function') ? hasVisibleResult(liveStatus||'') : liveRank>=4;
+  const gmVisible = (typeof isGmApprovedOrBeyond==='function') ? isGmApprovedOrBeyond(liveStatus||'') : liveRank>=4;
   /* #176: ผู้ใช้ขอให้ใบรายงานแบบฟอร์มที่สอบทานแล้วแต่ละระดับ แสดง "ชื่อจริง" ของผู้ที่ลงนามสอบทาน L1/L2
      ด้วย ไม่ใช่แค่ชิป "✓ ยืนยันแล้ว" เฉยๆ — เดิม signedName ของ 2 แถวนี้ใช้ u[9]/u[10] (ชื่อในช่อง
      สายบังคับบัญชาของพนักงานคนนี้เอง) ซึ่งว่างเปล่าได้จริงถ้าขั้นนั้นถูกข้ามอัตโนมัติ (ไม่มีผู้สอบทาน
@@ -8817,7 +8826,7 @@ async function notifyPrevEvaluatorOfEdit(payload, prevActor){
   const actorEmp = MASTER_USERS.find(u=>u[0]===prevActor.code);
   if(!actorEmp || !actorEmp[15]) return { sent:false, reason:'ผู้ดำเนินการก่อนหน้าไม่มีอีเมลบันทึกไว้ในระบบ' };
   const [empCode, empName, cycle] = payload;
-  const stepLabel = {Submitted:'ส่งแบบประเมิน', L1Reviewed:'สอบทานหัวหน้าแผนก', L2Reviewed:'สอบทาน L2', RejectedL2Review:'ตีกลับจากสอบทาน L2', GMApproved:'อนุมัติ GM', RejectedGmApproval:'ตีกลับจากอนุมัติ GM', Acknowledged:'รับทราบผลการประเมิน', Calibrated:'Calibration', Approved:'อนุมัติขั้นสุดท้าย', RejectedFinalApproval:'ตีกลับจากอนุมัติขั้นสุดท้าย'}[prevActor.step] || prevActor.step;
+  const stepLabel = {Submitted:'ส่งแบบประเมิน', L1Reviewed:'สอบทานหัวหน้าแผนก', L2Reviewed:'สอบทาน L2', RejectedL2Review:'ตีกลับจากสอบทาน L2', GMApproved:'อนุมัติ GM', ResultSent:'ส่งผลให้พนักงาน', RejectedGmApproval:'ตีกลับจากอนุมัติ GM', Acknowledged:'รับทราบผลการประเมิน', Calibrated:'Calibration', Approved:'อนุมัติขั้นสุดท้าย', RejectedFinalApproval:'ตีกลับจากอนุมัติขั้นสุดท้าย'}[prevActor.step] || prevActor.step;
   const subject = `[SML PMS] ใบประเมินที่ท่านดำเนินการไปถูกแก้ไข — ${empName} (${empCode})`;
   const body = `ใบประเมินของ ${empName} (${empCode}) รอบ ${cycle} ซึ่งท่านเคยดำเนินการ (${stepLabel}) ไว้ก่อนหน้านี้ ถูกแก้ไขและบันทึกใหม่แล้ว\n\nวันที่แก้ไข: ${new Date().toLocaleString('th-TH')}\n\nกรุณาเข้าเว็บ SML PMS เพื่อตรวจสอบข้อมูลล่าสุดอีกครั้ง\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
   try{
@@ -8890,7 +8899,7 @@ async function notifyEmployeeOfApproval(empCode, empName, cycle, Y, Z, X){
 async function acknowledgeMyResult(empCode, cycle){
   const drafts = getDrafts();
   const d = findCurrentCycleDraft(drafts, empCode, cycle);
-  if(!d || d[d.length-1]!=='GMApproved'){ smlToast('ไม่พบผลประเมินที่ GM อนุมัติแล้วให้รับทราบ','warn'); return; }
+  if(!d || d[d.length-1]!=='ResultSent'){ smlToast('ผลประเมินนี้ยังไม่ถูกส่งให้ท่านรับทราบ (รอ GM ยืนยันส่งผล)','warn'); return; }
   d[d.length-1] = 'Acknowledged';
   saveDrafts(drafts);
   /* #173: บันทึกช่องทางทันทีที่กดเอง — ไม่ต้องรอ sync กลับจาก Excel เหมือนการรับทราบผ่าน LINE
@@ -9537,7 +9546,9 @@ function deleteDraftByKey(key){
    (ดู CLAUDE.md #58 ที่เคยออกแบบ Acknowledged ไว้ผิดตำแหน่ง ก่อนที่ผู้ใช้จะอธิบาย flow จริงทั้งหมด) */
 /* เพิ่ม 'L1Reviewed' คั่นระหว่าง Submitted/L2Reviewed (#92) — หัวหน้าแผนก (role l1) สอบทานทั้งแผนก
    ก่อนส่งต่อผู้จัดการส่วน (role l2) ต่อจาก CLAUDE.md #61's GM/Acknowledge ที่เพิ่มไว้ก่อนหน้า */
-const EVAL_STATUS_ORDER = ['Draft','Submitted','L1Reviewed','L2Reviewed','GMApproved','Acknowledged','Calibrated','CalibChecked','Approved'];
+/* #238: เพิ่ม 'ResultSent' (ส่งผลให้พนักงานแล้ว) คั่นระหว่าง GMApproved/Acknowledged — GM อนุมัติแล้วยังไม่ถึงพนักงาน
+   จนกว่า GM กด "ยืนยันส่งผลให้พนักงาน" (ต้องตรงกับ EVAL_STATUS_ORDER ใน tools/sml-pms-proxy-worker.js ทุกตัวอักษร) */
+const EVAL_STATUS_ORDER = ['Draft','Submitted','L1Reviewed','L2Reviewed','GMApproved','ResultSent','Acknowledged','Calibrated','CalibChecked','Approved'];
 function evalStatusRank(status){ const i = EVAL_STATUS_ORDER.indexOf(status); return i<0 ? 0 : i; }
 /* "จบกระบวนการทั้งหมดแล้ว จริงๆ" (พร้อมพิมพ์ทางการ/นับเป็นค้าง Push เข้า Excel/พร้อม Export
    Payroll) = อนุมัติขั้นสุดท้ายโดย AMD/MD เท่านั้น — คืนความหมายเดิมของคำว่า "Approved" ให้ตรงกับ
@@ -9547,7 +9558,9 @@ function evalStatusRank(status){ const i = EVAL_STATUS_ORDER.indexOf(status); re
 function isFinalStatus(status){ return status==='Approved'; }
 /* "มีผลลัพธ์ให้พนักงานเห็นแล้ว" (ยังไม่ใช่ตัวเลขสุดท้ายหลัง Calibration/อนุมัติ AMD/MD — เป็นตัวเลข
    ที่ GM อนุมัติแล้วเท่านั้น) ใช้ตัดสินใจว่าจะโชว์ปุ่ม "รับทราบผล" ในหน้าผลประเมินไหม */
-function hasVisibleResult(status){ return evalStatusRank(status) >= evalStatusRank('GMApproved'); }
+function hasVisibleResult(status){ return evalStatusRank(status) >= evalStatusRank('ResultSent'); }
+/* #238: "GM อนุมัติแล้ว" (ช่องลงนาม GM ในใบประเมิน/ฟอร์มสอบทาน) ≠ "พนักงานเห็นผลแล้ว" — ใช้ตัวนี้กับลายเซ็น GM เท่านั้น */
+function isGmApprovedOrBeyond(status){ return evalStatusRank(status) >= evalStatusRank('GMApproved'); }
 
 /* ผู้ใช้ขอ "ปรับสายการบังคับบัญชาให้เป็นไปตามที่กำหนดในข้อมูลพนักงาน ว่าใครประเมินบ้าง ถ้าไม่มีใน
    ตำแหน่งไหนให้ข้าม ต้องมีคนประเมินอย่างน้อย 1 คน" — ยืนยันขอบเขตคือลำดับสอบทาน/อนุมัติ 4 ระดับจริง
@@ -10305,8 +10318,26 @@ function renderGmApproveQueue(){
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
+  /* #238: ตารางที่ 2 — GM อนุมัติแล้ว รอ "ยืนยันส่งผลให้พนักงาน" (สถานะ GMApproved) + ที่ส่งแล้ว (ResultSent ขึ้นไป) แสดงสถานะ */
+  const sendBody = document.getElementById('gmSendRows'), sendCnt = document.getElementById('gmSendCount');
+  if(sendBody){
+    const sendChecked = new Set(getCheckedKeys('gmsend-chk'));
+    const sendRows = roster.filter(r=>r.state==='done' && r.draft && evalStatusRank(r.draft[r.draft.length-1])>=evalStatusRank('GMApproved') && evalStatusRank(r.draft[r.draft.length-1])<evalStatusRank('Calibrated'));
+    const waiting = sendRows.filter(r=>r.draft[r.draft.length-1]==='GMApproved').length;
+    if(sendCnt) sendCnt.textContent = waiting+' รอส่ง';
+    sendBody.innerHTML = sendRows.length ? deptGroupMap(sendRows,5,r=>{
+      const {name,dept}=empDeptLabel(r.emp[0], r.emp[1]); const d=r.draft, code=r.emp[0], st=d[d.length-1];
+      const waitingSend = st==='GMApproved';
+      const badge = waitingSend ? '<span class="bd b-y">📤 รอยืนยันส่งผล</span>' : (st==='ResultSent' ? '<span class="bd b-b">ส่งแล้ว — รอพนักงานรับทราบ</span>' : '<span class="bd b-g">✓ ส่งแล้ว/รับทราบแล้ว</span>');
+      return `<tr><td>${waitingSend?`<input type="checkbox" class="gmsend-chk" value="${draftKey(d)}">`:''}</td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td style="font-size:12px">${dept}</td><td style="text-align:center">${d[d.length-3]}</td>
+        <td>${badge} <button class="btn btn-sm" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button></td></tr>`;
+    }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีใบที่ GM อนุมัติแล้ว</td></tr>';
+    restoreCheckedKeys('gmsend-chk', sendChecked);
+  }
 }
-/* อนุมัติ GM แล้ว = พร้อมส่งผลให้พนักงานรับทราบ — จึงส่งอีเมลแจ้งพนักงานตรงนี้เลย (ย้ายมาจาก
+/* อนุมัติ GM แล้ว = พร้อมส่งผลให้พนักงานรับทราบ (#238: แต่ต้องรอ GM กดยืนยันส่งเอง) — เดิมส่งอีเมลตรงนี้เลย (ย้ายมาจาก
    approveAllFinal() เดิมที่เคยแจ้งตอนอนุมัติขั้นสุดท้าย เพราะตอนนี้พนักงานต้องรับทราบ *ก่อน*
    Calibration/อนุมัติขั้นสุดท้าย ไม่ใช่หลัง — ดู CLAUDE.md #61) */
 async function approveGmSelected(){
@@ -10322,25 +10353,35 @@ async function approveGmSelected(){
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'GMApproved',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติ GM', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
-  /* #173: notifyEmployeeOfApproval() ตอนนี้คืนผลทั้ง 2 ช่องทาง (email/line) แยกกัน — นับแต่ละช่อง
-     อิสระ ไม่ใช่ถือว่า "แจ้งแล้ว" ถ้าช่องใดช่องหนึ่งสำเร็จ */
+  /* #238: ไม่ส่งอีเมล/LINE ให้พนักงานอัตโนมัติตอนอนุมัติแล้ว — ผู้ใช้สั่งให้ต้องกด "ยืนยันส่งผลให้พนักงาน"
+     (sendResultToEmployeesSelected) ก่อน พนักงานจึงจะเห็นผลและรับทราบได้ */
+  smlToast('อนุมัติ GM แล้ว '+keys.length+' รายการ — ไปกด "📤 ยืนยันส่งผลให้พนักงาน" ในตารางด้านล่างเพื่อส่งผลให้พนักงานรับทราบ','ok');
+}
+/* #238: GM (หรือผู้ทำแทน) กด "ยืนยันส่งผลให้พนักงาน" — เปลี่ยนสถานะ GMApproved → ResultSent (ทุกเครื่องเห็นตรงกันผ่าน Appraisals)
+   แล้วส่งอีเมล/LINE ให้พนักงานรับทราบ (ย้ายมาจาก approveGmSelected เดิมที่ส่งอัตโนมัติทันที) */
+async function sendResultToEmployeesSelected(){
+  let keys=getCheckedKeys('gmsend-chk');
+  if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการที่จะส่งผลให้พนักงาน','warn'); return; }
+  keys = await guardFreshStatus(keys,'GMApproved');
+  if(!keys.length) return;
+  if(!confirm('ยืนยันส่งผลการประเมินให้พนักงาน '+keys.length+' คน?\n\nพนักงานจะเห็นผล (Y/Z/X) และกดรับทราบได้ทันทีหลังส่ง (เกรดยังไม่แสดงจนกว่าจะอนุมัติขั้นสุดท้าย)')) return;
+  const drafts = getDrafts();
+  const rows = keys.map(k=>drafts.find(d=>draftKey(d)===k)).filter(Boolean);
+  updateDraftStatus(keys,'ResultSent');
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'ResultSent','GM ยืนยันส่งผลการประเมินให้พนักงาน'); });
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันส่งผลให้พนักงาน', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   let emailSent = 0, lineSent = 0;
   for(const d of rows){
     const Y = Number(d[d.length-5])||0, Z = Number(d[d.length-4])||0, X = Number(d[d.length-3])||0;
     const r = await notifyEmployeeOfApproval(d[0], d[1], d[2], Y, Z, X).catch(()=>({email:{sent:false},line:{sent:false}}));
     if(r.email?.sent) emailSent++;
     if(r.line?.sent) lineSent++;
-    /* #182: มาร์คว่า "แจ้งแล้วอัตโนมัติ" ทันทีที่ช่องทางใดช่องทางหนึ่งสำเร็จจริง — กันไม่ให้คนกลุ่มนี้
-       ไปโผล่เป็น target ของปุ่ม "📬 แจ้งผลการประเมิน" (มือ) อีกโดยไม่มีใครรู้ว่าเคยแจ้งไปแล้ว ถ้าทั้ง
-       2 ช่องทางล้มเหลวจริง (เช่น Worker ยังไม่ตั้งค่า) จะไม่มาร์ค — ยังต้องขึ้นเป็น target ให้ Admin
-       เห็นและส่งเอง (ปุ่มมือ) เหมือนเดิม ไม่ใช่หายไปเงียบๆ */
     if(r.email?.sent || r.line?.sent) markResultNotified(draftKey(d), 'auto');
   }
-  const notifParts = [];
-  if(emailSent) notifParts.push(`อีเมล ${emailSent}/${rows.length} คน`);
-  if(lineSent) notifParts.push(`LINE ${lineSent}/${rows.length} คน`);
-  const notifNote = notifParts.length ? ` · แจ้งพนักงานแล้ว (${notifParts.join(' · ')})` : '';
-  smlToast('อนุมัติ GM แล้ว '+keys.length+' รายการ — แจ้งพนักงานรับทราบต่อไป'+notifNote,'ok');
+  const parts = [];
+  if(emailSent) parts.push(`อีเมล ${emailSent}/${rows.length} คน`);
+  if(lineSent) parts.push(`LINE ${lineSent}/${rows.length} คน`);
+  smlToast('ส่งผลให้พนักงานแล้ว '+keys.length+' คน'+(parts.length?' · แจ้งทาง '+parts.join(' · '):' · ยังไม่ได้แจ้งทางอีเมล/LINE (พนักงานเข้าดูที่เมนู "ผลประเมิน" ได้เลย หรือใช้ปุ่ม 📬 แจ้งผลประเมินบน Dashboard)'),'ok');
 }
 async function rejectGmSelected(){
   let keys=getCheckedKeys('gm-chk');
@@ -11106,7 +11147,7 @@ async function ms365SyncAckChannel(silent=true){
   }
 }
 /* อนุมัติขั้นสุดท้ายโดย AMD/MD — เกิด *หลัง* Calibration และ *หลัง* พนักงานรับทราบผลไปแล้ว (#61)
-   จึงไม่ต้องแจ้งอีเมลพนักงานอีกรอบตรงนี้ (ย้ายไปแจ้งตอน GM อนุมัติแล้ว — ดู approveGmSelected())
+   จึงไม่ต้องแจ้งอีเมลพนักงานอีกรอบตรงนี้ (#238: ส่งให้พนักงานตอน GM กดยืนยันส่งผล — ดู sendResultToEmployeesSelected()) แต่ส่งผลให้ HR แทน
    ขั้นนี้คือจุดที่ผลถือว่า "จบกระบวนการจริง" พร้อม Export เข้า Payroll (isFinalStatus()) */
 async function approveAllFinal(){
   const sign=(document.getElementById('mApproveSign')?.value||'').trim();
@@ -11119,7 +11160,31 @@ async function approveAllFinal(){
   closeM();
   rows.forEach(d=>pushApprovalRecordToExcel(d[0], d[2], 'Approved', 'ลงนามโดย '+sign));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติขั้นสุดท้าย', rows.length+' รายการ', 'ลงนามโดย '+sign+' — '+rows.map(d=>d[0]).join(', '));
-  smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+') — พร้อม Export เข้า Payroll','ok');
+  /* #238: ขั้นนี้ไม่ส่งอะไรให้พนักงาน — ส่งผลให้ HR/Admin เพื่อนำไปคำนวณเงินเดือนแทน */
+  const hr = await notifyHrOfFinalApproval(rows, sign).catch(e=>({sent:0,total:0,reason:e.message}));
+  const hrNote = hr.sent ? ` · ส่งอีเมลแจ้ง HR/Admin แล้ว ${hr.sent}/${hr.total} คน` : ` · ยังไม่ได้ส่งอีเมลแจ้ง HR (${hr.reason||'ไม่สำเร็จ'}) — ใช้ปุ่ม Export Payroll แทน`;
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ส่งผลให้ HR คำนวณเงินเดือน', rows.length+' รายการ', hr.sent?`อีเมล ${hr.sent}/${hr.total} คน`:(hr.reason||'ส่งไม่สำเร็จ'));
+  smlToast('อนุมัติเรียบร้อย '+rows.length+' รายการ (ลงนามโดย '+sign+') — พร้อม Export เข้า Payroll'+hrNote,hr.sent?'ok':'warn');
+}
+/* #238: อนุมัติขั้นสุดท้าย (AMD/MD) → ส่งผลให้ HR/Admin นำไปคำนวณเงินเดือน (ไม่ส่งพนักงาน) — อีเมลผ่าน Worker /send-mail
+   เหมือน notifyAdminOfEvalSubmission(): ต้องตั้งค่า Proxy และมีอีเมลจริง ไม่สำเร็จ = บอกเหตุผลจริง ไม่ปิดเงียบ (#10) */
+async function notifyHrOfFinalApproval(rows, sign){
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return { sent:0, total:0, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
+  const seen = new Set();
+  const hrs = MASTER_USERS.filter(u=>u[12]==='active' && ['admin','sysadmin'].includes(u[2]) && u[15] && !seen.has(String(u[15]).toLowerCase()) && seen.add(String(u[15]).toLowerCase()));
+  if(!hrs.length) return { sent:0, total:0, reason:'ไม่มี Admin/HR ที่มีอีเมลบันทึกไว้ในระบบ' };
+  const cycle = rows[0] ? rows[0][2] : '';
+  const lines = rows.slice(0,60).map(d=>`- ${d[0]} ${d[1]} · X=${Number(d[d.length-3]).toFixed(2)} · เกรด ${d[d.length-2]}`);
+  const more = rows.length>60 ? `\n… และอีก ${rows.length-60} คน (ดูทั้งหมดที่ปุ่ม Export ข้อมูล Payroll)` : '';
+  const link = cfg.appUrl ? `\n\nเปิดระบบ: ${cfg.appUrl}` : '';
+  const subject = `[SML PMS] MD อนุมัติผลประเมินขั้นสุดท้ายแล้ว ${rows.length} คน — เพื่อคำนวณเงินเดือน (รอบ ${cycle})`;
+  const body = `เรียน HR/Admin\n\nAMD/MD (${sign}) อนุมัติผลการประเมินขั้นสุดท้ายแล้ว ${rows.length} คน รอบ ${cycle}\nกรุณานำผลไปคำนวณเงินเดือน — Export ได้ที่เมนู "7. อนุมัติ AMD/MD" → ปุ่ม "Export ข้อมูล Payroll"\n(ขั้นตอนนี้ไม่ได้ส่งผลให้พนักงาน — พนักงานรับทราบผลไปแล้วก่อนหน้า)\n\nรายชื่อ:\n${lines.join('\n')}${more}${link}`;
+  let sent = 0;
+  for(const h of hrs){
+    try{ await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: h[15], toName: h[1], subject, body }) }); sent++; }catch(e){ /* best-effort ต่อคน */ }
+  }
+  return { sent, total: hrs.length, reason: sent?'':'ส่งอีเมลไม่สำเร็จ' };
 }
 async function rejectApproveAll(){
   const okRej = new Set(await guardFreshStatus(getDrafts().filter(d=>d[d.length-1]==='CalibChecked').map(draftKey),'CalibChecked'));
@@ -11173,7 +11238,7 @@ function renderNavBadges(){
     navBadgeTeam: teamPending,
     navBadgeReviewL1: readyCount(resolveL1Reviewer, 'Submitted'),
     navBadgeReview: readyCount(resolveL2Reviewer, 'L1Reviewed'),
-    navBadgeGm: readyCount(resolveGmReviewer, 'L2Reviewed'),
+    navBadgeGm: readyCount(resolveGmReviewer, 'L2Reviewed') + readyCount(resolveGmReviewer, 'GMApproved'),
     navBadgeCalib: readyCount(null, 'Acknowledged'),
     navBadgeApprove: readyCount(null, 'CalibChecked'),
   };
@@ -11510,7 +11575,7 @@ function buildEvalPrintPage(d, printDate){
      printEvalForm()/buildReviewerSignFlowHtml() ด้านบน */
   const gmSignerRec = (typeof getStageSigner==='function') ? getStageSigner(code, cycle, 'GMApproved') : null;
   const gmNoReviewer = (typeof resolveGmReviewer==='function') && !resolveGmReviewer(emp);
-  const gmVisible = (typeof hasVisibleResult==='function') ? hasVisibleResult(status||'') : rank>=4;
+  const gmVisible = (typeof isGmApprovedOrBeyond==='function') ? isGmApprovedOrBeyond(status||'') : rank>=4;
   const sigLines = [
     _sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, rank>=evalStatusRank('Acknowledged'), empName, ackDateText(code,cycle), (typeof ackChannelLabel==='function')?ackChannelLabel(code+'|'+cycle):''),
     _sign('ผู้ประเมิน ( ผู้บังคับบัญชาโดยตรง )', empL1, rank>=2, l1SignerRec?l1SignerRec.name:'', l1SignerRec?new Date(l1SignerRec.at).toLocaleDateString('th-TH'):'', '', l1NoReviewer?'ข้ามขั้นตอน — ไม่มีผู้สอบทานระดับนี้สำหรับพนักงานคนนี้':''),
@@ -11968,6 +12033,7 @@ function renderDashboardWorkflowSteps(participants, drafts){
     { label:'ผ่านสอบทานหัวหน้าแผนก', count: countAtLeast('L1Reviewed') },
     { label:'ผ่านสอบทานผู้จัดการส่วน', count: countAtLeast('L2Reviewed') },
     { label:'ผ่านอนุมัติ GM', count: countAtLeast('GMApproved') },
+    { label:'ส่งผลให้พนักงานแล้ว', count: countAtLeast('ResultSent') },
     { label:'พนักงานรับทราบผลแล้ว', count: countAtLeast('Acknowledged') },
     { label:'ผ่าน Calibration (HR)', count: countAtLeast('Calibrated') },
     { label:'HR ตรวจสอบก่อนส่ง MD/AMD', count: countAtLeast('CalibChecked') },
@@ -12047,11 +12113,13 @@ function getNotifications(){
   const submitted = readyCount(resolveL1Reviewer, 'Submitted');
   const l1reviewed = readyCount(resolveL2Reviewer, 'L1Reviewed');
   const l2reviewed = readyCount(resolveGmReviewer, 'L2Reviewed');
+  const gmToSend = readyCount(resolveGmReviewer, 'GMApproved');
   const calibrated = readyCount(null, 'CalibChecked');
   const toCheck = readyCount(null, 'Calibrated');
   if(submitted) items.push({ icon:'📝', text:`มีใบประเมิน ${submitted} รายการ รอสอบทานหัวหน้าแผนก`, page:'reviewl1' });
   if(l1reviewed) items.push({ icon:'🔍', text:`มีใบประเมิน ${l1reviewed} รายการ รอสอบทานผู้จัดการส่วน`, page:'review' });
   if(l2reviewed) items.push({ icon:'🏢', text:`มีใบประเมิน ${l2reviewed} รายการ รออนุมัติ GM`, page:'gmapprove' });
+  if(gmToSend) items.push({ icon:'📤', text:`มีใบประเมิน ${gmToSend} รายการ GM อนุมัติแล้ว รอยืนยันส่งผลให้พนักงาน`, page:'gmapprove' });
   if(toCheck) items.push({ icon:'🔎', text:`มีใบประเมิน ${toCheck} รายการ รอ HR ตรวจสอบหลัง Calibration ก่อนส่ง MD/AMD`, page:'calib' });
   if(calibrated) items.push({ icon:'✅', text:`มีใบประเมิน ${calibrated} รายการ รออนุมัติขั้นสุดท้าย`, page:'approve' });
 
@@ -13493,7 +13561,8 @@ const CYCLE_PARTICIPANT_STATUS_TH = {
   Submitted:'ส่งแบบประเมินแล้ว — รอหัวหน้าหน่วย/แผนกสอบทาน',
   L1Reviewed:'ผ่านสอบทานหัวหน้าแผนก (L2) แล้ว',
   L2Reviewed:'ผ่านสอบทานผู้จัดการส่วน (L3) แล้ว',
-  GMApproved:'ผ่านอนุมัติ GM (L4) แล้ว',
+  GMApproved:'ผ่านอนุมัติ GM (L4) แล้ว — รอ GM ยืนยันส่งผลให้พนักงาน',
+  ResultSent:'ส่งผลให้พนักงานแล้ว — รอพนักงานรับทราบ',
   Acknowledged:'พนักงานรับทราบผลแล้ว',
   Calibrated:'ผ่าน Calibration แล้ว — รอ HR ตรวจสอบ',
   CalibChecked:'HR ตรวจสอบแล้ว — รอ MD/AMD อนุมัติ',
@@ -15067,7 +15136,7 @@ async function confirmImportEmployees(){
    ใช้ MutationObserver เพราะ tbody ถูก render ใหม่ด้วย innerHTML ตลอด (ผ่านการกรอง/ซิงก์) */
 (function(){
   'use strict';
-  var IDS=['teamRows','reviewl1Rows','reviewRows','gmApproveRows','calibRows','calibCheckRows','approveRows','attRows','orgRows','reportRows','auditRows','userRows','cyclesListRows','myResultHistoryRows','cycleParticipantsRows'];
+  var IDS=['gmSendRows','teamRows','reviewl1Rows','reviewRows','gmApproveRows','calibRows','calibCheckRows','approveRows','attRows','orgRows','reportRows','auditRows','userRows','cyclesListRows','myResultHistoryRows','cycleParticipantsRows'];
   function headerLabels(table){
     var th=table.querySelectorAll('thead tr:last-child th'),out=[];
     th.forEach(function(h){ var n=parseInt(h.getAttribute('colspan')||'1',10)||1; var t=(h.textContent||'').replace(/\s+/g,' ').trim(); for(var i=0;i<n;i++) out.push(i===0?t:''); });

@@ -421,7 +421,7 @@ async function verifyLineSignature(channelSecret, rawBody, signatureHeader) {
    (CLAUDE.md #41's precedent: client/Worker คนละที่ แชร์โค้ดกันไม่ได้ ต้องคัดลอกให้ตรงกันเองแล้ว
    แก้คู่กันเสมอถ้าฝั่งใดฝั่งหนึ่งเปลี่ยน) ใช้แค่เพื่อแยก "สถานะยังไม่ถึง GMApproved" (จริงๆ ไม่ควรเกิด
    เพราะปุ่มนี้ส่งหลัง GM อนุมัติเท่านั้น) ออกจาก "ผ่าน GMApproved ไปแล้ว" (รับทราบไปแล้วก่อนหน้านี้) */
-const EVAL_STATUS_ORDER = ['Draft', 'Submitted', 'L1Reviewed', 'L2Reviewed', 'GMApproved', 'Acknowledged', 'Calibrated', 'CalibChecked', 'Approved'];
+const EVAL_STATUS_ORDER = ['Draft', 'Submitted', 'L1Reviewed', 'L2Reviewed', 'GMApproved', 'ResultSent', 'Acknowledged', 'Calibrated', 'CalibChecked', 'Approved'];
 function evalStatusRank(status) {
   const i = EVAL_STATUS_ORDER.indexOf(status);
   return i < 0 ? -1 : i;
@@ -490,15 +490,17 @@ async function handleLineAckPostback(ev, env, token, driveId, itemId) {
     if (!row) {
       outcome = 'notfound';
     } else {
-      const status = String(row[row.length - 1] || '').trim();
-      if (status === 'GMApproved') {
+      /* #238: หลัง #232 แถว Appraisals มีคอลัมน์ KPI ต่อท้าย — สถานะอยู่ index 22 (ไม่ใช่ช่องสุดท้าย) ใช้กฎเดียวกับ planDedupe */
+      const statusIdx = row.length >= 23 ? 22 : row.length - 1;
+      const status = String(row[statusIdx] || '').trim();
+      if (status === 'ResultSent') { // #238: รับทราบได้เฉพาะหลัง GM ยืนยันส่งผลให้พนักงาน (ResultSent)
         const level = String(row[3] || '').trim();
         const updated = row.slice();
-        updated[updated.length - 1] = 'Acknowledged';
+        updated[statusIdx] = 'Acknowledged';
         await upsertRow(token, driveId, itemId, 'Appraisals', [0, 2, 3], [code, cycle, level], updated);
         await addRow(token, driveId, itemId, 'Approvals', [code, empName, cycle, 'Acknowledged', empName, new Date().toISOString(), 'รับทราบผลการประเมินผ่าน LINE']);
         outcome = 'saved';
-      } else if (evalStatusRank(status) > evalStatusRank('GMApproved')) {
+      } else if (evalStatusRank(status) > evalStatusRank('ResultSent')) {
         outcome = 'already';
       } else {
         outcome = 'notfound'; // สถานะยังไม่ถึง GMApproved เลย (ไม่ควรเกิดจริง เพราะปุ่มส่งหลัง GM อนุมัติเท่านั้น)
