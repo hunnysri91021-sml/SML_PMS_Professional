@@ -765,8 +765,8 @@ function planDedupe(rows, keyCols) {
     let keep = list[0];
     for (const r of list) {
       const rv = r.values[0] || [], kv = keep.values[0] || [];
-      const rr = evalStatusRank(String(rv[rv.length - 1] ?? '').trim());
-      const kr = evalStatusRank(String(kv[kv.length - 1] ?? '').trim());
+      const rr = evalStatusRank(String(rv[rv.length >= 23 ? 22 : rv.length - 1] ?? '').trim());
+      const kr = evalStatusRank(String(kv[kv.length >= 23 ? 22 : kv.length - 1] ?? '').trim());
       if (rr > kr || (rr === kr && r.index > keep.index)) keep = r;
     }
     for (const r of list) if (r !== keep) toDelete.push(r.index);

@@ -24,8 +24,20 @@ const {open,ok,done}=require('./helpers');
     // #231 กล่อง KPI บนใบพิมพ์
     out.boxPerson=buildKpiPrintBoxHtml('KP1',cy,'of');
     out.boxNone=buildKpiPrintBoxHtml('NOBODY',cy,'of');
+    // #232 แถว Excel 24 ช่อง (KPI ท้ายสุด) / ดึงกลับต้องตัดเหลือ 23
+    const d=['KP1','x',cy,'of',13,13,13,8,8,8,8,3,3,3,'','','','',50,30,80,'B','Acknowledged'];
+    out.kpct=getScoreWeightsFor('of',cy).kpct;
+    const row=appraisalExcelRow(d); out.len=row.length; out.kpiCol=row[23]; out.status22=row[22];
+    out.none=appraisalExcelRow(['NOBODY',...d.slice(1)])[23];
+    out.back=normalizeAppraisalRow(row).length;
+    out.plan=planDedupeRows([{index:0,values:[row.slice()]},{index:1,values:[Object.assign(row.slice(),{22:'Draft'})]}],[0,2,3]).toDelete;
     return out;
   });
+  ok(r.len===24&&r.status22==='Acknowledged','แถว push 24 ช่อง status อยู่ช่อง W');
+  ok(r.kpct>0?r.kpiCol!=='':r.kpiCol==='','KPI ช่อง X ตามสัดส่วน (kpct=0 → ว่าง)');
+  ok(r.none==='','ไม่มี KPI → ว่าง');
+  ok(r.back===23,'ดึงกลับตัด KPI เหลือ 23 ช่อง');
+  ok(JSON.stringify(r.plan)==='[1]','dedupe ใช้ช่อง Status (W) ไม่ใช่ช่อง KPI');
   ok(r.boxPerson.includes('KPI รายบุคคล')&&r.boxPerson.includes('75.0%')&&r.boxPerson.includes('>a<')&&!r.boxPerson.includes('>d<'),'ใบพิมพ์แสดง KPI รายบุคคล (เฉพาะ person ของคนนี้ ผลจริง 75%)');
   ok(r.boxNone==='','ไม่มี KPI และ kpct=0 → ไม่แสดงกล่อง');
   ok(r.up[0]===70&&r.up[1]===100,'KPI ยิ่งมากยิ่งดี capped 100: '+r.up);

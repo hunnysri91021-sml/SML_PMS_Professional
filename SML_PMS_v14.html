@@ -8011,8 +8011,8 @@ function planDedupeRows(rows, keyCols){
     let keep = list[0];
     for(const r of list){
       const rv = r.values[0] || [], kv = keep.values[0] || [];
-      const rr = evalStatusRank(String(rv[rv.length-1]??'').trim());
-      const kr = evalStatusRank(String(kv[kv.length-1]??'').trim());
+      const rr = evalStatusRank(String(rv[rv.length>=23?22:rv.length-1]??'').trim());
+      const kr = evalStatusRank(String(kv[kv.length>=23?22:kv.length-1]??'').trim());
       if(rr>kr || (rr===kr && r.index>keep.index)) keep = r;
     }
     for(const r of list) if(r!==keep) toDelete.push(r.index);
@@ -8844,7 +8844,7 @@ async function acknowledgeMyResult(empCode, cycle){
   const cfg = loadMs365Config();
   if(isMs365Configured(cfg)){
     try{
-      await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d);
+      await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], appraisalExcelRow(d));
       if(typeof appendSyncLog==='function') appendSyncLog(`Push Acknowledged (${d[0]}) เข้า Appraisals`, true);
     }catch(e){
       if(typeof appendSyncLog==='function') appendSyncLog(`Push Acknowledged (${d[0]}) เข้า Appraisals ไม่สำเร็จ: ${e.message}`, false);
@@ -8906,7 +8906,7 @@ async function saveEvaluationToMs365(status='Draft'){
      ใน Excel ทุกครั้งที่กด "บันทึกร่าง" ซ้ำ — ดู CLAUDE.md #40) */
   let pushResult;
   try{
-    await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], payload);
+    await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], appraisalExcelRow(payload));
     updateMs365Status('ok','Connected');
     pushResult = { ok:true };
     if(typeof appendSyncLog==='function') appendSyncLog(`Push ${status} (${payload[0]}) เข้า Appraisals`, true);
@@ -9612,8 +9612,22 @@ function skipEmptyReviewStages(empCode, cycle, level){
    แทบจะผ่าน sync มาแล้วเสมอ จึงเป็นจุดที่เจอบั๊กนี้บ่อยที่สุด แก้ที่จุดกิน (ingestion) จุดเดียวแทนที่จะ
    แก้ทุกจุดอ่านปลายทาง — บังคับแปลงฟิลด์ตัวเลขที่รู้ตำแหน่งแน่นอน (m0..m9/l0..l3/Y/Z/X ตำแหน่ง
    4-20) เป็น number จริงตั้งแต่ตอน merge เข้า local queue */
+/* #232: แถว Appraisals ใน Excel มี 24 คอลัมน์ (A-W เดิม + X=KPI คะแนน KPI ที่เข้า X) แต่ draft ในเครื่องยังเป็น 23 ช่อง
+   (status อยู่ท้ายสุดเสมอ — โค้ดทั้งไฟล์อ่านจากท้ายแถว) จึงต่อ KPI เฉพาะตอน push เท่านั้น ว่างถ้าไม่มี KPI จริง (#14) */
+function appraisalExcelRow(d){
+  const base = d.slice(0,23);
+  let kpi = '';
+  try{
+    const lv = d[3], cyc = d[2];
+    const w = getScoreWeightsFor(lv, cyc);
+    const r = computeKpiScoreForEmp(d[0], cyc);
+    if(r.hasKpi && (w.kpct||0)>0) kpi = Math.round(r.pct/100*w.kpct*100)/100;
+  }catch(e){}
+  base.push(kpi);
+  return base;
+}
 function normalizeAppraisalRow(r){
-  const out = r.slice();
+  const out = r.slice(0,23); /* ตัดคอลัมน์ KPI (X) ออก — draft ในเครื่องต้องยาว 23 ช่อง status อยู่ท้าย */
   for(let i=4;i<=20;i++){ if(out[i]!==null && out[i]!==undefined && out[i]!=='') out[i]=Number(out[i]); }
   /* #160: out[2] (รอบ)/out[3] (ระดับ) ไม่เคยถูกบังคับชนิดข้อมูลมาก่อน — ถ้าคอลัมน์ "รอบ" ใน Excel จริง
      ถูกจัดรูปแบบเป็นตัวเลข (เช่น 2569 ดูเหมือนปีจึง Excel มักตั้งเป็น Number cell โดยอัตโนมัติ ไม่ใช่
@@ -9810,7 +9824,7 @@ function pushDraftRowToExcel(d, label){
   pendingPushKeys.add(key);
   /* คืน Promise<{ok,error}> เสมอ (ไม่ reject) — ผู้เรียกที่อยากรู้ผลจริง (confirmCalibration) await ได้
      ผู้เรียกเดิมที่ไม่สน ก็เรียกทิ้งไว้เหมือนเดิมได้ ไม่กระทบ */
-  return graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], d)
+  return graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [d[0],d[2],d[3]], appraisalExcelRow(d))
     .then(res=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) เข้า Appraisals (${res})`, true); return {ok:true, result:res}; })
     .catch(err=>{ const msg = err?.message||String(err); if(typeof appendSyncLog==='function') appendSyncLog(`Push สถานะ ${d[d.length-1]} (${d[0]}) ไม่สำเร็จ: `+msg, false); return {ok:false, error:msg}; })
     .finally(()=>{ pendingPushKeys.delete(key); });
@@ -11229,9 +11243,11 @@ function exportIndividualSummary(){
   const rows = getReportData();
   if(!rows.some(r=>r.X!==null)){ smlToast('ยังไม่มีผลประเมินในระบบให้ Export','warn'); return; }
   downloadCsv('สรุปผลประเมินรายบุคคล_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนผลงาน (Y)','คะแนนเวลาทำงาน (Z)','คะแนนรวม (X)','เกรด','สถานะ',...ATT_EXPORT_HEADERS],
+    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนผลงาน (Y)','คะแนนเวลาทำงาน (Z)','คะแนนรวม (X)','คะแนน KPI','เกรด','สถานะ',...ATT_EXPORT_HEADERS],
     rows.map(r=>{
-      return [r.code,r.name,r.group,r.dept, r.Y??'', r.Z??'', r.X??'', r.grade??'', r.status, ...attendanceExportCells(r.code)];
+      const dr = findCurrentCycleDraft(getDrafts(), r.code, getCurrentEvalCycleYear());
+      const kpi = dr ? appraisalExcelRow(dr)[23] : '';
+      return [r.code,r.name,r.group,r.dept, r.Y??'', r.Z??'', r.X??'', kpi, r.grade??'', r.status, ...attendanceExportCells(r.code)];
     }));
   smlToast('Export สรุปผลรายบุคคลแล้ว ('+rows.length+' คน)','ok');
 }
@@ -12032,7 +12048,7 @@ async function ms365PushAppraisals(){
   let ok=0, fail=0;
   for(const payload of toPush){
     try{
-      await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], payload);
+      await graphUpsertTableRow(cfg.evaluationTable, [0,2,3], [payload[0],payload[2],payload[3]], appraisalExcelRow(payload));
       markAppraisalPushed(draftKey(payload));
       ok++;
     }
