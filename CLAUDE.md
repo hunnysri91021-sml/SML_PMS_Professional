@@ -10905,3 +10905,5 @@ Before considering a change to `SML_PMS_v14.html` done:
     diagnostic log at that exact lookup, so a live production report
     that can't be reproduced locally still leaves a concrete trail the
     next time it happens.
+
+220. **มือถือ: ช่องลงนามในหน้าสอบทาน (`openReviewerForm`) บีบ 4 คอลัมน์ ≤700px จนอ่านไม่ออก.** เพิ่มบล็อก `#220` เฉพาะ `.reviewer-sign-flow` (เรียงการ์ดเป็น 1 คอลัมน์, ฟอนต์ 12–14px) ไม่กระทบ `.F-signs` ของใบพิมพ์ A4. เมื่อดึง component ที่ออกแบบสำหรับพิมพ์มาแสดงบนจอ ให้เช็กที่ 390px เสมอ.

@@ -1524,6 +1524,17 @@ img,svg,canvas{max-width:100%}
   #pg-org .card-b,#pg-org .tbl-wrap{overflow-x:auto}
   #pg-calib select{max-width:300px;min-width:200px}
 }
+/* #220 — มือถือ: ช่องลงนามในหน้าสอบทานเรียงเป็นแถวเดียว อ่านง่าย (เฉพาะ .reviewer-sign-flow ไม่กระทบใบพิมพ์ A4) */
+@media (max-width:700px){
+  .reviewer-sign-flow .F-signs,.reviewer-sign-flow .F-signs.s4,.reviewer-sign-flow .F-signs.s3{grid-template-columns:1fr !important;gap:8px !important}
+  .reviewer-sign-flow .F-sign{min-height:0 !important;padding:10px 12px !important;display:flex;flex-direction:column;gap:3px;text-align:left;align-items:flex-start}
+  .reviewer-sign-flow .sg-role{font-size:12px !important;font-weight:700}
+  .reviewer-sign-flow .sg-name{font-size:14px !important;word-break:break-word}
+  .reviewer-sign-flow .sg-date{font-size:12px !important}
+  .reviewer-sign-flow .sg-chip{font-size:12px !important;white-space:normal}
+  .reviewer-sign-flow .sg-title{font-size:12px !important}
+  .reviewer-sign-flow .F-result{flex-direction:column;align-items:flex-start;gap:8px}
+}
 </style>
 
 </head>
