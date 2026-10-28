@@ -2048,6 +2048,8 @@ img,svg,canvas{max-width:100%}
     <div class="ph"><div><h2>⚖️ Calibration — ปรับเทียบคะแนน (ขั้นที่ 6, HR)</h2><p>ปรับเทียบคะแนนของใบประเมินที่พนักงานรับทราบผลแล้ว (สถานะ Acknowledged) ก่อนส่งอนุมัติขั้นสุดท้าย AMD/MD — เกรดสุดท้ายคำนวณแบบ Bell Curve (A=10% B=20% C=40% D=20% E=10%) ตามระเบียบปฏิบัติข้อ 6.7 ไม่ใช่เกณฑ์ตัดคะแนนสัมบูรณ์แบบเดิม</p></div>
     <div class="ph-act"><button class="btn btn-dg" id="resetCalibBtn" onclick="resetCalibration()" title="ย้อนรายการที่ Calibrate แล้ว (ยังไม่ Approved) กลับมารอ Calibration ใหม่ — Admin/HR เท่านั้น">↩️ รีเซ็ต Calibration</button> <button class="btn btn-ok" id="confirmCalibBtn" style="opacity:.55" onclick="confirmCalibration()">🔒 ยืนยันผล Calibration</button></div></div>
 
+    <div id="calibAttBanner"></div>
+
     <div class="card calib-step-card" style="margin-bottom:18px">
       <div class="card-h"><h3>⚙️ การคำนวณเกรด (Bell Curve)</h3></div>
       <div style="padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -2366,7 +2368,7 @@ img,svg,canvas{max-width:100%}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" title="Push จะไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร Excel" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button></div></div>
+      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" title="Push จะไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร Excel" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button><button class="btn btn-sm" title="รายละเอียด สาย/กลับก่อน/กิจ/ป่วย/ขาด ของพนักงานทุกคน (ระบุคนที่ยังไม่มีข้อมูล)" onclick="exportAttendanceList()">📥 Export ข้อมูลเวลา (CSV)</button></div></div>
       <div id="attPushStatus" style="padding:0 16px 4px;font-size:11.5px;color:#64748b"></div>
       <div class="tw"><table>
         <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
@@ -5092,6 +5094,21 @@ function computeZDays(att){
   const lateDays = Math.floor(lateEarly/8);
   const raw = (att.sickDay||0) + (att.personalDay||0) + (att.absentDay||0)*3 + lateDays;
   return Math.min(30, Math.round(raw*1000)/1000);
+}
+/* #229: ตัวช่วยเดียวสำหรับ "รายละเอียดเวลาทำงาน" ของพนักงานหนึ่งคน ใช้ร่วมกันทุก export และแบนเนอร์ Calibration
+   hasRecord=false เมื่อไม่มีแถวจริงใน ATTENDANCE — getAttendanceFor() จะคืนค่าตัวอย่าง (DEFAULT_ATTENDANCE) ซึ่ง
+   ห้ามนำไปแสดงใน export เป็นข้อมูลจริง (CLAUDE.md #14) จึงคืนค่าว่างแทน */
+function attendanceBreakdown(code){
+  const a = ATTENDANCE[code];
+  if(!a) return { hasRecord:false, late:'', early:'', lateEarly:'', lateDays:'', personal:'', sick:'', absent:'', zDays:'' };
+  const late=a.lateCount||0, early=a.earlyCount||0;
+  return { hasRecord:true, late, early, lateEarly:late+early, lateDays:Math.floor((late+early)/8),
+    personal:a.personalDay||0, sick:a.sickDay||0, absent:a.absentDay||0, zDays:computeZDays(a) };
+}
+const ATT_EXPORT_HEADERS = ['สาย (ครั้ง)','กลับก่อน (ครั้ง)','สาย+กลับก่อน (ครั้ง)','เทียบเป็นวันลา (÷8 ปัดลง)','ลากิจ (วัน)','ลาป่วย (วัน)','ขาดงาน (วัน)','วันลารวม (สูตร Z)','สถานะข้อมูลเวลา'];
+function attendanceExportCells(code){
+  const b = attendanceBreakdown(code);
+  return [b.late,b.early,b.lateEarly,b.lateDays,b.personal,b.sick,b.absent,b.zDays, b.hasRecord?'มีข้อมูล':'ไม่มีข้อมูลเวลา'];
 }
 function zKeyForLevel(lv){ lv=(typeof LEVEL_CONFIG!=='undefined'&&LEVEL_CONFIG[lv]&&LEVEL_CONFIG[lv].base)||lv; return lv==='mgr' ? 'mgr' : (lv==='ldr'||lv==='super') ? 'ldr' : 'emp'; }
 function computeZScore(lv, empCode){
@@ -9396,7 +9413,7 @@ function findCurrentCycleDraft(drafts, empCode, cycle){
    absolute — ถ้าต้องการเกรดที่ตรงกับคะแนนใหม่ ต้องให้ HR กด "คำนวณ Bell Curve" ของกลุ่มนั้นใหม่เอง
    (ตามที่ผู้ใช้ยืนยันตรงๆ ไม่เดาเอง) ปิดทางที่ใบ Approved แล้ว — ถือว่าปิดจบ ต้องใช้ "✏️ ปรับเกรดเอง"
    (#155) แทนถ้าจำเป็นจริงๆ */
-function recalcKpiScoreForRecord(empCode, cycle){
+function recalcKpiScoreForRecord(empCode, cycle, quiet){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่คำนวณคะแนนใหม่ได้','warn'); return; }
   const drafts = getDrafts();
   const d = findCurrentCycleDraft(drafts, empCode, cycle);
@@ -9420,8 +9437,10 @@ function recalcKpiScoreForRecord(empCode, cycle){
   saveDrafts(drafts);
   pushDraftRowToExcel(d, 'คำนวณคะแนนใหม่ (KPI)');
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','คำนวณคะแนนใหม่ (รวม KPI ล่าสุด)', empCode, `X เดิม=${oldX} → ใหม่=${r.X.toFixed(2)} (เกรดเดิมคงไว้ก่อน ต้องรัน Bell Curve ใหม่ถ้าต้องการเกรดที่ตรงกับคะแนนใหม่)`);
+  if(quiet) return true;
   renderWorkflowPages();
   smlToast(`คำนวณคะแนนใหม่แล้ว: X ${oldX} → ${r.X.toFixed(2)} (เกรดเดิมยังไม่เปลี่ยน — กด "📊 คำนวณ Bell Curve" ใหม่ถ้าต้องการเกรดที่ตรงกับคะแนนใหม่)`,'ok');
+  return true;
 }
 /* #113: ลบใบประเมินทั้งใบ (กรณีกรอกคนผิด/ข้อมูลผิด) ตามที่ผู้ใช้ขอ — ลบได้เฉพาะ admin/sysadmin
    (ปุ่มถูกซ่อนทั้งหมดสำหรับ role อื่นที่ render จุดเรียกใช้ ไม่ใช่แค่ disabled ตามแบบ #72/#90)
@@ -10286,6 +10305,45 @@ function exportCalibTableList(){
   smlToast('Export ตารางปรับเทียบ '+roster.length+' รายการแล้ว','ok');
 }
 
+/* #229: แบนเนอร์เตือนหน้า Calibration — (1) คนในคิวที่ "ไม่มีข้อมูลเวลา" ในระบบ (Z จะถูกคำนวณจากค่าตัวอย่าง/เต็ม)
+   (2) คนที่ Z ที่บันทึกในใบประเมินไม่ตรงกับ Attendance ล่าสุด (ข้อมูลมาช้า/แก้ไขหลังบันทึก) — HR ควรจัดการก่อนกดคำนวณ Bell Curve */
+function getCalibAttendanceIssues(roster){
+  const missing=[], stale=[];
+  roster.filter(r=>r.state==='ready').forEach(r=>{
+    const code=r.emp[0];
+    if(!ATTENDANCE[code]){ missing.push(r); return; }
+    const live=computeZScore(r.draft[3], code).score, stored=Number(r.draft[r.draft.length-4]);
+    if(isFinite(stored) && Math.abs(live-stored)>0.005) stale.push({r,live,stored});
+  });
+  return {missing,stale};
+}
+function renderCalibAttendanceBanner(roster){
+  const box=document.getElementById('calibAttBanner'); if(!box) return;
+  const {missing,stale}=getCalibAttendanceIssues(roster);
+  if(!missing.length && !stale.length){ box.innerHTML=''; return; }
+  const names=(arr,f)=>arr.slice(0,6).map(f).join(', ')+(arr.length>6?` และอีก ${arr.length-6} คน`:'');
+  let h='<div class="al al-w" style="margin-bottom:14px;line-height:1.7"><b>⚠️ ตรวจข้อมูลเวลาทำงาน (Attendance) ก่อนคำนวณ Bell Curve</b>';
+  if(missing.length) h+=`<div>• <b>${missing.length} คน</b> ยังไม่มีข้อมูลเวลาในระบบ — ${names(missing,r=>r.emp[1])}<br><span style="font-size:11.5px">กด "ดึงเวลาจาก Excel" หรือกรอกที่หน้า "นำเข้าข้อมูลเวลา" (ถ้าไม่มีข้อมูล คะแนน Z จะคำนวณจากค่าตัวอย่าง ไม่ใช่ข้อมูลจริง)</span></div>`;
+  if(stale.length) h+=`<div>• <b>${stale.length} คน</b> Z ที่บันทึกไว้ไม่ตรงกับ Attendance ล่าสุด — ${names(stale,x=>`${x.r.emp[1]} (${x.stored.toFixed(2)}→${x.live.toFixed(2)})`)}</div>`;
+  h+='<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="calibSyncAttendanceThenRefresh()">🔄 ดึงเวลาจาก Excel</button>';
+  if(stale.length && isAdminOrSysadmin()) h+='<button class="btn btn-sm btn-p" onclick="recalcStaleAttendanceZ()">🧮 คำนวณ Z ใหม่ให้ทุกคนที่ไม่ตรง</button>';
+  h+='<button class="btn btn-sm" onclick="exportAttendanceList()">📥 Export ข้อมูลเวลา</button></div></div>';
+  box.innerHTML=h;
+}
+async function calibSyncAttendanceThenRefresh(){
+  await ms365SyncAttendance(false);
+  if(typeof renderCalibQueue==='function') renderCalibQueue();
+}
+function recalcStaleAttendanceZ(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  const cycle=getCurrentEvalCycleYear();
+  const {stale}=getCalibAttendanceIssues(buildTierRoster(null,null,'Acknowledged',cycle));
+  if(!stale.length){ smlToast('ไม่มีรายการที่ Z ไม่ตรงกับ Attendance','ok'); return; }
+  if(!confirm(`คำนวณคะแนน Z/X ใหม่ให้ ${stale.length} คน จาก Attendance ล่าสุด?\n(เกรดไม่เปลี่ยน — ต้องกดคำนวณ Bell Curve ใหม่หลังจากนี้)`)) return;
+  let n=0; stale.forEach(x=>{ if(recalcKpiScoreForRecord(x.r.emp[0], cycle, true)) n++; });
+  renderWorkflowPages();
+  smlToast(`คำนวณใหม่แล้ว ${n} คน — กด "📊 คำนวณ Bell Curve" อีกครั้งก่อนยืนยัน`,'ok');
+}
 function renderCalibQueue(){
   const tbody=document.getElementById('calibRows'); const cnt=document.getElementById('calibCount');
   const distBox=document.getElementById('calibGradeDist');
@@ -10297,6 +10355,7 @@ function renderCalibQueue(){
      roster = getEvalParticipants() ทั้งหมดในขอบเขต (ดูคอมเมนต์บน buildTierRoster) */
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = buildTierRoster(null, null, 'Acknowledged', cycle);
+  renderCalibAttendanceBanner(fullRoster);
   /* ผู้ใช้ขอให้ "ตารางปรับเทียบรายบุคคล" กรองตาม กลุ่มงาน/แผนก/ส่วน/ฝ่าย ได้ — แยกจาก dropdown
      "เฉพาะค่า" ของ Bell Curve ด้านบนโดยเจตนา (คนละวัตถุประสงค์: อันนั้นกำหนดว่าจะ "คำนวณ" กลุ่มไหน
      ส่วนตัวกรองนี้แค่ "แสดง" แถวไหนในตารางให้ HR ดู/ไล่ดูทีละหน่วยงานได้ ไม่กระทบการคำนวณ/ยืนยัน
@@ -11151,10 +11210,9 @@ function exportIndividualSummary(){
   const rows = getReportData();
   if(!rows.some(r=>r.X!==null)){ smlToast('ยังไม่มีผลประเมินในระบบให้ Export','warn'); return; }
   downloadCsv('สรุปผลประเมินรายบุคคล_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนผลงาน (Y)','คะแนนเวลาทำงาน (Z)','คะแนนรวม (X)','เกรด','สถานะ','มาสาย(ครั้ง)','กลับก่อน(ครั้ง)','ลาป่วย(วัน)','ลากิจ(วัน)','ขาดงาน(วัน)'],
+    ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่ม','ฝ่าย','คะแนนผลงาน (Y)','คะแนนเวลาทำงาน (Z)','คะแนนรวม (X)','เกรด','สถานะ',...ATT_EXPORT_HEADERS],
     rows.map(r=>{
-      const att = (typeof getAttendanceFor==='function') ? getAttendanceFor(r.code) : {};
-      return [r.code,r.name,r.group,r.dept, r.Y??'', r.Z??'', r.X??'', r.grade??'', r.status, att.lateCount||0, att.earlyCount||0, att.sickDay||0, att.personalDay||0, att.absentDay||0];
+      return [r.code,r.name,r.group,r.dept, r.Y??'', r.Z??'', r.X??'', r.grade??'', r.status, ...attendanceExportCells(r.code)];
     }));
   smlToast('Export สรุปผลรายบุคคลแล้ว ('+rows.length+' คน)','ok');
 }
@@ -11417,15 +11475,23 @@ function printSingleDraft(code, cycle, level){
 }
 
 function exportAttendanceVsScore(){
-  const rows = getReportData().filter(r=>r.X!==null).map(r=>{
-    const att = ATTENDANCE[r.code];
-    return { ...r, lateCount: att?.lateCount||0, absentDay: att?.absentDay||0, sickDay: att?.sickDay||0 };
-  });
-  if(!rows.length){ smlToast('ยังไม่มีคนที่มีทั้งผลประเมินและข้อมูลวันลาให้เปรียบเทียบ','warn'); return; }
+  const rows = getReportData().filter(r=>r.X!==null);
+  if(!rows.length){ smlToast('ยังไม่มีคนที่มีผลประเมินให้เปรียบเทียบ','warn'); return; }
   downloadCsv('สถิติเวลา_vs_คะแนน_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','มาสาย(ครั้ง)','ขาดงาน(วัน)','ลาป่วย(วัน)','คะแนนรวม (X)','เกรด'],
-    rows.map(r=>[r.code,r.name,r.lateCount,r.absentDay,r.sickDay,r.X,r.grade]));
-  smlToast('Export สถิติเวลา vs คะแนนแล้ว ('+rows.length+' คน)','ok');
+    ['รหัสพนักงาน','ชื่อ-สกุล',...ATT_EXPORT_HEADERS,'คะแนนเวลา (Z)','คะแนนรวม (X)','เกรด'],
+    rows.map(r=>[r.code,r.name,...attendanceExportCells(r.code),r.Z??'',r.X,r.grade]));
+  const missing = rows.filter(r=>!attendanceBreakdown(r.code).hasRecord).length;
+  smlToast('Export สถิติเวลา vs คะแนนแล้ว ('+rows.length+' คน)'+(missing?' · ไม่มีข้อมูลเวลา '+missing+' คน (เว้นว่างไว้ ไม่ใช้ค่าตัวอย่าง)':''),missing?'warn':'ok');
+}
+/* #229: export "ข้อมูลเวลาทำงาน" ของพนักงานทุกคนที่ active — รวมคนที่ยังไม่มีข้อมูล (ระบุสถานะ) ให้ HR เห็นว่าใครยังขาด */
+function exportAttendanceList(){
+  const emps = MASTER_USERS.filter(u=>u[12]==='active');
+  if(!emps.length){ smlToast('ไม่มีพนักงานให้ Export','warn'); return; }
+  downloadCsv('ข้อมูลเวลาทำงาน_'+getCurrentEvalCycleYear()+'_'+Date.now()+'.csv',
+    ['รหัสพนักงาน','ชื่อ-สกุล','ฝ่าย/แผนก',...ATT_EXPORT_HEADERS,'หมายเหตุ/ใบรับรองแพทย์'],
+    emps.map(u=>[u[0],u[1],u[6]||u[4]||'',...attendanceExportCells(u[0]),(ATTENDANCE[u[0]]&&ATTENDANCE[u[0]].medCert)||'']));
+  const missing = emps.filter(u=>!ATTENDANCE[u[0]]).length;
+  smlToast('Export ข้อมูลเวลาทำงานแล้ว ('+emps.length+' คน)'+(missing?' · ยังไม่มีข้อมูล '+missing+' คน':''),missing?'warn':'ok');
 }
 
 /* ====== ตัวเลขสรุปจริง (แดชบอร์ด / ผังองค์กร / ตั้งค่ารอบ) ======
