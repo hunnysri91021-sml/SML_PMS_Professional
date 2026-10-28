@@ -5513,7 +5513,7 @@ function renderTeamFromMaster() {
     (!q || r.u[0].toLowerCase().includes(q) || r.u[1].toLowerCase().includes(q))
   );
 
-  el.innerHTML = filtered.length ? filtered.map(({u,wf,X,discipline,d}) => {
+  el.innerHTML = filtered.length ? deptGroupMap(filtered.map(r=>({...r,emp:r.u})),7,({u,wf,X,discipline,d}) => {
     const st = stMap[wf];
     /* เดิมใช้ inferLevelFromPosition(u[7]) เดา "ระดับฟอร์ม" จากคำในตำแหน่งงานเสมอ — ถ้าคนนี้เคยมีร่าง/
        ส่งแบบประเมินไว้จริงแล้วภายใต้ระดับจริงที่ Admin กำหนด (emp[18], ดู CLAUDE.md #23) ซึ่งอาจไม่ตรง
@@ -5579,7 +5579,7 @@ function renderTeamFromMaster() {
   /* #156: Export หน้านี้เป็น Excel — เก็บแถวที่กำลังแสดงจริง (หลังผ่าน status/search filter แล้ว)
      ไว้ในตัวแปร module-level เดียว ไม่สร้าง query แยกชุดที่สองที่อาจดริฟท์ออกจากตารางบนจอ (บทเรียน
      #126/#127/#138) ปุ่ม Export ที่กดจะอ่านจากตัวแปรนี้ตรงๆ เสมอ จึง "export อะไรก็เหมือนที่เห็นบนจอ" */
-  _teamExportRows = filtered.map(({u,wf,X,discipline})=>({
+  _teamExportRows = [...filtered].sort((a,b)=>((a.u[6]||'').trim()||'(ไม่ระบุฝ่าย)').localeCompare(((b.u[6]||'').trim()||'(ไม่ระบุฝ่าย)'),'th')).map(({u,wf,X,discipline})=>({
     code:u[0], name:u[1], position:u[7],
     dept: u[6]||u[4]||'—',
     discipline: discipline==null?'':discipline,
