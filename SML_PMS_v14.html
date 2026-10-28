@@ -1572,6 +1572,67 @@ img,svg,canvas{max-width:100%}
   table:has(#assignRows) thead{display:none}
   table:has(#assignRows){display:block}
 }
+/* #225 — Responsive รอบใหญ่ (มือถือ / แท็บเล็ต / Laptop / PC): แถบบนสุดไม่ล้น, ตารางหนาแน่นเป็นการ์ดบนมือถือ
+   เพิ่มทับท้ายสุด ไม่แก้กฎเดิม — การ์ดตาราง (.rtc) ติด data-label อัตโนมัติจากหัวตารางโดย script #sml-responsive-tables */
+.crumb{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 0}
+.sml-live,.role-box label,.session-badge .btn,.session-badge span{white-space:nowrap}
+.top-right{min-width:0;flex-shrink:0}
+#sessionName{max-width:170px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
+.role-box select{max-width:200px;text-overflow:ellipsis}
+@media(max-width:1250px){.sml-live{display:none}}
+@media(max-width:1100px){.crumb{display:none}.topbar{padding:10px 16px;gap:10px}}
+@media(max-width:900px){
+  .topbar{flex-wrap:wrap;min-height:0;padding:8px 12px;gap:8px}
+  .top-right{flex:1 1 0;min-width:0;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+  .role-box{flex:1 1 160px;min-width:0}
+  .role-box select{width:100%;max-width:none}
+  .session-badge{order:9;flex:1 1 100%;justify-content:space-between;padding-top:6px;border-top:1px dashed #e2e8f0}
+  #sessionName{max-width:60vw}
+}
+@media(max-width:700px){
+  .role-box label{display:none}
+  .avatar{width:32px;height:32px}
+}
+/* Laptop / จอที่มี sidebar: ตารางหนาแน่นพอดี ไม่ให้ปุ่มกองเป็นแถวสูง */
+.tw,.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#pg-calib .calib-table-wrap table{min-width:900px}
+#pg-calib #calibRows td:first-child,#pg-calib .calib-table-wrap thead th:first-child{position:sticky;left:0;z-index:2;min-width:140px;box-shadow:1px 0 0 #e3eaf2}
+#pg-calib .calib-table-wrap thead th:first-child{background:#f1f5fb}
+#pg-calib #calibRows td:first-child{background:#fff}
+#pg-calib #calibRows .calib-row-ready td:first-child,#pg-calib #calibRows .calib-row-done td:first-child{background:inherit}
+#pg-calib .calib-acts{display:flex;flex-wrap:wrap;gap:4px;min-width:130px}
+#pg-calib .calib-acts .btn{white-space:nowrap;margin:0;padding:5px 7px;font-size:11px}
+#pg-calib #calibRows td:last-child{min-width:140px}
+#pg-calib .calib-note{width:100%;min-width:115px;max-width:220px}
+@media(min-width:1000px) and (max-width:1500px){
+  #pg-calib #calibRows td{padding:8px 5px}
+  #pg-calib .calib-table-wrap thead th{padding:8px 5px;font-size:10px}
+  #pg-calib .calib-adj{width:72px}
+  .stat .vl{font-size:26px}
+}
+/* การ์ดตารางบนมือถือ (ตารางที่ script ใส่ class rtc) */
+@media(max-width:700px){
+  .rtc thead{display:none}
+  .rtc,.rtc tbody,.rtc tr,.rtc td{display:block;width:100%;min-width:0!important}
+  .rtc{min-width:0!important}
+  .rtc tr{margin:0 0 10px;padding:10px 12px;border:1px solid #e3eaf2;border-radius:10px;background:#fff!important}
+  .rtc tr:has(>td[colspan]:only-child){padding:8px 12px;background:#eef3fb!important}
+  .rtc td{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0!important;border:0!important;text-align:right!important;position:static!important;background:transparent!important;box-shadow:none!important;font-size:13px}
+  .rtc td[colspan]:only-child{display:block;text-align:left!important}
+  .rtc td[data-label]::before{content:attr(data-label);flex:0 0 38%;max-width:44%;text-align:left;font-size:11.5px;font-weight:700;color:#64748b}
+  .rtc td:first-child{display:block;text-align:left!important;font-size:15px;padding-bottom:6px!important;border-bottom:1px solid #eef2f7!important;margin-bottom:4px}
+  .rtc td:first-child::before{display:none}
+  .rtc td:last-child{flex-wrap:wrap;justify-content:flex-end;padding-top:8px!important}
+  .rtc td:last-child::before{flex-basis:100%;max-width:100%}
+  .rtc td .btn{min-height:38px;flex:0 0 auto;white-space:nowrap}
+  .rtc td:last-child{gap:6px}
+  .rtc td input:not([type=checkbox]),.rtc td select{flex:1 1 55%;min-width:0;width:auto!important;max-width:100%!important}
+  #pg-calib .calib-note{max-width:none}
+  #pg-calib .calib-acts{justify-content:flex-end;min-width:0;width:100%}
+  #pg-calib .calib-acts .btn{padding:8px 12px;font-size:13px}
+  #pg-calib .calib-adj{width:110px!important;flex:0 0 110px!important}
+  #pg-calib .calib-table-wrap table{min-width:0}
+}
 </style>
 
 </head>
@@ -10485,7 +10546,7 @@ function renderCalibQueue(){
         <td style="text-align:center">${Zs}</td>
         <td style="text-align:center"><span class="grade g${grade}" title="เกรดจริงจาก Bell Curve/การปรับเอง ณ ขั้น Calibration — ไม่ใช่เกรดชั่วคราวอีกต่อไป">${grade}</span><br><small style="color:#16a34a;font-size:10px">(ผ่าน Calibration แล้ว)</small></td>
         <td colspan="3" style="text-align:center"><span class="calib-done-pill">✓ ผ่าน Calibration แล้ว</span></td>
-        <td>${recalcBtn}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+        <td><div class="calib-acts">${recalcBtn}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</div></td></tr>`;
     }
     const noteKey = code+'|'+d[2];
     const noteVal = (typeof getEvalHrNote==='function' ? getEvalHrNote(noteKey) : '').replace(/"/g,'&quot;');
@@ -10498,7 +10559,7 @@ function renderCalibQueue(){
       <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()"></td>
       <td class="calib-bc-cell" data-key="${key}" style="text-align:center"><span class="calib-bc-pending">ยังไม่คำนวณ</span></td>
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)"></td>
-      <td>${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${d[2]}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน แล้วเติมลงช่องให้อัตโนมัติ">🔄 คำนวณใหม่ (KPI)</button> `:''}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+      <td><div class="calib-acts">${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${d[2]}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน แล้วเติมลงช่องให้อัตโนมัติ">🔄 คำนวณใหม่ (KPI)</button> `:''}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</div></td></tr>`;
   }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
   /* ทาสีเซลล์เกรดกลับเข้าไปถ้า bellCurveResult ยัง valid (ดูคอมเมนต์ด้านบน) — เซลล์ที่เพิ่งสร้างใหม่
      ทุกอันเริ่มจาก "ยังไม่คำนวณ" เสมอ ต้องเติมผลที่คำนวณไว้แล้วกลับเข้าไปเอง ไม่งั้นแม้ผลจะยังอยู่จริง
@@ -14991,5 +15052,43 @@ async function confirmImportEmployees(){
   </div>
 </div>
 
+<script id="sml-responsive-tables">
+/* #225 — ใส่ class "rtc" + data-label (จากหัวตารางตามจริง รองรับ colspan) ให้ตารางรายการหลัก เพื่อให้ CSS แสดงเป็นการ์ดบนมือถือ
+   ใช้ MutationObserver เพราะ tbody ถูก render ใหม่ด้วย innerHTML ตลอด (ผ่านการกรอง/ซิงก์) */
+(function(){
+  'use strict';
+  var IDS=['teamRows','reviewl1Rows','reviewRows','gmApproveRows','calibRows','calibCheckRows','approveRows','attRows','orgRows','reportRows','auditRows','userRows','cyclesListRows','myResultHistoryRows','cycleParticipantsRows'];
+  function headerLabels(table){
+    var th=table.querySelectorAll('thead tr:last-child th'),out=[];
+    th.forEach(function(h){ var n=parseInt(h.getAttribute('colspan')||'1',10)||1; var t=(h.textContent||'').replace(/\s+/g,' ').trim(); for(var i=0;i<n;i++) out.push(i===0?t:''); });
+    return out;
+  }
+  function label(tbody){
+    var table=tbody.closest('table'); if(!table) return;
+    table.classList.add('rtc');
+    var labels=headerLabels(table);
+    tbody.querySelectorAll('tr').forEach(function(tr){
+      var col=0;
+      Array.prototype.forEach.call(tr.children,function(td){
+        var span=parseInt(td.getAttribute('colspan')||'1',10)||1;
+        if(span===1&&labels[col]){ if(td.getAttribute('data-label')!==labels[col]) td.setAttribute('data-label',labels[col]); }
+        col+=span;
+      });
+    });
+  }
+  var pending=new Set(),timer=null;
+  function flush(){ timer=null; pending.forEach(label); pending.clear(); }
+  function init(){
+    IDS.forEach(function(id){
+      var tb=document.getElementById(id); if(!tb||tb.__rtc) return; tb.__rtc=1;
+      label(tb);
+      new MutationObserver(function(){ pending.add(tb); if(!timer) timer=setTimeout(flush,30); }).observe(tb,{childList:true});
+    });
+  }
+  document.addEventListener('DOMContentLoaded',init);
+  window.addEventListener('load',init);
+  if(document.readyState!=='loading') init();
+})();
+</script>
 </body>
 </html>
