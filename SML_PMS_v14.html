@@ -2154,17 +2154,18 @@ img,svg,canvas{max-width:100%}
     <div class="card calib-table-card">
       <div class="card-h"><h3>📋 ตารางปรับเทียบรายบุคคล</h3><div class="r"><span class="bd b-y" id="calibCount">รอปรับเทียบ 0 รายการ</span></div></div>
       <div style="padding:10px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--bd)">
-        <select id="calibFilterGroup" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
-          <option value="">ทุกกลุ่มงาน (Group)</option>
-        </select>
-        <select id="calibFilterSection" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
-          <option value="">ทุกแผนก (Section)</option>
+        <select id="calibView" onchange="renderCalibQueue()" title="รูปแบบการแสดงผล" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit"><option value="dept">มุมมอง: แยกตามฝ่าย</option><option value="all">มุมมอง: รวมทั้งบริษัท</option></select>
+        <select id="calibFilterDept" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
+          <option value="">ทุกฝ่าย (Department)</option>
         </select>
         <select id="calibFilterDivision" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
           <option value="">ทุกส่วน (Division)</option>
         </select>
-        <select id="calibFilterDept" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
-          <option value="">ทุกฝ่าย (Department)</option>
+        <select id="calibFilterSection" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
+          <option value="">ทุกแผนก (Section)</option>
+        </select>
+        <select id="calibFilterGroup" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
+          <option value="">ทุกกลุ่มงาน (Group)</option>
         </select>
         <select id="calibSort" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit"><option value="">เรียง: ค่าเริ่มต้น</option><option value="code">เรียง: รหัสพนักงาน</option><option value="gradeAE">เรียง: เกรด A→E</option><option value="gradeEA">เรียง: เกรด E→A</option><option value="scoreDesc">เรียง: คะแนน สูง→ต่ำ</option><option value="name">เรียง: ชื่อ ก→ฮ</option></select>
         <button class="btn btn-sm" onclick="resetCalibTableFilters()" title="ล้างตัวกรองทั้งหมด">↩️ ล้างตัวกรอง</button>
@@ -10021,7 +10022,11 @@ function resolveUnitHeadFor(emp){
 /* #233: ตัวกรองตามโครงสร้างองค์กร (กลุ่มงาน/แผนก/ส่วน/ฝ่าย → ค่าย่อย) ใช้ร่วมกันทุกหน้าคิว L1-L4 —
    ค่าในตัวเลือกย่อยมาจากรายชื่อจริงในคิวนั้น (ไม่ hardcode, #3) และใช้ฟิลด์เดียวกับ Bell Curve (BELL_CURVE_GROUP_FIELDS) */
 /* #234: แสดงคิวแยกเป็นฝ่ายๆ (department = u[6]) — เรียงตามฝ่ายแล้วแทรกแถวหัวฝ่าย (พร้อมจำนวนคน) ก่อนกลุ่มพนักงานของฝ่ายนั้น */
+function orgViewFlat(key){ const el=document.getElementById(key==='calib'?'calibView':'orgf_'+key+'_view'); return !!el && el.value==='all'; }
+let ORG_VIEW_KEY = '';
+function deptGroupMapK(key, roster, colspan, fn){ ORG_VIEW_KEY = key; try{ return deptGroupMap(roster, colspan, fn); } finally { ORG_VIEW_KEY=''; } }
 function deptGroupMap(roster, colspan, fn){
+  if(ORG_VIEW_KEY && orgViewFlat(ORG_VIEW_KEY)) return roster.map(fn);   // #241: มุมมอง "รวมทั้งบริษัท" = ไม่แยกฝ่าย ไม่มีแถวหัวฝ่าย
   const dep = r=>((r.emp[6]||'').trim()||'(ไม่ระบุฝ่าย)');
   const sorted = roster.map((r,i)=>({r,i})).sort((a,b)=>dep(a.r).localeCompare(dep(b.r),'th')||a.i-b.i).map(x=>x.r);
   const cnt = {}; sorted.forEach(r=>{ const k=dep(r); cnt[k]=(cnt[k]||0)+1; });
@@ -10067,13 +10072,15 @@ function applyOrgFilter(key, countId, roster, rerender, bcByKey){
     const wrap = document.createElement('span');
     wrap.className = 'orgf-bar';
     wrap.style.cssText = 'display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center';
-    wrap.innerHTML = fields.map(f=>'<select class="btn" id="orgf_'+key+'_'+f+'" title="กรอง'+lbl(f)+'"></select>').join('')
+    wrap.innerHTML = '<select class="btn" id="orgf_'+key+'_view" title="รูปแบบการแสดงผล"><option value="dept">มุมมอง: แยกตามฝ่าย</option><option value="all">มุมมอง: รวมทั้งบริษัท</option></select>'
+      + ['department','division','section','group'].map(f=>'<select class="btn" id="orgf_'+key+'_'+f+'" title="กรอง'+lbl(f)+'"></select>').join('')
       + '<select class="btn" id="orgf_'+key+'_sort" title="เรียงลำดับ">'+ORGQ_SORT_OPTIONS.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>'
       + '<button class="btn btn-sm" id="orgf_'+key+'_reset" title="ล้างตัวกรอง">↩️ ล้าง</button>';
     anchor.parentNode.insertBefore(wrap, anchor);
     fields.forEach(f=>{ document.getElementById('orgf_'+key+'_'+f).onchange = ()=>rerender(); });
     document.getElementById('orgf_'+key+'_sort').onchange = ()=>rerender();
-    document.getElementById('orgf_'+key+'_reset').onclick = ()=>{ fields.forEach(f=>{ document.getElementById('orgf_'+key+'_'+f).value=''; }); document.getElementById('orgf_'+key+'_sort').value=''; rerender(); };
+    document.getElementById('orgf_'+key+'_view').onchange = ()=>rerender();
+    document.getElementById('orgf_'+key+'_reset').onclick = ()=>{ fields.forEach(f=>{ document.getElementById('orgf_'+key+'_'+f).value=''; }); document.getElementById('orgf_'+key+'_sort').value=''; document.getElementById('orgf_'+key+'_view').value='dept'; rerender(); };
   }
   const cur = {}; fields.forEach(f=>{ cur[f] = document.getElementById('orgf_'+key+'_'+f).value; });
   // ตัวเลือกของแต่ละช่องนับจากรายชื่อที่ผ่านตัวกรอง "ช่องอื่น" (กรองรวมกันได้ + ไม่มีตัวเลือกที่ได้ 0 คน)
@@ -10166,7 +10173,7 @@ function renderReviewL1Queue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? deptGroupMap(roster,6,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('reviewl1',roster,6,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
@@ -10231,7 +10238,7 @@ function renderReviewQueue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? deptGroupMap(roster,5,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('review',roster,5,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
@@ -10327,7 +10334,7 @@ function renderGmApproveQueue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? deptGroupMap(roster,5,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('gmapprove',roster,5,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
@@ -10359,7 +10366,7 @@ function renderGmApproveQueue(){
     const sendRows = roster.filter(r=>r.state==='done' && r.draft && evalStatusRank(r.draft[r.draft.length-1])>=evalStatusRank('GMApproved') && evalStatusRank(r.draft[r.draft.length-1])<evalStatusRank('Calibrated'));
     const waiting = sendRows.filter(r=>r.draft[r.draft.length-1]==='GMApproved').length;
     if(sendCnt) sendCnt.textContent = waiting+' รอส่ง';
-    sendBody.innerHTML = sendRows.length ? deptGroupMap(sendRows,5,r=>{
+    sendBody.innerHTML = sendRows.length ? deptGroupMapK('gmapprove',sendRows,5,r=>{
       const {name,dept}=empDeptLabel(r.emp[0], r.emp[1]); const d=r.draft, code=r.emp[0], st=d[d.length-1];
       const waitingSend = st==='GMApproved';
       const badge = waitingSend ? '<span class="bd b-y">📤 รอยืนยันส่งผล</span>' : (st==='ResultSent' ? '<span class="bd b-b">ส่งแล้ว — รอพนักงานรับทราบ</span>' : '<span class="bd b-g">✓ ส่งแล้ว/รับทราบแล้ว</span>');
@@ -10468,6 +10475,7 @@ function filterCalibTableRoster(fullRoster){
 function resetCalibTableFilters(){
   CALIB_TABLE_FILTER_SELECTS.forEach(({id})=>{ const sel = document.getElementById(id); if(sel) sel.value=''; });
   const so=document.getElementById('calibSort'); if(so) so.value='';
+  const cv=document.getElementById('calibView'); if(cv) cv.value='dept';
   renderCalibQueue();
 }
 /* Export ตารางปรับเทียบรายบุคคลตามตัวกรองที่เลือกไว้ตอนนี้ (ทุก state — pending/ready/done ไม่ใช่แค่
@@ -10600,7 +10608,7 @@ function renderCalibQueue(){
     });
     if(!stillValid) bellCurveResult = null;
   }
-  tbody.innerHTML = roster.length ? deptGroupMap(roster,9,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('calib',roster,9,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
@@ -10920,7 +10928,7 @@ function renderApproveQueue(){
   const pendingCount = roster.filter(r=>r.state!=='ready' && r.state!=='done').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
   if(btn) btn.textContent = '✅ อนุมัติทั้งหมด ('+readyCount+')';
-  tbody.innerHTML = roster.length ? deptGroupMap(roster,5,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('approve',roster,5,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
