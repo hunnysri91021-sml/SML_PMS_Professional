@@ -5671,8 +5671,18 @@ let _teamExportRows = [];
 function exportTeamListToExcel(){
   if(!_teamExportRows.length){ smlToast('ไม่มีรายชื่อในตารางให้ Export ตอนนี้','warn'); return; }
   downloadCsv('รายชื่อพนักงานในสังกัด_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','ตำแหน่ง','แผนก/ฝ่าย','สถานะการประเมิน'],
-    _teamExportRows.map(r=>[r.code, r.name, r.position, r.dept, r.statusLabel]));
+    ['รหัสพนักงาน','ชื่อ-สกุล','ตำแหน่ง','แผนก/ฝ่าย','สถานะการประเมิน',...ATT_EXPORT_HEADERS,'คะแนน Z ที่ได้'],
+    _teamExportRows.map(r=>{
+      /* #244: เวลาทำงานจาก attendanceExportCells ชุดเดียวกับรายงานอื่น; Z คิดเฉพาะคนที่มีข้อมูลเวลาจริง (ไม่ใช้ค่าตัวอย่าง #14/#229) */
+      let z='';
+      if(ATTENDANCE[r.code]){
+        const emp=MASTER_USERS.find(u=>u[0]===r.code);
+        const dr=findCurrentCycleDraft(getDrafts(), r.code, getCurrentEvalCycleYear());
+        const lv=(dr&&dr[3])||(emp&&getAssignedEvalLevel(emp))||'op';
+        try{ z=computeZScore(lv, r.code).score; }catch(e){ z=''; }
+      }
+      return [r.code, r.name, r.position, r.dept, r.statusLabel, ...attendanceExportCells(r.code), z];
+    }));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','Export รายชื่อพนักงานในสังกัด', _teamExportRows.length+' รายการ', _teamExportRows.map(r=>r.code).join(', '));
   smlToast('Export รายชื่อแล้ว ('+_teamExportRows.length+' คน)','ok');
 }
