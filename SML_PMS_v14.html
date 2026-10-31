@@ -2066,7 +2066,7 @@ img,svg,canvas{max-width:100%}
     <div class="ph-act"><button class="btn" onclick="rejectReviewL1Selected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewL1Selected()">✅ ยืนยันและส่งให้ผู้ประเมินคนถัดไป</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามหัวหน้าหน่วยงาน (หัวหน้าหน่วย/หัวหน้าแผนก) เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
+      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามหัวหน้าหน่วยงาน (หัวหน้าหน่วย/หัวหน้าแผนก) เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><button class="btn btn-sm" onclick="exportQueueToExcel('reviewl1')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
       <div class="al al-w" id="reviewl1FilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.reviewl1-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
@@ -2081,7 +2081,7 @@ img,svg,canvas{max-width:100%}
     <div class="ph-act"><button class="btn" onclick="rejectReviewSelected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewSelected()">✅ ยืนยันและส่งให้ผู้ประเมินคนถัดไป</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewFilter" onchange="renderReviewQueue()" title="กรองตามหัวหน้าแผนก เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
+      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewFilter" onchange="renderReviewQueue()" title="กรองตามหัวหน้าแผนก เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><button class="btn btn-sm" onclick="exportQueueToExcel('review')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
       <div class="al al-w" id="reviewFilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.review-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
@@ -2096,7 +2096,7 @@ img,svg,canvas{max-width:100%}
     <div class="ph-act"><button class="btn" onclick="rejectGmSelected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveGmSelected()">✓ อนุมัติที่เลือก</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>ใบประเมินรออนุมัติ GM</h3><div class="r"><select class="btn" id="gmApproveFilter" onchange="renderGmApproveQueue()" title="กรองตามผู้จัดการส่วน เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="gmApproveCount">0 รายการ</span></div></div>
+      <div class="card-h"><h3>ใบประเมินรออนุมัติ GM</h3><div class="r"><select class="btn" id="gmApproveFilter" onchange="renderGmApproveQueue()" title="กรองตามผู้จัดการส่วน เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><button class="btn btn-sm" onclick="exportQueueToExcel('gmapprove')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="gmApproveCount">0 รายการ</span></div></div>
       <div class="al al-w" id="gmApproveFilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
@@ -10222,6 +10222,28 @@ function buildTierRoster(resolverFn, myCode, inputStatus, cycle){
 /* ขั้นใหม่ "สอบทานหัวหน้าแผนก" (#92, ก่อน "สอบทานผู้จัดการส่วน" เดิม) — อ่านคิวจาก Submitted
    เหมือนที่ renderReviewQueue() เคยอ่านตอนยังไม่มีขั้นนี้ ผ่าน role l1 scoping ที่เดินสายบังคับบัญชา
    2 ชั้นจาก u[9] (ดู getMyScopedEmpCodes() ด้านบน) จึงเห็นทั้งแผนก ไม่ใช่แค่ลูกน้องที่รายงานตรง */
+const _queueExportRows = {reviewl1:[], review:[], gmapprove:[]};
+const _QUEUE_EXPORT_NAME = {reviewl1:'L2_สอบทานหัวหน้าแผนก', review:'L3_สอบทานผู้จัดการส่วน', gmapprove:'L4_อนุมัติGM'};
+/* #245: Export Excel คิว L2–L4 — ใช้รายชื่อชุดเดียวกับที่แสดงบนจอ (รวมตัวกรอง/มุมมองหัวหน้า) + เวลาทำงาน */
+function exportQueueToExcel(key){
+  const rows = _queueExportRows[key] || [];
+  if(!rows.length){ smlToast('ไม่มีรายชื่อให้ Export','warn'); return; }
+  const showGrade = key==='reviewl1';
+  const head = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','ส่วน/แผนก','ฝ่าย','สถานะในคิว','สถานะใบประเมิน','คะแนน Y','คะแนน Z','คะแนนรวม X'];
+  if(showGrade) head.push('เกรดชั่วคราว');
+  head.push(...ATT_EXPORT_HEADERS);
+  const stateTh = {ready:'รอดำเนินการ', pending:'รอผลประเมิน', done:'ดำเนินการแล้ว'};
+  const data = rows.map(r=>{
+    const u = r.emp, d = r.draft;
+    const line = [u[0], (u[1]||'').trim(), u[3]||'', u[4]||'', u[6]||'', stateTh[r.state]||r.state,
+      d ? d[d.length-1] : 'ยังไม่ส่งแบบประเมิน', d ? d[d.length-5] : '', d ? d[d.length-4] : '', d ? d[d.length-3] : ''];
+    if(showGrade) line.push(d && canSeeGradeForStatus(d[d.length-1]) ? d[d.length-2] : '');
+    line.push(...attendanceExportCells(u[0]));
+    return line;
+  });
+  downloadCsv((_QUEUE_EXPORT_NAME[key]||key)+'_'+getCurrentEvalCycleYear()+'_'+Date.now()+'.csv', head, data);
+  if(typeof appendAuditLog==='function') appendAuditLog('export','Export คิว '+key, data.length+' คน','');
+}
 function renderReviewL1Queue(){
   const tbody=document.getElementById('reviewl1Rows'); const cnt=document.getElementById('reviewl1Count');
   if(!tbody) return;
@@ -10233,6 +10255,7 @@ function renderReviewL1Queue(){
   populateReviewManagerFilter('reviewl1Filter', orgRoster, resolveUnitHeadFor);
   renderReviewerFilterDiagNote('reviewl1FilterDiag', fullRoster, resolveUnitHeadFor, 9, 'หัวหน้าหน่วย (L1)');
   const roster = filterRosterByManager('reviewl1Filter', orgRoster, resolveUnitHeadFor);
+  _queueExportRows['reviewl1'] = roster;
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -10301,6 +10324,7 @@ function renderReviewQueue(){
   populateReviewManagerFilter('reviewFilter', orgRoster, resolveL1Reviewer);
   renderReviewerFilterDiagNote('reviewFilterDiag', fullRoster, resolveL1Reviewer, 10, 'หัวหน้าแผนก (L2)');
   const roster = filterRosterByManager('reviewFilter', orgRoster, resolveL1Reviewer);
+  _queueExportRows['review'] = roster;
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
@@ -10400,6 +10424,7 @@ function renderGmApproveQueue(){
   populateReviewManagerFilter('gmApproveFilter', orgRoster, resolveL2Reviewer);
   renderReviewerFilterDiagNote('gmApproveFilterDiag', fullRoster, resolveL2Reviewer, 19, 'ผู้ตรวจ MGR (L3)');
   const roster = filterRosterByManager('gmApproveFilter', orgRoster, resolveL2Reviewer);
+  _queueExportRows['gmapprove'] = roster;
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
