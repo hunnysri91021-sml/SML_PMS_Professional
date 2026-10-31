@@ -2037,6 +2037,7 @@ img,svg,canvas{max-width:100%}
         <option value="pending">รอประเมิน</option>
         <option value="done">ส่งแล้ว</option>
       </select>
+      <button class="btn btn-ok" id="teamSendHeldBtn" onclick="sendHeldTeamSelected()">✅ ยืนยันและส่งที่เลือก (ที่บันทึกไว้)</button>
       <button class="btn" id="teamExportBtn" style="display:none" onclick="exportTeamListToExcel()">📊 Export Excel</button>
     </div></div>
 
@@ -2053,7 +2054,7 @@ img,svg,canvas{max-width:100%}
     <div class="card">
       <div class="card-h"><h3>รายชื่อลูกน้องทางตรง</h3><div class="r"><input id="teamSearch" oninput="renderTeamFromMaster()" placeholder="🔍 ค้นหาชื่อ / รหัสพนักงาน" style="padding:7px 11px;border:1px solid var(--bd);border-radius:7px;font-size:12.5px;width:220px"></div></div>
       <div class="tw"><table>
-        <thead><tr><th>พนักงาน</th><th>ตำแหน่ง</th><th>ตนเอง</th><th>วินัย</th><th>คะแนน L1 (ของคุณ)</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <thead><tr><th><input type="checkbox" title="เลือกทั้งหมดที่พักไว้" onchange="document.querySelectorAll('.team-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>ตำแหน่ง</th><th>ตนเอง</th><th>วินัย</th><th>คะแนน L1 (ของคุณ)</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
         <tbody id="teamRows"></tbody>
       </table></div>
     </div>
@@ -3547,7 +3548,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 <div class="ov" id="mReview"><div class="md reviewer-md" style="max-width:1120px">
   <div class="md-h"><div><h3 id="reviewerTitle">📋 แบบประเมินสำหรับผู้ประเมิน</h3><small id="reviewerSubtitle" style="color:#7b8796">แบบฟอร์มจะเปลี่ยนตามระดับของผู้ถูกประเมิน</small></div><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b" id="reviewerFormArea"></div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="rejectReviewerForm()">↩️ ตีกลับ</button><button class="btn btn-p" id="reviewerConfirmBtn" style="display:none" onclick="confirmReviewerReconfirm()">✓ ยืนยันว่าตรวจสอบแล้ว</button><button class="btn btn-ok" id="reviewerSubmitBtn" onclick="submitReviewerForm()">✅ ยืนยันและส่งให้ผู้ประเมินคนถัดไป</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="rejectReviewerForm()">↩️ ตีกลับ</button><button class="btn btn-p" id="reviewerConfirmBtn" style="display:none" onclick="confirmReviewerReconfirm()">✓ ยืนยันว่าตรวจสอบแล้ว</button><button class="btn btn-p" id="reviewerHoldBtn" onclick="saveReviewerHold()">💾 บันทึกไว้ก่อน (ยังไม่ส่ง)</button><button class="btn btn-ok" id="reviewerSubmitBtn" onclick="submitReviewerForm()">✅ ยืนยันและส่งให้ผู้ประเมินคนถัดไป</button></div>
 </div></div>
 
 <div class="ov" id="mSubmit"><div class="md" style="max-width:440px">
@@ -5580,7 +5581,8 @@ function renderTeamFromMaster() {
     (!q || r.u[0].toLowerCase().includes(q) || r.u[1].toLowerCase().includes(q))
   );
 
-  el.innerHTML = filtered.length ? deptGroupMap(filtered.map(r=>({...r,emp:r.u})),7,({u,wf,X,discipline,d}) => {
+  const _teamChecked = new Set(getCheckedKeys('team-chk'));
+  el.innerHTML = filtered.length ? deptGroupMap(filtered.map(r=>({...r,emp:r.u})),8,({u,wf,X,discipline,d}) => {
     const st = stMap[wf];
     /* เดิมใช้ inferLevelFromPosition(u[7]) เดา "ระดับฟอร์ม" จากคำในตำแหน่งงานเสมอ — ถ้าคนนี้เคยมีร่าง/
        ส่งแบบประเมินไว้จริงแล้วภายใต้ระดับจริงที่ Admin กำหนด (emp[18], ดู CLAUDE.md #23) ซึ่งอาจไม่ตรง
@@ -5598,9 +5600,12 @@ function renderTeamFromMaster() {
        (d[3]) เป็นอันดับแรกเสมอเมื่อมี draft อยู่แล้ว — ข้อมูลที่บันทึกไว้จริงย่อมน่าเชื่อถือกว่าการคำนวณ
        ใหม่ทุกครั้ง ส่วน realLevel (คำนวณสด) ใช้เฉพาะตอนยังไม่เคยมี draft เลยเท่านั้น */
     const openLevel = d ? d[3] : ((typeof getAssignedEvalLevel==='function' ? getAssignedEvalLevel(u) : '') || inferLevelFromPosition(u[7]));
+    const _hk = d ? draftKey(d) : '';
+    const _canSend = d && wf==='pending' && isHeld(_hk);
     return `<tr>
+      <td>${_canSend?`<input type="checkbox" class="team-chk" value="${_hk}">`:''}</td>
       <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>
-        <div><b>${u[1]}</b><small>${u[0]}</small></div></div></td>
+        <div><b>${u[1]}</b><small>${u[0]}</small>${_canSend?heldBadge(_hk):''}</div></div></td>
       <td style="font-size:12px">${u[7]}</td>
       <td style="color:#cbd5e1">—</td>
       <td>${discipline==null?'<span style="color:#cbd5e1">—</span>':'<b>'+discipline+'</b>'}</td>
@@ -5611,8 +5616,9 @@ function renderTeamFromMaster() {
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
       </button></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px 0">${managerName ? 'ไม่พบลูกทีมตรงตามเงื่อนไข' : 'กรุณาเลือกหัวหน้าที่มุมขวาบนก่อน'}</td></tr>`;
+  }).join('') : `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px 0">${managerName ? 'ไม่พบลูกทีมตรงตามเงื่อนไข' : 'กรุณาเลือกหัวหน้าที่มุมขวาบนก่อน'}</td></tr>`;
 
+  restoreCheckedKeys('team-chk', _teamChecked);
   const total = allDirectReports.length;
   const doneCount = withStatus.filter(r=>r.wf==='done').length;
   const pendingCount = total - doneCount;
@@ -10238,7 +10244,7 @@ function renderReviewL1Queue(){
         <td style="text-align:center">${provisionalGradeCell(grade)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
-    return `<tr><td><input type="checkbox" class="reviewl1-chk" value="${draftKey(d)}"></td>
+    return `<tr><td><input type="checkbox" class="reviewl1-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
@@ -10257,6 +10263,7 @@ async function approveReviewL1Selected(){
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
   if(!confirm('ยืนยันส่ง '+keys.length+' รายการให้ผู้ประเมินคนถัดไป?\n\nระบบจะแจ้งเตือนผู้ประเมินคนถัดไป และหลังส่งแล้วจะแก้ไขไม่ได้อีก')) return;
   updateDraftStatus(keys,'L1Reviewed');
+  keys.forEach(k=>setHeld(k,false));
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L1Reviewed',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทานหัวหน้าแผนก', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   const nextRes = await notifyNextEvaluators(keys.map(k=>{const [c,y]=k.split('|');return {empCode:c,cycle:y};})).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
@@ -10305,7 +10312,7 @@ function renderReviewQueue(){
         <td style="text-align:center">${X}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
-    return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}"></td>
+    return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
@@ -10347,6 +10354,7 @@ async function approveReviewSelected(){
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
   if(!confirm('ยืนยันส่ง '+keys.length+' รายการให้ผู้ประเมินคนถัดไป (GM)?\n\nระบบจะแจ้งเตือนผู้ประเมินคนถัดไป และหลังส่งแล้วจะแก้ไขไม่ได้อีก')) return;
   updateDraftStatus(keys,'L2Reviewed');
+  keys.forEach(k=>setHeld(k,false));
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L2Reviewed',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทาน L2', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   const nextRes = await notifyNextEvaluators(keys.map(k=>{const [c,y]=k.split('|');return {empCode:c,cycle:y};})).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
@@ -13140,7 +13148,7 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
      — จุดที่เปิดหน้าต่างนี้ด้วยปุ่ม "ดูแบบฟอร์ม" (ทีมงานที่ส่งแล้ว, คิวอนุมัติ GM) คือบริบท "ดูอย่างเดียว"
      ส่วนคิวสอบทาน L1/L2 ("สอบทานแบบฟอร์ม") ยังต้องใช้ปุ่มจริงเพื่อนุมัติ/ตีกลับ (#109) — ซ่อนปุ่มแทนการลบ
      ทิ้งเพื่อให้ยังล้าง/คืนสถานะปุ่มได้ถ้าหน้าต่างถูกเปิดซ้ำในบริบทที่ต่างกัน */
-  const footerBtns = document.querySelectorAll('#mReview .md-f .btn-dg, #mReview .md-f .btn-ok');
+  const footerBtns = document.querySelectorAll('#mReview .md-f .btn-dg, #mReview .md-f .btn-ok, #mReview .md-f #reviewerHoldBtn');
   footerBtns.forEach(b => { b.style.display = viewOnly ? 'none' : ''; });
   /* เดิมไม่เคยรับ/จำ cycle เลย — ปุ่ม "บันทึกและส่งต่อ"/"ตีกลับ" ในหน้าต่างนี้จึงไม่มีทางรู้ว่ากำลัง
      แก้ไข/อนุมัติใบของรอบไหน (CLAUDE.md #108's ชุดเดียวกัน ตามด้วยการเชื่อมปุ่มให้ทำงานจริงด้านล่าง) */
@@ -13378,6 +13386,60 @@ function clearReviewerForm(){
    ใบอยู่เลย/Draft → Submitted ของหน้าทีมงาน, Submitted → L1Reviewed ของคิวสอบทานหัวหน้าแผนก,
    L1Reviewed → L2Reviewed ของคิวสอบทานผู้จัดการส่วน) ให้ผลเหมือนปุ่มจริงที่หน้ารายการทุกจุด (สถานะ,
    push Approvals/Appraisals, audit log, renderWorkflowPages) ไม่ใช่เส้นทางคู่ขนานที่อาจเพี้ยนกัน */
+/* #243: "บันทึกไว้ก่อน" — ผู้ประเมินให้คะแนนแล้วเก็บไว้ (สถานะไม่เลื่อน) เพื่อรอรวมกับพนักงานคนอื่น
+   แล้วค่อยเลือกหลายคนกด "ยืนยันและส่งให้ผู้ประเมินคนถัดไป" ทีเดียว. EVAL_HELD_KEY = Set ของ draftKey ที่พักไว้ (local) */
+const EVAL_HELD_KEY='smlPmsEvalHeld';
+function loadHeld(){ try{return JSON.parse(localStorage.getItem(EVAL_HELD_KEY)||'{}')||{};}catch(e){return {};} }
+function isHeld(k){ return !!loadHeld()[k]; }
+function setHeld(k,on){ const h=loadHeld(); if(on) h[k]={at:new Date().toISOString(),by:(CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||''}; else delete h[k]; try{localStorage.setItem(EVAL_HELD_KEY,JSON.stringify(h));}catch(e){} }
+function heldBadge(k){ return isHeld(k)?'<br><span class="bd b-y" title="บันทึกไว้แล้ว ยังไม่ได้ส่งต่อ">💾 พักไว้</span>':''; }
+async function saveReviewerHold(){
+  const code=currentReviewerCode, cycle=currentReviewerCycle, lv=currentReviewerLevel;
+  const cfg=LEVEL_CONFIG[lv];
+  if(!code||!cycle||!lv||!cfg){ smlToast('ไม่พบข้อมูลพนักงานสำหรับฟอร์มนี้','warn'); return; }
+  const table=document.querySelector('#reviewerFormArea .reviewer-table');
+  const rows=table?[...table.querySelectorAll('tbody tr')]:[];
+  if(!rows.length){ smlToast('ไม่พบตารางคะแนนในแบบฟอร์มนี้','warn'); return; }
+  const scores=rows.map(r=>{const n=parseFloat(r.querySelector('.review-got')?.textContent);return isNaN(n)?0:n;});
+  if(scores.some(x=>!x)){ smlToast('กรุณาให้คะแนนครบทุกข้อก่อนบันทึก','warn'); return; }
+  const existing=getDrafts().find(d=>d[0]===code&&d[2]===cycle&&d[3]===lv);
+  const curStatus=existing?existing[existing.length-1]:'Draft';
+  const STEPNEXT={Draft:'Submitted',Submitted:'L1Reviewed',L1Reviewed:'L2Reviewed'};
+  if(!STEPNEXT[curStatus]){ smlToast('ขั้นตอนนี้ไม่รองรับการบันทึกไว้ก่อนจากหน้าต่างนี้','warn'); return; }
+  const emp=MASTER_USERS.find(u=>u[0]===code);
+  const empName=emp?emp[1]:code;
+  const m=scores.slice(0,10), l=cfg.leaderShow?scores.slice(10,14):[null,null,null,null];
+  const y=parseFloat(document.getElementById('reviewY')?.textContent||'0');
+  const z=currentReviewerZ||0;
+  const x=parseFloat(document.getElementById('reviewX')?.textContent||'0');
+  const payload=[code,empName,cycle,lv,...m,...l,y,z,x,gradeFromX(x),curStatus];
+  saveEvaluationLocal(payload);
+  if(typeof saveEvalCommentStage==='function'){
+    const a=CURRENT_SESSION_USER;
+    saveEvalCommentStage(code,cycle,STEPNEXT[curStatus],{by:a?a[1]:'',byCode:a?a[0]:'',byRole:a?a[2]:'',strength:document.getElementById('reviewStrength')?.value||'',dev:document.getElementById('reviewDev')?.value||''});
+  }
+  setHeld(draftKey(payload),true);
+  if(typeof pushDraftRowToExcel==='function') pushDraftRowToExcel(payload,'บันทึกไว้ก่อน');
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','บันทึกคะแนนไว้ก่อน (ยังไม่ส่งต่อ)',code,empName);
+  smlToast('บันทึกคะแนนของ '+empName+' ไว้แล้ว — ยังไม่ส่งต่อ ไปเลือกหลายคนแล้วกด "ยืนยันและส่ง" ได้ที่หน้ารายการ','ok');
+  closeM();
+  if(typeof renderWorkflowPages==='function') renderWorkflowPages();
+}
+async function sendHeldTeamSelected(){
+  let keys=getCheckedKeys('team-chk');
+  if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 คนที่บันทึกไว้แล้ว','warn'); return; }
+  keys=await guardFreshStatus(keys,'Draft');
+  if(!keys.length) return;
+  const bad=keys.filter(k=>{const emp=MASTER_USERS.find(u=>u[0]===k.split('|')[0]); return typeof hasAnyRealReviewer==='function'&&!hasAnyRealReviewer(emp);});
+  if(bad.length){ smlToast('มี '+bad.length+' คนที่ไม่มีผู้ประเมินคนถัดไปในสายบังคับบัญชา — ติดต่อ Admin ก่อนส่ง','warn'); keys=keys.filter(k=>!bad.includes(k)); if(!keys.length) return; }
+  if(!confirm('ยืนยันส่ง '+keys.length+' คนให้ผู้ประเมินคนถัดไป?\n\nระบบจะแจ้งเตือนผู้ประเมินคนถัดไป และหลังส่งแล้วจะแก้ไขไม่ได้อีก')) return;
+  updateDraftStatus(keys,'Submitted');
+  keys.forEach(k=>{ const [c,y]=k.split('|'); setHeld(k,false); pushApprovalRecordToExcel(c,y,'Submitted',''); });
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ส่งคะแนนรอบแรกให้ผู้ประเมินถัดไป',keys.length+' รายการ',keys.map(k=>k.split('|')[0]).join(', '));
+  const nextRes=await notifyNextEvaluators(keys.map(k=>{const [c,y]=k.split('|');return {empCode:c,cycle:y};})).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
+  smlToast('ส่งต่อผู้ประเมินคนถัดไปแล้ว '+keys.length+' คน — แก้ไขไม่ได้แล้ว'+nextNotifyToast(nextRes),'ok');
+  renderWorkflowPages();
+}
 async function submitReviewerForm(){
   const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
   const cfg = LEVEL_CONFIG[lv];
@@ -13442,6 +13504,7 @@ async function submitReviewerForm(){
   const oldGrade = existing ? existing[existing.length-2] : null;
   const payload = [code, empName, cycle, lv, ...m, ...l, y, z, x, grade, step.next];
   saveEvaluationLocal(payload);
+  setHeld(draftKey(payload),false);
   if(typeof skipEmptyReviewStages==='function') skipEmptyReviewStages(code, cycle, lv);
   if(typeof pushDraftRowToExcel==='function') pushDraftRowToExcel(payload, step.next);
   /* ผู้ใช้ขอ "ดึง comment จากคนประเมินคนก่อนมาด้วย" + "ทำ sync ขั้น excel" — บันทึกความเห็นของผู้สอบทาน

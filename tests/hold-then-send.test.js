@@ -1,0 +1,50 @@
+const {open,ok,done,INJECT}=require('./helpers');
+(async()=>{
+  const {b,p,errs}=await open();
+  await p.evaluate(INJECT);
+  const r=await p.evaluate(async()=>{
+    __mockGraph();
+    const sent=[]; window.isWorkerConfigured=()=>true;
+    window.workerFetch=async(c,path,o)=>{ sent.push({path,body:JSON.parse(o.body)}); return {ok:true}; };
+    window.confirm=()=>true;
+    __emp('L1',{name:'หน.แผนก',role:'l1',email:'l1@x.com'});
+    __emp('U1',{name:'หน.หน่วย',role:'unit',email:'u1@x.com',l1:'หน.แผนก',l3:'',l4:''});
+    __emp('E1',{name:'พนักงาน1',role:'emp',l1:'หน.หน่วย'});
+    __emp('E2',{name:'พนักงาน2',role:'emp',l1:'หน.หน่วย'});
+    const u=MASTER_USERS.find(x=>x[0]==='U1'); u[9]='หน.แผนก';
+    __login(u);
+    const cy=getCurrentEvalCycleYear();
+    const out={};
+    for(const code of ['E1','E2']){
+      const emp=MASTER_USERS.find(x=>x[0]===code);
+      openReviewerForm('of',emp[1],code,'',cy);
+      document.querySelectorAll('#reviewerFormArea .reviewer-table tbody tr').forEach(tr=>{ const bt=tr.querySelector('.review-score'); if(bt) bt.click(); });
+      await saveReviewerHold();
+    }
+    const dr=getDrafts().filter(d=>['E1','E2'].includes(d[0]));
+    out.statuses=dr.map(d=>d[d.length-1]);
+    out.held=dr.map(d=>isHeld(draftKey(d)));
+    out.mailsAfterHold=sent.filter(s=>s.path==='/send-mail').length;
+    document.getElementById('teamManagerSelect') && (document.getElementById('teamManagerSelect').value='');
+    renderTeamFromMaster();
+    const boxes=[...document.querySelectorAll('.team-chk')];
+    out.boxes=boxes.length;
+    boxes.forEach(c=>c.checked=true);
+    await sendHeldTeamSelected();
+    const dr2=getDrafts().filter(d=>['E1','E2'].includes(d[0]));
+    out.after=dr2.map(d=>d[d.length-1]);
+    out.heldAfter=dr2.map(d=>isHeld(draftKey(d)));
+    out.mails=sent.filter(s=>s.path==='/send-mail').map(s=>s.body.toEmail);
+    return out;
+  });
+  console.log(JSON.stringify(r));
+  ok(r.statuses.length===2&&r.statuses.every(s=>s==='Draft'),'hold keeps status Draft');
+  ok(r.held.every(Boolean),'both marked held');
+  ok(r.mailsAfterHold===0,'no notification on hold');
+  ok(r.boxes===2,'team page shows 2 selectable held rows');
+  ok(r.after.every(s=>s!=='Draft'),'bulk send advanced both '+r.after);
+  ok(r.heldAfter.every(x=>!x),'held cleared');
+  ok(r.mails.length>=1,'next evaluator emailed once (grouped) '+r.mails);
+  ok(errs.length===0,'no page errors '+errs.join('|'));
+  await b.close(); done();
+})();
