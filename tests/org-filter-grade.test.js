@@ -13,9 +13,8 @@ const {open,ok,done,INJECT}=require('./helpers');
     __draft('O-E1','Submitted',80); __draft('O-E2','Submitted',75);
     applySession(dh); renderReviewL1Queue();
     out.rowsAll=document.querySelectorAll('#reviewl1Rows .reviewl1-chk').length;
-    const f=document.getElementById('orgf_reviewl1_f'), v=document.getElementById('orgf_reviewl1_v');
-    out.hasFilter=!!f&&!!v;
-    f.value='group'; f.onchange(); 
+    const v=document.getElementById('orgf_reviewl1_group');
+    out.hasFilter=!!v&&!!document.getElementById('orgf_reviewl1_sort');
     v.value='กลุ่มA'; v.onchange();
     out.rowsA=document.querySelectorAll('#reviewl1Rows .reviewl1-chk').length;
     // เกรดไม่รั่ว: พนักงานเจ้าของผล + Admin ยังไม่เปิดแสดง

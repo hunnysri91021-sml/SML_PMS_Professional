@@ -2166,6 +2166,7 @@ img,svg,canvas{max-width:100%}
         <select id="calibFilterDept" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
           <option value="">ทุกฝ่าย (Department)</option>
         </select>
+        <select id="calibSort" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit"><option value="">เรียง: ค่าเริ่มต้น</option><option value="code">เรียง: รหัสพนักงาน</option><option value="gradeAE">เรียง: เกรด A→E</option><option value="gradeEA">เรียง: เกรด E→A</option><option value="scoreDesc">เรียง: คะแนน สูง→ต่ำ</option><option value="name">เรียง: ชื่อ ก→ฮ</option></select>
         <button class="btn btn-sm" onclick="resetCalibTableFilters()" title="ล้างตัวกรองทั้งหมด">↩️ ล้างตัวกรอง</button>
         <button class="btn btn-sm" onclick="exportCalibTableList()" title="Export ตารางนี้ (ตามตัวกรองที่เลือกไว้) เป็นไฟล์ Excel (CSV)" style="margin-left:auto">📥 Export Excel (ตารางนี้)</button>
       </div>
@@ -10032,28 +10033,61 @@ function deptGroupMap(roster, colspan, fn){
   });
   return out;
 }
-function applyOrgFilter(key, countId, roster, rerender){
+/* #240: ตัวกรององค์กรแบบ "รวมกันได้" (กลุ่มงาน+แผนก+ส่วน+ฝ่าย พร้อมกัน, ตัวเลือกแคบลงตามที่เลือกอื่น) + ตัวเลือกเรียงลำดับ
+   (รหัสพนักงาน / เกรด A→E / E→A / คะแนน / ชื่อ) ใช้ร่วมกันทุกคิว — เรียงภายในแต่ละฝ่ายเพราะ deptGroupMap คงลำดับเดิมในฝ่าย */
+const ORGQ_SORT_OPTIONS = [['','เรียง: ค่าเริ่มต้น'],['code','เรียง: รหัสพนักงาน'],['gradeAE','เรียง: เกรด A→E'],['gradeEA','เรียง: เกรด E→A'],['scoreDesc','เรียง: คะแนน สูง→ต่ำ'],['name','เรียง: ชื่อ ก→ฮ']];
+function rosterGradeOf(r, bcByKey){
+  const d = r.draft;
+  if(!d || r.state==='pending') return '';
+  const bc = bcByKey && bcByKey[draftKey(d)];
+  return bc ? bc.grade : String(d[d.length-2]||'');
+}
+function sortRosterBy(roster, mode, bcByKey){
+  if(!mode) return roster;
+  const code = r=>String(r.emp[0]);
+  const byCode = (a,b)=>code(a).localeCompare(code(b),'th',{numeric:true});
+  const gr = r=>{ const g=rosterGradeOf(r,bcByKey); return g? 'ABCDE'.indexOf(g[0]) : 99; };   // ไม่มีเกรด (รอผล) ไปท้ายสุด
+  const sc = r=>{ const d=r.draft; return (d && r.state!=='pending') ? (Number(d[d.length-3])||0) : -1; };
+  const cmp = {
+    code:byCode,
+    gradeAE:(a,b)=>gr(a)-gr(b)||sc(b)-sc(a)||byCode(a,b),
+    gradeEA:(a,b)=>{ const x=gr(a),y=gr(b); if(x===99||y===99) return x-y; return y-x||sc(b)-sc(a)||byCode(a,b); },
+    scoreDesc:(a,b)=>sc(b)-sc(a)||byCode(a,b),
+    name:(a,b)=>String(a.emp[1]).localeCompare(String(b.emp[1]),'th')
+  }[mode];
+  return cmp ? roster.slice().sort(cmp) : roster;
+}
+function orgValOf(emp, f){ return (emp[BELL_CURVE_GROUP_FIELDS[f]]||'').trim()||'(ไม่ระบุ)'; }
+function applyOrgFilter(key, countId, roster, rerender, bcByKey){
   const anchor = document.getElementById(countId);
   if(!anchor) return roster;
-  if(!document.getElementById('orgf_'+key+'_f')){
+  const fields = Object.keys(BELL_CURVE_GROUP_FIELDS);
+  const lbl = f=>f==='group'?'กลุ่มงาน':BELL_CURVE_GROUP_LABELS[f].split(' ')[0];
+  if(!document.getElementById('orgf_'+key+'_sort')){
     const wrap = document.createElement('span');
+    wrap.className = 'orgf-bar';
     wrap.style.cssText = 'display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center';
-    wrap.innerHTML = '<select class="btn" id="orgf_'+key+'_f" title="เลือกระดับโครงสร้างองค์กรที่จะกรอง">'
-      + Object.keys(BELL_CURVE_GROUP_FIELDS).map(k=>'<option value="'+k+'">'+(k==='group'?'กลุ่มงาน':BELL_CURVE_GROUP_LABELS[k].split(' ')[0])+'</option>').join('')
-      + '</select><select class="btn" id="orgf_'+key+'_v" title="เลือกค่าย่อย"></select>';
+    wrap.innerHTML = fields.map(f=>'<select class="btn" id="orgf_'+key+'_'+f+'" title="กรอง'+lbl(f)+'"></select>').join('')
+      + '<select class="btn" id="orgf_'+key+'_sort" title="เรียงลำดับ">'+ORGQ_SORT_OPTIONS.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('')+'</select>'
+      + '<button class="btn btn-sm" id="orgf_'+key+'_reset" title="ล้างตัวกรอง">↩️ ล้าง</button>';
     anchor.parentNode.insertBefore(wrap, anchor);
-    document.getElementById('orgf_'+key+'_f').onchange = ()=>{ document.getElementById('orgf_'+key+'_v').value=''; rerender(); };
-    document.getElementById('orgf_'+key+'_v').onchange = ()=>rerender();
+    fields.forEach(f=>{ document.getElementById('orgf_'+key+'_'+f).onchange = ()=>rerender(); });
+    document.getElementById('orgf_'+key+'_sort').onchange = ()=>rerender();
+    document.getElementById('orgf_'+key+'_reset').onclick = ()=>{ fields.forEach(f=>{ document.getElementById('orgf_'+key+'_'+f).value=''; }); document.getElementById('orgf_'+key+'_sort').value=''; rerender(); };
   }
-  const f = document.getElementById('orgf_'+key+'_f'), v = document.getElementById('orgf_'+key+'_v');
-  const idx = BELL_CURVE_GROUP_FIELDS[f.value];
-  const cur = v.value;
-  const counts = {};
-  roster.forEach(r=>{ const x=(r.emp[idx]||'').trim()||'(ไม่ระบุ)'; counts[x]=(counts[x]||0)+1; });
-  const vals = Object.keys(counts).sort();
-  v.innerHTML = '<option value="">ทุกค่า ('+roster.length+' คน)</option>' + vals.map(x=>'<option value="'+x.replace(/"/g,'&quot;')+'">'+x+' ('+counts[x]+' คน)</option>').join('');
-  v.value = vals.includes(cur) ? cur : '';
-  return v.value ? roster.filter(r=>((r.emp[idx]||'').trim()||'(ไม่ระบุ)')===v.value) : roster;
+  const cur = {}; fields.forEach(f=>{ cur[f] = document.getElementById('orgf_'+key+'_'+f).value; });
+  // ตัวเลือกของแต่ละช่องนับจากรายชื่อที่ผ่านตัวกรอง "ช่องอื่น" (กรองรวมกันได้ + ไม่มีตัวเลือกที่ได้ 0 คน)
+  fields.forEach(f=>{
+    const sel = document.getElementById('orgf_'+key+'_'+f);
+    const base = roster.filter(r=>fields.every(g=>g===f || !cur[g] || orgValOf(r.emp,g)===cur[g]));
+    const counts = {}; base.forEach(r=>{ const x=orgValOf(r.emp,f); counts[x]=(counts[x]||0)+1; });
+    const vals = Object.keys(counts).sort((a,b)=>a.localeCompare(b,'th'));
+    sel.innerHTML = '<option value="">ทุก'+lbl(f)+'</option>' + vals.map(x=>'<option value="'+x.replace(/"/g,'&quot;')+'">'+x+' ('+counts[x]+' คน)</option>').join('');
+    sel.value = vals.includes(cur[f]) ? cur[f] : '';
+    cur[f] = sel.value;
+  });
+  const out = roster.filter(r=>fields.every(f=>!cur[f] || orgValOf(r.emp,f)===cur[f]));
+  return sortRosterBy(out, document.getElementById('orgf_'+key+'_sort').value, bcByKey);
 }
 function populateReviewManagerFilter(selectId, roster, resolverFn){
   const sel = document.getElementById(selectId);
@@ -10407,27 +10441,33 @@ const CALIB_TABLE_FILTER_SELECTS = [
   { id:'calibFilterDept', fieldKey:'department' }
 ];
 function populateCalibTableFilters(fullRoster){
+  const cur = {};
+  CALIB_TABLE_FILTER_SELECTS.forEach(({id,fieldKey})=>{ const sel=document.getElementById(id); cur[fieldKey]=sel?sel.value:''; });
   CALIB_TABLE_FILTER_SELECTS.forEach(({id,fieldKey})=>{
     const sel = document.getElementById(id);
     if(!sel) return;
+    // #240: ตัวเลือกแคบลงตามช่องอื่นที่เลือกไว้ (กรองรวมกันได้)
+    const base = fullRoster.filter(r=>CALIB_TABLE_FILTER_SELECTS.every(o=>o.fieldKey===fieldKey || !cur[o.fieldKey] || getBellCurveGroupValue(r.emp,o.fieldKey)===cur[o.fieldKey]));
     const counts = {};
-    fullRoster.forEach(r=>{ const v = getBellCurveGroupValue(r.emp, fieldKey); counts[v] = (counts[v]||0)+1; });
+    base.forEach(r=>{ const v = getBellCurveGroupValue(r.emp, fieldKey); counts[v] = (counts[v]||0)+1; });
     const values = Object.keys(counts).filter(v=>v && v!=='—').sort((a,b)=>a.localeCompare(b,'th'));
-    const prev = sel.value;
+    const prev = cur[fieldKey];
     const placeholder = sel.options[0] ? sel.options[0].outerHTML : '<option value="">ทุกค่า</option>';
     sel.innerHTML = placeholder + values.map(v=>`<option value="${v.replace(/"/g,'&quot;')}">${v} (${counts[v]} คน)</option>`).join('');
     sel.value = values.includes(prev) ? prev : '';
+    cur[fieldKey] = sel.value;
   });
 }
 function filterCalibTableRoster(fullRoster){
   const active = CALIB_TABLE_FILTER_SELECTS
     .map(({id,fieldKey})=>({ fieldKey, val: (document.getElementById(id)||{}).value||'' }))
     .filter(f=>f.val);
-  if(!active.length) return fullRoster;
-  return fullRoster.filter(r=> active.every(f=> getBellCurveGroupValue(r.emp, f.fieldKey) === f.val));
+  const out = active.length ? fullRoster.filter(r=> active.every(f=> getBellCurveGroupValue(r.emp, f.fieldKey) === f.val)) : fullRoster;
+  return sortRosterBy(out, (document.getElementById('calibSort')||{}).value||'', bellCurveResult?bellCurveResult.byKey:null);
 }
 function resetCalibTableFilters(){
   CALIB_TABLE_FILTER_SELECTS.forEach(({id})=>{ const sel = document.getElementById(id); if(sel) sel.value=''; });
+  const so=document.getElementById('calibSort'); if(so) so.value='';
   renderCalibQueue();
 }
 /* Export ตารางปรับเทียบรายบุคคลตามตัวกรองที่เลือกไว้ตอนนี้ (ทุก state — pending/ready/done ไม่ใช่แค่
