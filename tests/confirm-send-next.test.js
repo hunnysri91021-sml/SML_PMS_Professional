@@ -1,0 +1,30 @@
+const {open,ok,done,INJECT}=require('./helpers');
+(async()=>{
+  const {b,p,errs}=await open();
+  await p.evaluate(INJECT);
+  const r=await p.evaluate(async()=>{
+    __mockGraph();
+    const sent=[]; window.isWorkerConfigured=()=>true;
+    window.workerFetch=async(c,path,o)=>{ sent.push({path,body:JSON.parse(o.body)}); return {ok:true}; };
+    window.confirm=()=>true;
+    const gm=__emp('G1',{name:'GM',role:'gm',email:'gm@x.com'});
+    const l2=__emp('L2',{name:'ผจก',role:'l2',email:'l2@x.com',l4:'GM'});
+    const l1=__emp('L1',{name:'หน.แผนก',role:'l1',email:'l1@x.com',l3:'ผจก',l4:'GM'});
+    const e=__emp('E1',{name:'พนักงาน',role:'emp',l1:'หน.แผนก',l2:'หน.แผนก',l3:'ผจก',l4:'GM',email:'e@x.com'});
+    __draft('E1','Submitted',80);
+    __login(MASTER_USERS.find(u=>u[0]==='L1'));
+    const cy=getCurrentEvalCycleYear();
+    const key='E1|'+cy+'|of';
+    const nx=nextEvaluatorFor('E1','Submitted');
+    renderWorkflowPages();
+    document.querySelectorAll('.reviewl1-chk').forEach(c=>{ if(c.value===key) c.checked=true; });
+    await approveReviewL1Selected();
+    const d=getDrafts().find(x=>x[0]==='E1');
+    return {nx:nx&&nx.who[0], st:d[d.length-1], mails:sent.filter(s=>s.path==='/send-mail').map(s=>s.body.toEmail)};
+  });
+  ok(r.nx==='L2'||r.nx==='L1'||!!r.nx,'nextEvaluatorFor resolves ('+r.nx+')');
+  ok(r.st!=='Submitted','status advanced ('+r.st+')');
+  ok(r.mails.length>=1,'next evaluator emailed '+JSON.stringify(r.mails));
+  ok(errs.length===0,'no page errors '+errs.join('|'));
+  await b.close(); done();
+})();

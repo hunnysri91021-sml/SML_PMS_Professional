@@ -2062,7 +2062,7 @@ img,svg,canvas{max-width:100%}
   <!-- ========== REVIEW L1 (หัวหน้าแผนก) ========== -->
   <section class="page" id="pg-reviewl1">
     <div class="ph"><div><h2>สอบทานขั้นที่ 3 (หัวหน้าแผนก L2)</h2><p>สอบทานใบประเมินที่ส่งแล้ว (สถานะ Submitted) ของทั้งแผนก รวมทีมของหัวหน้าหน่วยในสายบังคับบัญชา ก่อนเข้าสู่ขั้นสอบทานผู้จัดการส่วน</p></div>
-    <div class="ph-act"><button class="btn" onclick="rejectReviewL1Selected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewL1Selected()">✓ อนุมัติที่เลือก</button></div></div>
+    <div class="ph-act"><button class="btn" onclick="rejectReviewL1Selected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewL1Selected()">✅ ยืนยันและส่งให้ผู้ประเมินคนถัดไป</button></div></div>
 
     <div class="card">
       <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามหัวหน้าหน่วยงาน (หัวหน้าหน่วย/หัวหน้าแผนก) เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
@@ -2077,7 +2077,7 @@ img,svg,canvas{max-width:100%}
   <!-- ========== REVIEW (L2) ========== -->
   <section class="page" id="pg-review">
     <div class="ph"><div><h2>สอบทานขั้นที่ 4 (ผู้จัดการส่วน L3)</h2><p>สอบทานใบประเมินที่ผ่านหัวหน้าแผนกแล้ว (สถานะ L1Reviewed) ก่อนเข้าสู่ขั้นอนุมัติ GM</p></div>
-    <div class="ph-act"><button class="btn" onclick="rejectReviewSelected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewSelected()">✓ อนุมัติที่เลือก</button></div></div>
+    <div class="ph-act"><button class="btn" onclick="rejectReviewSelected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewSelected()">✅ ยืนยันและส่งให้ผู้ประเมินคนถัดไป</button></div></div>
 
     <div class="card">
       <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewFilter" onchange="renderReviewQueue()" title="กรองตามหัวหน้าแผนก เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
@@ -3547,7 +3547,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 <div class="ov" id="mReview"><div class="md reviewer-md" style="max-width:1120px">
   <div class="md-h"><div><h3 id="reviewerTitle">📋 แบบประเมินสำหรับผู้ประเมิน</h3><small id="reviewerSubtitle" style="color:#7b8796">แบบฟอร์มจะเปลี่ยนตามระดับของผู้ถูกประเมิน</small></div><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b" id="reviewerFormArea"></div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="rejectReviewerForm()">↩️ ตีกลับ</button><button class="btn btn-p" id="reviewerConfirmBtn" style="display:none" onclick="confirmReviewerReconfirm()">✓ ยืนยันว่าตรวจสอบแล้ว</button><button class="btn btn-ok" id="reviewerSubmitBtn" onclick="submitReviewerForm()">✓ บันทึกและส่งต่อ</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button><button class="btn btn-dg" onclick="clearReviewerForm()">🗑️ ล้างคะแนน</button><button class="btn btn-dg" onclick="rejectReviewerForm()">↩️ ตีกลับ</button><button class="btn btn-p" id="reviewerConfirmBtn" style="display:none" onclick="confirmReviewerReconfirm()">✓ ยืนยันว่าตรวจสอบแล้ว</button><button class="btn btn-ok" id="reviewerSubmitBtn" onclick="submitReviewerForm()">✅ ยืนยันและส่งให้ผู้ประเมินคนถัดไป</button></div>
 </div></div>
 
 <div class="ov" id="mSubmit"><div class="md" style="max-width:440px">
@@ -8821,6 +8821,53 @@ async function notifyPrevTierOnAdvance(empCode, cycle, prevActorSnapshot){
   if(r.sent && typeof appendAuditLog==='function') appendAuditLog('evaluation','แจ้งเตือนผู้ดำเนินการก่อนหน้าทางอีเมล (สายบังคับบัญชาสอบทาน/อนุมัติทับ)', empCode, r.to);
   return r;
 }
+/* #242: ผู้ใช้สั่งให้ทุกขั้นมี "ยืนยันและส่งให้ผู้ประเมินคนถัดไป" — เมื่อกดแล้วระบบแจ้งเตือนผู้ประเมินคนถัดไปจริง
+   (อีเมลผ่าน Worker /send-mail + LINE /send-line) และใบนั้นออกจากคิวของผู้ส่งเป็น "ดูอย่างเดียว" (แก้ไม่ได้)
+   คนถัดไปหาจากสถานะ "หลังเลื่อนขั้นแล้วจริง" (รวมกรณี skipEmptyReviewStages ข้ามขั้นที่ไม่มีผู้ประเมิน) ด้วย resolver
+   ตัวเดียวกับที่ใช้จัดคิว — ไม่เดา, ไม่มีอีเมล/LINE = บอกเหตุผลจริง ไม่อ้างว่าแจ้งแล้ว (#10/#26) */
+function nextEvaluatorFor(empCode, status){
+  const emp = MASTER_USERS.find(u=>u[0]===empCode);
+  if(!emp) return null;
+  const map = { Submitted:[resolveL1Reviewer,'สอบทานหัวหน้าแผนก (L2)'], L1Reviewed:[resolveL2Reviewer,'สอบทานผู้จัดการส่วน (L3)'], L2Reviewed:[resolveGmReviewer,'อนุมัติ GM (L4)'] };
+  const m = map[status]; if(!m) return null;
+  const who = m[0](emp);
+  return who ? { who, stageLabel:m[1], emp } : null;
+}
+async function notifyNextEvaluators(items){
+  const groups = new Map();
+  for(const it of items){
+    const d = findCurrentCycleDraft(getDrafts(), it.empCode, it.cycle);
+    const st = d ? d[d.length-1] : '';
+    const n = nextEvaluatorFor(it.empCode, st);
+    if(!n) continue;
+    const key = n.who[0];
+    if(!groups.has(key)) groups.set(key, { who:n.who, stageLabel:n.stageLabel, names:[] });
+    groups.get(key).names.push(n.emp[1]+' ('+n.emp[0]+')');
+  }
+  if(!groups.size) return { notified:0, total:0, reason:'ไม่พบผู้ประเมินคนถัดไป (ข้ามขั้นอัตโนมัติ หรือไม่ได้กำหนดสายบังคับบัญชา)' };
+  let notified = 0, firstReason = '';
+  for(const g of groups.values()){
+    const me = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[1]) || '';
+    const subject = '[SML PMS] มีใบประเมินรอ'+g.stageLabel+' '+g.names.length+' รายการ';
+    const body = 'มีใบประเมินส่งมาให้ท่าน'+g.stageLabel+' จำนวน '+g.names.length+' รายการ\n\n'+g.names.join('\n')+'\n\nส่งโดย: '+me+'\nวันที่: '+new Date().toLocaleString('th-TH')+'\n\nกรุณาเข้าเว็บ SML PMS เพื่อดำเนินการ\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ)';
+    let ok = false;
+    if(g.who[15]){
+      const r = await sendEmailToList([g.who], subject, body).catch(()=>({configured:false}));
+      if(r.configured && r.sentCount) ok = true; else if(!firstReason) firstReason = r.configured===false ? 'ยังไม่ได้ตั้งค่า Proxy (Worker)' : (r.reason||'ส่งอีเมลไม่สำเร็จ');
+    } else if(!firstReason) firstReason = g.who[1]+' ไม่มีอีเมลในระบบ';
+    if(g.who[21]){
+      const r2 = await sendLineReminder([g.who], subject+'\n'+g.names.join(', ')).catch(()=>({sent:0}));
+      if(r2.sent) ok = true;
+    }
+    if(ok) notified++;
+  }
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','แจ้งผู้ประเมินคนถัดไป', items.length+' รายการ', 'แจ้งสำเร็จ '+notified+'/'+groups.size+' คน');
+  return { notified, total:groups.size, reason:firstReason };
+}
+function nextNotifyToast(r){
+  if(r.notified) return ' · แจ้งผู้ประเมินคนถัดไปแล้ว '+r.notified+'/'+r.total+' คน';
+  return ' · ยังไม่ได้แจ้งผู้ประเมินคนถัดไป ('+(r.reason||'ไม่ทราบสาเหตุ')+')';
+}
 async function notifyPrevEvaluatorOfEdit(payload, prevActor){
   const cfg = loadMs365Config();
   if(!isWorkerConfigured(cfg)) return { sent:false, reason:'ยังไม่ได้ตั้งค่า Proxy (MS365)' };
@@ -10208,10 +10255,12 @@ async function approveReviewL1Selected(){
   /* #114b: อ่าน prevActor ของทุก key ไว้ "ก่อน" pushApprovalRecordToExcel() ทับ แล้วแจ้งทีหลัง */
   const prevActors = {};
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
+  if(!confirm('ยืนยันส่ง '+keys.length+' รายการให้ผู้ประเมินคนถัดไป?\n\nระบบจะแจ้งเตือนผู้ประเมินคนถัดไป และหลังส่งแล้วจะแก้ไขไม่ได้อีก')) return;
   updateDraftStatus(keys,'L1Reviewed');
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L1Reviewed',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทานหัวหน้าแผนก', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
-  smlToast('ผ่านสอบทานหัวหน้าแผนกแล้ว '+keys.length+' รายการ — เข้าสู่ขั้นสอบทานผู้จัดการส่วน','ok');
+  const nextRes = await notifyNextEvaluators(keys.map(k=>{const [c,y]=k.split('|');return {empCode:c,cycle:y};})).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
+  smlToast('ส่งต่อผู้ประเมินคนถัดไปแล้ว '+keys.length+' รายการ — แก้ไขไม่ได้แล้ว'+nextNotifyToast(nextRes),'ok');
   for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
 }
 async function rejectReviewL1Selected(){
@@ -10296,10 +10345,12 @@ async function approveReviewSelected(){
   if(!keys.length) return;
   const prevActors = {};
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
+  if(!confirm('ยืนยันส่ง '+keys.length+' รายการให้ผู้ประเมินคนถัดไป (GM)?\n\nระบบจะแจ้งเตือนผู้ประเมินคนถัดไป และหลังส่งแล้วจะแก้ไขไม่ได้อีก')) return;
   updateDraftStatus(keys,'L2Reviewed');
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L2Reviewed',''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทาน L2', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
-  smlToast('ผ่านสอบทาน L2 แล้ว '+keys.length+' รายการ — เข้าสู่ขั้น Calibration','ok');
+  const nextRes = await notifyNextEvaluators(keys.map(k=>{const [c,y]=k.split('|');return {empCode:c,cycle:y};})).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
+  smlToast('ส่งต่อผู้ประเมินคนถัดไปแล้ว '+keys.length+' รายการ — แก้ไขไม่ได้แล้ว'+nextNotifyToast(nextRes),'ok');
   for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
 }
 async function rejectReviewSelected(){
@@ -13385,6 +13436,7 @@ async function submitReviewerForm(){
      ครอบคลุมทั้ง Submitted->L1Reviewed (หัวหน้าแผนกแก้ทับ) และ L1Reviewed->L2Reviewed (ผจก.ส่วนแก้ทับ)
      ต้องอ่าน prevActor "ก่อน" pushApprovalRecordToExcel() ด้านล่าง เพราะฟังก์ชันนั้นจะบันทึก actor
      คนใหม่ทับคนเดิมทันทีที่เรียก */
+  if(!confirm('ยืนยันส่งใบประเมินของ '+empName+' ให้ผู้ประเมินคนถัดไป?\n\nระบบจะแจ้งเตือนผู้ประเมินคนถัดไป และหลังส่งแล้วจะ "แก้ไขไม่ได้" อีก (ผู้ประเมินคนถัดไปตีกลับมาได้เท่านั้น)')) return;
   const prevActor = getEvalLastActor(code, cycle);
   const oldX = existing ? Number(existing[existing.length-3]) : null;
   const oldGrade = existing ? existing[existing.length-2] : null;
@@ -13411,7 +13463,8 @@ async function submitReviewerForm(){
   pushApprovalRecordToExcel(code, cycle, step.next, commentText);
   const diffNote = (oldX!==null && !isNaN(oldX) && (oldX!==x || oldGrade!==grade)) ? ` (คะแนนเดิม X=${oldX.toFixed(2)} เกรด ${oldGrade} → ใหม่ X=${x.toFixed(2)} เกรด ${grade})` : '';
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, empName+diffNote);
-  smlToast(step.label+'เรียบร้อย','ok');
+  const nextRes = await notifyNextEvaluators([{empCode:code,cycle,level:lv}]).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
+  smlToast(step.label+'เรียบร้อย — ใบนี้แก้ไขไม่ได้แล้ว'+nextNotifyToast(nextRes),'ok');
   const editNotif = await notifyPrevTierOnAdvance(code, cycle, prevActor).catch(()=>({sent:false}));
   if(editNotif.sent) smlToast(`แจ้งเตือน ${editNotif.to} ทางอีเมลว่าคะแนนถูกแก้ไขแล้ว`,'ok');
   closeM();
