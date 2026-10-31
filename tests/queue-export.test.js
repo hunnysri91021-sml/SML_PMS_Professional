@@ -17,7 +17,7 @@ const {open,ok,done,INJECT}=require('./helpers');
   ok(r.btns.every(x=>x),'3 buttons exist');
   ok(r.l3.rows.length===2&&r.l3.rows[0][9]===70&&!r.l3.h.includes('เกรดชั่วคราว'),'L3 no grade col, X=70');
   ok(r.l3.rows[1][6]==='ยังไม่ส่งแบบประเมิน'&&r.l3.rows[1].includes('ไม่มีข้อมูลเวลา'),'pending + no attendance flagged');
-  ok(r.l2.h.includes('เกรดชั่วคราว'),'L2 has grade col');
+  ok(!r.l2.h.includes('เกรดชั่วคราว')&&!r.l3.h.includes('เกรดชั่วคราว'),'#246 no provisional grade col');
   ok(errs.length===0,'no errors '+errs.join('|'));
   await b.close(); done();
 })();

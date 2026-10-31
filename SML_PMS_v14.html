@@ -2069,7 +2069,7 @@ img,svg,canvas{max-width:100%}
       <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามหัวหน้าหน่วยงาน (หัวหน้าหน่วย/หัวหน้าแผนก) เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><button class="btn btn-sm" onclick="exportQueueToExcel('reviewl1')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
       <div class="al al-w" id="reviewl1FilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.reviewl1-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.reviewl1-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
         <tbody id="reviewl1Rows"></tbody>
       </table></div>
     </div>
@@ -2173,7 +2173,7 @@ img,svg,canvas{max-width:100%}
         <button class="btn btn-sm" onclick="exportCalibTableList()" title="Export ตารางนี้ (ตามตัวกรองที่เลือกไว้) เป็นไฟล์ Excel (CSV)" style="margin-left:auto">📥 Export Excel (ตารางนี้)</button>
       </div>
       <div class="tw calib-table-wrap"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงาน<br>รับทราบ (X)</th><th>คะแนน<br>การมาทำงาน (Z)</th><th>เกรดเดิม<br><small>(ชั่วคราว)</small></th><th>คะแนนหลังปรับ</th><th>เกรด<br>Bell Curve</th><th>ใบเตือน /<br>หมายเหตุวินัย (HR)</th><th>การดำเนินการ</th></tr></thead>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงาน<br>รับทราบ (X)</th><th>คะแนน<br>การมาทำงาน (Z)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>เกรด<br>Bell Curve</th><th>ใบเตือน /<br>หมายเหตุวินัย (HR)</th><th>การดำเนินการ</th></tr></thead>
         <tbody id="calibRows"></tbody>
       </table></div>
     </div>
@@ -8597,7 +8597,7 @@ function renderCalibBellCurveNamesPreview(){
     const X = Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(r.draft[r.draft.length-3])||0;
     const gradeCell = bc
       ? `<span class="grade g${bc.grade}">${bc.grade}</span><br><small style="color:#64748b;font-size:10px">อันดับ ${bc.rank}/${bc.n}</small>`
-      : provisionalGradeCell(r.draft[r.draft.length-2]);
+      : '<span style="color:#94a3b8">—</span>';
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const Zs = (Number(r.draft[r.draft.length-4])||0).toFixed(2);
     return `<tr><td>${name}</td><td style="color:#94a3b8;font-size:11px">${r.emp[0]}</td><td style="font-size:11px">${dept}</td><td style="text-align:center">${X}</td><td style="text-align:center">${Zs}</td><td style="text-align:center">${gradeCell}</td></tr>`;
@@ -8607,7 +8607,7 @@ function renderCalibBellCurveNamesPreview(){
     : `<div style="margin-top:8px;font-size:11.5px;color:#94a3b8">กด "📊 คำนวณ Bell Curve" ก่อน แล้วปุ่มยืนยันส่งผลไป MD/AMD จะแสดงที่นี่</div>`;
   box.innerHTML = `<div style="font-size:11.5px;font-weight:700;color:#475569;margin-bottom:6px">ผลเปรียบเทียบในกลุ่มที่เลือก (${roster.length} คน${computed?` · คำนวณแล้ว ${computed} คน`:''})</div>
     <div class="tw" style="max-height:260px;overflow-y:auto"><table>
-      <thead><tr><th>ชื่อ</th><th>รหัส</th><th>หน่วยงาน</th><th>คะแนนหลังปรับ (X)</th><th>คะแนนการมาทำงาน (Z)</th><th>เกรด${computed?'':'ชั่วคราว'}</th></tr></thead>
+      <thead><tr><th>ชื่อ</th><th>รหัส</th><th>หน่วยงาน</th><th>คะแนนหลังปรับ (X)</th><th>คะแนนการมาทำงาน (Z)</th><th>เกรด</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>${sendBtn}`;
 }
@@ -8653,16 +8653,16 @@ function exportCalibScopedList(){
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
   const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
   const anyComputed = roster.some(r=>bcByKey[draftKey(r.draft)]);
-  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','หน่วยงาน','ระดับฟอร์ม','คะแนน (X)','คะแนนการมาทำงาน (Z)', 'คะแนน KPI', anyComputed ? 'เกรด (Bell Curve)' : 'เกรดชั่วคราว', 'อันดับ'];
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','หน่วยงาน','ระดับฟอร์ม','คะแนน (X)','คะแนนการมาทำงาน (Z)', 'คะแนน KPI', 'เกรด (Bell Curve)', 'อันดับ', ...ATT_EXPORT_HEADERS];
   const rows = roster.map(r=>{
     const key = draftKey(r.draft);
     const X = Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(r.draft[r.draft.length-3])||0;
     const bc = bcByKey[key];
-    const grade = bc ? bc.grade : r.draft[r.draft.length-2];
+    const grade = bc ? bc.grade : '';
     const rankTxt = bc ? (bc.rank+'/'+bc.n) : '';
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const lv = getAssignedEvalLevel(r.emp) || r.draft[3] || '';
-    return [r.emp[0], name, dept, lv, X, (Number(r.draft[r.draft.length-4])||0).toFixed(2), appraisalExcelRow(r.draft)[23], grade, rankTxt];
+    return [r.emp[0], name, dept, lv, X, (Number(r.draft[r.draft.length-4])||0).toFixed(2), appraisalExcelRow(r.draft)[23], grade, rankTxt, ...attendanceExportCells(r.emp[0])];
   });
   const scopeTag = (specificValue || 'ทั้งหมด').replace(/[^฀-๿a-zA-Z0-9]+/g,'_');
   downloadCsv(`Calibration_${BELL_CURVE_GROUP_LABELS[fieldKey].split(' ')[0]}_${scopeTag}_${getCurrentEvalCycleYear()}.csv`, headers, rows);
@@ -10228,7 +10228,7 @@ const _QUEUE_EXPORT_NAME = {reviewl1:'L2_สอบทานหัวหน้า
 function exportQueueToExcel(key){
   const rows = _queueExportRows[key] || [];
   if(!rows.length){ smlToast('ไม่มีรายชื่อให้ Export','warn'); return; }
-  const showGrade = key==='reviewl1';
+  const showGrade = false; /* #246: เอาเกรดชั่วคราวออกจาก export ทั้งหมด */
   const head = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','ส่วน/แผนก','ฝ่าย','สถานะในคิว','สถานะใบประเมิน','คะแนน Y','คะแนน Z','คะแนนรวม X'];
   if(showGrade) head.push('เกรดชั่วคราว');
   head.push(...ATT_EXPORT_HEADERS);
@@ -10259,14 +10259,14 @@ function renderReviewL1Queue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? deptGroupMapK('reviewl1',roster,6,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('reviewl1',roster,5,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="3" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
     const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
     if(r.state==='done'){
@@ -10274,16 +10274,14 @@ function renderReviewL1Queue(){
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td style="text-align:center">${provisionalGradeCell(grade)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="reviewl1-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td style="text-align:center">${provisionalGradeCell(grade)}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
+  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
 }
 async function approveReviewL1Selected(){
@@ -10589,20 +10587,20 @@ function exportCalibTableList(){
   const inputs = {};
   document.querySelectorAll('.calib-adj').forEach(inp=>{ inputs[inp.dataset.key] = inp.value; });
   const bcByKey = bellCurveResult ? bellCurveResult.byKey : {};
-  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','คะแนนการมาทำงาน (Z)','คะแนน KPI','เกรด','อันดับ'];
+  const headers = ['รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','แผนก','ส่วน','ฝ่าย','สถานะ','คะแนน (X)','คะแนนการมาทำงาน (Z)','คะแนน KPI','เกรด','อันดับ', ...ATT_EXPORT_HEADERS];
   const rows = roster.map(r=>{
     const code = r.emp[0], name = r.emp[1]||'';
     const group = getBellCurveGroupValue(r.emp,'group'), section = getBellCurveGroupValue(r.emp,'section');
     const division = getBellCurveGroupValue(r.emp,'division'), dept = getBellCurveGroupValue(r.emp,'department');
-    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', '', '', '', ''];
+    if(r.state==='pending') return [code, name, group, section, division, dept, 'รอผลประเมิน', '', '', '', '', '', ...attendanceExportCells(code)];
     const d = r.draft;
     const key = draftKey(d);
     const X = r.state==='ready' && Object.prototype.hasOwnProperty.call(inputs, key) ? inputs[key] : Number(d[d.length-3])||0;
     const statusLabel = r.state==='ready' ? 'พร้อม Calibration' : d[d.length-1];
     const bc = bcByKey[key];
-    const grade = bc ? bc.grade : d[d.length-2];
+    const grade = bc ? bc.grade : (r.state==='ready' ? '' : d[d.length-2]); /* #246: ready ที่ยังไม่คำนวณ = ไม่มีเกรด (ไม่ส่งเกรดชั่วคราว) */
     const rankTxt = bc ? (bc.rank+'/'+bc.n) : '';
-    return [code, name, group, section, division, dept, statusLabel, X, (Number(d[d.length-4])||0).toFixed(2), appraisalExcelRow(d)[23], grade, rankTxt];
+    return [code, name, group, section, division, dept, statusLabel, X, (Number(d[d.length-4])||0).toFixed(2), appraisalExcelRow(d)[23], grade, rankTxt, ...attendanceExportCells(code)];
   });
   const filterTag = CALIB_TABLE_FILTER_SELECTS
     .map(({id})=>(document.getElementById(id)||{}).value)
@@ -10733,7 +10731,7 @@ function renderCalibQueue(){
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center">${Zs}</td>
-      <td style="text-align:center">${provisionalGradeCell(grade)}</td>
+      <td style="text-align:center;color:#94a3b8">—</td>
       <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()"></td>
       <td class="calib-bc-cell" data-key="${key}" style="text-align:center"><span class="calib-bc-pending">ยังไม่คำนวณ</span></td>
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)"></td>
