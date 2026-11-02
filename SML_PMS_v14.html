@@ -3303,6 +3303,15 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         </div>
         <div style="padding:11px 16px;border-top:1px solid var(--bd);display:flex;align-items:center;font-size:12px;color:var(--t2)">
           <span id="userCount">แสดง 0 รายการ</span>
+          <span style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:4px">แถวต่อหน้า
+              <select id="userPageSize" onchange="onUserPageSizeChange()" style="padding:3px 6px;font-size:12px">
+                <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option><option value="0">ทั้งหมด</option>
+              </select></label>
+            <button class="btn btn-sm" id="userPgPrev" onclick="gotoUserPage(-1)">‹ ก่อนหน้า</button>
+            <span id="userPgInfo">หน้า 1/1</span>
+            <button class="btn btn-sm" id="userPgNext" onclick="gotoUserPage(1)">ถัดไป ›</button>
+          </span>
         </div>
       </div>
     </div>
@@ -5252,10 +5261,22 @@ function supervisorChainLabel(u){
   if(approver) lines.push(`<b>L4 (ผู้อนุมัติ GM)</b> ${approver}`);
   return lines.join('<br>');
 }
-function renderUsers(data) {
+/* แบ่งหน้ารายชื่อผู้ใช้ — เก็บผลกรองทั้งชุดไว้ใน _usersFiltered แล้วแสดงทีละหน้า;
+   เปลี่ยนตัวกรอง = กลับหน้า 1, แต่ save/sync ที่เรียก filterUsers() ซ้ำด้วยตัวกรองเดิม = อยู่หน้าเดิม (CLAUDE.md #63) */
+let _usersFiltered = [], _userPage = 1, _userFilterSig = null;
+function userPageSize(){ const v = parseInt(document.getElementById('userPageSize')?.value||'50',10); return v>0 ? v : 0; }
+function onUserPageSizeChange(){ _userPage = 1; renderUsers(_usersFiltered, true); }
+function gotoUserPage(delta){ _userPage += delta; renderUsers(_usersFiltered, true); }
+function renderUsers(data, keepPage) {
   const el = document.getElementById('userRows');
   if(!el) return;
-  el.innerHTML = data.map(u => `<tr>
+  _usersFiltered = data;
+  const size = userPageSize();
+  const pages = size ? Math.max(1, Math.ceil(data.length / size)) : 1;
+  if(!keepPage && _userPage > pages) _userPage = pages;
+  _userPage = Math.min(Math.max(1, _userPage), pages);
+  const view = size ? data.slice((_userPage-1)*size, _userPage*size) : data;
+  el.innerHTML = view.map(u => `<tr>
     <td><b style="font-size:12px">${escH(u[0])}</b></td>
     <td>
       <div class="u-cell">
@@ -5280,7 +5301,13 @@ function renderUsers(data) {
     </td>
   </tr>`).join('');
   const cnt = document.getElementById('userCount');
-  if(cnt) cnt.textContent = 'แสดง ' + data.length + ' รายการ';
+  if(cnt){
+    const from = view.length ? (size ? (_userPage-1)*size+1 : 1) : 0;
+    cnt.textContent = 'แสดง ' + from + '–' + (from ? from+view.length-1 : 0) + ' จากทั้งหมด ' + data.length + ' รายการ';
+  }
+  const info = document.getElementById('userPgInfo'); if(info) info.textContent = 'หน้า ' + _userPage + '/' + pages;
+  const pv = document.getElementById('userPgPrev'); if(pv) pv.disabled = _userPage<=1;
+  const nx = document.getElementById('userPgNext'); if(nx) nx.disabled = _userPage>=pages;
 }
 
 function populateUserFilters(){
@@ -5317,6 +5344,8 @@ function filterUsers() {
     (!department || u[6] === department) &&   /* [6] = ฝ่าย (Department) — matches filterSection's "ทุกฝ่าย (Dept)" options */
     (!q          || u[0].toLowerCase().includes(q) || u[1].toLowerCase().includes(q))
   );
+  const sig = [role,status,group,department,q].join('|');
+  if(sig !== _userFilterSig){ _userFilterSig = sig; _userPage = 1; }
   renderUsers(f);
 }
 

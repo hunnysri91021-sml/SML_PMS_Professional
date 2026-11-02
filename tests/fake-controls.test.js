@@ -8,14 +8,14 @@ const {open,ok,done}=require('./helpers');
     renderCyclesTable();
     return {
       recalc:html.includes('คำนวณใหม่ทั้งรอบ'),
-      pager:!!document.querySelector('#userCount')&&document.querySelector('#userCount').parentElement.querySelectorAll('button').length,
+      pager:0,
       fy:/FY2023/.test(document.getElementById('cyclePastList').innerHTML),
       past:document.getElementById('cyclePastList').textContent,
       sample:!!document.querySelector('#leaderRows input[placeholder="ความเห็นเพิ่มเติม"]')
     };
   });
   ok(!r.recalc,'ไม่มีปุ่ม คำนวณใหม่ทั้งรอบ ที่ไม่ทำงาน');
-  ok(r.pager===0,'ไม่มีปุ่ม pagination ปลอม');
+  /* pagination ของรายชื่อผู้ใช้ตอนนี้เป็นของจริง (ทดสอบใน user-pagination.test.js) */
   ok(!r.fy&&r.past.includes('รอบทดสอบ 2568'),'รอบย้อนหลังมาจากรอบจริง');
   ok(!r.sample,'ไม่มีตารางสมรรถนะตัวอย่าง');
   ok(errs.length===0,'ไม่มี page error '+errs.join('|'));
