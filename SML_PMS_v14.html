@@ -3890,7 +3890,7 @@ function renderRoleCards(){
     const avatarStyle = def.avatarBg ? ` style="background:${def.avatarBg};color:${def.avatarColor}"` : '';
     const cardStyle = def.borderColor ? ` style="border-color:${def.borderColor}"` : '';
     return `<div class="role-card ${def.cardClass}"${cardStyle}>
-      <div class="role-top"><div class="role-avatar"${avatarStyle}>${def.icon}</div><div class="role-title"><b>${r.name}</b><span>${r.desc}</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
+      <div class="role-top"><div class="role-avatar"${avatarStyle}>${def.icon}</div><div class="role-title"><b>${escH(r.name)}</b><span>${escH(r.desc)}</span></div><span class="role-state on">● เปิดใช้งาน</span></div>
       <div class="permission-list">${items}</div>
       <div class="role-actions"><button class="btn btn-sm" onclick="editRole('${def.key}')">ดูสิทธิ์</button><button class="btn btn-sm btn-p" onclick="editRole('${def.key}')">แก้ไข</button></div>
     </div>`;
@@ -3986,7 +3986,7 @@ function showBehavTab(id){
  const idx=LV_IDX[x.lv], cfg=LEVEL_CONFIG[x.lv];
  const body=document.getElementById('behavRows'); if(!body)return;
  const factors=[...FACTORS_MAIN,...(cfg.leaderShow?FACTORS_LEADER:[])];
- body.innerHTML=factors.map((f,i)=>{const w=f[2][idx]; if(!w)return ''; const sc=SCORES[w]; return `<tr><td>${i+1}</td><td><b>${f[0]}</b><br><small style="color:#94a3b8">${f[1]}</small></td><td style="text-align:center"><span class="bd b-b">${w}</span></td><td style="text-align:center">${sc.Ap}</td><td style="text-align:center">${sc.A}</td><td style="text-align:center">${sc.B}</td><td style="text-align:center">${sc.Cp}</td><td style="text-align:center">${sc.C}</td></tr>`}).join('');
+ body.innerHTML=factors.map((f,i)=>{const w=f[2][idx]; if(!w)return ''; const sc=SCORES[w]; return `<tr><td>${i+1}</td><td><b>${escH(f[0])}</b><br><small style="color:#94a3b8">${escH(f[1])}</small></td><td style="text-align:center"><span class="bd b-b">${w}</span></td><td style="text-align:center">${sc.Ap}</td><td style="text-align:center">${sc.A}</td><td style="text-align:center">${sc.B}</td><td style="text-align:center">${sc.Cp}</td><td style="text-align:center">${sc.C}</td></tr>`}).join('');
  const label=document.getElementById('behavLevelLabel'); if(label){label.textContent=`${x.label} · ${factors.length} ปัจจัย · น้ำหนักรวม ${cfg.leaderShow?(x.lv==='ldr'?29:33):20} · Y:Z = ${cfg.Ypct}:${cfg.Zpct}`;label.style.color=x.color;}
  const head=document.getElementById('behavHeader');if(head)head.style.background=x.color+'18';
  const units=document.getElementById('behavTotalUnits');if(units)units.textContent=cfg.leaderShow?(x.lv==='ldr'?29:33):20;
@@ -4134,7 +4134,7 @@ function renderGoalKpi(data) {
   const typeColor = {ปริมาณ:'b-b', คุณภาพ:'b-g', ความปลอดภัย:'b-r', ภาวะผู้นำ:'b-p', วินัย:'b-y'};
   body.innerHTML = data.map((k,i) => `<tr>
     <td style="color:#94a3b8;font-size:12px">${i+1}</td>
-    <td><b>${k.name}</b><br><small style="color:#94a3b8">${k.type} · เป้า: ${k.target}</small></td>
+    <td><b>${escH(k.name)}</b><br><small style="color:#94a3b8">${escH(k.type)} · เป้า: ${escH(k.target)}</small></td>
     <td style="color:#64748b;font-size:12px">${k.unit}</td>
     <td style="text-align:center;font-weight:700;color:#2563eb">${k.pct}%</td>
     <td><span class="bd ${SCOPE_BD[k.scope]||'b-s'}">${SCOPE_LABEL[k.scope]||k.scope}</span></td>
@@ -4143,9 +4143,9 @@ function renderGoalKpi(data) {
     <td style="text-align:center">${KPI_STATUS[k.status]||''}</td>
     <td>
       <div style="display:flex;gap:4px;justify-content:center">
-        <button class="btn btn-sm" onclick="editGoalKpi('${k.id}')">✏️</button>
-        ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteGoalKpi('${k.id}')" title="ลบ KPI นี้ (ทั้งในเว็บและ Excel)">🗑️</button>`:''}
-        <button class="btn btn-sm" onclick="activateGoalKpi('${k.id}')"
+        <button class="btn btn-sm" onclick="editGoalKpi('${escJs(k.id)}')">✏️</button>
+        ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteGoalKpi('${escJs(k.id)}')" title="ลบ KPI นี้ (ทั้งในเว็บและ Excel)">🗑️</button>`:''}
+        <button class="btn btn-sm" onclick="activateGoalKpi('${escJs(k.id)}')"
           title="ผูกกับรอบ" style="color:${k.status==='active'?'#94a3b8':'#2563eb'}">
           ${k.status==='active'?'⏸️':'🔓'}
         </button>
@@ -4559,7 +4559,7 @@ let cascadeData = [];
 const CASCADE_LEVEL_LABEL = {'':'ทุกคน (ตาม scope KPI)', emp:'เฉพาะพนักงานปฏิบัติการ', l1:'เฉพาะหัวหน้าแผนก', l2:'เฉพาะผู้จัดการส่วน'};
 function populateCascadeModal(){
   const kpiSel = document.getElementById('mCascadeKpiId');
-  if(kpiSel) kpiSel.innerHTML = goalKpiData.map(k=>`<option value="${k.id}">${k.name}</option>`).join('') || '<option value="">— ยังไม่มี KPI ในระบบ —</option>';
+  if(kpiSel) kpiSel.innerHTML = goalKpiData.map(k=>`<option value="${escH(k.id)}">${escH(k.name)}</option>`).join('') || '<option value="">— ยังไม่มี KPI ในระบบ —</option>';
   const deptSel = document.getElementById('mCascadeDept');
   if(deptSel){
     const depts = [...new Set(MASTER_USERS.map(u=>u[6]).filter(Boolean))].sort();
@@ -4576,7 +4576,7 @@ function renderCascadeRows(){
   tbody.innerHTML = cascadeData.map((c,i)=>`
     <tr><td><b>${c.kpiName}</b></td>
     <td style="font-size:12px">${CASCADE_LEVEL_LABEL[c.level]||'ทุกคน'}${c.dept?' · '+c.dept:''}</td>
-    <td style="font-size:12px">${c.target || 'ใช้เป้าหมายเดิม'}</td>
+    <td style="font-size:12px">${escH(c.target || 'ใช้เป้าหมายเดิม')}</td>
     <td style="text-align:center">${c.kpiYear ? 'FY'+c.kpiYear : '—'}</td>
     <td style="text-align:center">${c.weight}%</td>
     <td style="text-align:center"><span class="bd b-ok" style="background:#dcfce7;color:#15803d">✅ ใช้งาน</span></td>
@@ -4618,7 +4618,7 @@ loadIdpData();
 function populateIdpModal(){
   const sel = document.getElementById('mIdpEmp');
   if(!sel) return;
-  sel.innerHTML = MASTER_USERS.filter(u=>u[12]==='active').map(u=>`<option value="${u[0]}">${u[1]} (${u[0]})</option>`).join('');
+  sel.innerHTML = MASTER_USERS.filter(u=>u[12]==='active').map(u=>`<option value="${escH(u[0])}">${escH(u[1])} (${escH(u[0])})</option>`).join('');
   onIdpEmpChange();
 }
 function onIdpEmpChange(){
@@ -4639,7 +4639,7 @@ function renderIdpRows(){
     return;
   }
   tbody.innerHTML = idpData.map((p,i)=>`
-    <tr><td><b>${p.name}</b><small style="display:block;color:#94a3b8">${p.code}</small></td>
+    <tr><td><b>${escH(p.name)}</b><small style="display:block;color:#94a3b8">${escH(p.code)}</small></td>
     <td style="font-size:12px">${p.dept}</td>
     <td style="text-align:center"><span class="grade g${p.grade}">${p.grade}</span></td>
     <td style="font-size:12px">${p.plan}</td>
@@ -5265,26 +5265,26 @@ function renderUsers(data) {
   const el = document.getElementById('userRows');
   if(!el) return;
   el.innerHTML = data.map(u => `<tr>
-    <td><b style="font-size:12px">${u[0]}</b></td>
+    <td><b style="font-size:12px">${escH(u[0])}</b></td>
     <td>
       <div class="u-cell">
-        <div class="u-av" style="flex-shrink:0">${u[1].substr(0,2)}</div>
+        <div class="u-av" style="flex-shrink:0">${escH(u[1].substr(0,2))}</div>
         <div>
-          <b style="font-size:12.5px">${u[1]}</b>
-          <small style="color:#94a3b8;display:block;font-size:11px">${u[7]}</small>
+          <b style="font-size:12.5px">${escH(u[1])}</b>
+          <small style="color:#94a3b8;display:block;font-size:11px">${escH(u[7])}</small>
         </div>
       </div>
     </td>
     <td style="text-align:center">${U_ROLE_LABEL[u[2]]||u[2]}</td>
     <td style="font-size:12px;color:#374151">${orgChainLabel(u)}</td>
-    <td style="text-align:center"><span class="bd b-s" style="font-size:11px">${u[8]}</span></td>
+    <td style="text-align:center"><span class="bd b-s" style="font-size:11px">${escH(u[8])}</span></td>
     <td style="font-size:12px;color:#374151;line-height:1.5">${supervisorChainLabel(u)}</td>
     <td style="text-align:center">${U_STATUS_LABEL[u[12]]||''}${u[20]==='1' ? '<br><span class="bd" style="font-size:10px;background:#f1f5f9;color:#64748b">🚫 ยกเว้นประเมิน</span>' : ''}</td>
-    <td style="font-size:11px;color:#374151">${u[14]||'—'}<br><small style="color:#94a3b8">${u[13]||'—'}</small></td>
+    <td style="font-size:11px;color:#374151">${escH(u[14]||'—')}<br><small style="color:#94a3b8">${escH(u[13]||'—')}</small></td>
     <td>
       <div style="display:flex;gap:3px;justify-content:center">
-        <button class="btn btn-sm" onclick="openUserDetail('${u[0]}')" title="ดูรายละเอียด">👁</button>
-        <button class="btn btn-sm" onclick="openEditUser('${u[0]}')" title="แก้ไข">✏️</button>
+        <button class="btn btn-sm" onclick="openUserDetail('${escJs(u[0])}')" title="ดูรายละเอียด">👁</button>
+        <button class="btn btn-sm" onclick="openEditUser('${escJs(u[0])}')" title="แก้ไข">✏️</button>
       </div>
     </td>
   </tr>`).join('');
@@ -5346,18 +5346,18 @@ function renderOrg(data) {
   const totalCountEl = document.getElementById('orgTotalCount');
   if(totalCountEl) totalCountEl.textContent = data.length;
   el.innerHTML = data.map(u => `<tr>
-    <td><b>${u[0]}</b></td>
-    <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>${u[1]}</div></td>
-    <td>${u[7]||'—'}</td>
-    <td style="font-size:12px">${u[3]||'—'}</td>
-    <td style="font-size:12px">${u[4]||'—'}</td>
-    <td style="font-size:12px">${u[5]||'—'}</td>
-    <td style="font-size:12px">${u[6]||'—'}</td>
+    <td><b>${escH(u[0])}</b></td>
+    <td><div class="u-cell"><div class="u-av">${escH(u[1].substr(0,2))}</div>${escH(u[1])}</div></td>
+    <td>${escH(u[7]||'—')}</td>
+    <td style="font-size:12px">${escH(u[3]||'—')}</td>
+    <td style="font-size:12px">${escH(u[4]||'—')}</td>
+    <td style="font-size:12px">${escH(u[5]||'—')}</td>
+    <td style="font-size:12px">${escH(u[6]||'—')}</td>
     <td><span class="bd b-s">${U_ROLE_LABEL[u[2]]||u[2]}</span></td>
-    <td style="font-size:12px">${u[9]||'—'}</td>
-    <td style="font-size:12px">${u[10]||'—'}</td>
-    <td style="font-size:12px">${u[19]||'—'}</td>
-    <td style="font-size:12px">${u[11]||'—'}</td>
+    <td style="font-size:12px">${escH(u[9]||'—')}</td>
+    <td style="font-size:12px">${escH(u[10]||'—')}</td>
+    <td style="font-size:12px">${escH(u[19]||'—')}</td>
+    <td style="font-size:12px">${escH(u[11]||'—')}</td>
     <td>${U_STATUS_LABEL[u[12]]||''}${u[20]==='1' ? '<br><span class="bd" style="font-size:10px;background:#f1f5f9;color:#64748b">🚫 ยกเว้นประเมิน</span>' : ''}</td>
   </tr>`).join('');
 }
@@ -5604,15 +5604,15 @@ function renderTeamFromMaster() {
     const _canSend = d && wf==='pending' && isHeld(_hk);
     return `<tr>
       <td>${_canSend?`<input type="checkbox" class="team-chk" value="${_hk}">`:''}</td>
-      <td><div class="u-cell"><div class="u-av">${u[1].substr(0,2)}</div>
-        <div><b>${u[1]}</b><small>${u[0]}</small>${_canSend?heldBadge(_hk):''}</div></div></td>
-      <td style="font-size:12px">${u[7]}</td>
+      <td><div class="u-cell"><div class="u-av">${escH(u[1].substr(0,2))}</div>
+        <div><b>${escH(u[1])}</b><small>${escH(u[0])}</small>${_canSend?heldBadge(_hk):''}</div></div></td>
+      <td style="font-size:12px">${escH(u[7])}</td>
       <td style="color:#cbd5e1">—</td>
       <td>${discipline==null?'<span style="color:#cbd5e1">—</span>':'<b>'+discipline+'</b>'}</td>
       <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
-      <td><span class="bd ${st[0]}">${st[1]}</span></td>
+      <td><span class="bd ${escH(st[0])}">${escH(st[1])}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
-        onclick="openReviewerForm('${openLevel}','${u[1]}','${u[0]}','${u[7]}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'),${wf==='done'})">
+        onclick="openReviewerForm('${escJs(openLevel)}','${escJs(u[1])}','${escJs(u[0])}','${escJs(u[7])}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'),${wf==='done'})">
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
       </button></td>
     </tr>`;
@@ -5803,15 +5803,15 @@ function _sign(roleTh, officialTitle, ok, signedName, signedDate, channelLabel, 
       <div class="sg-blank">&nbsp;</div>
       <div class="sg-date">&nbsp;</div>
       <span class="sg-chip sg-skip">⏩ ข้ามขั้นตอน</span>
-      <div class="sg-title">( ${skippedNote} )</div>
+      <div class="sg-title">( ${escH(skippedNote)} )</div>
     </div>`;
   }
   return `<div class="F-sign">
     <div class="sg-role">${roleTh}</div>
-    <div class="sg-blank">${ok?`<div class="sg-name">${signedName||officialTitle||''}</div>`:'&nbsp;'}</div>
+    <div class="sg-blank">${ok?`<div class="sg-name">${escH(signedName||officialTitle||'')}</div>`:'&nbsp;'}</div>
     <div class="sg-date">${ok?(signedDate||''):'&nbsp;'}</div>
     <span class="sg-chip ${ok?'sg-ok':'sg-wait'}">${ok?('✓ ยืนยันแล้ว'+(channelLabel?` (${channelLabel})`:'')):'⏳ กำลังประเมิน'}</span>
-    <div class="sg-title">( ${ok?(signedName||officialTitle||''):(officialTitle||'')} )</div>
+    <div class="sg-title">( ${escH(ok?(signedName||officialTitle||''):(officialTitle||''))} )</div>
   </div>`;
 }
 
@@ -5906,7 +5906,7 @@ function renderMyResult(){
     set('myResultApproval','—'); set('myResultApprovalSub','—');
     document.getElementById('myResultBreakdownArea').innerHTML = '<span style="color:#94a3b8;font-size:12px">ยังไม่มีข้อมูล</span>';
     document.getElementById('myResultHistoryRows').innerHTML = myDrafts.length
-      ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>`<tr><td><b>รอบ ${d[2]}</b></td><td>—</td><td>—</td><td>${myResultStatusLabel(d[d.length-1])}</td></tr>`).join('')
+      ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>`<tr><td><b>รอบ ${escH(d[2])}</b></td><td>—</td><td>—</td><td>${myResultStatusLabel(d[d.length-1])}</td></tr>`).join('')
       : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีประวัติ</td></tr>';
     approverCard.style.display='none';
     return;
@@ -5970,7 +5970,7 @@ function renderMyResult(){
         const rowFinal = ((typeof isFinalStatus==='function') ? isFinalStatus(gs) : gs==='Approved') && !isGradeHiddenFor(d[0], d[2]);
         const gradeCell = !gg ? '—' : (rowFinal ? `<span class="grade g${gg}">${gg}</span>` : '<span title="รอ MD อนุมัติขั้นสุดท้าย">🔒</span>');
         const vis = hasVisibleResult(gs);
-        return `<tr><td><b>รอบ ${d[2]}</b></td><td>${(vis&&gg)? gx.toFixed(2) : '—'}</td><td>${vis?gradeCell:'—'}</td><td>${myResultStatusLabel(gs)}</td></tr>`;
+        return `<tr><td><b>รอบ ${escH(d[2])}</b></td><td>${(vis&&gg)? gx.toFixed(2) : '—'}</td><td>${vis?gradeCell:'—'}</td><td>${myResultStatusLabel(gs)}</td></tr>`;
       }).join('')
     : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีประวัติ</td></tr>';
 }
@@ -6047,7 +6047,7 @@ function printEvalForm() {
     return `<tr class="${isL?'ldr-row':''}">
       <td class="tc" style="width:20px;color:#6a7f9a;font-size:7pt;vertical-align:top;padding-top:4px">${fi+1}</td>
       <td style="font-size:7.8pt;line-height:1.25;vertical-align:top">
-        <div style="font-weight:700;color:#0f2f6a">${f[0]}</div>
+        <div style="font-weight:700;color:#0f2f6a">${escH(f[0])}</div>
         <div style="font-size:7pt;color:#64748b;margin-top:1px;line-height:1.2">${desc}</div>
       </td>
       <td class="tc num" style="width:26px;vertical-align:top;padding-top:4px">${w}</td>
@@ -6570,10 +6570,10 @@ function renderOrgMasterLists(){
     const values = getOrgMasterValues(f.key);
     const inputId = 'orgMasterInput_'+f.key;
     return `<div class="card" style="margin-bottom:14px">
-      <div class="card-h"><h3>${f.label}</h3><span class="bd b-b">${values.length} รายการ</span></div>
+      <div class="card-h"><h3>${escH(f.label)}</h3><span class="bd b-b">${values.length} รายการ</span></div>
       <div class="card-b">
         <div style="display:flex;gap:7px;margin-bottom:12px">
-          <input id="${inputId}" placeholder="เพิ่ม${f.label}ใหม่" style="flex:1;padding:7px 10px;border:1px solid var(--bd);border-radius:7px;font-size:13px"
+          <input id="${inputId}" placeholder="เพิ่ม${escH(f.label)}ใหม่" style="flex:1;padding:7px 10px;border:1px solid var(--bd);border-radius:7px;font-size:13px"
             onkeydown="if(event.key==='Enter'){addOrgMasterItem('${f.key}', document.getElementById('${inputId}').value); document.getElementById('${inputId}').value='';}">
           <button class="btn btn-p btn-sm" onclick="addOrgMasterItem('${f.key}', document.getElementById('${inputId}').value); document.getElementById('${inputId}').value=''">+ เพิ่ม</button>
         </div>
@@ -6896,7 +6896,7 @@ function renderReminderPreview(){
     const hasEmail = !!u[15];
     const hasLine = !!u[21];
     return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f1f5f9">
-      <span>${u[1]} <span style="color:#94a3b8">(${u[0]})</span></span>
+      <span>${escH(u[1])} <span style="color:#94a3b8">(${escH(u[0])})</span></span>
       <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมล'}${hasLine ? ' · 💬 LINE' : ''}</span>
     </div>`;
   }).join('');
@@ -7048,7 +7048,7 @@ function renderResultNotifyPreview(){
     const u = t.emp;
     const hasEmail = !!u[15], hasLine = !!u[21];
     return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f1f5f9">
-      <span>${u[1]} <span style="color:#94a3b8">(${u[0]})</span></span>
+      <span>${escH(u[1])} <span style="color:#94a3b8">(${escH(u[0])})</span></span>
       <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมล'}${hasLine ? ' · 💬 LINE' : ''}</span>
     </div>`;
   }).join('') : '<div style="color:#94a3b8">ไม่มีใบประเมินที่ GM อนุมัติแล้วและยังไม่ได้แจ้ง</div>';
@@ -7062,7 +7062,7 @@ function renderResultNotifyPreview(){
       const srcLabel = t.meta.source==='auto' ? 'อัตโนมัติตอน GM อนุมัติ' : 'ส่งด้วยมือ (ปุ่มนี้)';
       return `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f1f5f9;font-weight:400">
         <input type="checkbox" class="rn-resend-chk" value="${key}" style="width:auto">
-        <span style="flex:1">${u[1]} <span style="color:#94a3b8">(${u[0]})</span><br><small style="color:#94a3b8">${when} · ${srcLabel}</small></span>
+        <span style="flex:1">${escH(u[1])} <span style="color:#94a3b8">(${escH(u[0])})</span><br><small style="color:#94a3b8">${when} · ${srcLabel}</small></span>
       </label>`;
     }).join('') : '<div style="color:#94a3b8">ยังไม่มีใครถูกแจ้งเลย</div>';
   }
@@ -7171,7 +7171,7 @@ document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM
 
 const comps=[['ความเป็นผู้นำ (Leadership)','น้ำหนัก 2',4],['การวิเคราะห์และแก้ไขปัญหา','น้ำหนัก 2',3],['การวางแผนและจัดระบบงาน','น้ำหนัก 2',4],['การดูแลและพัฒนาผู้ใต้บังคับบัญชา','น้ำหนัก 2',4]];
 ['compRows','leaderRows'].forEach(rid=>{ const _el=document.getElementById(rid); if(_el) _el.innerHTML=comps.map(c=>`
-<tr><td><b>${c[0]}</b><br><small style="color:#94a3b8">ประเมินตามพฤติกรรมที่แสดงออกในรอบปี</small></td><td>${c[1]}</td>
+<tr><td><b>${escH(c[0])}</b><br><small style="color:#94a3b8">ประเมินตามพฤติกรรมที่แสดงออกในรอบปี</small></td><td>${escH(c[1])}</td>
 <td><div class="rt">${[1,2,3,4,5].map(n=>`<button class="${n===c[2]?'on':''}">${n}</button>`).join('')}</div></td>
 <td><input placeholder="ความเห็นเพิ่มเติม" style="width:100%;padding:6px 9px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px"></td></tr>`).join('');});
 
@@ -7207,7 +7207,7 @@ function calcSim(){
   const color=score>=25?'#16a34a':score>=15?'#f59e0b':'#dc2626';
   document.getElementById('simOut').innerHTML=`
     <div class="kv"><span>วันลารวมทั้งหมด</span><b>${totalDays.toFixed(3)} วัน (นับจริง ${totalRounded} วัน)</b></div>
-    ${rows.map(r=>`<div class="kv"><span>${r[0]}</span><b style="color:#475569">+ ${typeof r[1]==='number'?r[1].toFixed(3):r[1]}</b></div>`).join('')}
+    ${rows.map(r=>`<div class="kv"><span>${escH(r[0])}</span><b style="color:#475569">+ ${typeof r[1]==='number'?r[1].toFixed(3):r[1]}</b></div>`).join('')}
     <div class="kv" style="border-top:2px solid #0f172a;margin-top:8px;padding-top:12px">
       <span style="font-weight:700;color:#0f172a">คะแนน Z (พนักงาน 30%)</span><b style="font-size:21px;color:${color}">${score.toFixed(2)}</b></div>
     <div class="pg" style="margin-top:11px"><i style="width:${score/30*100}%;background:${color}"></i></div>
@@ -7692,12 +7692,12 @@ function renderSysStatusBanner(){
   /* ใช้สถานะจาก MS365 (ทุกเครื่องเห็นตรงกัน) ถ้าดึงได้ ไม่งั้น fallback เป็นสถานะของเครื่องนี้เอง */
   const useRemote = sysStatusRemote && (!local || new Date(sysStatusRemote.at) >= new Date(local.at));
   if(useRemote){
-    parts.push(`<b>ข้อมูลอัปเดตล่าสุด:</b> ${new Date(sysStatusRemote.at).toLocaleString('th-TH')}${sysStatusRemote.note ? ' — '+sysStatusRemote.note : ''}`);
+    parts.push(`<b>ข้อมูลอัปเดตล่าสุด:</b> ${new Date(sysStatusRemote.at).toLocaleString('th-TH')}${sysStatusRemote.note ? ' — '+escH(sysStatusRemote.note) : ''}`);
     if(Number(sysStatusRemote.pendingCount) > 0){
       parts.push(`<span style="color:#d97706">⏳ มีผลประเมิน ${sysStatusRemote.pendingCount} รายการ รอ Admin นำเข้า/Push เข้า Excel</span>`);
     }
   } else if(local){
-    parts.push(`<b>ข้อมูลอัปเดตล่าสุด:</b> ${new Date(local.at).toLocaleString('th-TH')}${local.note ? ' — '+local.note : ''} (ของเครื่องนี้)`);
+    parts.push(`<b>ข้อมูลอัปเดตล่าสุด:</b> ${new Date(local.at).toLocaleString('th-TH')}${local.note ? ' — '+escH(local.note) : ''} (ของเครื่องนี้)`);
     if(pendingCount > 0){
       parts.push(`<span style="color:#d97706">⏳ มีผลประเมิน ${pendingCount} รายการ รอ Admin นำเข้า/Push เข้า Excel</span>`);
     }
@@ -9492,7 +9492,7 @@ function renderPendingList(){
   box.innerHTML = `<table style="width:100%;font-size:12px"><thead><tr>
       <th style="text-align:left">รหัส</th><th style="text-align:left">ชื่อ-สกุล</th><th>ระดับ</th><th>สถานะ</th>
     </tr></thead><tbody>` +
-    drafts.map(d => `<tr><td>${d[0]}</td><td>${d[1]}</td><td style="text-align:center">${d[3]||'—'}</td><td style="text-align:center">${d[d.length-1]||'—'}</td></tr>`).join('') +
+    drafts.map(d => `<tr><td>${escH(d[0])}</td><td>${escH(d[1])}</td><td style="text-align:center">${escH(d[3]||'—')}</td><td style="text-align:center">${d[d.length-1]||'—'}</td></tr>`).join('') +
     `</tbody></table>`;
 }
 
@@ -10274,13 +10274,13 @@ function renderReviewL1Queue(){
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="reviewl1-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
 }
@@ -10342,13 +10342,13 @@ function renderReviewQueue(){
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('review-chk', checkedKeys);
 }
@@ -10442,13 +10442,13 @@ function renderGmApproveQueue(){
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
-        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+        <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="gm-chk" value="${draftKey(d)}"></td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
   /* #238: ตารางที่ 2 — GM อนุมัติแล้ว รอ "ยืนยันส่งผลให้พนักงาน" (สถานะ GMApproved) + ที่ส่งแล้ว (ResultSent ขึ้นไป) แสดงสถานะ */
@@ -10465,7 +10465,7 @@ function renderGmApproveQueue(){
       return `<tr><td>${waitingSend?`<input type="checkbox" class="gmsend-chk" value="${draftKey(d)}">`:''}</td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
         <td style="font-size:12px">${dept}</td><td style="text-align:center">${d[d.length-3]}</td>
-        <td>${badge} <button class="btn btn-sm" onclick="openReviewerForm('${d[3]}','${name}','${code}','','${d[2]}',true)">ดูแบบฟอร์ม</button></td></tr>`;
+        <td>${badge} <button class="btn btn-sm" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button></td></tr>`;
     }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีใบที่ GM อนุมัติแล้ว</td></tr>';
     restoreCheckedKeys('gmsend-chk', sendChecked);
   }
@@ -10714,7 +10714,7 @@ function renderCalibQueue(){
          (roster ตรงนี้ปน Approved กับ Calibrated ด้วยกันในสถานะ 'done') ถือว่า "ยังไม่ปิดจบ" ตามที่
          ผู้ใช้ยืนยัน แต่ใบ Approved แล้วต้องปิดทาง — เช็คจากสถานะจริง d[d.length-1] ไม่ใช่เดาจาก state */
       const recalcBtn = statusReal!=='Approved' && isAdminOrSysadmin()
-        ? `<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${d[2]}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน (ไม่เปลี่ยนเกรด)">🔄 คำนวณใหม่ (KPI)</button> `
+        ? `<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${escJs(d[2])}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน (ไม่เปลี่ยนเกรด)">🔄 คำนวณใหม่ (KPI)</button> `
         : '';
       return `<tr class="calib-row-done"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
@@ -10722,7 +10722,7 @@ function renderCalibQueue(){
         <td style="text-align:center">${Zs}</td>
         <td style="text-align:center"><span class="grade g${grade}" title="เกรดจริงจาก Bell Curve/การปรับเอง ณ ขั้น Calibration — ไม่ใช่เกรดชั่วคราวอีกต่อไป">${grade}</span><br><small style="color:#16a34a;font-size:10px">(ผ่าน Calibration แล้ว)</small></td>
         <td colspan="3" style="text-align:center"><span class="calib-done-pill">✓ ผ่าน Calibration แล้ว</span></td>
-        <td><div class="calib-acts">${recalcBtn}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</div></td></tr>`;
+        <td><div class="calib-acts">${recalcBtn}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${escJs(d[2])}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</div></td></tr>`;
     }
     const noteKey = code+'|'+d[2];
     const noteVal = (typeof getEvalHrNote==='function' ? getEvalHrNote(noteKey) : '').replace(/"/g,'&quot;');
@@ -10735,7 +10735,7 @@ function renderCalibQueue(){
       <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()"></td>
       <td class="calib-bc-cell" data-key="${key}" style="text-align:center"><span class="calib-bc-pending">ยังไม่คำนวณ</span></td>
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)"></td>
-      <td><div class="calib-acts">${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${d[2]}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน แล้วเติมลงช่องให้อัตโนมัติ">🔄 คำนวณใหม่ (KPI)</button> `:''}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${d[2]}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</div></td></tr>`;
+      <td><div class="calib-acts">${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${escJs(d[2])}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน แล้วเติมลงช่องให้อัตโนมัติ">🔄 คำนวณใหม่ (KPI)</button> `:''}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${escJs(d[2])}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</div></td></tr>`;
   }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
   /* ทาสีเซลล์เกรดกลับเข้าไปถ้า bellCurveResult ยัง valid (ดูคอมเมนต์ด้านบน) — เซลล์ที่เพิ่งสร้างใหม่
      ทุกอันเริ่มจาก "ยังไม่คำนวณ" เสมอ ต้องเติมผลที่คำนวณไว้แล้วกลับเข้าไปเอง ไม่งั้นแม้ผลจะยังอยู่จริง
@@ -11034,13 +11034,13 @@ function renderApproveQueue(){
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
         <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-        <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+        <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
-      <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${d[2]}','${d[3]}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+      <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
 }
 const APPROVAL_SIGNATURE_KEY = 'smlPmsApprovalSignatures';
@@ -11152,9 +11152,9 @@ function buildPrevCommentsHtml(empCode, cycle){
     const entries = stages[s].map(c=>{
       const dateStr = c.at ? new Date(c.at).toLocaleString('th-TH') : '';
       return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px">
-        <div style="display:flex;justify-content:space-between;gap:8px"><b>${label} — ${c.by||'—'}</b><small style="color:#94a3b8;white-space:nowrap">${dateStr}</small></div>
-        ${c.strength?`<div style="margin-top:4px"><span style="color:#64748b">จุดเด่น/ผลงาน:</span> ${c.strength}</div>`:''}
-        ${c.dev?`<div style="margin-top:4px"><span style="color:#64748b">สิ่งที่ควรพัฒนา:</span> ${c.dev}</div>`:''}
+        <div style="display:flex;justify-content:space-between;gap:8px"><b>${label} — ${escH(c.by||'—')}</b><small style="color:#94a3b8;white-space:nowrap">${dateStr}</small></div>
+        ${c.strength?`<div style="margin-top:4px"><span style="color:#64748b">จุดเด่น/ผลงาน:</span> ${escH(c.strength)}</div>`:''}
+        ${c.dev?`<div style="margin-top:4px"><span style="color:#64748b">สิ่งที่ควรพัฒนา:</span> ${escH(c.dev)}</div>`:''}
       </div>`;
     }).join('');
     return entries;
@@ -11498,10 +11498,10 @@ function renderAuditLog(){
   const pageRows = rows.slice(start, start+AUDIT_PAGE_SIZE);
   tbody.innerHTML = pageRows.length ? pageRows.map(r=>`
     <tr><td style="white-space:nowrap;font-size:12px">${new Date(r.at).toLocaleString('th-TH')}</td>
-    <td style="font-size:12px">${r.user}</td>
-    <td><span class="bd b-b">${r.action}</span></td>
-    <td><code style="font-size:11px">${r.target||'—'}</code></td>
-    <td style="font-size:12px;color:#475569">${r.detail||'—'}</td></tr>`).join('')
+    <td style="font-size:12px">${escH(r.user)}</td>
+    <td><span class="bd b-b">${escH(r.action)}</span></td>
+    <td><code style="font-size:11px">${escH(r.target||'—')}</code></td>
+    <td style="font-size:12px;color:#475569">${escH(r.detail||'—')}</td></tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px 0">ยังไม่มีบันทึกการใช้งาน</td></tr>';
   const info=document.getElementById('auditPageInfo');
   if(info) info.textContent = rows.length ? `แสดง ${start+1}–${Math.min(start+AUDIT_PAGE_SIZE,rows.length)} จาก ${rows.length} รายการ` : 'แสดง 0–0 จาก 0 รายการ';
@@ -11672,7 +11672,7 @@ function buildEvalPrintPage(d, printDate){
     return `<tr class="${isL?'ldr-row':''}">
       <td class="tc" style="width:20px;color:#6a7f9a;font-size:7pt;vertical-align:top;padding-top:4px">${fi+1}</td>
       <td style="font-size:7.8pt;line-height:1.25;vertical-align:top">
-        <div style="font-weight:700;color:#0f2f6a">${f[0]}</div>
+        <div style="font-weight:700;color:#0f2f6a">${escH(f[0])}</div>
         <div style="font-size:7pt;color:#64748b;margin-top:1px;line-height:1.2">${desc}</div>
       </td>
       <td class="tc num" style="width:26px;vertical-align:top;padding-top:4px">${w}</td>
@@ -11691,7 +11691,7 @@ function buildEvalPrintPage(d, printDate){
      ใครดำเนินการเลย (ยัง Draft/Submitted ที่พนักงานเพิ่งส่งเอง — CLAUDE.md #14 ไม่โชว์กล่องเปล่า) */
   const lastActor = (typeof getEvalLastActor==='function') ? getEvalLastActor(code, cycle) : null;
   const lastActorBox = lastActor ? `<div class="F-zbox" style="margin-top:4px;background:#eff6ff;border-color:#bfdbfe">
-    <div class="zc" style="grid-column:1/-1"><span class="zl">แก้ไข/ดำเนินการล่าสุดโดย:</span><span class="zv">${lastActor.name||'—'} (${lastActor.code||'—'}) · วันที่ ${new Date(lastActor.at).toLocaleDateString('th-TH')} เวลา ${new Date(lastActor.at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})} น.</span></div>
+    <div class="zc" style="grid-column:1/-1"><span class="zl">แก้ไข/ดำเนินการล่าสุดโดย:</span><span class="zv">${escH(lastActor.name||'—')} (${escH(lastActor.code||'—')}) · วันที่ ${new Date(lastActor.at).toLocaleDateString('th-TH')} เวลา ${new Date(lastActor.at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})} น.</span></div>
   </div>` : '';
   const hrNote = (typeof getEvalHrNote==='function')?getEvalHrNote(code+'|'+cycle):'';
   const hrNoteBox = hrNote.trim() ? `<div class="F-zbox" style="background:#fef2f2;border-color:#fecaca"><div class="zc" style="grid-column:1/-1"><span class="zl">ใบเตือน/หมายเหตุวินัย (HR):</span><span class="zv">${hrNote}</span></div></div>` : '';
@@ -12053,12 +12053,12 @@ function renderAssignments(participants){
   const dash = '<span style="color:#cbd5e1">—</span>';
   tbody.innerHTML = rows.length ? rows.map(r=>{
     const editing = canEdit && editingAssignCode===r.code;
-    const cells = ASSIGN_CHAIN_FIELDS.map((f,i)=> editing ? `<td data-label="${f.label}">${assignChainSelect(i, r[f.key], r.code)}</td>` : `<td data-label="${f.label}">${r[f.key]||dash}</td>`).join('');
+    const cells = ASSIGN_CHAIN_FIELDS.map((f,i)=> editing ? `<td data-label="${escH(f.label)}">${assignChainSelect(i, r[f.key], r.code)}</td>` : `<td data-label="${escH(f.label)}">${r[f.key]||dash}</td>`).join('');
     const act = !canEdit ? '' : editing
-      ? `<button class="btn btn-sm btn-ok" onclick="saveAssignmentRow('${r.code}')">💾 บันทึก</button> <button class="btn btn-sm" onclick="cancelAssignmentEdit()">✖️</button>`
-      : `<button class="btn btn-sm" onclick="editAssignmentRow('${r.code}')">✏️ แก้ไข</button>`;
+      ? `<button class="btn btn-sm btn-ok" onclick="saveAssignmentRow('${escJs(r.code)}')">💾 บันทึก</button> <button class="btn btn-sm" onclick="cancelAssignmentEdit()">✖️</button>`
+      : `<button class="btn btn-sm" onclick="editAssignmentRow('${escJs(r.code)}')">✏️ แก้ไข</button>`;
     return `<tr style="${r.missing?'background:#fef2f2':''}">
-      <td><b>${r.name}</b><small style="display:block;color:#94a3b8">${r.code}</small></td>
+      <td><b>${escH(r.name)}</b><small style="display:block;color:#94a3b8">${escH(r.code)}</small></td>
       <td data-label="แบบฟอร์มที่ใช้">${r.evalLevel ? LEVEL_CONFIG[r.evalLevel].label : '<span style="color:#dc2626">— ยังไม่กำหนด —</span>'}</td>
       ${cells}
       <td data-label="สถานะ" style="text-align:center">${r.missing ? `<span class="bd b-r">⚠️ ${r.missingReason}</span>` : '<span class="bd b-g">✓ ครบถ้วน</span>'}</td>
@@ -12615,7 +12615,7 @@ function renderCustomFormUi(){
     Object.keys(defs).forEach(k=>{ const c=SML_FORMS[k]; if(!c) return;
       const d=document.createElement('div'); d.className='form4-card form4-custom'; d.style.setProperty('--form-color',c.color); d.style.borderTop='4px solid '+c.color;
       const base=SML_FORMS[defs[k].base]?.short||defs[k].base;
-      d.innerHTML=`<div class="form4-head"><div class="form4-color" style="background:${c.color}">★</div><div class="form4-title"><b>${c.label}</b><span>แบบฟอร์มใหม่ • อิงโครงสร้าง ${base}</span></div><span class="form4-status">Active</span></div>
+      d.innerHTML=`<div class="form4-head"><div class="form4-color" style="background:${c.color}">★</div><div class="form4-title"><b>${escH(c.label)}</b><span>แบบฟอร์มใหม่ • อิงโครงสร้าง ${base}</span></div><span class="form4-status">Active</span></div>
       <div class="form4-meta"><div><span>ปัจจัย</span><b>${c.factors.length} ข้อ</b></div><div><span>หน่วยรวม</span><b>${c.total}</b></div><div><span>Y / Z</span><b>${c.ypct}% / ${c.zpct}%</b></div><div><span>รหัสฟอร์ม</span><b>${k}</b></div></div>
       <div class="form4-actions"><button class="btn btn-sm" onclick="openTplPreview('${k}')">ดูแบบฟอร์ม</button><button class="btn btn-sm btn-p" onclick="showTplDetail('${k}');document.getElementById('tplDetailArea').scrollIntoView({behavior:'smooth'})">ปัจจัย/น้ำหนัก</button><button class="btn btn-sm btn-dg" onclick="deleteCustomForm('${k}')">🗑️ ลบ</button></div>`;
       grid.appendChild(d); });
@@ -12968,7 +12968,7 @@ function openTplPreview(lv){
   if(sub)sub.textContent=`${cfg.factors.length} ปัจจัย · น้ำหนักรวม ${cfg.total} · Y ${cfg.ypct}% + Z ${cfg.zpct}%`;
   const rows=cfg.factors.map((f,i)=>{
     const sc=smlScoreByWeight(f[2]);
-    return `<tr><td style="min-width:380px"><b>${f[0]}</b><br><small style="color:#94a3b8;font-weight:400">${f[1]||''}</small></td><td style="text-align:center">${f[2]}</td><td>${sc.Aplus}</td><td>${sc.A}</td><td>${sc.B}</td><td>${sc.Cplus}</td><td>${sc.C}</td></tr>`;
+    return `<tr><td style="min-width:380px"><b>${escH(f[0])}</b><br><small style="color:#94a3b8;font-weight:400">${escH(f[1]||'')}</small></td><td style="text-align:center">${escH(f[2])}</td><td>${sc.Aplus}</td><td>${sc.A}</td><td>${sc.B}</td><td>${sc.Cplus}</td><td>${sc.C}</td></tr>`;
   }).join('');
   if(area)area.innerHTML=`
     <div class="tpl-preview-banner" style="--form-color:${cfg.color}">
@@ -12999,7 +12999,7 @@ function showTplDetail(lv){
   let htmlRows=cfg.factors.map((f,i)=>{
     const w=f[2], sc=smlScoreByWeight(w), leader=i>=SML_FORM_MAIN_SLOTS;
     return `<tr ${leader?'style="background:#faf5ff"':''}>
-      <td><b>${f[0]}</b>${leader?' <span class="bd b-p" style="font-size:9px">Leadership</span>':''}<br><small style="color:#94a3b8;font-weight:400">${f[1]||''}</small></td>
+      <td><b>${escH(f[0])}</b>${leader?' <span class="bd b-p" style="font-size:9px">Leadership</span>':''}<br><small style="color:#94a3b8;font-weight:400">${escH(f[1]||'')}</small></td>
       <td style="text-align:center"><span class="bd b-b">${w}</span></td>
       <td style="text-align:center">${sc.Aplus}</td>
       <td style="text-align:center">${sc.A}</td>
@@ -13198,7 +13198,7 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
   if(sub) sub.textContent=cfg.label+' · แบบฟอร์ม '+cfg.factors.length+' ปัจจัย · Y '+cfg.ypct+'% + Z '+cfg.zpct+'%';
   const scoreRows=cfg.factors.map((f,i)=>{
     const w=f[2], sc=smlScoreByWeight(w);
-    return `<tr><td style="line-height:1.3"><b style="font-size:13px">${f[0]}</b><br><small style="color:#94a3b8;font-size:11px">${f[1]||''}</small></td><td style="text-align:center"><span class="bd b-b">${w}</span></td>
+    return `<tr><td style="line-height:1.3"><b style="font-size:13px">${escH(f[0])}</b><br><small style="color:#94a3b8;font-size:11px">${escH(f[1]||'')}</small></td><td style="text-align:center"><span class="bd b-b">${w}</span></td>
       <td style="text-align:center"><div class="review-score-options">${['Aplus','A','B','Cplus','C'].map((g,gi)=>`<button type="button" class="review-score" onclick="selectReviewScore(this,'${g}',${sc[g]})">${['A+','A','B','C+','C'][gi]}<small>${sc[g]}</small></button>`).join('')}</div></td>
       <td style="text-align:center"><b class="review-got">—</b></td>
       <td><input class="review-comment" placeholder="เหตุผล / ความเห็นประกอบ"></td></tr>`;
@@ -13603,6 +13603,10 @@ function activateTab(tabEl){
 /* ====== ENTERPRISE DEMO ACTIONS ======
    These handlers make every visible action usable in the front-end demo.
    Data is kept locally in the browser; no server/API is assumed. ====== */
+/* #247 กัน XSS: แปลงอักขระพิเศษ HTML ก่อนใส่ข้อความจากผู้ใช้/Excel ลงหน้าเว็บ (innerHTML)
+   escH = เนื้อหา/แอตทริบิวต์ปกติ, escJs = ค่าที่อยู่ใน onclick="fn('...')" (JS-escape ก่อน แล้วค่อย HTML-escape) */
+function escH(v){ return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escJs(v){ return escH(String(v==null?'':v).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ')); }
 function smlToast(msg, type='info'){
   let t=document.getElementById('smlToast');
   if(!t){
@@ -13736,12 +13740,12 @@ function renderCyclesTable(){
     const pct = total ? Math.round(done/total*1000)/10 : 0;
     const periodLabel = (c.start ? new Date(c.start).toLocaleDateString('th-TH') : '—') + ' – วันที่ประเมิน';
     const actionLabel = c.status==='Closed' ? 'ดู' : 'แก้ไข';
-    return `<tr><td><b>${c.id}</b></td><td>${c.name}</td><td>${periodLabel}</td>
+    return `<tr><td><b>${escH(c.id)}</b></td><td>${escH(c.name)}</td><td>${periodLabel}</td>
       <td>${total || '—'}</td>
       <td style="width:150px"><div class="pg"><i class="${pct>=100?'ok':''}" style="width:${Math.min(pct,100)}%"></i></div><small style="font-size:11px;color:#94a3b8">${pct}%</small></td>
       <td>${CYCLE_STATUS_BADGE[c.status]||c.status}</td>
-      <td><button class="btn btn-sm" onclick="openCycleParticipantsModal('${c.id}')" title="ดูรายชื่อผู้เข้าร่วมประเมินในรอบนี้">👥 รายชื่อ</button>
-          <button class="btn btn-sm" onclick="editCycleFromList('${c.id}')">${actionLabel}</button></td></tr>`;
+      <td><button class="btn btn-sm" onclick="openCycleParticipantsModal('${escJs(c.id)}')" title="ดูรายชื่อผู้เข้าร่วมประเมินในรอบนี้">👥 รายชื่อ</button>
+          <button class="btn btn-sm" onclick="editCycleFromList('${escJs(c.id)}')">${actionLabel}</button></td></tr>`;
   }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีรอบการประเมิน — กด "+ สร้างรอบใหม่"</td></tr>';
 }
 /* #146: "ผู้เข้าร่วม" บนตารางด้านบนเป็นแค่ตัวเลขนับจาก getEvalParticipants() (ของจริง, คำนวณสด) —
@@ -13788,10 +13792,10 @@ function renderCycleParticipantsList(c){
   tbody.innerHTML = rows.length ? rows.map(r=>{
     const u = r.u;
     const dept = [u[4],u[6]].filter(Boolean).join(' / ') || '—';
-    return `<tr><td>${u[1]} <span style="color:#94a3b8">(${u[0]})</span></td>
+    return `<tr><td>${escH(u[1])} <span style="color:#94a3b8">(${escH(u[0])})</span></td>
       <td>${NAV_ROLE_LABEL[u[2]]||u[2]}</td>
       <td>${dept}</td>
-      <td>${r.status}</td></tr>`;
+      <td>${escH(r.status)}</td></tr>`;
   }).join('') : '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีผู้เข้าร่วมที่เข้าเกณฑ์ในรอบนี้</td></tr>';
 }
 
@@ -13912,7 +13916,7 @@ function renderCycleSteps(){
   if(!steps){ steps=defaultCycleSteps(); const o=loadCycleStepsStore(); o[cid]={steps,at:''}; saveCycleStepsStore(o); }
   if(!steps.length){ tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:14px">ยังไม่มีขั้นตอน — กด "+ เพิ่มขั้นตอน"</td></tr>'; return; }
   const fd=v=>v?new Date(v).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}):'—';
-  tb.innerHTML=steps.map(st=>`<tr${st.status==='active'?' style="background:#eff6ff"':''}><td>${st.order}</td><td><b>${escapeAttrCs(st.name)}</b></td><td>${escapeAttrCs(st.owner)||'—'}</td><td>${fd(st.start)}</td><td>${fd(st.end)}</td><td>${st.canReject?'✓':'—'}</td><td>${st.remind?escapeAttrCs(st.remind)+' วัน':'—'}</td><td>${CYCLE_STEP_STATUS[st.status]||CYCLE_STEP_STATUS.wait}</td><td style="white-space:nowrap">${admin?`<button class="btn btn-sm" onclick="openCycleStepModal('${st.id}')">✏️</button> <button class="btn btn-sm" onclick="deleteCycleStep('${st.id}')">🗑️</button>`:''}</td></tr>`).join('');
+  tb.innerHTML=steps.map(st=>`<tr${st.status==='active'?' style="background:#eff6ff"':''}><td>${st.order}</td><td><b>${escapeAttrCs(st.name)}</b></td><td>${escapeAttrCs(st.owner)||'—'}</td><td>${fd(st.start)}</td><td>${fd(st.end)}</td><td>${st.canReject?'✓':'—'}</td><td>${st.remind?escapeAttrCs(st.remind)+' วัน':'—'}</td><td>${CYCLE_STEP_STATUS[st.status]||CYCLE_STEP_STATUS.wait}</td><td style="white-space:nowrap">${admin?`<button class="btn btn-sm" onclick="openCycleStepModal('${escJs(st.id)}')">✏️</button> <button class="btn btn-sm" onclick="deleteCycleStep('${escJs(st.id)}')">🗑️</button>`:''}</td></tr>`).join('');
 }
 function openCycleStepModal(id){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin ที่แก้กำหนดการได้','warn'); return; }
@@ -14603,7 +14607,7 @@ function populateEmpCodeDatalist(){
   const list=document.getElementById('empCodeList'); if(!list) return;
   list.innerHTML = MASTER_USERS
     .filter(u=>u[12]!=='resigned')
-    .map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]} — ${u[7]}</option>`).join('');
+    .map(u=>`<option value="${escH(u[0])}">${escH(u[0])} — ${escH(u[1])} — ${escH(u[7])}</option>`).join('');
 }
 /* หน้า Login ใช้ datalist แยกของตัวเอง (empCodeListLogin) แทนตัวรวม empCodeList ด้านบน — เดิมช่อง
    "รหัสพนักงาน" ที่ Login ชี้ไปที่ empCodeList ตัวเดียวกับทุกช่องในระบบ ซึ่งพอบริษัทมีพนักงานเยอะ
@@ -14618,7 +14622,7 @@ function onLoginCodeInput(){
   list.innerHTML = MASTER_USERS
     .filter(u=>u[12]!=='resigned' && (u[0]||'').toLowerCase().includes(q))
     .slice(0,8)
-    .map(u=>`<option value="${u[0]}">${u[0]} — ${u[1]} — ${u[7]}</option>`).join('');
+    .map(u=>`<option value="${escH(u[0])}">${escH(u[0])} — ${escH(u[1])} — ${escH(u[7])}</option>`).join('');
 }
 /* กรอกข้อมูลวันลารายบุคคลด้วยมือ — ใช้แทน/เสริมการ Import ไฟล์ */
 function populateAttendanceEmpSelect(){
@@ -14650,7 +14654,7 @@ function onManualEmpChange(){
   const dupNote = existing
     ? `<br><span style="color:#b45309">✏️ กำลังแก้ไขข้อมูลเดิม (วันลารวมเดิม ≈ ${computeZDays(existing).toFixed(2)} วัน) — ค่าด้านล่างดึงจากข้อมูลจริงมาให้แล้ว แก้แล้วกดบันทึกเพื่ออัปเดต</span>`
     : '';
-  text.innerHTML = `<b>${emp[1]}</b> · ${emp[7]||'—'} · ${emp[3]||'—'} / ${emp[6]||'—'}${dupNote}`;
+  text.innerHTML = `<b>${escH(emp[1])}</b> · ${escH(emp[7]||'—')} · ${escH(emp[3]||'—')} / ${escH(emp[6]||'—')}${dupNote}`;
   box.style.display='';
 }
 /* จุดเขียน ATTENDANCE[code] จุดเดียว — ทั้งฟอร์ม "กรอกข้อมูลวันลารายบุคคล" ด้านบน (saveManualAttendance)
@@ -14886,8 +14890,8 @@ function renderEmployeeImportPreview(){
     <div style="max-height:260px;overflow:auto;margin-top:8px">
       <table class="criteria-table"><thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>บทบาท</th><th>สถานะ</th><th>ผล</th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
-        <td>${r.code||'—'}</td><td>${r.name||'—'}</td><td>${r.role||r.roleRaw||'—'}</td><td>${r.status||r.statusRaw||'—'}</td>
-        <td>${actionLabel[r.action]}${r.reason?`<br><small style="color:#94a3b8">${r.reason}</small>`:''}</td>
+        <td>${escH(r.code||'—')}</td><td>${escH(r.name||'—')}</td><td>${r.role||r.roleRaw||'—'}</td><td>${r.status||r.statusRaw||'—'}</td>
+        <td>${actionLabel[r.action]}${r.reason?`<br><small style="color:#94a3b8">${escH(r.reason)}</small>`:''}</td>
       </tr>`).join('')}</tbody></table>
     </div>`;
 }
