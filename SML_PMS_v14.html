@@ -4349,7 +4349,7 @@ async function ms365SyncKpiGoals(silent=false){
     if(typeof renderGoalKpi==='function') renderGoalKpi(goalKpiData);
     if(typeof goalStatUpdate==='function') goalStatUpdate();
     if(!silent) smlToast('ดึง KPI จาก Excel แล้ว '+parsed.length+' รายการ','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncKpiGoals: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึง KPI ไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -4708,7 +4708,7 @@ async function ms365SyncIdp(silent=false){
     saveIdpDataLocal();
     if(typeof renderIdpRows==='function') renderIdpRows();
     if(!silent) smlToast('ดึง IDP จาก Excel แล้ว '+parsed.length+' รายการ','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncIdp: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึง IDP ไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -6550,7 +6550,7 @@ async function ms365SyncOrgMaster(silent=true){
       if(typeof populateOrgSelects==='function') populateOrgSelects();
     }
     if(!silent) smlToast(changed ? 'ดึงรายการหลักจาก Excel แล้ว (มีรายการใหม่)' : 'รายการหลักครบถ้วนอยู่แล้ว','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncOrgMaster: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึงรายการหลักจาก Excel ไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -8340,11 +8340,11 @@ async function ms365SyncEmployeeSettingsSilent(){
     const res = await fetch('https://graph.microsoft.com/v1.0/drives/' + driveId + '/items/' + itemId +
       "/workbook/tables('" + encodeURIComponent(EMPLOYEE_SETTINGS_TABLE) + "')/rows",
       { headers: { Authorization: 'Bearer ' + token } });
-    if(!res.ok) return 0;
+    if(!res.ok){ appendSyncLog('ms365SyncEmployeeSettingsSilent: Graph ตอบ HTTP '+res.status, false); return 0; }
     const data = await res.json();
     const rows = (data.value || []).map(r => (r.values && r.values[0]) || []);
     return applyEmployeeSettingsRows(rows);
-  }catch(e){ return 0; }
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncEmployeeSettingsSilent: ดึง PIN/ระดับแบบฟอร์ม/LINE จาก Excel ล้มเหลว — '+(e&&e.message||e), false); return 0; }
 }
 
 function calcCurrentEvalSummary(){
@@ -9244,10 +9244,8 @@ function clearSyncLog(){
 async function ms365SyncEmployees(silent=false){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){
-    if(!silent){
-      smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงพนักงานจาก Excel ได้','warn');
-      appendSyncLog('Sync พนักงาน: ยังไม่ได้ตั้งค่า MS365', false);
-    }
+    if(!silent) smlToast('ยังไม่ได้ตั้งค่า MS365 — ไม่สามารถดึงพนักงานจาก Excel ได้','warn');
+    appendSyncLog('Sync พนักงาน: ยังไม่ได้ตั้งค่า MS365', false);
     return;
   }
   const before = MASTER_USERS.length;
@@ -9877,7 +9875,7 @@ async function ms365SyncStageSigners(silent=true){
     });
     localStorage.setItem(EVAL_STAGE_SIGNERS_KEY, JSON.stringify(store));
     if(!silent && typeof smlToast==='function') smlToast('ดึงรายชื่อผู้ลงนามสอบทานจาก Excel แล้ว','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncStageSigners: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent && typeof smlToast==='function') smlToast('ดึงรายชื่อผู้ลงนามสอบทานไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -11177,7 +11175,7 @@ async function ms365SyncEvalComments(silent=true){
       mergeEvalCommentEntry(empCode, cycle, step, { by, byCode: byUser?byUser[0]:by, byRole: byUser?byUser[2]:'', at, strength, dev });
     });
     if(!silent) smlToast('ดึงความเห็นผู้ประเมินจาก Excel แล้ว','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncEvalComments: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึงความเห็นผู้ประเมินไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -11200,7 +11198,7 @@ async function ms365SyncHrNotes(silent=true){
     });
     localStorage.setItem(EVAL_HR_NOTE_KEY, JSON.stringify(notes));
     if(!silent) smlToast('ดึงหมายเหตุ/ใบเตือนจาก Excel แล้ว','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncHrNotes: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึงหมายเหตุ/ใบเตือนไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -11225,7 +11223,7 @@ async function ms365SyncApprovalSignatures(silent=true){
     });
     localStorage.setItem(APPROVAL_SIGNATURE_KEY, JSON.stringify(sigs));
     if(!silent) smlToast('ดึงลายเซ็นอนุมัติจาก Excel แล้ว','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncApprovalSignatures: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึงลายเซ็นอนุมัติไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -11268,7 +11266,7 @@ async function ms365SyncAckChannel(silent=true){
     });
     localStorage.setItem(ACK_CHANNEL_KEY, JSON.stringify(m));
     if(!silent) smlToast('ดึงช่องทางรับทราบผลจาก Excel แล้ว','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncAckChannel: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึงช่องทางรับทราบผลไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -12935,7 +12933,7 @@ async function ms365SyncFormWeights(silent=false){
     localStorage.setItem(SML_FORMS_STORAGE_KEY, JSON.stringify(out));
     if(typeof showTplDetail==='function' && typeof currentTplLevel!=='undefined' && currentTplLevel) showTplDetail(currentTplLevel);
     if(!silent) smlToast('ดึงน้ำหนักแบบประเมินจาก Excel แล้ว '+applied+' ระดับ','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncFormWeights: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึงน้ำหนักแบบประเมินไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -13974,7 +13972,7 @@ async function ms365SyncCyclesList(silent=false){
     saveCyclesList();
     renderCyclesTable();
     if(!silent) smlToast('ดึงรอบการประเมินจาก Excel แล้ว '+parsed.length+' รอบ','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncCyclesList: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึงรอบการประเมินไม่สำเร็จ: '+e.message,'warn');
   }
 }
@@ -13995,7 +13993,7 @@ async function ms365SyncCycleSetup(silent=false){
     if(title && data.name) title.dataset.cycleName=data.name;
     if(typeof renderCycleStats==='function') renderCycleStats();
     if(!silent) smlToast('ดึงการตั้งค่ารอบประเมินจาก Excel แล้ว','ok');
-  }catch(e){
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncCycleSetup: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false);
     if(!silent) smlToast('ดึงการตั้งค่ารอบประเมินไม่สำเร็จ: '+e.message,'warn');
   }
 }
