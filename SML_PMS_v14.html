@@ -2453,7 +2453,7 @@ img,svg,canvas{max-width:100%}
   <!-- ========== RULES ========== -->
   <section class="page" id="pg-rules">
     <div class="ph"><div><h2>เกณฑ์คะแนนเวลาทำงาน (Z)</h2><p>กำหนดสูตรแปลงข้อมูลเวลาทำงานเป็นคะแนน Z — ตามเกณฑ์ SML · รอบ FY2568</p></div>
-    <div class="ph-act"><button class="btn">🔄 คำนวณใหม่ทั้งรอบ</button><button class="btn btn-p" onclick="openM('mRule')">+ เพิ่มเกณฑ์</button></div></div>
+    <div class="ph-act"><button class="btn btn-p" onclick="openM('mRule')">+ เพิ่มเกณฑ์</button></div></div>
 
     <div class="al al-i"><span>🧮</span><div><b>สูตร SML:</b> นับวันลา (ป่วย+กิจ+ขาด) รวมกัน · ขาด 1 วัน = ลากิจ 3 วัน · สาย/กลับก่อน 8 ครั้ง = 1 วันลา · ดูจากตารางคะแนน Z ตามจำนวนวันลา (0-5 วัน ได้คะแนนเต็ม)</div></div>
 
@@ -3303,11 +3303,6 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         </div>
         <div style="padding:11px 16px;border-top:1px solid var(--bd);display:flex;align-items:center;font-size:12px;color:var(--t2)">
           <span id="userCount">แสดง 0 รายการ</span>
-          <div style="margin-left:auto;display:flex;gap:5px">
-            <button class="btn btn-sm">‹ ก่อนหน้า</button>
-            <button class="btn btn-sm btn-p">1</button>
-            <button class="btn btn-sm">ถัดไป ›</button>
-          </div>
         </div>
       </div>
     </div>
@@ -3420,13 +3415,9 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       </div>
 
       <div class="cycle-card">
-        <div class="cycle-card-head"><h3>รอบย้อนหลัง</h3><button class="btn btn-sm">ดูทั้งหมด</button></div>
+        <div class="cycle-card-head"><h3>รอบย้อนหลัง</h3></div>
         <div class="cycle-card-body">
-          <div class="mini-list">
-            <div class="mini-row"><span>FY2025</span><span class="bd b-s">ปิดรอบแล้ว</span></div>
-            <div class="mini-row"><span>FY2024</span><span class="bd b-s">ปิดรอบแล้ว</span></div>
-            <div class="mini-row"><span>FY2023</span><span class="bd b-s">ปิดรอบแล้ว</span></div>
-          </div>
+          <div class="mini-list" id="cyclePastList"></div>
         </div>
       </div>
 
@@ -7169,11 +7160,6 @@ document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM
 /* แถบความคืบหน้ารายฝ่าย + การกระจายเกรดบนแดชบอร์ด — render จากข้อมูลจริง
    ดูฟังก์ชัน renderDashDeptProgress()/renderDashGradeBars() ที่ถูกเรียกจาก renderCycleStats() */
 
-const comps=[['ความเป็นผู้นำ (Leadership)','น้ำหนัก 2',4],['การวิเคราะห์และแก้ไขปัญหา','น้ำหนัก 2',3],['การวางแผนและจัดระบบงาน','น้ำหนัก 2',4],['การดูแลและพัฒนาผู้ใต้บังคับบัญชา','น้ำหนัก 2',4]];
-['compRows','leaderRows'].forEach(rid=>{ const _el=document.getElementById(rid); if(_el) _el.innerHTML=comps.map(c=>`
-<tr><td><b>${escH(c[0])}</b><br><small style="color:#94a3b8">ประเมินตามพฤติกรรมที่แสดงออกในรอบปี</small></td><td>${escH(c[1])}</td>
-<td><div class="rt">${[1,2,3,4,5].map(n=>`<button class="${n===c[2]?'on':''}">${n}</button>`).join('')}</div></td>
-<td><input placeholder="ความเห็นเพิ่มเติม" style="width:100%;padding:6px 9px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px"></td></tr>`).join('');});
 
 
 /* ตารางอนุมัติขั้นสุดท้ายตอนนี้ render จากข้อมูลจริง (renderApproveQueue) — ดูฟังก์ชัน workflow ด้านล่าง */
@@ -13729,6 +13715,8 @@ const CYCLE_STATUS_BADGE = {
   Draft: '<span class="bd b-y">● Draft</span>'
 };
 function renderCyclesTable(){
+  const pl=document.getElementById('cyclePastList');
+  if(pl){ const closed=cyclesList.filter(c=>c.status==='Closed'); pl.innerHTML=closed.length?closed.map(c=>`<div class="mini-row"><span>${escH(c.name||c.id)}</span><span class="bd b-s">ปิดรอบแล้ว</span></div>`).join(''):'<div class="mini-row"><span style="color:#94a3b8">ยังไม่มีรอบที่ปิดแล้ว</span></div>'; }
   const tbody = document.getElementById('cyclesListRows');
   if(!tbody) return;
   const participants = (typeof getEvalParticipants==='function') ? getEvalParticipants() : [];
