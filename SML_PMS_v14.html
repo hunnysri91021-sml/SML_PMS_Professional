@@ -3656,7 +3656,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <label style="font-weight:400"><input type="checkbox" id="rn_ch_email" checked style="width:auto;margin-right:5px">อีเมล</label>
       <label style="font-weight:400;margin-left:14px"><input type="checkbox" id="rn_ch_line" checked style="width:auto;margin-right:5px">LINE <small style="color:#64748b">(เฉพาะคนที่มี LINE User ID บันทึกไว้แล้ว)</small></label>
     </div>
-    <div class="fg"><label>ข้อความ <small style="color:#64748b">(ระบบจะแนบลิงก์เข้าเว็บแอปต่อท้ายให้อัตโนมัติ ถ้าตั้งค่าไว้ที่หน้า MS365 Proxy)</small></label><textarea id="rn_message" rows="4">ผลการประเมินผลการปฏิบัติงานของท่านได้รับการอนุมัติจาก GM แล้ว กรุณาเข้าดูผลที่หน้า "6. ผลประเมิน" ในระบบ SML PMS</textarea></div>
+    <div class="fg"><label>ข้อความ <small style="color:#64748b">(ระบบจะแนบลิงก์เข้าเว็บแอปต่อท้ายให้อัตโนมัติ ถ้าตั้งค่าไว้ที่หน้า MS365 Proxy)</small></label><textarea id="rn_message" rows="4">ผลการประเมินผลการปฏิบัติงานของท่านได้รับการอนุมัติจาก GM แล้ว กรุณาเข้าดูผลที่หน้า "8. ผลประเมิน" ในระบบ SML PMS</textarea></div>
     <div class="fg"><label>รายชื่อที่ส่งผลให้พนักงานแล้วแต่ยังไม่ได้แจ้งทางอีเมล/LINE</label>
       <div id="rn_preview" style="max-height:160px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
     </div>
@@ -4875,7 +4875,7 @@ function applySession(u){
     if(typeof onEvalCodeGateChange === 'function') onEvalCodeGateChange();
   }
   /* #175: ลิงก์จาก LINE/อีเมลแจ้งผลประเมิน (notifyEmployeeOfApproval()) พก ?ackCode=&ackCycle= มาด้วย
-     เพื่อพาพนักงานไปหน้า "6. ผลประเมิน" ให้อัตโนมัติทันทีที่ login สำเร็จ — ตรวจรหัสที่ login จริง
+     เพื่อพาพนักงานไปหน้า "8. ผลประเมิน" ให้อัตโนมัติทันทีที่ login สำเร็จ — ตรวจรหัสที่ login จริง
      (u[0]) ต้องตรงกับ ackCode ในลิงก์เท่านั้น ไม่ใช่เชื่อพารามิเตอร์ใน URL เฉยๆ (คนอื่นอาจเปิดลิงก์ของ
      เพื่อนแล้ว login เป็นตัวเอง — ต้องไม่ถูกพาไปดูผลของคนอื่น) ยังต้องกรอก PIN จริงเหมือนเดิมทุกครั้ง
      ลิงก์นี้ไม่ได้ข้าม PIN แค่ช่วย prefill รหัสพนักงาน (ดู onLoginCodeInput()) และพาไปหน้าที่ถูกต้อง
@@ -5857,7 +5857,7 @@ function _levelCells(w, sc, allApproved) {
   }).join('');
 }
 
-/* หน้า "6. ผลประเมิน" (pg-myresult) เดิมเป็น mock HTML ล้วน — เกรด/คะแนน/ประวัติ 4 ปี/ความเห็นผู้ประเมิน
+/* หน้า "8. ผลประเมิน" (pg-myresult) เดิมเป็น mock HTML ล้วน — เกรด/คะแนน/ประวัติ 4 ปี/ความเห็นผู้ประเมิน
    ฝังตายตัวทั้งหมด ไม่เคยเปลี่ยนไม่ว่าใครล็อกอิน (CLAUDE.md #16) แก้ให้ดึงจาก getDrafts() ของ
    CURRENT_SESSION_USER จริง — "ปรับเงินเดือน/โบนัส" เดิมเป็นตัวเลขที่ระบบไม่มีทางรู้ได้จริง (ไม่มีข้อมูล
    เงินเดือนเก็บอยู่ที่ไหนในระบบเลย) จึงตัดออกแทนที่ด้วย "สถานะอนุมัติ" ซึ่งเป็นข้อมูลจริง (#14) และ
@@ -6243,7 +6243,7 @@ function printEvalForm() {
     <!-- เดิมถือว่าพนักงาน "ลงนามรับทราบ" ตั้งแต่ liveRank>=1 (แค่ส่งแบบประเมินของตัวเองเท่านั้น) — ผิด
          ความหมายจริงของป้าย "ลงนามรับทราบผลการประเมิน": พนักงานยังไม่เห็น "ผล" อะไรเลยตอนส่ง มีแต่
          คะแนนที่ตัวเองให้ตัวเอง ผลจริงจะถูกส่งให้พนักงานเห็นก็ตอน GM อนุมัติแล้ว (GMApproved, อีเมลแจ้ง
-         จริงที่ #61 ส่ง) และพนักงานกดรับทราบเองที่หน้า "6. ผลประเมิน" ทำให้สถานะขยับเป็น Acknowledged
+         จริงที่ #61 ส่ง) และพนักงานกดรับทราบเองที่หน้า "8. ผลประเมิน" ทำให้สถานะขยับเป็น Acknowledged
          (acknowledgeMyResult(), #60/#61) — ผู้ใช้ขอให้ลงชื่อพนักงานเฉพาะตอนที่ส่งให้รับทราบแล้วจริงๆ
          จึงเปลี่ยนเงื่อนไขเป็น liveRank>=evalStatusRank('Acknowledged') ตรงตามความหมายของป้ายเอง */
     ${_sign('ผู้ถูกประเมิน ลงนามรับทราบผลการประเมิน', empName, liveRank>=evalStatusRank('Acknowledged'), empName, ackDateText(empCode,printCycle), (typeof ackChannelLabel==='function')?ackChannelLabel(empCode+'|'+printCycle):'')}
@@ -8887,7 +8887,7 @@ async function notifyPrevEvaluatorOfEdit(payload, prevActor){
 }
 
 /* แจ้งอีเมลให้พนักงานเจ้าของผลประเมินรู้ตัวว่าอนุมัติขั้นสุดท้ายเสร็จแล้ว พร้อมชวนเข้าระบบไปกด
-   "รับทราบผลการประเมิน" ที่หน้า "6. ผลประเมิน" (ดู acknowledgeMyResult()) — ผู้ใช้ขอให้ผลส่งถึงพนักงาน
+   "รับทราบผลการประเมิน" ที่หน้า "8. ผลประเมิน" (ดู acknowledgeMyResult()) — ผู้ใช้ขอให้ผลส่งถึงพนักงาน
    แล้วให้พนักงานเป็นคนกดรับทราบเองในระบบ ไม่ใช่ถือว่า "อนุมัติแล้ว = จบ" ทันที ใช้กลไกความซื่อสัตย์
    เดียวกับอีเมลอื่นๆ ในไฟล์นี้ (#26/#40/#58): best-effort ต่อคน, ต้องตั้งค่า Worker ไว้และพนักงานต้องมี
    อีเมลจริง ไม่งั้น return เหตุผลจริงแทนที่จะเงียบแล้วสันนิษฐานว่าส่งสำเร็จ */
@@ -8917,14 +8917,14 @@ async function notifyEmployeeOfApproval(empCode, empName, cycle, Y, Z, X){
   const scoreLine = hasScore ? `คะแนนผลงาน (Y) = ${Number(Y).toFixed(2)}, คะแนนเวลาทำงาน (Z) = ${Number(Z).toFixed(2)}, คะแนนรวม (X) = ${Number(X).toFixed(2)}` : '';
   /* #175: ลิงก์เข้าเว็บแอปจริง พร้อม prefill รหัสพนักงาน (?ackCode=&ackCycle=) ให้พนักงานกดจาก LINE/
      อีเมลได้เลย — ไม่ใช่การข้าม PIN (ยังต้องกรอก PIN จริงเหมือนเดิม ความปลอดภัยเดิมไม่เปลี่ยน) แค่
-     ช่วยกรอกรหัสให้ และหลัง login สำเร็จแล้วรหัสตรงกับคนที่ login จริง จะพาไปหน้า "6. ผลประเมิน"
+     ช่วยกรอกรหัสให้ และหลัง login สำเร็จแล้วรหัสตรงกับคนที่ login จริง จะพาไปหน้า "8. ผลประเมิน"
      ให้อัตโนมัติ (ดู applySession()) — ไม่มี appUrl ตั้งไว้ = ไม่ใส่ลิงก์เลย (ไม่เดา URL เอง ตาม #14) */
   const ackLink = cfg.appUrl ? `${cfg.appUrl}?ackCode=${encodeURIComponent(empCode)}&ackCycle=${encodeURIComponent(cycle)}` : '';
   if(!emp[15]){
     result.email = { sent:false, reason:'พนักงานไม่มีอีเมลบันทึกไว้ในระบบ' };
   } else {
     const subject = `[SML PMS] ผลการประเมินของท่านได้รับการอนุมัติแล้ว — รอบ ${cycle}`;
-    const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว\n${scoreLine ? 'ผลคะแนนของท่าน: '+scoreLine+'\n(หมายเหตุ: เกรดจะแสดงหลังผ่านขั้นตอน Calibration และอนุมัติขั้นสุดท้ายจาก MD)\n' : ''}\nกรุณาเข้าสู่ระบบ SML PMS${ackLink ? ' ('+ackLink+')' : ''} ที่หน้า "6. ผลประเมิน" เพื่อดูผลโดยละเอียด ดาวน์โหลด PDF และกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
+    const body = `เรียน ${empName}\n\nผลการประเมินผลการปฏิบัติงานของท่าน รอบ ${cycle} ได้รับการอนุมัติจาก GM แล้ว\n${scoreLine ? 'ผลคะแนนของท่าน: '+scoreLine+'\n(หมายเหตุ: เกรดจะแสดงหลังผ่านขั้นตอน Calibration และอนุมัติขั้นสุดท้ายจาก MD)\n' : ''}\nกรุณาเข้าสู่ระบบ SML PMS${ackLink ? ' ('+ackLink+')' : ''} ที่หน้า "8. ผลประเมิน" เพื่อดูผลโดยละเอียด ดาวน์โหลด PDF และกด "รับทราบผลการประเมิน"\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลฉบับนี้)`;
     try{
       await workerFetch(cfg, '/send-mail', { method:'POST', body: JSON.stringify({ toEmail: emp[15], toName: emp[1], subject, body }) });
       result.email = { sent:true };
