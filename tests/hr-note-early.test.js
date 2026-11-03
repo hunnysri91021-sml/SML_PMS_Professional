@@ -1,0 +1,31 @@
+const {open,ok,done,INJECT}=require('./helpers');
+(async()=>{
+  const {b,p,errs}=await open();
+  await p.evaluate(INJECT);
+  const r=await p.evaluate(()=>{
+    const out={};
+    const mk=(c,n,role)=>{const u=new Array(22).fill('');u[0]=c;u[1]=n;u[2]=role;u[12]='active';return u;};
+    MASTER_USERS.push(mk('HN1','คนทดสอบ','emp'),mk('HNA','แอดมิน','admin'));
+    CURRENT_SESSION_USER=MASTER_USERS.find(u=>u[0]==='HNA');
+    const cyc=getCurrentEvalCycleYear();
+    const calls=[];
+    window.isMs365Configured=()=>true;
+    window.graphAddTableRow=(t,row)=>{calls.push([t,row]);return Promise.resolve();};
+    openReviewerForm('op','คนทดสอบ','HN1','พนง',cyc,false);
+    const el=document.getElementById('reviewHrNote');
+    out.hasBox=!!el;
+    el.value='ใบเตือนครั้งที่ 1';
+    saveHrNoteFromReviewer();
+    out.saved=getEvalHrNote('HN1|'+cyc);
+    out.calls=JSON.stringify(calls);const ap=calls.find(c=>c[0]==='Approvals');out.push=!!ap&&ap[1][3]==='HrNote'&&ap[1][6].includes('ใบเตือนครั้งที่ 1');
+    CURRENT_SESSION_USER=mk('HN2','พนักงาน','emp');
+    openReviewerForm('op','คนทดสอบ','HN1','พนง',cyc,false);
+    out.hiddenForNonAdmin=!document.getElementById('reviewHrNote');
+    return out;
+  });
+  ok(r.hasBox,'admin เห็นช่องใบเตือนในฟอร์ม');
+  ok(r.saved==='ใบเตือนครั้งที่ 1','บันทึก local');
+  ok(r.push,'push แถว HrNote ไป Approvals');
+  ok(r.hiddenForNonAdmin,'role อื่นไม่เห็นช่อง');
+  await b.close(); done();
+})();

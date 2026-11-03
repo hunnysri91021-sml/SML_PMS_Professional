@@ -11274,7 +11274,7 @@ async function ms365SyncHrNotes(silent=true){
     try{ notes=JSON.parse(localStorage.getItem(EVAL_HR_NOTE_KEY)||'{}'); }catch(e){ notes={}; }
     rows.forEach(r=>{
       const empCode=String(r[0]??'').trim(), cycle=String(r[2]??'').trim(), step=String(r[3]??'').trim();
-      if(step!=='Calibrated' || !empCode || !cycle) return;
+      if((step!=='Calibrated' && step!=='HrNote') || !empCode || !cycle) return;
       const comment=String(r[6]??'');
       const m = comment.match(/\|\s*หมายเหตุ:\s*(.+)$/);
       if(m && m[1].trim()) notes[empCode+'|'+cycle] = m[1].trim();
@@ -13302,6 +13302,8 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
     ${typeof buildPrevCommentsHtml==='function' ? buildPrevCommentsHtml(code, currentReviewerCycle) : ''}
     <div class="review-section-title">📝 ส่วนที่ 2 — ความคิดเห็นและแผนพัฒนา</div>
     <div class="grid g2"><div class="fg"><label>จุดเด่น / ผลงาน</label><textarea id="reviewStrength" rows="3" placeholder="ระบุผลงานและพฤติกรรมที่โดดเด่น"></textarea></div><div class="fg"><label>สิ่งที่ควรพัฒนา</label><textarea id="reviewDev" rows="3" placeholder="ระบุสิ่งที่ควรพัฒนา / แผนพัฒนา"></textarea></div></div>
+    ${isAdminOrSysadmin()?`<div class="review-section-title">⚠️ ใบเตือน / หมายเหตุวินัย (HR บันทึกได้ก่อนถึง Calibration)</div>
+    <div class="fg"><textarea id="reviewHrNote" rows="2" placeholder="ใบเตือน/หมายเหตุวินัยของรอบนี้ (ว่าง = ไม่มี)">${escH(getEvalHrNote(code+'|'+currentReviewerCycle))}</textarea><button class="btn btn-sm" style="margin-top:6px" onclick="saveHrNoteFromReviewer()">💾 บันทึกใบเตือน/หมายเหตุ</button></div>`:''}
     <div class="review-section-title">✍️ ส่วนที่ 3 — ลงนามผลการประเมิน (สถานะจริง)</div>
     <div id="reviewerSignFlow" class="reviewer-sign-flow"></div>
     <div class="review-section-title">🏆 ส่วนที่ 4 — ตัดเกรดหลัง Calibration ( Calibrated )</div>
@@ -13493,6 +13495,25 @@ function loadHeld(){ try{return JSON.parse(localStorage.getItem(EVAL_HELD_KEY)||
 function isHeld(k){ return !!loadHeld()[k]; }
 function setHeld(k,on){ const h=loadHeld(); if(on) h[k]={at:new Date().toISOString(),by:(CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||''}; else delete h[k]; try{localStorage.setItem(EVAL_HELD_KEY,JSON.stringify(h));}catch(e){} }
 function heldBadge(k){ return isHeld(k)?'<br><span class="bd b-y" title="บันทึกไว้แล้ว ยังไม่ได้ส่งต่อ">💾 พักไว้</span>':''; }
+function saveHrNoteFromReviewer(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่บันทึกใบเตือนได้','warn'); return; }
+  const code=currentReviewerCode, cycle=currentReviewerCycle;
+  const el=document.getElementById('reviewHrNote');
+  if(!code||!cycle||!el) return;
+  const note=el.value.trim();
+  saveEvalHrNote(code+'|'+cycle, note);
+  appendAuditLog('hrnote', 'บันทึกใบเตือน/หมายเหตุวินัย', code, note?note.slice(0,80):'(ล้างหมายเหตุ)');
+  /* ไม่ผ่าน pushApprovalRecordToExcel(): ฟังก์ชันนั้นจำ "ผู้ดำเนินการล่าสุด/ผู้ลงนามขั้น" ซึ่งบันทึกใบเตือนไม่ใช่ขั้นอนุมัติ */
+  const cfg=loadMs365Config();
+  if(note && isMs365Configured(cfg)){
+    const empName=(MASTER_USERS.find(u=>u[0]===code)||[])[1]||'';
+    const by=(CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||currentActorLabel();
+    graphAddTableRow('Approvals',[code,empName,cycle,'HrNote',by,new Date().toISOString(),'| หมายเหตุ: '+note])
+      .then(()=>appendSyncLog(`Push ใบเตือน (${code}) เข้า Approvals`,true))
+      .catch(err=>appendSyncLog(`Push ใบเตือน (${code}) ไม่สำเร็จ: `+(err?.message||err),false));
+  } else if(note){ appendSyncLog('Push ใบเตือน: ยังไม่ได้ตั้งค่า MS365 (บันทึกเฉพาะเครื่องนี้)',false); }
+  smlToast(note?'บันทึกใบเตือน/หมายเหตุแล้ว':'ล้างหมายเหตุแล้ว (เครื่องนี้)','ok');
+}
 async function saveReviewerHold(){
   const code=currentReviewerCode, cycle=currentReviewerCycle, lv=currentReviewerLevel;
   const cfg=LEVEL_CONFIG[lv];
