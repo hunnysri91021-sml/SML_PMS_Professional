@@ -1635,6 +1635,18 @@ img,svg,canvas{max-width:100%}
 }
 </style>
 
+<style>
+/* #255: ข้อโต้แย้งผลประเมิน — สีแดงชัดเจนทุกจุดที่เกี่ยวข้อง */
+.dispute-banner{display:none;margin:0 0 14px;padding:12px 16px;border-radius:12px;background:#fef2f2;border:2px solid #dc2626;color:#991b1b;font-weight:600;align-items:center;gap:12px;flex-wrap:wrap}
+.dispute-banner .btn{background:#dc2626;color:#fff;border-color:#dc2626}
+.dp-badge{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;vertical-align:middle}
+.notif-item.red{background:#fef2f2;color:#b91c1c;font-weight:700}
+.dp-card{border:2px solid #fecaca;background:#fff;border-radius:12px;padding:14px;margin-bottom:12px}
+.dp-card h4{margin:0 0 6px;color:#b91c1c;font-size:15px}
+.dp-card .dp-row{font-size:13px;margin:3px 0}
+.dp-st{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700}
+.dp-st.open{background:#fee2e2;color:#b91c1c}.dp-st.scheduled{background:#fef3c7;color:#92400e}.dp-st.resolved{background:#dcfce7;color:#166534}
+</style>
 </head>
 <body>
 
@@ -1737,6 +1749,7 @@ img,svg,canvas{max-width:100%}
   <div class="content">
 
   <!-- ========== DASHBOARD ========== -->
+  <div class="dispute-banner" id="disputeBanner"></div>
   <section class="page on" id="pg-dash">
     <div class="ph">
       <div><h2>แดชบอร์ดภาพรวม</h2><p>รอบประเมิน <b>ประจำปี 2569 (FY2026)</b> · ผลงาน 1 ม.ค. 69 – วันที่ประเมิน · เวลา 1 ธ.ค. 68 – 30 พ.ย. 69</p></div>
@@ -3636,6 +3649,22 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="closeM()">บันทึก</button></div>
 </div></div>
 
+<div class="ov" id="mDispute"><div class="md" style="max-width:500px">
+  <div class="md-h"><h3>❌ ไม่ยอมรับผลการประเมิน / ขอหารือ</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-b">
+    <input type="hidden" id="dpCode"><input type="hidden" id="dpCycle">
+    <div class="al al-w" style="margin-bottom:10px"><span>ℹ️</span><div>ระบบจะแจ้งผู้ประเมินทุกระดับที่ลงนามในใบของคุณและ HR ให้นัดหมายพูดคุย ระหว่างนี้ใบประเมินจะยังไม่ถูกส่งต่อ</div></div>
+    <div class="fg"><label>เหตุผลที่ไม่ยอมรับ <i>*</i> (อย่างน้อย 10 ตัวอักษร)</label><textarea id="dpReason" rows="4" placeholder="เช่น คะแนนข้อ 3 ไม่ตรงกับผลงานจริง เพราะ..."></textarea></div>
+    <div class="fg"><label>วันที่สะดวกคุย (เสนอ 1–3 วัน) <i>*</i></label>
+      <input type="date" id="dpD1"><input type="date" id="dpD2" style="margin-top:6px"><input type="date" id="dpD3" style="margin-top:6px"></div>
+  </div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-dg" onclick="submitDispute()">ส่งคำขอหารือ</button></div>
+</div></div>
+<div class="ov" id="mDispList"><div class="md" style="max-width:720px">
+  <div class="md-h"><h3>🔴 ข้อโต้แย้งผลประเมิน</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-b" id="dpListBody"></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button></div>
+</div></div>
 <div class="ov" id="mReminder"><div class="md" style="max-width:470px">
   <div class="md-h"><h3>📢 ส่งการแจ้งเตือน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
@@ -4980,6 +5009,7 @@ async function doLogin(){
   if(typeof ms365SyncStageSigners === 'function'){
     try{ await ms365SyncStageSigners(true); }catch(e){}
   }
+  if(typeof ms365SyncDisputes === 'function'){ try{ await ms365SyncDisputes(true); }catch(e){} }
   if(typeof ms365SyncHrNotes === 'function'){
     try{ await ms365SyncHrNotes(true); }catch(e){}
   }
@@ -5950,8 +5980,12 @@ function renderMyResult(){
      ไปไกลกว่านั้น (Acknowledged/Calibrated/Approved) = รับทราบแล้ว → โชว์แค่ข้อความยืนยัน ไม่มีปุ่มซ้ำ
      (กดซ้ำไม่ได้ ไม่มีประโยชน์ที่จะกดซ้ำ) — ดู CLAUDE.md #61 เรื่องลำดับขั้นจริง */
   const latestStatus = latest[latest.length-1];
-  const ackBtn = latestStatus==='ResultSent'
-    ? ` <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="acknowledgeMyResult('${latest[0]}','${latest[2]}')">✅ รับทราบผลการประเมิน</button>`
+  const dsp = getDispute(latest[0],latest[2]);
+  const dspOpen = !!dsp && dsp.status!=='resolved';
+  const ackBtn = latestStatus==='ResultSent' && dspOpen
+    ? ` <span class="dp-st ${dsp.status}" style="margin-left:8px">🔴 ${dsp.status==='open'?'ขอหารือแล้ว — รอผู้ประเมินนัดหมาย':'นัดพูดคุยวันที่ '+escH(disputeFmtDate(dsp.scheduledDate))}</span>`
+    : latestStatus==='ResultSent'
+    ? ` <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="acknowledgeMyResult('${latest[0]}','${latest[2]}')">✅ รับทราบผลการประเมิน</button> <button class="btn btn-sm btn-dg" style="margin-left:6px" onclick="openDisputeModal('${latest[0]}','${latest[2]}')">❌ ไม่ยอมรับผล / ขอหารือ</button>`
     : (evalStatusRank(latestStatus) >= evalStatusRank('Acknowledged') ? ` <span class="bd b-g" style="margin-left:8px">✓ รับทราบแล้ว</span>` : '');
   /* #173: พนักงานขอ "save เก็บข้อมูลไว้เอง" — ใช้ printSingleDraft()/buildEvalPrintPage() ตัวเดียวกับทุก
      จุดที่พิมพ์ PDF ในไฟล์นี้อยู่แล้ว (ไม่สร้างทางพิมพ์ที่สอง) window.print() ให้เลือก "บันทึกเป็น PDF"
@@ -9028,7 +9062,175 @@ async function notifyEmployeeOfApproval(empCode, empName, cycle, Y, Z, X){
    คอลัมน์ status จะได้ไม่ค้างเป็น "GMApproved" ตลอดไปทั้งที่รับทราบแล้วจริง) — ทั้งสองตารางต้อง
    อัปเดตคนละเหตุผลกัน: Approvals คือ log เหตุการณ์ (append-only), Appraisals คือ "สถานะปัจจุบัน"
    (upsert) ตามที่ทั้งไฟล์นี้แยกไว้ตลอด (ดู CLAUDE.md #34) */
+
+/* #255: พนักงานไม่ยอมรับผลประเมิน — ขอหารือพร้อมเหตุผลและวันที่สะดวก แจ้งผู้ประเมินทุกระดับ+HR (แดง)
+   เก็บแยกจากสถานะใบประเมิน (open → scheduled → resolved) ใบยังอยู่ที่ ResultSent จึงไม่เข้า Calibration จนกว่าจะปิดเรื่อง
+   ซิงก์ข้ามเครื่องผ่านตาราง Approvals (step = DisputeRaised/DisputeScheduled/DisputeResolved, comment = '| DISPUTE:'+JSON)
+   — ไม่ผ่าน pushApprovalRecordToExcel เพราะไม่ใช่ขั้นอนุมัติ (จะไปทับ "ผู้ดำเนินการล่าสุด/ผู้ลงนามขั้น") */
+const DISPUTES_KEY='smlPmsDisputes';
+function loadDisputes(){ try{return JSON.parse(localStorage.getItem(DISPUTES_KEY)||'{}');}catch(e){return {};} }
+function saveDisputes(m){ localStorage.setItem(DISPUTES_KEY,JSON.stringify(m)); }
+function getDispute(code,cycle){ return loadDisputes()[code+'|'+cycle]||null; }
+function hasOpenDispute(code,cycle){ const d=getDispute(code,cycle); return !!d && d.status!=='resolved'; }
+function disputeStamp(r){ return [r.raisedAt,r.scheduledAt,r.resolvedAt].filter(Boolean).sort().pop()||''; }
+function disputeFmtDate(s){ if(!s) return '—'; try{ const d=new Date(String(s).length<=10?s+'T00:00:00':s); return d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return s; } }
+function disputeEvaluators(empCode,cycle){
+  const emp=MASTER_USERS.find(u=>u[0]===empCode); const out=new Map();
+  const add=u=>{ if(u && u[0]!==empCode) out.set(u[0],u); };
+  const byName=n=>{ n=(n||'').trim(); return n&&n!=='—' ? MASTER_USERS.find(u=>(u[1]||'').trim()===n && u[12]==='active') : null; };
+  if(emp){ add(resolveL1Reviewer(emp)); add(resolveL2Reviewer(emp)); add(resolveGmReviewer(emp)); add(byName(emp[9])); }
+  ['L1Reviewed','L2Reviewed','GMApproved'].forEach(st=>{ const s=getStageSigner(empCode,cycle,st); if(s) add(s.code?MASTER_USERS.find(u=>u[0]===s.code):byName(s.name)); });
+  return [...out.values()];
+}
+function disputeHrList(){ return MASTER_USERS.filter(u=>u[12]==='active' && (u[2]==='admin'||u[2]==='sysadmin')); }
+function disputeIsParty(code,cycle){ const me=CURRENT_SESSION_USER; if(!me) return false; if(['admin','sysadmin'].includes(me[2])) return true; return disputeEvaluators(code,cycle).some(u=>u[0]===me[0]); }
+function disputesForMe(){
+  const m=loadDisputes(); const out=[];
+  Object.keys(m).forEach(k=>{ const [code,cycle]=k.split('|'); const r=m[k]; if(r.status!=='resolved' && disputeIsParty(code,cycle)) out.push({code,cycle,rec:r}); });
+  return out.sort((a,b)=>String(a.rec.raisedAt).localeCompare(String(b.rec.raisedAt)));
+}
+function disputeBadgeHtml(code){
+  const cy=(typeof getCurrentEvalCycleYear==='function')?getCurrentEvalCycleYear():'';
+  return hasOpenDispute(code,cy) ? '<span class="dp-badge" title="พนักงานไม่ยอมรับผล — รอพูดคุย">🔴 ขอหารือ</span>' : '';
+}
+function renderDisputeBanner(){
+  const el=document.getElementById('disputeBanner'); if(!el) return;
+  const list=CURRENT_SESSION_USER?disputesForMe():[];
+  if(!list.length){ el.style.display='none'; el.innerHTML=''; return; }
+  const open=list.filter(x=>x.rec.status==='open').length, sch=list.length-open;
+  el.style.display='flex';
+  el.innerHTML='<span>🔴 พนักงานไม่ยอมรับผลประเมิน '+list.length+' ราย (รอนัดหมาย '+open+' · นัดแล้ว '+sch+')</span><button class="btn btn-sm" onclick="openDisputeList()">ดูรายละเอียด / นัดหมาย</button>';
+}
+async function pushDisputeEvent(code,cycle,step,rec){
+  const cfg=loadMs365Config(); const emp=MASTER_USERS.find(u=>u[0]===code); const me=CURRENT_SESSION_USER;
+  if(!isMs365Configured(cfg)){ appendSyncLog('pushDisputeEvent: ยังไม่ได้ตั้งค่า MS365 — บันทึกเฉพาะเครื่องนี้',false); return false; }
+  try{
+    await graphAddTableRow('Approvals',[code,emp?emp[1]:'',cycle,step,me?me[1]:'',new Date().toISOString(),'| DISPUTE:'+JSON.stringify(rec)]);
+    appendSyncLog('Push '+step+' ('+code+') เข้า Approvals',true); return true;
+  }catch(e){ appendSyncLog('Push '+step+' ('+code+') เข้า Approvals ไม่สำเร็จ: '+(e&&e.message||e),false); return false; }
+}
+async function notifyDisputeParties(code,cycle,rec,kind){
+  const emp=MASTER_USERS.find(u=>u[0]===code); if(!emp) return {total:0,reason:'ไม่พบพนักงาน'};
+  const rcp=new Map(); disputeEvaluators(code,cycle).forEach(u=>rcp.set(u[0],u)); disputeHrList().forEach(u=>rcp.set(u[0],u));
+  if(kind!=='raised') rcp.set(emp[0],emp);
+  const me=CURRENT_SESSION_USER; if(me) rcp.delete(me[0]);
+  const list=[...rcp.values()]; if(!list.length) return {total:0,reason:'ไม่พบผู้รับ'};
+  const who=emp[1]+' ('+code+')';
+  const subj = kind==='raised' ? '[SML PMS] 🔴 พนักงานไม่ยอมรับผลประเมิน: '+who
+    : kind==='scheduled' ? '[SML PMS] นัดหมายพูดคุยผลประเมิน: '+who+' วันที่ '+disputeFmtDate(rec.scheduledDate)
+    : '[SML PMS] ปิดเรื่องข้อโต้แย้งผลประเมิน: '+who;
+  let body = kind==='raised' ? who+' ไม่ยอมรับผลประเมินรอบ '+cycle+'\n\nเหตุผล: '+rec.reason+'\nวันที่สะดวก: '+rec.proposed.map(disputeFmtDate).join(', ')+'\n\nกรุณาเข้า SML PMS เพื่อยืนยันวันนัดพูดคุย'
+    : kind==='scheduled' ? 'นัดหมายพูดคุยผลประเมินของ '+who+' วันที่ '+disputeFmtDate(rec.scheduledDate)+'\nเหตุผลที่พนักงานขอหารือ: '+rec.reason
+    : 'ผลการพูดคุย: '+(rec.resolution==='redo'?'ขอให้ประเมินใหม่ (ใบถูกส่งกลับให้ผู้ประเมินแก้)':'คงผลเดิม')+'\nบันทึก: '+rec.resolvedNote;
+  body += '\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ)';
+  let emailSent=0, lineSent=0, reason='';
+  const r=await sendEmailToList(list.filter(u=>u[15]),subj,body).catch(()=>({configured:false}));
+  if(r.configured) emailSent=r.sentCount||0; else reason='ยังไม่ได้ตั้งค่า Proxy (Worker) จึงไม่ได้ส่งอีเมล/LINE — ผู้เกี่ยวข้องจะเห็นแถบสีแดงเมื่อเข้าระบบ';
+  const rl=await sendLineReminder(list,subj+'\n'+body.split('\n')[0]).catch(()=>({sent:0}));
+  lineSent=rl.sent||0;
+  appendAuditLog('evaluation','แจ้งข้อโต้แย้งผลประเมิน ('+kind+')',code,'อีเมล '+emailSent+' · LINE '+lineSent+' จาก '+list.length+' คน');
+  return {total:list.length,emailSent,lineSent,reason};
+}
+function disputeNotifyToast(n){ return n.total ? (n.emailSent||n.lineSent ? ' · แจ้งผู้เกี่ยวข้องแล้ว (อีเมล '+n.emailSent+' · LINE '+n.lineSent+' จาก '+n.total+' คน)' : ' · ยังไม่ได้แจ้งทางอีเมล/LINE ('+(n.reason||'ผู้รับไม่มีอีเมล/LINE')+')') : ''; }
+function openDisputeModal(code,cycle){
+  const me=CURRENT_SESSION_USER; if(!me||me[0]!==code){ smlToast('ทำได้เฉพาะเจ้าของผลประเมิน','warn'); return; }
+  document.getElementById('dpCode').value=code; document.getElementById('dpCycle').value=cycle;
+  document.getElementById('dpReason').value='';
+  const today=new Date().toISOString().slice(0,10);
+  ['dpD1','dpD2','dpD3'].forEach(id=>{ const e=document.getElementById(id); e.value=''; e.min=today; });
+  openM('mDispute');
+}
+async function submitDispute(){
+  const code=document.getElementById('dpCode').value, cycle=document.getElementById('dpCycle').value, me=CURRENT_SESSION_USER;
+  if(!me||me[0]!==code){ smlToast('ทำได้เฉพาะเจ้าของผลประเมิน','warn'); return; }
+  const d=findCurrentCycleDraft(getDrafts(),code,cycle);
+  if(!d||d[d.length-1]!=='ResultSent'){ smlToast('ขอหารือได้เฉพาะช่วงที่ GM ส่งผลแล้วและยังไม่ได้รับทราบ','warn'); return; }
+  if(hasOpenDispute(code,cycle)){ smlToast('คุณได้ขอหารือไปแล้ว อยู่ระหว่างดำเนินการ','warn'); return; }
+  const reason=(document.getElementById('dpReason').value||'').trim();
+  if(reason.length<10){ smlToast('กรุณาระบุเหตุผลอย่างน้อย 10 ตัวอักษร','warn'); return; }
+  const today=new Date().toISOString().slice(0,10);
+  const dates=['dpD1','dpD2','dpD3'].map(id=>document.getElementById(id).value).filter(Boolean);
+  if(!dates.length){ smlToast('กรุณาเสนอวันที่สะดวกอย่างน้อย 1 วัน','warn'); return; }
+  if(dates.some(x=>x<today)){ smlToast('วันที่เสนอต้องไม่เป็นวันที่ผ่านมาแล้ว','warn'); return; }
+  const rec={status:'open',reason,proposed:[...new Set(dates)].sort(),raisedAt:new Date().toISOString(),raisedBy:me[1],scheduledDate:'',scheduledBy:'',scheduledAt:'',resolution:'',resolvedNote:'',resolvedBy:'',resolvedAt:''};
+  const m=loadDisputes(); m[code+'|'+cycle]=rec; saveDisputes(m);
+  appendAuditLog('evaluation','ไม่ยอมรับผลประเมิน (ขอหารือ)',code,reason.slice(0,80));
+  closeM();
+  const ok=await pushDisputeEvent(code,cycle,'DisputeRaised',rec);
+  const n=await notifyDisputeParties(code,cycle,rec,'raised');
+  if(typeof renderMyResult==='function') renderMyResult();
+  renderDisputeBanner();
+  smlToast('ส่งคำขอหารือแล้ว'+(ok?'':' (บันทึกเฉพาะเครื่องนี้ — Excel ยังไม่ได้)')+disputeNotifyToast(n),'ok');
+}
+function openDisputeList(){ renderDisputeList(); openM('mDispList'); }
+function renderDisputeList(){
+  const body=document.getElementById('dpListBody'); if(!body) return;
+  const list=disputesForMe(); const isAdm=isAdminOrSysadmin();
+  if(!list.length){ body.innerHTML='<div style="text-align:center;color:#94a3b8;padding:20px">ไม่มีรายการข้อโต้แย้งที่รอดำเนินการ</div>'; return; }
+  body.innerHTML=list.map(x=>{
+    const emp=MASTER_USERS.find(u=>u[0]===x.code); const r=x.rec; const k=escJs(x.code), c=escJs(x.cycle);
+    let act='';
+    if(r.status==='open'){
+      act='<div class="fg" style="margin-top:8px"><label>เลือกวันนัดพูดคุย</label><select id="dpSel_'+escH(x.code)+'">'+r.proposed.map((dt,i)=>'<option value="'+i+'">'+escH(disputeFmtDate(dt))+'</option>').join('')+'</select></div><button class="btn btn-sm btn-p" onclick="confirmDisputeDate(\''+k+'\',\''+c+'\')">✓ ยืนยันวันนัด</button>';
+    } else if(r.status==='scheduled'){
+      act = isAdm ? '<div class="fg" style="margin-top:8px"><label>ผลการพูดคุย</label><select id="dpOut_'+escH(x.code)+'"><option value="keep">คงผลประเมินเดิม</option><option value="redo">ขอให้ประเมินใหม่ (ส่งกลับให้ผู้ประเมินแก้)</option></select></div><div class="fg"><label>บันทึกสรุป <i>*</i></label><textarea id="dpNote_'+escH(x.code)+'" rows="2"></textarea></div><button class="btn btn-sm btn-ok" onclick="resolveDispute(\''+k+'\',\''+c+'\')">บันทึกผล / ปิดเรื่อง</button>'
+        : '<div class="dp-row" style="color:#92400e">รอ HR บันทึกผลหลังพูดคุย</div>';
+    }
+    return '<div class="dp-card"><h4>'+escH(emp?emp[1]:x.code)+' ('+escH(x.code)+') · รอบ '+escH(x.cycle)+' <span class="dp-st '+r.status+'">'+(r.status==='open'?'รอนัดหมาย':'นัดแล้ว '+escH(disputeFmtDate(r.scheduledDate)))+'</span></h4>'
+      +'<div class="dp-row"><b>เหตุผล:</b> '+escH(r.reason)+'</div>'
+      +'<div class="dp-row"><b>วันที่พนักงานเสนอ:</b> '+r.proposed.map(d=>escH(disputeFmtDate(d))).join(' · ')+'</div>'
+      +'<div class="dp-row" style="color:#6b7280">แจ้งเมื่อ '+escH(new Date(r.raisedAt).toLocaleString('th-TH'))+'</div>'+act+'</div>';
+  }).join('');
+}
+async function confirmDisputeDate(code,cycle){
+  if(!disputeIsParty(code,cycle)){ smlToast('เฉพาะผู้ประเมินในสายของพนักงานหรือ HR','warn'); return; }
+  const m=loadDisputes(); const r=m[code+'|'+cycle]; if(!r||r.status!=='open'){ smlToast('รายการนี้ไม่อยู่ในสถานะรอนัดหมายแล้ว','warn'); renderDisputeList(); return; }
+  const sel=document.getElementById('dpSel_'+code); const idx=sel?Number(sel.value):0; const me=CURRENT_SESSION_USER;
+  r.status='scheduled'; r.scheduledDate=r.proposed[idx]||r.proposed[0]; r.scheduledBy=me[1]; r.scheduledAt=new Date().toISOString(); saveDisputes(m);
+  appendAuditLog('evaluation','ยืนยันวันนัดพูดคุยผลประเมิน',code,disputeFmtDate(r.scheduledDate));
+  await pushDisputeEvent(code,cycle,'DisputeScheduled',r);
+  const n=await notifyDisputeParties(code,cycle,r,'scheduled');
+  renderDisputeList(); renderDisputeBanner(); if(typeof renderMyResult==='function') renderMyResult();
+  smlToast('ยืนยันวันนัดแล้ว'+disputeNotifyToast(n),'ok');
+}
+async function resolveDispute(code,cycle){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ HR/Admin บันทึกผลการพูดคุยได้','warn'); return; }
+  const m=loadDisputes(); const r=m[code+'|'+cycle]; if(!r||r.status!=='scheduled'){ smlToast('ต้องยืนยันวันนัดก่อนจึงปิดเรื่องได้','warn'); return; }
+  const out=(document.getElementById('dpOut_'+code)||{}).value||'keep';
+  const note=((document.getElementById('dpNote_'+code)||{}).value||'').trim();
+  if(!note){ smlToast('กรุณาบันทึกสรุปผลการพูดคุย','warn'); return; }
+  const me=CURRENT_SESSION_USER;
+  r.status='resolved'; r.resolution=out; r.resolvedNote=note; r.resolvedBy=me[1]; r.resolvedAt=new Date().toISOString(); saveDisputes(m);
+  if(out==='redo'){
+    const d=findCurrentCycleDraft(getDrafts(),code,cycle);
+    if(d && d[d.length-1]==='ResultSent'){ const key=draftKey(d); updateDraftStatus([key],'Submitted'); markNeedsReconfirm(key); }
+  }
+  appendAuditLog('evaluation','ปิดเรื่องข้อโต้แย้งผลประเมิน ('+(out==='redo'?'ประเมินใหม่':'คงผลเดิม')+')',code,note.slice(0,80));
+  await pushDisputeEvent(code,cycle,'DisputeResolved',r);
+  const n=await notifyDisputeParties(code,cycle,r,'resolved');
+  renderDisputeList(); renderDisputeBanner(); if(typeof renderWorkflowPages==='function') renderWorkflowPages(); if(typeof renderMyResult==='function') renderMyResult();
+  smlToast('บันทึกผลการพูดคุยแล้ว'+(out==='redo'?' — ใบถูกส่งกลับให้ผู้ประเมิน':'')+disputeNotifyToast(n),'ok');
+}
+async function ms365SyncDisputes(silent=true){
+  const cfg=loadMs365Config();
+  if(!isMs365Configured(cfg)){ appendSyncLog('ms365SyncDisputes: ยังไม่ได้ตั้งค่า MS365',false); return; }
+  try{
+    const rows=await graphListTableRows('Approvals'); const m=loadDisputes(); let changed=false;
+    rows.forEach(r=>{
+      const step=String(r[3]??'').trim(); if(!/^Dispute(Raised|Scheduled|Resolved)$/.test(step)) return;
+      const code=String(r[0]??'').trim(), cycle=String(r[2]??'').trim(); const cm=String(r[6]??'');
+      const i=cm.indexOf('| DISPUTE:'); if(!code||!cycle||i<0) return;
+      let rec; try{ rec=JSON.parse(cm.slice(i+10)); }catch(e){ return; }
+      if(!rec||!Array.isArray(rec.proposed)) return;
+      const key=code+'|'+cycle; const cur=m[key];
+      if(!cur || disputeStamp(rec) > disputeStamp(cur)){ m[key]=rec; changed=true; }
+    });
+    if(changed){ saveDisputes(m); renderDisputeBanner(); if(typeof renderMyResult==='function') try{renderMyResult();}catch(e){} }
+    appendSyncLog('Sync ข้อโต้แย้งผลประเมิน: ตรวจ '+rows.length+' แถว'+(changed?' (มีการอัปเดต)':''),true);
+  }catch(e){ appendSyncLog('ms365SyncDisputes: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e),false); }
+}
 async function acknowledgeMyResult(empCode, cycle){
+  if(hasOpenDispute(empCode,cycle)){ smlToast('คุณขอหารือผลประเมินไว้ — ต้องรอปิดเรื่องก่อนจึงรับทราบได้','warn'); return; }
   const drafts = getDrafts();
   const d = findCurrentCycleDraft(drafts, empCode, cycle);
   if(!d || d[d.length-1]!=='ResultSent'){ smlToast('ผลประเมินนี้ยังไม่ถูกส่งให้ท่านรับทราบ (รอ GM ยืนยันส่งผล)','warn'); return; }
@@ -9900,8 +10102,9 @@ async function ms365SyncAppraisals(silent=true){
 var evalAutoSyncTimer = null;
 function startEvalAutoSync(){
   if(typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true);
+  if(typeof ms365SyncDisputes==='function') ms365SyncDisputes(true);
   if(evalAutoSyncTimer) return;
-  evalAutoSyncTimer = setInterval(()=>{ if(typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true); }, 30*1000);
+  evalAutoSyncTimer = setInterval(()=>{ if(typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true); if(typeof ms365SyncDisputes==='function') ms365SyncDisputes(true); }, 30*1000);
 }
 function stopEvalAutoSync(){
   if(evalAutoSyncTimer){ clearInterval(evalAutoSyncTimer); evalAutoSyncTimer=null; }
@@ -10331,20 +10534,20 @@ function renderReviewL1Queue(){
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td></td>
-        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
     const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
     if(r.state==='done'){
       return `<tr><td></td>
-        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="reviewl1-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
-      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
@@ -10398,7 +10601,7 @@ function renderReviewQueue(){
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td></td>
-        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
@@ -10406,13 +10609,13 @@ function renderReviewQueue(){
     const d = r.draft, X = d[d.length-3];
     if(r.state==='done'){
       return `<tr><td></td>
-        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
-      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
@@ -10498,7 +10701,7 @@ function renderGmApproveQueue(){
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td></td>
-        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
@@ -10506,13 +10709,13 @@ function renderGmApproveQueue(){
     const d = r.draft, X = d[d.length-3];
     if(r.state==='done'){
       return `<tr><td></td>
-        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
         <td style="text-align:center">${X}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="gm-chk" value="${draftKey(d)}"></td>
-      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+      <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
@@ -10530,7 +10733,7 @@ function renderGmApproveQueue(){
       const waitingSend = st==='GMApproved';
       const badge = waitingSend ? '<span class="bd b-y">📤 รอยืนยันส่งผล</span>' : (st==='ResultSent' ? '<span class="bd b-b">ส่งแล้ว — รอพนักงานรับทราบ</span>' : '<span class="bd b-g">✓ ส่งแล้ว/รับทราบแล้ว</span>');
       return `<tr><td>${waitingSend?`<input type="checkbox" class="gmsend-chk" value="${draftKey(d)}">`:''}</td>
-        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small></div></div></td>
+        <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td><td style="text-align:center">${d[d.length-3]}</td>
         <td>${badge} <button class="btn btn-sm" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button></td></tr>`;
     }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีใบที่ GM อนุมัติแล้ว</td></tr>';
@@ -11435,6 +11638,7 @@ function renderWorkflowPages(){
    ถ้ามีใบประเมินค้างอยู่ของคนที่เพิ่งถูกยกเว้นหรือออกจากงานหลุดอยู่ใน scope badge จะเกินจำนวนแถวจริงใน
    หน้าคิว ย้อนกลับไปเป็นบั๊กรูปแบบเดียวกับ CLAUDE.md #73/#85/#87/#126/#130 (สรุปกับรายละเอียดนับไม่ตรงกัน) */
 function renderNavBadges(){
+  try{ renderDisputeBanner(); }catch(e){}
   const me = CURRENT_SESSION_USER;
   const cycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
   const drafts = (typeof getDrafts==='function') ? getDrafts() : [];
@@ -12327,6 +12531,7 @@ function getNotifications(){
   if(l1reviewed) items.push({ icon:'🔍', text:`มีใบประเมิน ${l1reviewed} รายการ รอสอบทานผู้จัดการส่วน`, page:'review' });
   if(l2reviewed) items.push({ icon:'🏢', text:`มีใบประเมิน ${l2reviewed} รายการ รออนุมัติ GM`, page:'gmapprove' });
   if(gmToSend) items.push({ icon:'📤', text:`มีใบประเมิน ${gmToSend} รายการ GM อนุมัติแล้ว รอยืนยันส่งผลให้พนักงาน`, page:'gmapprove' });
+  if(me){ const dl=disputesForMe(); if(dl.length) items.push({ icon:'🔴', red:true, text:`พนักงานไม่ยอมรับผลประเมิน ${dl.length} ราย — รอนัดพูดคุย/ปิดเรื่อง`, page:'dispute' }); }
   if(toCheck) items.push({ icon:'🔎', text:`มีใบประเมิน ${toCheck} รายการ รอ HR ตรวจสอบหลัง Calibration ก่อนส่ง MD/AMD`, page:'calib' });
   if(calibrated) items.push({ icon:'✅', text:`มีใบประเมิน ${calibrated} รายการ รออนุมัติขั้นสุดท้าย`, page:'approve' });
 
@@ -12387,6 +12592,7 @@ document.addEventListener('click', ()=>{
 });
 function goToNotif(page){
   document.getElementById('notifPanel').style.display='none';
+  if(page==='dispute'){ openDisputeList(); return; }
   document.querySelector(`.nav-item[data-pg="${page}"]`)?.click();
 }
 function renderNotifBell(){
@@ -12401,7 +12607,7 @@ function renderNotifBell(){
     badge.style.display='none';
   }
   list.innerHTML = items.length
-    ? items.map(n=>`<div class="notif-item" onclick="goToNotif('${n.page}')"><span>${n.icon}</span><span>${n.text}</span></div>`).join('')
+    ? items.map(n=>`<div class="notif-item${n.red?' red':''}" onclick="goToNotif('${n.page}')"><span>${n.icon}</span><span>${n.text}</span></div>`).join('')
     : '<div class="notif-empty">ไม่มีรายการที่ต้องติดตามตอนนี้</div>';
 }
 
@@ -14500,7 +14706,8 @@ document.addEventListener('input',e=>{
       if(typeof ms365SyncIdp === 'function'){ try{ await ms365SyncIdp(true); }catch(e){} }
       if(typeof ms365SyncApprovalSignatures === 'function'){ try{ await ms365SyncApprovalSignatures(true); }catch(e){} }
       if(typeof ms365SyncStageSigners === 'function'){ try{ await ms365SyncStageSigners(true); }catch(e){} }
-      if(typeof ms365SyncHrNotes === 'function'){ try{ await ms365SyncHrNotes(true); }catch(e){} }
+      if(typeof ms365SyncDisputes === 'function'){ try{ await ms365SyncDisputes(true); }catch(e){} }
+  if(typeof ms365SyncHrNotes === 'function'){ try{ await ms365SyncHrNotes(true); }catch(e){} }
       if(typeof ms365SyncEvalComments === 'function'){ try{ await ms365SyncEvalComments(true); }catch(e){} }
       if(typeof ms365SyncAckChannel === 'function'){ try{ await ms365SyncAckChannel(true); }catch(e){} }
       if(typeof ms365SyncAuditLog === 'function'){ try{ await ms365SyncAuditLog(true); }catch(e){} }
