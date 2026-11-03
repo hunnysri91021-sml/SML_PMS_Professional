@@ -4685,12 +4685,25 @@ function toggleIdpStatus(i){
 /* ลบแค่ในเครื่องนี้ — ยังไม่มี graphDeleteTableRow() ในระบบ (ไม่มีฟังก์ชันลบแถวออกจาก Excel
    ให้ตารางใดๆ เลยจนถึงตอนนี้) แถวเดิมใน Excel จะยังค้างอยู่จนกว่าจะลบเองใน Excel โดยตรง หรือมีคน
    push ทับด้วยรหัสเดียวกันอีกครั้ง — บอกไว้ตรงนี้เพื่อไม่ให้เข้าใจผิดว่าลบแล้วหายจาก Excel ด้วย */
-function deleteIdp(i){
-  if(!confirm('ลบ IDP นี้? (ลบเฉพาะในเครื่องนี้ — ถ้าเคย sync ขึ้น Excel แล้ว ต้องลบที่ Excel เองด้วย)')) return;
+async function deleteIdp(i){
+  const p = idpData[i];
+  if(!p) return;
+  if(!confirm('ลบ IDP ของ "'+(p.name||p.code)+'" ?\n\nจะลบทั้งในเว็บและในตาราง IDP ของ Excel — ย้อนกลับไม่ได้')) return;
   idpData.splice(i,1);
   saveIdpDataLocal();
   renderIdpRows();
-  smlToast('ลบเรียบร้อย (เฉพาะเครื่องนี้)','ok');
+  if(typeof appendAuditLog==='function') appendAuditLog('idp','ลบ IDP', p.name||p.code, 'code '+p.code);
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg) || !p.code){ smlToast('ลบ IDP ในเว็บแล้ว (ยังไม่ได้ตั้งค่า MS365 จึงยังไม่ได้ลบใน Excel)','warn'); return; }
+  try{
+    const n = await graphDeleteTableRows('IDP', 0, p.code);
+    if(typeof appendSyncLog==='function') appendSyncLog(`ลบ IDP (${p.code}) ออกจาก Excel ${n} แถว`, true);
+    smlToast('ลบ IDP แล้ว — เว็บและ Excel'+(n?` (ลบ ${n} แถวใน Excel)`:' (ไม่พบแถวนี้ใน Excel อยู่แล้ว)'),'ok');
+  }catch(err){
+    const msg = err?.message||String(err);
+    if(typeof appendSyncLog==='function') appendSyncLog(`ลบ IDP (${p.code}) ออกจาก Excel ไม่สำเร็จ: `+msg, false);
+    smlToast('ลบ IDP ในเว็บแล้ว แต่ลบใน Excel ไม่สำเร็จ: '+msg+' — IDP นี้จะกลับมาตอน sync ครั้งถัดไป จนกว่าจะลบแถวใน Excel ได้','err');
+  }
 }
 
 function pushIdpToExcel(p){

@@ -8895,6 +8895,8 @@ touches employee/attendance/evaluation data.
 
 227. **ตาราง "กำหนดการขั้นตอน" หน้ารอบประเมินเป็น HTML ฝังตายตัวชื่อ FY2026-ANNUAL (#16/#10) — ตอนนี้ใช้งานจริง.** เก็บแยกตามรหัสรอบใน `smlPmsCycleSteps` (`getCycleSteps/putCycleSteps`), เลือกรอบได้ด้วย `#cycleStepsCycleSel`, เพิ่ม/แก้ไข/ลบ/รีเซ็ตผ่าน `mCycleStep` (Admin/sysadmin เท่านั้น, ตรวจ end>=start), sync ขึ้น Excel ตาราง FormWeights แถว `__steps__<id>` (JSON, ใหม่กว่าชนะด้วย `at`, hook ใน `ms365SyncFormWeights`). ไม่เติมวันที่/สถานะปลอม — ค่าเริ่มต้นวันที่ว่าง สถานะ "รอ". ชุดทดสอบ Playwright ย้ายเข้า `tests/` (`node tests/run-all.js`) — เพิ่มเทสต์ใหม่ที่นั่นแทน scratchpad.
 
+252. **`deleteIdp()` ลบแถวใน Excel ตาราง IDP แล้ว (เดิมลบเฉพาะเครื่องนี้, #39).** ใช้ `graphDeleteTableRows('IDP',0,code)` (#209) แบบเดียวกับ `deleteGoalKpi`: confirm บอกว่าลบทั้งเว็บและ Excel, log Sync Log, ถ้า Excel ล้มเหลวจะ toast ตามจริงว่า IDP จะกลับมาตอน sync. ต้องใช้ Worker `/rows/delete` ที่ redeploy แล้ว. ทดสอบ: `tests/idp-delete.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
