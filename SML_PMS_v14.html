@@ -3650,15 +3650,17 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 </div></div>
 
 <div class="ov" id="mDispute"><div class="md" style="max-width:500px">
-  <div class="md-h"><h3>❌ ไม่ยอมรับผลการประเมิน / ขอหารือ</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-h"><h3 id="dpTitle">❌ ไม่ยอมรับผลการประเมิน / ขอหารือ</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
     <input type="hidden" id="dpCode"><input type="hidden" id="dpCycle">
-    <div class="al al-w" style="margin-bottom:10px"><span>ℹ️</span><div>ระบบจะแจ้งผู้ประเมินทุกระดับที่ลงนามในใบของคุณและ HR ให้นัดหมายพูดคุย ระหว่างนี้ใบประเมินจะยังไม่ถูกส่งต่อ</div></div>
+    <input type="hidden" id="dpMode" value="dispute">
+    <div class="al al-w" id="dpAckNote" style="margin-bottom:10px;display:none"><span>ℹ️</span><div>กดรับทราบผลตามปกติ (ขั้นตอนเดินต่อ) และบันทึกความเห็นต่างให้ผู้ประเมินกับ HR ทราบ ไม่ต้องนัดพูดคุย</div></div>
+    <div class="al al-w" id="dpDisputeNote" style="margin-bottom:10px"><span>ℹ️</span><div>ระบบจะแจ้งผู้ประเมินทุกระดับที่ลงนามในใบของคุณและ HR ให้นัดหมายพูดคุย ระหว่างนี้ใบประเมินจะยังไม่ถูกส่งต่อ</div></div>
     <div class="fg"><label>เหตุผลที่ไม่ยอมรับ <i>*</i> (อย่างน้อย 10 ตัวอักษร)</label><textarea id="dpReason" rows="4" placeholder="เช่น คะแนนข้อ 3 ไม่ตรงกับผลงานจริง เพราะ..."></textarea></div>
-    <div class="fg"><label>วันที่สะดวกคุย (เสนอ 1–3 วัน) <i>*</i></label>
+    <div class="fg" id="dpDatesBox"><label>วันที่สะดวกคุย (เสนอ 1–3 วัน) <i>*</i></label>
       <input type="date" id="dpD1"><input type="date" id="dpD2" style="margin-top:6px"><input type="date" id="dpD3" style="margin-top:6px"></div>
   </div>
-  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-dg" onclick="submitDispute()">ส่งคำขอหารือ</button></div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-dg" id="dpSubmitBtn" onclick="submitDispute()">ส่งคำขอหารือ</button></div>
 </div></div>
 <div class="ov" id="mDispList"><div class="md" style="max-width:720px">
   <div class="md-h"><h3>🔴 ข้อโต้แย้งผลประเมิน</h3><button class="x" onclick="closeM()">×</button></div>
@@ -5985,8 +5987,8 @@ function renderMyResult(){
   const ackBtn = latestStatus==='ResultSent' && dspOpen
     ? ` <span class="dp-st ${dsp.status}" style="margin-left:8px">🔴 ${dsp.status==='open'?'ขอหารือแล้ว — รอผู้ประเมินนัดหมาย':'นัดพูดคุยวันที่ '+escH(disputeFmtDate(dsp.scheduledDate))}</span>`
     : latestStatus==='ResultSent'
-    ? ` <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="acknowledgeMyResult('${latest[0]}','${latest[2]}')">✅ รับทราบผลการประเมิน</button> <button class="btn btn-sm btn-dg" style="margin-left:6px" onclick="openDisputeModal('${latest[0]}','${latest[2]}')">❌ ไม่ยอมรับผล / ขอหารือ</button>`
-    : (evalStatusRank(latestStatus) >= evalStatusRank('Acknowledged') ? ` <span class="bd b-g" style="margin-left:8px">✓ รับทราบแล้ว</span>` : '');
+    ? ` <button class="btn btn-sm btn-p" style="margin-left:8px" onclick="acknowledgeMyResult('${latest[0]}','${latest[2]}')">✅ รับทราบผลการประเมิน</button> <button class="btn btn-sm btn-dg" style="margin-left:6px" onclick="openDisputeModal('${latest[0]}','${latest[2]}')">❌ ไม่ยอมรับผล / ขอหารือ</button> <button class="btn btn-sm" style="margin-left:6px" onclick="openDisputeModal('${latest[0]}','${latest[2]}','ack')" title="รับทราบและเดินขั้นตอนต่อ พร้อมบันทึกว่าไม่เห็นด้วย">📝 รับทราบพร้อมความเห็นต่าง</button>`
+    : (evalStatusRank(latestStatus) >= evalStatusRank('Acknowledged') ? ` <span class="bd b-g" style="margin-left:8px">✓ รับทราบแล้ว</span>`+((dsp&&dsp.status==='noted')?` <span class="dp-st scheduled" style="margin-left:6px">🟠 บันทึกความเห็นต่างไว้แล้ว</span>`:'') : '');
   /* #173: พนักงานขอ "save เก็บข้อมูลไว้เอง" — ใช้ printSingleDraft()/buildEvalPrintPage() ตัวเดียวกับทุก
      จุดที่พิมพ์ PDF ในไฟล์นี้อยู่แล้ว (ไม่สร้างทางพิมพ์ที่สอง) window.print() ให้เลือก "บันทึกเป็น PDF"
      ได้ตรงในกล่องพิมพ์ของเบราว์เซอร์เอง — แสดงได้ตั้งแต่ hasVisibleResult() จริงแล้ว (ถึงจุดนี้แปลว่าใช่) */
@@ -9071,8 +9073,15 @@ const DISPUTES_KEY='smlPmsDisputes';
 function loadDisputes(){ try{return JSON.parse(localStorage.getItem(DISPUTES_KEY)||'{}');}catch(e){return {};} }
 function saveDisputes(m){ localStorage.setItem(DISPUTES_KEY,JSON.stringify(m)); }
 function getDispute(code,cycle){ return loadDisputes()[code+'|'+cycle]||null; }
-function hasOpenDispute(code,cycle){ const d=getDispute(code,cycle); return !!d && d.status!=='resolved'; }
-function disputeStamp(r){ return [r.raisedAt,r.scheduledAt,r.resolvedAt].filter(Boolean).sort().pop()||''; }
+function hasOpenDispute(code,cycle){ const d=getDispute(code,cycle); return !!d && (d.status==='open'||d.status==='scheduled'); }
+const DISPUTE_SLA_DAYS=7;
+function disputeOverdue(r){
+  if(!r) return '';
+  if(r.status==='open' && r.raisedAt && (Date.now()-new Date(r.raisedAt).getTime())>DISPUTE_SLA_DAYS*86400000) return 'ยังไม่มีการนัดหมายเกิน '+DISPUTE_SLA_DAYS+' วัน';
+  if(r.status==='scheduled' && r.scheduledDate && r.scheduledDate < new Date().toISOString().slice(0,10)) return 'เลยวันนัดแล้วแต่ยังไม่ปิดเรื่อง';
+  return '';
+}
+function disputeStamp(r){ return [r.raisedAt,r.scheduledAt,r.resolvedAt,r.remindedAt].filter(Boolean).sort().pop()||''; }
 function disputeFmtDate(s){ if(!s) return '—'; try{ const d=new Date(String(s).length<=10?s+'T00:00:00':s); return d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return s; } }
 function disputeEvaluators(empCode,cycle){
   const emp=MASTER_USERS.find(u=>u[0]===empCode); const out=new Map();
@@ -9084,9 +9093,9 @@ function disputeEvaluators(empCode,cycle){
 }
 function disputeHrList(){ return MASTER_USERS.filter(u=>u[12]==='active' && (u[2]==='admin'||u[2]==='sysadmin')); }
 function disputeIsParty(code,cycle){ const me=CURRENT_SESSION_USER; if(!me) return false; if(['admin','sysadmin'].includes(me[2])) return true; return disputeEvaluators(code,cycle).some(u=>u[0]===me[0]); }
-function disputesForMe(){
+function disputesForMe(withNoted){
   const m=loadDisputes(); const out=[];
-  Object.keys(m).forEach(k=>{ const [code,cycle]=k.split('|'); const r=m[k]; if(r.status!=='resolved' && disputeIsParty(code,cycle)) out.push({code,cycle,rec:r}); });
+  Object.keys(m).forEach(k=>{ const [code,cycle]=k.split('|'); const r=m[k]; if(r.status!=='resolved' && (withNoted||r.status!=='noted') && disputeIsParty(code,cycle)) out.push({code,cycle,rec:r}); });
   return out.sort((a,b)=>String(a.rec.raisedAt).localeCompare(String(b.rec.raisedAt)));
 }
 function disputeBadgeHtml(code){
@@ -9096,10 +9105,14 @@ function disputeBadgeHtml(code){
 function renderDisputeBanner(){
   const el=document.getElementById('disputeBanner'); if(!el) return;
   const list=CURRENT_SESSION_USER?disputesForMe():[];
+  try{ remindOverdueDisputes(); }catch(e){}
+  const noted=CURRENT_SESSION_USER?disputesForMe(true).filter(x=>x.rec.status==='noted'):[];
+  if(!list.length && noted.length){ el.style.display='flex'; el.style.background='#fffbeb'; el.style.borderColor='#f59e0b'; el.style.color='#92400e'; el.innerHTML='<span>🟠 มีพนักงานรับทราบผลพร้อมบันทึกความเห็นต่าง '+noted.length+' ราย</span><button class="btn btn-sm" style="background:#f59e0b;border-color:#f59e0b" onclick="openDisputeList()">ดูรายละเอียด</button>'; return; }
+  el.style.background=''; el.style.borderColor=''; el.style.color='';
   if(!list.length){ el.style.display='none'; el.innerHTML=''; return; }
-  const open=list.filter(x=>x.rec.status==='open').length, sch=list.length-open;
+  const open=list.filter(x=>x.rec.status==='open').length, sch=list.length-open, od=list.filter(x=>disputeOverdue(x.rec)).length;
   el.style.display='flex';
-  el.innerHTML='<span>🔴 พนักงานไม่ยอมรับผลประเมิน '+list.length+' ราย (รอนัดหมาย '+open+' · นัดแล้ว '+sch+')</span><button class="btn btn-sm" onclick="openDisputeList()">ดูรายละเอียด / นัดหมาย</button>';
+  el.innerHTML='<span>🔴 พนักงานไม่ยอมรับผลประเมิน '+list.length+' ราย (รอนัดหมาย '+open+' · นัดแล้ว '+sch+')'+(od?' · ⚠️ เกินกำหนด '+od+' ราย':'')+'</span><button class="btn btn-sm" onclick="openDisputeList()">ดูรายละเอียด / นัดหมาย</button>';
 }
 async function pushDisputeEvent(code,cycle,step,rec){
   const cfg=loadMs365Config(); const emp=MASTER_USERS.find(u=>u[0]===code); const me=CURRENT_SESSION_USER;
@@ -9109,17 +9122,39 @@ async function pushDisputeEvent(code,cycle,step,rec){
     appendSyncLog('Push '+step+' ('+code+') เข้า Approvals',true); return true;
   }catch(e){ appendSyncLog('Push '+step+' ('+code+') เข้า Approvals ไม่สำเร็จ: '+(e&&e.message||e),false); return false; }
 }
+let _dpRemindBusy=false, _dpLastTry=0;
+/* #255b: เตือนซ้ำอัตโนมัติ (ทุก 24 ชม. ต่อรายการ) เมื่อค้างเกินกำหนด — เฉพาะเครื่องของ admin/sysadmin ที่เปิดระบบอยู่
+   (ไม่มี server รันตามเวลา) เวลาที่เตือนล่าสุดบันทึกใน rec.remindedAt และ push ขึ้น Approvals (DisputeReminded)
+   เครื่อง admin อื่นจึงไม่ส่งซ้ำซ้อนภายใน 24 ชม. */
+async function remindOverdueDisputes(){
+  const me=CURRENT_SESSION_USER; if(!me||!['admin','sysadmin'].includes(me[2])||_dpRemindBusy) return;
+  if(Date.now()-_dpLastTry<3600000) return;
+  const m=loadDisputes(); const due=Object.keys(m).filter(k=>{ const r=m[k]; if(!disputeOverdue(r)) return false; return !r.remindedAt || (Date.now()-new Date(r.remindedAt).getTime())>86400000; });
+  if(!due.length) return;
+  _dpRemindBusy=true; _dpLastTry=Date.now();
+  try{
+    for(const k of due){
+      const [code,cycle]=k.split('|'); const r=m[k];
+      const n=await notifyDisputeParties(code,cycle,r,'overdue');
+      if(n.emailSent||n.lineSent){ r.remindedAt=new Date().toISOString(); const mm=loadDisputes(); mm[k]=r; saveDisputes(mm); await pushDisputeEvent(code,cycle,'DisputeReminded',r); }
+    }
+  } finally { _dpRemindBusy=false; }
+}
 async function notifyDisputeParties(code,cycle,rec,kind){
   const emp=MASTER_USERS.find(u=>u[0]===code); if(!emp) return {total:0,reason:'ไม่พบพนักงาน'};
   const rcp=new Map(); disputeEvaluators(code,cycle).forEach(u=>rcp.set(u[0],u)); disputeHrList().forEach(u=>rcp.set(u[0],u));
-  if(kind!=='raised') rcp.set(emp[0],emp);
+  if(kind==='scheduled'||kind==='resolved') rcp.set(emp[0],emp);
   const me=CURRENT_SESSION_USER; if(me) rcp.delete(me[0]);
   const list=[...rcp.values()]; if(!list.length) return {total:0,reason:'ไม่พบผู้รับ'};
   const who=emp[1]+' ('+code+')';
   const subj = kind==='raised' ? '[SML PMS] 🔴 พนักงานไม่ยอมรับผลประเมิน: '+who
+    : kind==='noted' ? '[SML PMS] 🟠 พนักงานรับทราบผลพร้อมความเห็นต่าง: '+who
+    : kind==='overdue' ? '[SML PMS] ⚠️ ข้อโต้แย้งผลประเมินค้างเกินกำหนด: '+who
     : kind==='scheduled' ? '[SML PMS] นัดหมายพูดคุยผลประเมิน: '+who+' วันที่ '+disputeFmtDate(rec.scheduledDate)
     : '[SML PMS] ปิดเรื่องข้อโต้แย้งผลประเมิน: '+who;
   let body = kind==='raised' ? who+' ไม่ยอมรับผลประเมินรอบ '+cycle+'\n\nเหตุผล: '+rec.reason+'\nวันที่สะดวก: '+rec.proposed.map(disputeFmtDate).join(', ')+'\n\nกรุณาเข้า SML PMS เพื่อยืนยันวันนัดพูดคุย'
+    : kind==='noted' ? who+' กดรับทราบผลประเมินรอบ '+cycle+' แต่บันทึกความเห็นต่างไว้\n\nความเห็น: '+rec.reason+'\n\n(ไม่ต้องหยุดขั้นตอน — แจ้งเพื่อทราบ/พิจารณาพูดคุย)'
+    : kind==='overdue' ? 'ข้อโต้แย้งของ '+who+' '+disputeOverdue(rec)+'\nเหตุผลที่พนักงานขอหารือ: '+rec.reason+'\n\nกรุณาเข้า SML PMS เพื่อนัดหมาย/ปิดเรื่อง'
     : kind==='scheduled' ? 'นัดหมายพูดคุยผลประเมินของ '+who+' วันที่ '+disputeFmtDate(rec.scheduledDate)+'\nเหตุผลที่พนักงานขอหารือ: '+rec.reason
     : 'ผลการพูดคุย: '+(rec.resolution==='redo'?'ขอให้ประเมินใหม่ (ใบถูกส่งกลับให้ผู้ประเมินแก้)':'คงผลเดิม')+'\nบันทึก: '+rec.resolvedNote;
   body += '\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ)';
@@ -9132,7 +9167,15 @@ async function notifyDisputeParties(code,cycle,rec,kind){
   return {total:list.length,emailSent,lineSent,reason};
 }
 function disputeNotifyToast(n){ return n.total ? (n.emailSent||n.lineSent ? ' · แจ้งผู้เกี่ยวข้องแล้ว (อีเมล '+n.emailSent+' · LINE '+n.lineSent+' จาก '+n.total+' คน)' : ' · ยังไม่ได้แจ้งทางอีเมล/LINE ('+(n.reason||'ผู้รับไม่มีอีเมล/LINE')+')') : ''; }
-function openDisputeModal(code,cycle){
+function openDisputeModal(code,cycle,mode){
+  mode=mode||'dispute';
+  document.getElementById('dpMode').value=mode;
+  const ack=mode==='ack';
+  document.getElementById('dpTitle').textContent=ack?'📝 รับทราบพร้อมบันทึกความเห็นต่าง':'❌ ไม่ยอมรับผลการประเมิน / ขอหารือ';
+  document.getElementById('dpSubmitBtn').textContent=ack?'รับทราบและบันทึกความเห็น':'ส่งคำขอหารือ';
+  document.getElementById('dpAckNote').style.display=ack?'':'none';
+  document.getElementById('dpDisputeNote').style.display=ack?'none':'';
+  document.getElementById('dpDatesBox').style.display=ack?'none':'';
   const me=CURRENT_SESSION_USER; if(!me||me[0]!==code){ smlToast('ทำได้เฉพาะเจ้าของผลประเมิน','warn'); return; }
   document.getElementById('dpCode').value=code; document.getElementById('dpCycle').value=cycle;
   document.getElementById('dpReason').value='';
@@ -9144,7 +9187,12 @@ async function submitDispute(){
   const code=document.getElementById('dpCode').value, cycle=document.getElementById('dpCycle').value, me=CURRENT_SESSION_USER;
   if(!me||me[0]!==code){ smlToast('ทำได้เฉพาะเจ้าของผลประเมิน','warn'); return; }
   const d=findCurrentCycleDraft(getDrafts(),code,cycle);
-  if(!d||d[d.length-1]!=='ResultSent'){ smlToast('ขอหารือได้เฉพาะช่วงที่ GM ส่งผลแล้วและยังไม่ได้รับทราบ','warn'); return; }
+  if(!d||d[d.length-1]!=='ResultSent'){ smlToast('ทำได้เฉพาะช่วงที่ GM ส่งผลแล้วและยังไม่ได้รับทราบ','warn'); return; }
+  if(document.getElementById('dpMode').value==='ack'){
+    const why=(document.getElementById('dpReason').value||'').trim();
+    if(why.length<10){ smlToast('กรุณาระบุความเห็นอย่างน้อย 10 ตัวอักษร','warn'); return; }
+    closeM(); await acknowledgeMyResult(code,cycle,why); return;
+  }
   if(hasOpenDispute(code,cycle)){ smlToast('คุณได้ขอหารือไปแล้ว อยู่ระหว่างดำเนินการ','warn'); return; }
   const reason=(document.getElementById('dpReason').value||'').trim();
   if(reason.length<10){ smlToast('กรุณาระบุเหตุผลอย่างน้อย 10 ตัวอักษร','warn'); return; }
@@ -9165,18 +9213,19 @@ async function submitDispute(){
 function openDisputeList(){ renderDisputeList(); openM('mDispList'); }
 function renderDisputeList(){
   const body=document.getElementById('dpListBody'); if(!body) return;
-  const list=disputesForMe(); const isAdm=isAdminOrSysadmin();
+  const list=disputesForMe(true); const isAdm=isAdminOrSysadmin();
   if(!list.length){ body.innerHTML='<div style="text-align:center;color:#94a3b8;padding:20px">ไม่มีรายการข้อโต้แย้งที่รอดำเนินการ</div>'; return; }
   body.innerHTML=list.map(x=>{
     const emp=MASTER_USERS.find(u=>u[0]===x.code); const r=x.rec; const k=escJs(x.code), c=escJs(x.cycle);
-    let act='';
+    let act=''; const od=disputeOverdue(r);
+    if(r.status==='noted'){ return '<div class="dp-card" style="border-color:#fde68a"><h4 style="color:#92400e">'+escH(emp?emp[1]:x.code)+' ('+escH(x.code)+') · รอบ '+escH(x.cycle)+' <span class="dp-st scheduled">รับทราบพร้อมความเห็นต่าง</span></h4><div class="dp-row"><b>ความเห็น:</b> '+escH(r.reason)+'</div><div class="dp-row" style="color:#6b7280">บันทึกเมื่อ '+escH(new Date(r.raisedAt).toLocaleString('th-TH'))+' · ไม่ได้หยุดขั้นตอน</div></div>'; }
     if(r.status==='open'){
       act='<div class="fg" style="margin-top:8px"><label>เลือกวันนัดพูดคุย</label><select id="dpSel_'+escH(x.code)+'">'+r.proposed.map((dt,i)=>'<option value="'+i+'">'+escH(disputeFmtDate(dt))+'</option>').join('')+'</select></div><button class="btn btn-sm btn-p" onclick="confirmDisputeDate(\''+k+'\',\''+c+'\')">✓ ยืนยันวันนัด</button>';
     } else if(r.status==='scheduled'){
       act = isAdm ? '<div class="fg" style="margin-top:8px"><label>ผลการพูดคุย</label><select id="dpOut_'+escH(x.code)+'"><option value="keep">คงผลประเมินเดิม</option><option value="redo">ขอให้ประเมินใหม่ (ส่งกลับให้ผู้ประเมินแก้)</option></select></div><div class="fg"><label>บันทึกสรุป <i>*</i></label><textarea id="dpNote_'+escH(x.code)+'" rows="2"></textarea></div><button class="btn btn-sm btn-ok" onclick="resolveDispute(\''+k+'\',\''+c+'\')">บันทึกผล / ปิดเรื่อง</button>'
         : '<div class="dp-row" style="color:#92400e">รอ HR บันทึกผลหลังพูดคุย</div>';
     }
-    return '<div class="dp-card"><h4>'+escH(emp?emp[1]:x.code)+' ('+escH(x.code)+') · รอบ '+escH(x.cycle)+' <span class="dp-st '+r.status+'">'+(r.status==='open'?'รอนัดหมาย':'นัดแล้ว '+escH(disputeFmtDate(r.scheduledDate)))+'</span></h4>'
+    return '<div class="dp-card"><h4>'+escH(emp?emp[1]:x.code)+' ('+escH(x.code)+') · รอบ '+escH(x.cycle)+' <span class="dp-st '+r.status+'">'+(r.status==='open'?'รอนัดหมาย':'นัดแล้ว '+escH(disputeFmtDate(r.scheduledDate)))+'</span>'+(od?' <span class="dp-st open">⚠️ '+escH(od)+'</span>':'')+'</h4>'
       +'<div class="dp-row"><b>เหตุผล:</b> '+escH(r.reason)+'</div>'
       +'<div class="dp-row"><b>วันที่พนักงานเสนอ:</b> '+r.proposed.map(d=>escH(disputeFmtDate(d))).join(' · ')+'</div>'
       +'<div class="dp-row" style="color:#6b7280">แจ้งเมื่อ '+escH(new Date(r.raisedAt).toLocaleString('th-TH'))+'</div>'+act+'</div>';
@@ -9217,7 +9266,7 @@ async function ms365SyncDisputes(silent=true){
   try{
     const rows=await graphListTableRows('Approvals'); const m=loadDisputes(); let changed=false;
     rows.forEach(r=>{
-      const step=String(r[3]??'').trim(); if(!/^Dispute(Raised|Scheduled|Resolved)$/.test(step)) return;
+      const step=String(r[3]??'').trim(); if(!/^Dispute(Raised|Scheduled|Resolved|Reminded|Noted)$/.test(step)) return;
       const code=String(r[0]??'').trim(), cycle=String(r[2]??'').trim(); const cm=String(r[6]??'');
       const i=cm.indexOf('| DISPUTE:'); if(!code||!cycle||i<0) return;
       let rec; try{ rec=JSON.parse(cm.slice(i+10)); }catch(e){ return; }
@@ -9229,7 +9278,7 @@ async function ms365SyncDisputes(silent=true){
     appendSyncLog('Sync ข้อโต้แย้งผลประเมิน: ตรวจ '+rows.length+' แถว'+(changed?' (มีการอัปเดต)':''),true);
   }catch(e){ appendSyncLog('ms365SyncDisputes: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e),false); }
 }
-async function acknowledgeMyResult(empCode, cycle){
+async function acknowledgeMyResult(empCode, cycle, objection){
   if(hasOpenDispute(empCode,cycle)){ smlToast('คุณขอหารือผลประเมินไว้ — ต้องรอปิดเรื่องก่อนจึงรับทราบได้','warn'); return; }
   const drafts = getDrafts();
   const d = findCurrentCycleDraft(drafts, empCode, cycle);
@@ -9240,7 +9289,7 @@ async function acknowledgeMyResult(empCode, cycle){
      (ซึ่งเกิดฝั่ง Worker ล้วนๆ, เครื่องนี้ไม่มีทางรู้ได้ทันทีอยู่แล้ว) */
   if(typeof setAckChannel==='function') setAckChannel(empCode+'|'+cycle, 'web');
   if(typeof renderMyResult==='function') renderMyResult();
-  if(typeof pushApprovalRecordToExcel==='function') pushApprovalRecordToExcel(empCode, cycle, 'Acknowledged', 'รับทราบผลการประเมินโดยพนักงานเอง (ผ่านเว็บ)');
+  if(typeof pushApprovalRecordToExcel==='function') pushApprovalRecordToExcel(empCode, cycle, 'Acknowledged', 'รับทราบผลการประเมินโดยพนักงานเอง (ผ่านเว็บ)'+(objection?' | มีความเห็นต่าง: '+objection:''));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','รับทราบผลการประเมิน', empCode, (CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||d[1]);
   const cfg = loadMs365Config();
   if(isMs365Configured(cfg)){
@@ -9252,6 +9301,16 @@ async function acknowledgeMyResult(empCode, cycle){
     }
   } else if(typeof appendSyncLog==='function'){
     appendSyncLog('acknowledgeMyResult: ยังไม่ได้ตั้งค่า MS365', false);
+  }
+  if(objection){
+    const rec={status:'noted',reason:objection,proposed:[],raisedAt:new Date().toISOString(),raisedBy:(CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||d[1],scheduledDate:'',scheduledBy:'',scheduledAt:'',resolution:'',resolvedNote:'',resolvedBy:'',resolvedAt:''};
+    const mm=loadDisputes(); mm[empCode+'|'+cycle]=rec; saveDisputes(mm);
+    appendAuditLog('evaluation','รับทราบผลพร้อมความเห็นต่าง',empCode,objection.slice(0,80));
+    await pushDisputeEvent(empCode,cycle,'DisputeNoted',rec);
+    const n=await notifyDisputeParties(empCode,cycle,rec,'noted');
+    smlToast('รับทราบผลการประเมินและบันทึกความเห็นต่างแล้ว'+disputeNotifyToast(n),'ok');
+    if(typeof renderMyResult==='function') renderMyResult();
+    return;
   }
   smlToast('รับทราบผลการประเมินเรียบร้อย','ok');
 }
