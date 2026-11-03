@@ -7376,6 +7376,38 @@ function setEvalToolbarEnabled(enabled){
     btn.title = enabled ? '' : 'ไม่มีสิทธิ์ประเมินตนเองในรอบนี้ — ปุ่มนี้ใช้งานไม่ได้';
   });
 }
+/* #253: ใบที่ถูกตีกลับ (markNeedsReconfirm) แล้วพนักงานเปิดหน้านี้ — คะแนนเดิมยังติ๊กไว้ให้เห็น แต่ปุ่ม
+   "ส่งแบบประเมิน" ถูกล็อกจนกว่าจะกดยืนยันว่าตรวจสอบแล้ว หรือแก้คะแนนอย่างน้อย 1 ข้อ (เหมือนหน้าต่างสอบทาน #133) */
+let _evalReconfirmKey = null;
+function applyEvalReconfirmState(lv, empCode, cycle){
+  _evalReconfirmKey = null;
+  document.getElementById('evalReconfirmNote')?.remove();
+  const btn = document.getElementById('evalBtnSubmit');
+  const key = empCode+'|'+cycle+'|'+lv;
+  const has = getDrafts().some(d=>draftKey(d)===key);
+  if(!has || !needsReconfirm(key)) return;
+  _evalReconfirmKey = key;
+  if(btn){ btn.disabled = true; btn.style.opacity='0.45'; btn.style.cursor='not-allowed'; btn.title='ใบนี้ถูกตีกลับ — ต้องยืนยันหรือแก้คะแนนก่อนส่งใหม่'; }
+  const note = document.createElement('div');
+  note.id = 'evalReconfirmNote';
+  note.className = 'al al-w';
+  note.style.cssText = 'margin-bottom:10px';
+  note.innerHTML = '⚠️ <b>ใบประเมินนี้ถูกตีกลับ</b> — คะแนนที่เห็นคือค่าเดิมก่อนถูกตีกลับ กรุณาตรวจสอบหรือแก้ไขก่อนส่งใหม่ '+
+    '<button class="btn btn-sm btn-ok" style="margin-left:8px" onclick="confirmEvalReconfirm()">✓ ยืนยันว่าตรวจสอบแล้ว</button>';
+  const box = document.getElementById('evalPrevCommentsBox');
+  if(box && box.parentNode) box.parentNode.insertBefore(note, box); else document.getElementById('formArea')?.prepend(note);
+}
+function unlockEvalSubmit(){
+  if(_evalReconfirmKey) clearNeedsReconfirm(_evalReconfirmKey);
+  _evalReconfirmKey = null;
+  document.getElementById('evalReconfirmNote')?.remove();
+  const btn = document.getElementById('evalBtnSubmit');
+  if(btn){ btn.disabled=false; btn.style.opacity=''; btn.style.cursor=''; btn.title=''; }
+}
+function confirmEvalReconfirm(){
+  unlockEvalSubmit();
+  smlToast('ยืนยันแล้ว — สามารถส่งแบบประเมินได้','ok');
+}
 function onEvalCodeGateChange(){
   const code = (document.getElementById('evalCodeGate')?.value || '').trim();
   const note = document.getElementById('evalLevelAssignedNote');
@@ -7433,6 +7465,7 @@ function onEvalCodeGateChange(){
     if(typeof restoreEvalFormFromDraft==='function'){
       const cyc = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
       restoreEvalFormFromDraft(assigned, code, cyc);
+      applyEvalReconfirmState(assigned, code, cyc);
     }
     /* ผู้ใช้ขอ "ดึง comment จากคนประเมินคนก่อนมาด้วย" — เกิดขึ้นได้ที่หน้านี้เหมือนกันกรณีใบถูกตีกลับ
        (เช่น หัวหน้าแผนก "ตีกลับให้แก้ไข" พร้อมความเห็น) พนักงานเปิดมาแก้ควรเห็นว่าหัวหน้าเขียนอะไรไว้ */
@@ -7561,6 +7594,7 @@ function buildRow(key, name, desc, w) {
 }
 
 function setScore(key, grade, w, btn) {
+  if(!_evalRestoring && _evalReconfirmKey) unlockEvalSubmit(); /* #253: แก้คะแนนจริง = ตรวจสอบแล้ว */
   evalScores[key] = SCORES[w][grade];
   const row = document.getElementById('row-'+key);
   if(row) {
@@ -7592,7 +7626,12 @@ function setScore(key, grade, w, btn) {
    ไม่ได้เก็บว่าเลือกเกรดไหน จึงต้อง reverse-lookup จาก SCORES[w] หาเกรดที่ให้คะแนนตรงกับค่าที่บันทึกไว้
    แล้วค้นปุ่มจริงในแถวนั้นมาเรียก setScore() เหมือนผู้ใช้กดเองอีกครั้ง (ไม่ได้ set evalScores ตรงๆ เพื่อให้
    สถานะปุ่ม/สี/recalc() อัปเดตถูกต้องเหมือนกดจริงทุกจุด) */
+let _evalRestoring = false;
 function restoreEvalFormFromDraft(lv, empCode, cycle){
+  _evalRestoring = true;
+  try{ _restoreEvalFormFromDraftInner(lv, empCode, cycle); } finally { _evalRestoring = false; }
+}
+function _restoreEvalFormFromDraftInner(lv, empCode, cycle){
   if(!lv || !empCode || !cycle || typeof getDrafts!=='function') return;
   const draft = getDrafts().find(d => d[0]===empCode && d[2]===cycle && d[3]===lv);
   if(!draft) return;
@@ -9109,6 +9148,7 @@ async function saveDraftEval() {
    "ตั้งค่ารอบประเมิน" (getCycleSetupData().end) — ถ้ายังไม่เคยตั้งวันที่สิ้นสุดไว้เลย แสดง "—" อย่างตรง
    ไปตรงมา (CLAUDE.md #14) ไม่ใช่เดาวันที่ขึ้นมาเอง */
 function openSubmitConfirmModal(){
+  if(_evalReconfirmKey){ smlToast('ใบนี้ถูกตีกลับ — กดยืนยันว่าตรวจสอบแล้ว หรือแก้คะแนนก่อนส่งใหม่','warn'); return; }
   if(!currentLevel){ smlToast('กรุณาเลือกระดับตำแหน่งก่อน','warn'); return; }
   const summary = (typeof calcCurrentEvalSummary==='function') ? calcCurrentEvalSummary() : null;
   const xEl = document.getElementById('mSubmitX');
@@ -9133,6 +9173,7 @@ function openSubmitConfirmModal(){
 }
 
 async function submitEvalOnline(){
+  if(_evalReconfirmKey){ smlToast('ใบนี้ถูกตีกลับ — ต้องยืนยันหรือแก้คะแนนก่อนส่งใหม่','warn'); return; }
   const result = await saveEvaluationToMs365('Submitted');
   if(result && result.blocked) return; // ไม่ปิด modal ถ้าถูกบล็อก ให้เห็น toast เตือนชัดเจนก่อนลองใหม่
   closeM();

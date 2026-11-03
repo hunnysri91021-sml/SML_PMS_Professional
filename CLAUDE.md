@@ -8897,6 +8897,8 @@ touches employee/attendance/evaluation data.
 
 252. **`deleteIdp()` ลบแถวใน Excel ตาราง IDP แล้ว (เดิมลบเฉพาะเครื่องนี้, #39).** ใช้ `graphDeleteTableRows('IDP',0,code)` (#209) แบบเดียวกับ `deleteGoalKpi`: confirm บอกว่าลบทั้งเว็บและ Excel, log Sync Log, ถ้า Excel ล้มเหลวจะ toast ตามจริงว่า IDP จะกลับมาตอน sync. ต้องใช้ Worker `/rows/delete` ที่ redeploy แล้ว. ทดสอบ: `tests/idp-delete.test.js`.
 
+253. **ตีกลับแล้วต้องยืนยัน/แก้คะแนนก่อนส่งใหม่ — ฝั่งหน้า "ประเมินตนเอง" (ปิดช่องว่างที่ #133 ระบุไว้).** ใช้ flag `markNeedsReconfirm` ชุดเดียวกับหน้าต่างสอบทาน (คีย์ `empCode|cycle|level`; bulk reject ทั้ง 3 ตัวตั้งไว้แล้ว). `onEvalCodeGateChange()` เรียก `applyEvalReconfirmState()` หลัง `restoreEvalFormFromDraft()`: ถ้าใบมี flag → คะแนนเดิมยังติ๊กให้เห็น, ปุ่ม `evalBtnSubmit` ถูกล็อก + banner "ถูกตีกลับ" พร้อมปุ่ม "✓ ยืนยันว่าตรวจสอบแล้ว". ปลดล็อกด้วย `confirmEvalReconfirm()` หรือแก้คะแนนจริง (`setScore()` ที่ไม่ได้มาจากการ restore — แยกด้วยตัวแปร `_evalRestoring`, ไม่ใช่พารามิเตอร์เพราะ onclick ในแถวเรียก setScore ตรงๆ). `openSubmitConfirmModal()` และ `submitEvalOnline()` เช็ก `_evalReconfirmKey` ซ้ำเป็นชั้นป้องกันที่สอง. ทดสอบ: `tests/self-eval-reconfirm.test.js` (หมายเหตุ: `isEligibleForSelfEval` ตรวจที่ตัวพนักงานเป้าหมาย ไม่ใช่ผู้ดู — เทสต์ต้องตั้ง EVAL_ELIGIBILITY เป็น mode 'all' ก่อน).
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
