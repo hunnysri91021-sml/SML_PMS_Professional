@@ -207,6 +207,10 @@ export default {
         const table = url.searchParams.get('table');
         if (!table) return json({ error: 'missing table' }, 400, cors);
         let rows = await listRows(token, driveId, itemId, table);
+        if (!isAdminAuth(auth)) {
+          const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
+          rows = filterRowsByScope(table, rows, scope, auth);
+        }
         /* #260: PinHash (คอลัมน์ 1 ของ EmployeeSettings) ไม่ส่งให้ผู้ใช้ที่ไม่ใช่ Admin — กัน hash ของ PIN ทุกคนรั่ว */
         if (table === 'EmployeeSettings' && !isAdminAuth(auth)) rows = rows.map((r) => { const c = r.slice(); c[1] = ''; return c; });
         return json({ rows }, 200, cors);
@@ -216,6 +220,10 @@ export default {
         const { table, values } = await request.json();
         if (!table || !values) return json({ error: 'missing table/values' }, 400, cors);
         if (!canWrite(auth, table, 'add')) return json({ error: 'forbidden: ไม่มีสิทธิ์เขียนตาราง ' + table }, 403, cors);
+        if (!isAdminAuth(auth) && table in ROW_SCOPE_COL) {
+          const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
+          if (!writeKeyOk(table, values[0], scope)) return json({ error: 'forbidden: เขียนได้เฉพาะข้อมูลของพนักงานในสังกัดตน' }, 403, cors);
+        }
         await addRow(token, driveId, itemId, table, values);
         return json({ ok: true }, 200, cors);
       }
@@ -226,6 +234,10 @@ export default {
           return json({ error: 'missing table/keyColIndex/keyValue/values' }, 400, cors);
         }
         if (!canWrite(auth, table, 'upsert')) return json({ error: 'forbidden: ไม่มีสิทธิ์เขียนตาราง ' + table }, 403, cors);
+        if (!isAdminAuth(auth) && table in ROW_SCOPE_COL) {
+          const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
+          if (!writeKeyOk(table, values[0], scope) || !writeKeyOk(table, keyValue, scope)) return json({ error: 'forbidden: เขียนได้เฉพาะข้อมูลของพนักงานในสังกัดตน' }, 403, cors);
+        }
         const result = await upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values);
         return json({ ok: true, result }, 200, cors);
       }
@@ -255,6 +267,10 @@ export default {
           return json({ error: 'missing table/keyColIndex/keyValue (คีย์ต้องไม่ว่าง)' }, 400, cors);
         }
         if (!canWrite(auth, table, 'delete')) return json({ error: 'forbidden: ไม่มีสิทธิ์ลบตาราง ' + table }, 403, cors);
+        if (!isAdminAuth(auth) && table in ROW_SCOPE_COL) {
+          const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
+          if (!writeKeyOk(table, keyValue, scope)) return json({ error: 'forbidden: ลบได้เฉพาะข้อมูลของพนักงานในสังกัดตน' }, 403, cors);
+        }
         const deleted = await deleteRows(token, driveId, itemId, table, keyColIndex, keyValue);
         return json({ ok: true, deleted }, 200, cors);
       }
@@ -887,7 +903,73 @@ function normalizeRole(raw) {
   const r = String(raw || '').trim().toLowerCase();
   if (r.includes('sysadmin') || r.includes('super')) return 'sysadmin';
   if (r.includes('admin')) return 'admin';
+  if (r.includes('exec')) return 'exec';
+  if (r === 'gm' || r.includes('general manager')) return 'gm';
+  if (r.includes('manager') || r === 'l2') return 'l2';
+  if (r.includes('leader') || r === 'l1') return 'l1';
+  if (r.includes('unit')) return 'unit';
   return r || 'emp';
+}
+
+/* ===== #262 (รอบ 2): กรอง "รายแถว" ตามสังกัดของผู้ล็อกอิน =====
+   สำเนาตรรกะ getMyScopedEmpCodes() ของเว็บ (SML_PMS_v14.html) — ต้องแก้ให้ตรงกันทั้งสองไฟล์
+   คอลัมน์ในตาราง Employees (ลำดับ EXCEL_EMPLOYEE_COLS): l1=11, l2=12, gm=13, approver=14
+   ซึ่งตรงกับ MASTER_USERS: u[9]=l1, u[10]=l2, u[19]=gm (ผู้ตรวจ MGR L3), u[11]=approver (ผู้อนุมัติ GM L4)
+   คืน null = เห็นได้ทั้งหมด (admin/sysadmin/exec) / Set ของรหัสพนักงานที่เห็นได้ (รวมตัวเอง) */
+const EMPC = { id: 0, name: 1, role: 2, l1: 11, l2: 12, gm: 13, approver: 14, status: 15 };
+function computeScope(emps, auth) {
+  const myCode = String(auth.sub || '').trim();
+  const role = auth.role;
+  if (role === 'admin' || role === 'sysadmin' || role === 'exec') return null;
+  const t = (v) => String(v == null ? '' : v).trim();
+  const myName = t(auth.name);
+  const rows = emps.map((r) => ({ code: t(r[EMPC.id]), name: t(r[EMPC.name]), role: normalizeRole(r[EMPC.role]),
+    l1: t(r[EMPC.l1]), l2: t(r[EMPC.l2]), gm: t(r[EMPC.gm]), ap: t(r[EMPC.approver]) }));
+  const set = new Set([myCode]);
+  const addGm = () => rows.forEach((u) => { if (myName && u.ap === myName) set.add(u.code); });
+  if (role === 'unit') {
+    rows.forEach((u) => { if (myName && u.l1 === myName) set.add(u.code); });
+    addGm();
+  } else if (role === 'l1') {
+    const direct = rows.filter((u) => myName && u.l1 === myName);
+    direct.forEach((u) => set.add(u.code));
+    rows.forEach((u) => { if (myName && u.l2 === myName) set.add(u.code); });
+    direct.filter((u) => u.role === 'unit').forEach((h) => rows.forEach((u) => { if (u.l1 === h.name) set.add(u.code); }));
+    addGm();
+  } else if (role === 'l2') {
+    rows.forEach((u) => { if (myName && u.gm === myName) set.add(u.code); });
+    addGm();
+  } else if (role === 'gm') {
+    rows.forEach((u) => { if (myName && u.ap === myName) set.add(u.code); });
+  }
+  /* emp และบทบาทที่ไม่รู้จัก = เห็นแค่ของตัวเอง (เข้มกว่าเว็บซึ่งปล่อย emp ไว้ — ข้อมูลรายคนไม่จำเป็นต้องเห็นของคนอื่น) */
+  return set;
+}
+/* ตาราง → คอลัมน์รหัสพนักงานที่ใช้กรองรายแถว (ตารางที่ไม่อยู่ในรายการ = ข้อมูลตั้งค่าทั่วไป เห็นได้ทุกคน) */
+const ROW_SCOPE_COL = { Appraisals: 0, Attendance: 0, Approvals: 0, IDP: 0 };
+const KPI_EMP_COL = 10;
+let scopeCache = { at: 0, emps: null };
+async function loadEmpsCached(token, driveId, itemId) {
+  if (scopeCache.emps && Date.now() - scopeCache.at < 60000) return scopeCache.emps;
+  const emps = await listRows(token, driveId, itemId, 'Employees');
+  scopeCache = { at: Date.now(), emps };
+  return emps;
+}
+function filterRowsByScope(table, rows, scope, auth) {
+  if (!scope && isAdminAuth(auth) === false && auth.role !== 'exec') scope = new Set([String(auth.sub || '').trim()]);
+  if (!scope) return rows;
+  const inScope = (v) => scope.has(String(v == null ? '' : v).trim());
+  if (table === 'AuditLog') return [];
+  if (table === 'KPI_Goals') return rows.filter((r) => !String(r[KPI_EMP_COL] == null ? '' : r[KPI_EMP_COL]).trim() || inScope(r[KPI_EMP_COL]));
+  if (table in ROW_SCOPE_COL) return rows.filter((r) => inScope(r[ROW_SCOPE_COL[table]]));
+  return rows;
+}
+/* เขียนได้เฉพาะแถวของคนที่อยู่ใน scope ของตน (key = รหัสพนักงาน) */
+function writeKeyOk(table, keyVal, scope) {
+  if (!scope) return true;
+  if (!(table in ROW_SCOPE_COL)) return true;
+  const k = Array.isArray(keyVal) ? keyVal[0] : keyVal;
+  return scope.has(String(k == null ? '' : k).trim());
 }
 function b64urlEncode(bytes) {
   let s = '';
