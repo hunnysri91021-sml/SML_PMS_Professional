@@ -5007,6 +5007,35 @@ function registerLoginFail(code){
   return r;
 }
 function clearLoginFails(code){ const all=_loginFails(); if(all[code]){ delete all[code]; try{ localStorage.setItem(LOGIN_FAIL_KEY,JSON.stringify(all)); }catch(e){} } }
+/* #263: ลดเวลา login — เดิม await sync ~20 ตารางเรียงทีละตัว
+   ขั้นที่ต้องรอ: Employees ก่อน (มันแทนที่ MASTER_USERS ทั้งก้อน แล้วตัวอื่นอ่านชื่อ/สังกัดจากมัน)
+   แล้วที่เหลือที่จำเป็นต่อหน้าแรก (PIN/ระดับ, เวลาทำงาน, ใบประเมิน, น้ำหนักแบบฟอร์ม+สถานะเปิด/ปิดระบบ, รอบ) ขนานกัน
+   ตารางที่ไม่จำเป็นต่อหน้าแรก (KPI/IDP/AuditLog/OrgMaster/ลายเซ็น/ความเห็น/ข้อโต้แย้ง) โหลดตามหลังโดยไม่บล็อก */
+async function _loginSyncCall(name, ...args){
+  if(typeof window[name] === 'function'){ try{ await window[name](...args); }catch(e){} }
+}
+async function runLoginSyncsCritical(){
+  await _loginSyncCall('ms365SyncEmployees', true);
+  await Promise.all([
+    _loginSyncCall('ms365SyncEmployeeSettingsSilent'),
+    _loginSyncCall('ms365SyncAttendance', true),
+    _loginSyncCall('ms365SyncAppraisals', true),
+    _loginSyncCall('ms365SyncFormWeights', true),
+    _loginSyncCall('ms365SyncCycleSetup', true),
+    _loginSyncCall('ms365SyncCyclesList', true)
+  ]);
+}
+function runLoginSyncsBackground(){
+  return Promise.all([
+    'ms365SyncKpiGoals','ms365SyncIdp','ms365SyncAuditLog','ms365SyncOrgMaster','ms365SyncApprovalSignatures',
+    'ms365SyncStageSigners','ms365SyncDisputes','ms365SyncHrNotes','ms365SyncEvalComments','ms365SyncAckChannel'
+  ].map(n=>_loginSyncCall(n, true))).then(()=>{
+    try{ if(typeof renderWorkflowPages==='function') renderWorkflowPages(); }catch(e){}
+    try{ if(typeof renderNavBadges==='function') renderNavBadges(); }catch(e){}
+    try{ if(typeof renderCycleStats==='function') renderCycleStats(); }catch(e){}
+  });
+}
+
 async function doLogin(){
   const codeEl = document.getElementById('loginCode');
   const pinEl = document.getElementById('loginPin');
@@ -5041,58 +5070,8 @@ async function doLogin(){
      (ซิงก์แค่ PIN/evalLevel) ทำให้ field อื่นอย่าง Grade/สังกัด ที่เพิ่งบันทึกไปยัง Excel ดูเหมือน
      "หาย" ทุกครั้งที่เปิดเว็บใหม่ จนกว่าจะมีคนกดปุ่ม Sync เองที่หน้า MS365 — ตอนนี้ Worker URL/Key
      ฝังเป็นค่าเริ่มต้นแล้ว (CLAUDE.md #31) จึง sync แบบเงียบได้ทุกเครื่องโดยไม่ต้อง login Microsoft */
-  if(typeof ms365SyncEmployees === 'function'){
-    try{ await ms365SyncEmployees(true); }catch(e){}
-  }
-  if(typeof ms365SyncEmployeeSettingsSilent === 'function'){
-    try{ await ms365SyncEmployeeSettingsSilent(); }catch(e){}
-  }
-  /* เวลาทำงาน/วันลา (ตาราง Attendance) เป็นอีกชีตที่ HR แก้ผ่าน Excel ตรงๆ บ่อย — เดิม sync ได้
-     แค่กดปุ่มเองหรือรอ interval ตอนอยู่หน้า MS365 เท่านั้น ซิงก์เงียบตรงนี้ด้วยเพื่อให้คะแนน Z /
-     รายงานวันลาไม่ค้างข้อมูลเก่าเหมือนที่เคยเกิดกับ Grade (ดู CLAUDE.md #32) */
-  if(typeof ms365SyncAttendance === 'function'){
-    try{ await ms365SyncAttendance(true); }catch(e){}
-  }
-  if(typeof ms365SyncKpiGoals === 'function'){
-    try{ await ms365SyncKpiGoals(true); }catch(e){}
-  }
-  if(typeof ms365SyncCycleSetup === 'function'){
-    try{ await ms365SyncCycleSetup(true); }catch(e){}
-  }
-  if(typeof ms365SyncCyclesList === 'function'){
-    try{ await ms365SyncCyclesList(true); }catch(e){}
-  }
-  if(typeof ms365SyncFormWeights === 'function'){
-    try{ await ms365SyncFormWeights(true); }catch(e){}
-  }
-  if(typeof ms365SyncIdp === 'function'){
-    try{ await ms365SyncIdp(true); }catch(e){}
-  }
-  if(typeof ms365SyncAuditLog === 'function'){
-    try{ await ms365SyncAuditLog(true); }catch(e){}
-  }
-  if(typeof ms365SyncOrgMaster === 'function'){
-    try{ await ms365SyncOrgMaster(true); }catch(e){}
-  }
-  if(typeof ms365SyncAppraisals === 'function'){
-    try{ await ms365SyncAppraisals(true); }catch(e){}
-  }
-  if(typeof ms365SyncApprovalSignatures === 'function'){
-    try{ await ms365SyncApprovalSignatures(true); }catch(e){}
-  }
-  if(typeof ms365SyncStageSigners === 'function'){
-    try{ await ms365SyncStageSigners(true); }catch(e){}
-  }
-  if(typeof ms365SyncDisputes === 'function'){ try{ await ms365SyncDisputes(true); }catch(e){} }
-  if(typeof ms365SyncHrNotes === 'function'){
-    try{ await ms365SyncHrNotes(true); }catch(e){}
-  }
-  if(typeof ms365SyncEvalComments === 'function'){
-    try{ await ms365SyncEvalComments(true); }catch(e){}
-  }
-  if(typeof ms365SyncAckChannel === 'function'){
-    try{ await ms365SyncAckChannel(true); }catch(e){}
-  }
+  /* #263: ดึงเฉพาะข้อมูลที่ต้องใช้ก่อนเข้าหน้าแรกให้เสร็จ (ขนานกัน) ส่วนที่เหลือโหลดตามหลัง */
+  await runLoginSyncsCritical();
   const u = MASTER_USERS.find(x => x[0] === code);
   if(!u || u[12] === 'resigned'){
     setLoginLoading(false);
@@ -5128,6 +5107,7 @@ async function doLogin(){
   applySession(u);
   setLoginLoading(false);
   if(typeof appendAuditLog === 'function') appendAuditLog('auth', 'เข้าสู่ระบบ', u[0], u[1]);
+  runLoginSyncsBackground();
 }
 
 function doLogout(){
@@ -14907,25 +14887,10 @@ document.addEventListener('input',e=>{
       /* เพจนี้รีโหลดแล้ว MASTER_USERS กลับไปเป็นข้อมูลตัวอย่างที่ฝังในไฟล์เสมอ (เหมือน doLogin())
          ต้อง sync ซ้ำแบบเงียบทุกครั้งที่มี session ค้างอยู่แล้วโหลดหน้าใหม่ ไม่ใช่แค่ตอน login ครั้งแรก
          มิฉะนั้น Grade/evalLevel ที่เพิ่งบันทึกไปจะดูเหมือน "หาย" ทุกครั้งที่รีเฟรชหน้า */
-      if(typeof ms365SyncEmployees === 'function'){ try{ await ms365SyncEmployees(true); }catch(e){} }
-      if(typeof ms365SyncEmployeeSettingsSilent === 'function'){ try{ await ms365SyncEmployeeSettingsSilent(); }catch(e){} }
-      if(typeof ms365SyncAttendance === 'function'){ try{ await ms365SyncAttendance(true); }catch(e){} }
-      if(typeof ms365SyncKpiGoals === 'function'){ try{ await ms365SyncKpiGoals(true); }catch(e){} }
-      if(typeof ms365SyncCycleSetup === 'function'){ try{ await ms365SyncCycleSetup(true); }catch(e){} }
-      if(typeof ms365SyncCyclesList === 'function'){ try{ await ms365SyncCyclesList(true); }catch(e){} }
-      if(typeof ms365SyncFormWeights === 'function'){ try{ await ms365SyncFormWeights(true); }catch(e){} }
-      if(typeof ms365SyncIdp === 'function'){ try{ await ms365SyncIdp(true); }catch(e){} }
-      if(typeof ms365SyncApprovalSignatures === 'function'){ try{ await ms365SyncApprovalSignatures(true); }catch(e){} }
-      if(typeof ms365SyncStageSigners === 'function'){ try{ await ms365SyncStageSigners(true); }catch(e){} }
-      if(typeof ms365SyncDisputes === 'function'){ try{ await ms365SyncDisputes(true); }catch(e){} }
-  if(typeof ms365SyncHrNotes === 'function'){ try{ await ms365SyncHrNotes(true); }catch(e){} }
-      if(typeof ms365SyncEvalComments === 'function'){ try{ await ms365SyncEvalComments(true); }catch(e){} }
-      if(typeof ms365SyncAckChannel === 'function'){ try{ await ms365SyncAckChannel(true); }catch(e){} }
-      if(typeof ms365SyncAuditLog === 'function'){ try{ await ms365SyncAuditLog(true); }catch(e){} }
-      if(typeof ms365SyncOrgMaster === 'function'){ try{ await ms365SyncOrgMaster(true); }catch(e){} }
-      if(typeof ms365SyncAppraisals === 'function'){ try{ await ms365SyncAppraisals(true); }catch(e){} }
+      await runLoginSyncsCritical();
       const fresh = MASTER_USERS.find(x => x[0] === s.code);
       if(fresh) applySession(fresh);
+      runLoginSyncsBackground();
     }catch(e){
     } finally {
       if(typeof setLoginLoading === 'function') setLoginLoading(false);
