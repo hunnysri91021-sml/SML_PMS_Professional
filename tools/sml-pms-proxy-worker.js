@@ -201,12 +201,30 @@ export default {
         return json({ ok: true }, 200, cors);
       }
 
-      const { driveId, itemId } = await resolveSite(env, token);
+      const { driveId, itemId, siteId } = await resolveSite(env, token);
+
+      /* #264: ตั้งค่า/ย้าย list (Admin เท่านั้น) — ไม่ขึ้นกับ LIST_TABLES เพื่อให้ย้ายข้อมูลได้ก่อนสลับใช้งาน */
+      if (url.pathname === '/admin/list-setup' && request.method === 'POST') {
+        const { table } = await request.json();
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
+        if (!(table in LIST_SCHEMAS)) return json({ error: 'ตารางนี้ยังไม่รองรับการย้ายไป List' }, 400, cors);
+        const r = await ensureList(token, siteId, table);
+        return json({ ok: true, list: r }, 200, cors);
+      }
+      if (url.pathname === '/admin/list-migrate' && request.method === 'POST') {
+        const { table, offset } = await request.json();
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
+        if (!(table in LIST_SCHEMAS)) return json({ error: 'ตารางนี้ยังไม่รองรับการย้ายไป List' }, 400, cors);
+        const r = await migrateTableToList(token, driveId, itemId, siteId, table, parseInt(offset, 10) || 0, 200);
+        return json({ ok: true, ...r }, 200, cors);
+      }
 
       if (url.pathname === '/rows' && request.method === 'GET') {
         const table = url.searchParams.get('table');
         if (!table) return json({ error: 'missing table' }, 400, cors);
-        let rows = await listRows(token, driveId, itemId, table);
+        let rows = isListBacked(env, table)
+          ? await listItemRows(token, siteId, table, url.searchParams.get('limit'))
+          : await listRows(token, driveId, itemId, table);
         if (!isAdminAuth(auth)) {
           const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
           rows = filterRowsByScope(table, rows, scope, auth);
@@ -224,7 +242,8 @@ export default {
           const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
           if (!writeKeyOk(table, values[0], scope)) return json({ error: 'forbidden: เขียนได้เฉพาะข้อมูลของพนักงานในสังกัดตน' }, 403, cors);
         }
-        await addRow(token, driveId, itemId, table, values);
+        if (isListBacked(env, table)) await addListItem(token, siteId, table, values);
+        else await addRow(token, driveId, itemId, table, values);
         return json({ ok: true }, 200, cors);
       }
 
@@ -233,6 +252,7 @@ export default {
         if (!table || keyColIndex === undefined || keyValue === undefined || !values) {
           return json({ error: 'missing table/keyColIndex/keyValue/values' }, 400, cors);
         }
+        if (isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
         if (!canWrite(auth, table, 'upsert')) return json({ error: 'forbidden: ไม่มีสิทธิ์เขียนตาราง ' + table }, 403, cors);
         if (!isAdminAuth(auth) && table in ROW_SCOPE_COL) {
           const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
@@ -252,6 +272,7 @@ export default {
         if (!table || keyColIndex === undefined || keyValue === undefined || !values) {
           return json({ error: 'missing table/keyColIndex/keyValue/values' }, 400, cors);
         }
+        if (isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
         if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
         const result = await upsertRowPartial(token, driveId, itemId, table, keyColIndex, keyValue, values, protectedCols || []);
         return json({ ok: true, result }, 200, cors);
@@ -266,6 +287,7 @@ export default {
         if (!table || keyColIndex === undefined || keyValue === undefined || keys.some((k) => String(k ?? '').trim() === '')) {
           return json({ error: 'missing table/keyColIndex/keyValue (คีย์ต้องไม่ว่าง)' }, 400, cors);
         }
+        if (isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
         if (!canWrite(auth, table, 'delete')) return json({ error: 'forbidden: ไม่มีสิทธิ์ลบตาราง ' + table }, 403, cors);
         if (!isAdminAuth(auth) && table in ROW_SCOPE_COL) {
           const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
@@ -284,6 +306,7 @@ export default {
         if (!table || !Array.isArray(keyCols) || !keyCols.length) {
           return json({ error: 'missing table/keyCols' }, 400, cors);
         }
+        if (isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
         if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
         const result = await dedupeRows(token, driveId, itemId, table, keyCols, !!dryRun);
         return json({ ok: true, ...result }, 200, cors);
@@ -346,7 +369,7 @@ async function resolveSite(env, token) {
   } catch (e) {
     throw new Error(`เจอ site/drive แล้ว แต่หาไฟล์ไม่เจอ (FILE_PATH="${env.FILE_PATH}"): ${e.message}`);
   }
-  cachedSite = { driveId: drive.id, itemId: item.id };
+  cachedSite = { driveId: drive.id, itemId: item.id, siteId: site.id };
   return cachedSite;
 }
 
@@ -721,6 +744,87 @@ async function handleLineWebhook(request, env, ctx) {
 
 // #159: ตารางที่มีแถวจำนวนมาก Graph อาจแบ่งหน้าด้วย @odata.nextLink — ต้องวนอ่านจนครบทุกหน้า
 // ไม่ใช่แค่หน้าแรก มิฉะนั้น sync จะดึงข้อมูลที่ประเมินไปแล้วมาได้ไม่ครบ (เฉพาะกลุ่มแรกของตาราง)
+
+/* ===== #264: ตารางที่ย้ายไปเก็บเป็น SharePoint List แทน Excel (เริ่มที่ AuditLog) =====
+   เปิดใช้ด้วย env LIST_TABLES="AuditLog" (คั่นด้วยจุลภาค) — ถ้าไม่ตั้ง ทุกอย่างทำงานผ่าน Excel เหมือนเดิม
+   สัญญา API กับเว็บ (/rows, /rows/add) ไม่เปลี่ยน: Worker แปลง list item <-> array ตามลำดับคอลัมน์เดิม
+   List ใช้คอลัมน์ข้อความหลายบรรทัดชื่อ F0..F{n-1} (n จาก LIST_SCHEMAS) ชื่อ list = ชื่อตาราง */
+const LIST_SCHEMAS = { AuditLog: 7 };
+function isListBacked(env, table) {
+  if (!(table in LIST_SCHEMAS)) return false;
+  return String(env.LIST_TABLES || '').split(',').map((x) => x.trim()).includes(table);
+}
+function listFieldNames(table) { return Array.from({ length: LIST_SCHEMAS[table] }, (_, i) => 'F' + i); }
+function listBase(siteId, table) {
+  return `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${encodeURIComponent(table)}`;
+}
+async function listItemRows(token, siteId, table, limit) {
+  const names = listFieldNames(table);
+  let url = `${listBase(siteId, table)}/items?$expand=${encodeURIComponent('fields($select=' + names.join(',') + ')')}&$top=999`;
+  let rows = [];
+  let guard = 0;
+  while (url && guard < 200) {
+    const data = await graphGet(token, url);
+    rows = rows.concat((data.value || []).map((it) => names.map((n) => String((it.fields && it.fields[n]) ?? ''))));
+    url = data['@odata.nextLink'] || null;
+    guard++;
+  }
+  const lim = parseInt(limit, 10);
+  return lim > 0 && rows.length > lim ? rows.slice(rows.length - lim) : rows;
+}
+function listFieldsFromValues(table, values) {
+  const f = {};
+  listFieldNames(table).forEach((n, i) => { f[n] = String(values[i] ?? ''); });
+  return f;
+}
+async function addListItem(token, siteId, table, values) {
+  return graphSend(token, `${listBase(siteId, table)}/items`, 'POST', { fields: listFieldsFromValues(table, values) });
+}
+async function countListItems(token, siteId, table) {
+  let url = `${listBase(siteId, table)}/items?$select=id&$top=999`;
+  let n = 0; let guard = 0;
+  while (url && guard < 400) {
+    const data = await graphGet(token, url);
+    n += (data.value || []).length;
+    url = data['@odata.nextLink'] || null;
+    guard++;
+  }
+  return n;
+}
+/* สร้าง list ถ้ายังไม่มี (ต้องมีสิทธิ์สร้าง list บน site — ถ้าไม่พอ คืนข้อความจาก Graph ให้สร้างมือ) */
+async function ensureList(token, siteId, table) {
+  try {
+    await graphGet(token, listBase(siteId, table));
+    return 'exists';
+  } catch (e) { /* ยังไม่มี → สร้าง */ }
+  await graphSend(token, `https://graph.microsoft.com/v1.0/sites/${siteId}/lists`, 'POST', {
+    displayName: table,
+    columns: listFieldNames(table).map((n) => ({ name: n, text: { allowMultipleLines: true } })),
+    list: { template: 'genericList' },
+  });
+  return 'created';
+}
+/* ย้ายข้อมูลจาก Excel เข้า list ทีละก้อน (ทำซ้ำได้: เริ่มต่อจากจำนวนที่ย้ายไปแล้ว — ใช้ได้เพราะ AuditLog เป็น append-only) */
+async function migrateTableToList(token, driveId, itemId, siteId, table, offset, chunk) {
+  const rows = await listRows(token, driveId, itemId, table);
+  let start = offset;
+  if (start === 0) start = await countListItems(token, siteId, table);
+  const part = rows.slice(start, start + chunk);
+  for (let i = 0; i < part.length; i += 20) {
+    const batch = part.slice(i, i + 20).map((vals, j) => ({
+      id: String(j + 1), method: 'POST',
+      url: `/sites/${siteId}/lists/${encodeURIComponent(table)}/items`,
+      headers: { 'Content-Type': 'application/json' },
+      body: { fields: listFieldsFromValues(table, vals) },
+    }));
+    const res = await graphSend(token, 'https://graph.microsoft.com/v1.0/$batch', 'POST', { requests: batch });
+    const bad = (res.responses || []).filter((r) => r.status >= 300);
+    if (bad.length) throw new Error('ย้ายไม่สำเร็จ ' + bad.length + ' แถว: ' + JSON.stringify((bad[0].body && bad[0].body.error && bad[0].body.error.message) || bad[0].status));
+  }
+  const next = start + part.length;
+  return { total: rows.length, start, migrated: part.length, next, done: next >= rows.length };
+}
+
 async function listRows(token, driveId, itemId, table) {
   let url = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
   let rows = [];

@@ -2864,6 +2864,7 @@ img,svg,canvas{max-width:100%}
             <div style="font-size:12px;color:#475569;margin-bottom:10px">Pending: <b id="appraisalPending">0 รายการ</b></div>
             <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAppraisals()">📤 Push ผลประเมิน → Excel</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ลบแถวซ้ำเก่า (รหัส+รอบ+ระดับเดียวกัน) เก็บแถวสถานะล่าสุด — Admin/HR เท่านั้น" onclick="ms365DedupeAppraisals()">🧹 ลบแถวซ้ำเก่าใน Appraisals</button>
+            <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Audit Log จาก Excel ไปเก็บเป็น SharePoint List (เร็วกว่า) — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateAuditLogToList()">🚚 ย้าย Audit Log ไป SharePoint List</button>
             <div id="pendingListArea" style="margin-top:10px;max-height:180px;overflow:auto"></div>
           </div>
         </div>
@@ -8150,10 +8151,11 @@ async function workerFetch(cfg, path, options={}){
    ทำให้ sync ดึงมาได้เฉพาะแถวกลุ่มแรกของตาราง (เช่น Sync Log ขึ้น "10 แถว" ทั้งที่ตารางจริงมีมากกว่า
    นั้น) ข้อมูลที่ประเมินไปแล้วของคนที่ไม่ได้อยู่ในหน้าแรกจึงไม่ถูกดึงมาที่เว็บเลย ต้องวนตาม
    @odata.nextLink จนกว่าจะไม่มีหน้าต่อไปแล้วค่อยคืนค่าทั้งหมด */
-async function graphListTableRows(tableName){
+async function graphListTableRows(tableName, limit){
   const cfg = loadMs365Config();
   if(isWorkerConfigured(cfg)){
-    const data = await workerFetch(cfg, '/rows?table=' + encodeURIComponent(tableName));
+    /* limit: ใช้เฉพาะตารางที่ Worker เก็บเป็น SharePoint List (#264) — ได้ N แถวล่าสุด; ตาราง Excel ปกติ Worker เมินพารามิเตอร์นี้ */
+    const data = await workerFetch(cfg, '/rows?table=' + encodeURIComponent(tableName) + (limit ? '&limit=' + encodeURIComponent(limit) : ''));
     return data.rows || [];
   }
   const { driveId, itemId } = await resolveMs365Site();
@@ -8300,6 +8302,32 @@ async function graphDedupeTableRows(tableName, keyCols, dryRun){
   if(!dryRun){ for(const idx of plan.toDelete){ await graphFetch(base + '/itemAt(index=' + idx + ')', { method:'DELETE' }); } }
   return { totalRows: rows.length, dupGroups: plan.dupGroups, toDelete: plan.toDelete.length, deleted: dryRun ? 0 : plan.toDelete.length, dryRun: !!dryRun };
 }
+/* #264: ปุ่ม Admin — สร้าง SharePoint List "AuditLog" (ถ้ายังไม่มี) แล้วย้ายประวัติจาก Excel ทีละก้อน (ทำซ้ำได้: เริ่มต่อจากที่ย้ายแล้ว)
+   ย้ายเสร็จยังไม่สลับใช้งานเอง — ต้องตั้ง LIST_TABLES=AuditLog ใน Cloudflare ก่อน เว็บจึงจะอ่าน/เขียนที่ List */
+async function ms365MigrateAuditLogToList(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg) || !isWorkerConfigured(cfg)){ smlToast('ต้องตั้งค่า MS365 + Proxy ก่อน','warn'); return; }
+  if(!confirm('ย้ายประวัติ Audit Log จาก Excel ไปเก็บเป็น SharePoint List\n\n• ระบบจะสร้าง List ชื่อ AuditLog ถ้ายังไม่มี (ต้อง redeploy Worker ตัวล่าสุดก่อน)\n• คัดลอกอย่างเดียว ไม่ลบข้อมูลใน Excel\n• ทำซ้ำได้ปลอดภัย (ไม่ย้ายซ้ำ)\n• ย้ายเสร็จแล้วต้องตั้ง LIST_TABLES=AuditLog ใน Cloudflare จึงจะเริ่มใช้ List\n\nเริ่มย้าย?')) return;
+  try{
+    const su = await workerFetch(cfg, '/admin/list-setup', { method:'POST', body: JSON.stringify({ table:'AuditLog' }) });
+    appendSyncLog('ย้าย AuditLog → List: ' + (su.list==='created' ? 'สร้าง List ใหม่แล้ว' : 'มี List อยู่แล้ว'), true);
+    let off = 0, moved = 0, total = 0, guard = 0, r;
+    do{
+      r = await workerFetch(cfg, '/admin/list-migrate', { method:'POST', body: JSON.stringify({ table:'AuditLog', offset: off }) });
+      off = r.next; moved += r.migrated; total = r.total; guard++;
+      smlToast('กำลังย้าย Audit Log ' + r.next + '/' + r.total + ' แถว...','info');
+    }while(!r.done && guard < 200);
+    appendSyncLog('ย้าย AuditLog → List สำเร็จ: ย้ายเพิ่ม ' + moved + ' แถว (Excel มี ' + total + ' แถว)', true);
+    if(typeof appendAuditLog==='function') appendAuditLog('ms365','ย้าย Audit Log ไป SharePoint List', moved+' แถว', '');
+    smlToast('ย้ายเสร็จ ' + moved + ' แถว — ขั้นต่อไป: ตั้ง LIST_TABLES=AuditLog ใน Cloudflare','ok');
+  }catch(e){
+    const msg = e?.message||String(e);
+    appendSyncLog('ย้าย AuditLog → List ไม่สำเร็จ: ' + msg, false);
+    smlToast('ย้ายไม่สำเร็จ: ' + msg + (/not found|404/i.test(msg)?' (ต้อง redeploy Worker ตัวล่าสุดก่อน)':'') + (/access|denied|forbidden|permission/i.test(msg)?' (แอปอาจไม่มีสิทธิ์สร้าง List — สร้าง List ชื่อ AuditLog เองใน SharePoint ตามคู่มือแล้วลองใหม่)':''),'err');
+  }
+}
+
 /* ปุ่ม Admin: ลบแถวซ้ำเก่าใน Appraisals — นับก่อน (dry-run) → confirm บอกจำนวน+ให้สำรองไฟล์ → ลบจริง → ดึงข้อมูลใหม่ */
 async function ms365DedupeAppraisals(){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
@@ -11897,7 +11925,7 @@ async function ms365SyncAuditLog(silent=true){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncAuditLog: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
-    const rows = await graphListTableRows('AuditLog');
+    const rows = await graphListTableRows('AuditLog', 2000);
     if(!rows.length) return;
     const remote = rows.map(r => ({
       at: String(r[0]??'').trim(), user: String(r[1]??'').trim(), type: String(r[2]??'').trim(),
