@@ -8414,6 +8414,10 @@ const SML365_STATUS_TABLE = 'SystemStatus';
 async function pushSystemStatusToMs365(note, pendingCount){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushSystemStatusToMs365: ยังไม่ได้ตั้งค่า MS365', false); return; }
+  /* #261: เฉพาะ Admin/sysadmin เขียนสถานะนี้ขึ้น Excel — markSystemUpdated() ถูกเรียกจากทุกการ sync อัตโนมัติ
+     ของทุกเครื่อง ผู้ใช้ทั่วไปไม่มีสิทธิ์เขียนตาราง SystemStatus ที่ Worker (403, #260) และถ้าให้เขียนได้
+     ทุกเครื่องจะพอกแถวสถานะซ้ำๆ ไม่จบ (ตารางนี้มีไว้ให้ Admin ประกาศ "ข้อมูลอัปเดตล่าสุด") */
+  if(typeof isAdminOrSysadmin==='function' && !isAdminOrSysadmin()) return;
   try{
     await graphAddTableRow(SML365_STATUS_TABLE, [new Date().toISOString(), note, pendingCount]);
   }catch(e){ /* เงียบไว้ — ไม่ให้กระทบ flow หลัก เผื่อยังไม่มีตาราง SystemStatus ในไฟล์ */ }
