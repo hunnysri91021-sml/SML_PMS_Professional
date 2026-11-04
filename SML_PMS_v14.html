@@ -4982,6 +4982,23 @@ function setLoginLoading(show, msg){
     if(msgEl) msgEl.textContent = msg || '🔄 ระบบกำลังโหลดข้อมูล...';
   }
 }
+/* #258 ล็อก PIN ผิดซ้ำ: ผิด LOGIN_MAX_FAILS ครั้ง ล็อกรหัสนั้น LOGIN_LOCK_MIN นาที (เฉพาะเครื่องนี้ — กั้นการเดาแบบสุ่มผ่านหน้าเว็บ ไม่ใช่ความปลอดภัยระดับเซิร์ฟเวอร์ #17) */
+const LOGIN_FAIL_KEY='smlPmsLoginFails', LOGIN_MAX_FAILS=5, LOGIN_LOCK_MIN=15;
+function _loginFails(){ try{ return JSON.parse(localStorage.getItem(LOGIN_FAIL_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function loginLockRemainingMin(code){
+  const r=_loginFails()[code]; if(!r||!r.until) return 0;
+  const ms=r.until-Date.now(); return ms>0?Math.ceil(ms/60000):0;
+}
+function registerLoginFail(code){
+  const all=_loginFails(); const r=all[code]||{n:0,until:0};
+  if(r.until && r.until<=Date.now()){ r.n=0; r.until=0; }
+  r.n=(r.n||0)+1;
+  if(r.n>=LOGIN_MAX_FAILS){ r.until=Date.now()+LOGIN_LOCK_MIN*60000; r.n=0;
+    try{ appendAuditLog('auth','ล็อก PIN','รหัส '+code,'ใส่ PIN ผิดครบ '+LOGIN_MAX_FAILS+' ครั้ง ล็อก '+LOGIN_LOCK_MIN+' นาที (เครื่องนี้)'); }catch(e){} }
+  all[code]=r; try{ localStorage.setItem(LOGIN_FAIL_KEY,JSON.stringify(all)); }catch(e){}
+  return r;
+}
+function clearLoginFails(code){ const all=_loginFails(); if(all[code]){ delete all[code]; try{ localStorage.setItem(LOGIN_FAIL_KEY,JSON.stringify(all)); }catch(e){} } }
 async function doLogin(){
   const codeEl = document.getElementById('loginCode');
   const pinEl = document.getElementById('loginPin');
@@ -4990,6 +5007,8 @@ async function doLogin(){
   const pin = (pinEl?.value || '').trim();
   errEl.style.display = 'none';
   if(!code){ errEl.textContent = 'กรุณากรอกรหัสพนักงาน'; errEl.style.display = 'block'; return; }
+  const lockMin = loginLockRemainingMin(code);
+  if(lockMin>0){ errEl.textContent='🔒 ใส่ PIN ผิดหลายครั้ง — รหัสนี้ถูกล็อกชั่วคราว ลองใหม่ในอีก '+lockMin+' นาที หรือให้ HR รีเซ็ต PIN'; errEl.style.display='block'; return; }
   setLoginLoading(true, '🔄 ระบบกำลังโหลดข้อมูล...');
   /* ดึงข้อมูลพนักงาน (ชื่อ/เกรด/สังกัด ฯลฯ) + PIN/แบบฟอร์มประเมินล่าสุดจาก Excel แบบเงียบก่อน
      ตรวจสอบทุกครั้งที่ล็อกอิน — เพราะ MASTER_USERS เริ่มต้นจากข้อมูลตัวอย่างที่ฝังในไฟล์เสมอตอน
@@ -5068,10 +5087,13 @@ async function doLogin(){
     const hash = await sha256Hex(pin);
     if(hash !== storedHash){
       setLoginLoading(false);
-      errEl.textContent = 'PIN ไม่ถูกต้อง';
+      const fr = registerLoginFail(code);
+      const lk = loginLockRemainingMin(code);
+      errEl.textContent = lk>0 ? '🔒 ใส่ PIN ผิดครบ '+LOGIN_MAX_FAILS+' ครั้ง — ล็อกรหัสนี้ '+lk+' นาที' : 'PIN ไม่ถูกต้อง (เหลืออีก '+(LOGIN_MAX_FAILS-(fr.n||0))+' ครั้งก่อนถูกล็อก)';
       errEl.style.display = 'block';
       return;
     }
+    clearLoginFails(code);
   } else {
     if(typeof smlToast === 'function') smlToast('บัญชีนี้ยังไม่ได้ตั้ง PIN กับ HR — เข้าใช้งานแบบยืนยันตัวตนเบื้องต้นเท่านั้น ติดต่อ HR เพื่อตั้ง PIN', 'warn');
   }
