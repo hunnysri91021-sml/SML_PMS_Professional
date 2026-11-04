@@ -2803,7 +2803,7 @@ img,svg,canvas{max-width:100%}
           </div></div>
           <div class="grid g2">
             <div class="fg"><label>Proxy URL</label><input id="ms365WorkerUrl" placeholder="https://sml-pms-proxy.xxx.workers.dev"></div>
-            <div class="fg"><label>Proxy API Key</label><input id="ms365WorkerApiKey" type="password" placeholder="กุญแจที่ตั้งไว้ตอน deploy Worker"></div>
+            <div class="fg"><label>การยืนยันตัวตนกับ Proxy</label><div style="font-size:12px;color:#64748b;padding:8px 0">ไม่ต้องกรอกกุญแจอีกต่อไป — ระบบล็อกอินด้วยรหัสพนักงาน + PIN ที่ Worker แล้วใช้บัตรผ่านชั่วคราวอายุ 8 ชม. (ตั้ง <code>SESSION_SECRET</code> ใน Cloudflare เท่านั้น)</div></div>
           </div>
           <div style="font-size:11px;color:#94a3b8;margin:4px 0 10px">เว้นว่างทั้งสองช่องนี้ = กลับไปใช้โหมด login MS365 รายคนตามปกติ (ค่าเริ่มต้น) กรอกทั้งคู่แล้วบันทึก = ทุกการอ่าน/เขียน Excel ในเว็บนี้ (พนักงาน, เวลา/วันลา, PIN/แบบฟอร์มประเมิน, ผลประเมิน) จะวิ่งผ่าน Proxy อัตโนมัติ ไม่ต้อง login MS365 อีกต่อไป</div>
           <div class="fg"><label>ลิงก์เว็บแอป SML PMS (สำหรับใส่ในข้อความ LINE แจ้งผลประเมิน)</label><input id="ms365AppUrl" placeholder="เช่น https://hunnysri91021-sml.github.io/SML_PMS_Professional/SML_PMS_v14.html"></div>
@@ -4907,6 +4907,14 @@ function getMyScopedEmpCodes(){
   return null;
 }
 
+/* #260: ใช้ล็อกอินกับ Worker เมื่อตั้ง MS365 + Proxy แล้ว (โหมดอื่นใช้ PIN ในเครื่องแบบเดิม) */
+function useServerAuth(){
+  try{
+    const cfg = loadMs365Config();
+    return (typeof isMs365Configured === 'function' && isMs365Configured(cfg)) && isWorkerConfigured(cfg);
+  }catch(e){ return false; }
+}
+
 async function sha256Hex(str){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -5010,6 +5018,23 @@ async function doLogin(){
   const lockMin = loginLockRemainingMin(code);
   if(lockMin>0){ errEl.textContent='🔒 ใส่ PIN ผิดหลายครั้ง — รหัสนี้ถูกล็อกชั่วคราว ลองใหม่ในอีก '+lockMin+' นาที หรือให้ HR รีเซ็ต PIN'; errEl.style.display='block'; return; }
   setLoginLoading(true, '🔄 ระบบกำลังโหลดข้อมูล...');
+  /* #260: ตรวจรหัสพนักงาน + PIN ที่ Worker (เซิร์ฟเวอร์) ก่อน แล้วรับบัตรผ่านชั่วคราวไว้เรียกข้อมูลทั้งหมดหลังจากนี้
+     ใช้ได้เมื่อตั้ง MS365 + Proxy แล้วเท่านั้น (โหมดไม่มี Proxy/โหมดทดสอบ ยังตรวจ PIN ในเครื่องแบบเดิม) */
+  let serverVerified = false;
+  if(useServerAuth()){
+    try{
+      const r = await workerFetch(loadMs365Config(), '/auth/login', { method:'POST', body: JSON.stringify({ code, pin }) });
+      sessionStorage.setItem(WORKER_TOKEN_KEY, r.token);
+      serverVerified = true;
+    }catch(e){
+      setLoginLoading(false);
+      if(e && e.status === 401) registerLoginFail(code);
+      const net = !(e && e.status);
+      errEl.textContent = net ? '⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่' : String(e.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      errEl.style.display = 'block';
+      return;
+    }
+  }
   /* ดึงข้อมูลพนักงาน (ชื่อ/เกรด/สังกัด ฯลฯ) + PIN/แบบฟอร์มประเมินล่าสุดจาก Excel แบบเงียบก่อน
      ตรวจสอบทุกครั้งที่ล็อกอิน — เพราะ MASTER_USERS เริ่มต้นจากข้อมูลตัวอย่างที่ฝังในไฟล์เสมอตอน
      โหลดหน้าเว็บใหม่ (ไม่ได้จำข้อมูลจริงข้ามการรีโหลด) เดิมมีแค่ ms365SyncEmployeeSettingsSilent()
@@ -5082,7 +5107,9 @@ async function doLogin(){
     return;
   }
   const storedHash = u[17] || '';
-  if(storedHash){
+  if(serverVerified){
+    clearLoginFails(code);
+  } else if(storedHash){
     if(!pin){ setLoginLoading(false); errEl.textContent = 'กรุณากรอก PIN'; errEl.style.display = 'block'; return; }
     const hash = await sha256Hex(pin);
     if(hash !== storedHash){
@@ -5108,6 +5135,7 @@ function doLogout(){
     appendAuditLog('auth', 'ออกจากระบบ', CURRENT_SESSION_USER[0], CURRENT_SESSION_USER[1]);
   }
   sessionStorage.removeItem(SML_SESSION_KEY);
+  clearWorkerToken();
   location.reload();
 }
 
@@ -7895,7 +7923,7 @@ const DEFAULT_MS365_CONFIG = {
      แม้ตอนที่ต้องกรอกเอง) ความปลอดภัยจริงมาจาก SharePoint Application Access Policy ฝั่ง Worker
      ไม่ใช่ตัว Key เอง ฝังไว้ตรงนี้จึงไม่ได้ลดความปลอดภัยลงกว่าที่เป็นอยู่ */
   workerUrl: 'https://smlpmsms365proxy.hunnysri91021.workers.dev',
-  workerApiKey: 'Tingtang1',
+  /* #260: ไม่มีกุญแจ API ฝังในหน้าเว็บอีกต่อไป — ล็อกอินด้วยรหัส+PIN ที่ Worker แล้วรับบัตรผ่านชั่วคราว (token) */
   /* #175/#207: URL จริงที่พนักงานเปิดเว็บแอปนี้ (ใช้ทำลิงก์ในข้อความ LINE/อีเมลแจ้งผล) */
   /* ฝังค่าเริ่มต้นไว้ในโค้ด (เหมือน workerUrl/tenantId #31) — เดิมว่างเปล่า ต้องกรอกที่หน้านี้เองทุกเครื่อง
      และค่าเก็บแค่ใน localStorage ของเบราว์เซอร์นั้น จึงหายทุกครั้งที่เปลี่ยนเครื่อง/ล้างข้อมูล/เปิด Incognito
@@ -7915,7 +7943,6 @@ function getMs365ConfigFromForm(){
     employeeTable: (document.getElementById('ms365EmployeeTable')?.value || 'Employees').trim(),
     evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'Appraisals').trim(),
     workerUrl: (document.getElementById('ms365WorkerUrl')?.value || '').trim().replace(/\/+$/,''),
-    workerApiKey: (document.getElementById('ms365WorkerApiKey')?.value || '').trim(),
     appUrl: (document.getElementById('ms365AppUrl')?.value || '').trim().replace(/\/+$/,'')
   };
 }
@@ -7929,7 +7956,6 @@ function applyMs365ConfigToForm(cfg){
   set('ms365EmployeeTable', cfg.employeeTable || 'Employees');
   set('ms365EvaluationTable', cfg.evaluationTable || 'Appraisals');
   set('ms365WorkerUrl', cfg.workerUrl);
-  set('ms365WorkerApiKey', cfg.workerApiKey);
   set('ms365AppUrl', cfg.appUrl);
   const configured = !!(cfg.tenantId && cfg.clientId && cfg.siteUrl);
   const workerOn = isWorkerConfigured(cfg);
@@ -7943,7 +7969,7 @@ function applyMs365ConfigToForm(cfg){
    วิ่งผ่าน Proxy แทน MSAL ทำให้ "อ่าน/เขียนได้โดยไม่ต้องให้พนักงานแต่ละคน login Microsoft เอง"
    เพราะ Proxy ถือ Application permission (client credentials) แทนทุกคนไว้ฝั่งเซิร์ฟเวอร์ */
 function isWorkerConfigured(cfg){
-  return !!(cfg && cfg.workerUrl && cfg.workerApiKey);
+  return !!(cfg && cfg.workerUrl);
 }
 
 function loadMs365Config(){
@@ -8110,15 +8136,32 @@ async function resolveMs365Site(){
    ก่อนอ่าน/เขียนข้อมูลได้ ใช้ header X-Api-Key เป็นกุญแจร่วมกันเบื้องต้น (ไม่ใช่ความปลอดภัยระดับสูง
    เหมือนกับ PIN — คนที่เปิด DevTools ดู network request จะเห็นได้ ความปลอดภัยจริงต้องพึ่ง Azure AD
    Application Access Policy ที่จำกัดสิทธิ์แอปนี้ให้เข้าถึงได้แค่ไฟล์ Excel ไฟล์เดียว ไม่ใช่ทั้ง tenant) */
+const WORKER_TOKEN_KEY = 'smlPmsWorkerToken';
+function getWorkerToken(){ try{ return sessionStorage.getItem(WORKER_TOKEN_KEY) || ''; }catch(e){ return ''; } }
+function clearWorkerToken(){ try{ sessionStorage.removeItem(WORKER_TOKEN_KEY); }catch(e){} }
+let _workerReauthPending = false;
 async function workerFetch(cfg, path, options={}){
-  const res = await fetch(cfg.workerUrl + path, {
-    ...options,
-    headers: Object.assign({ 'X-Api-Key': cfg.workerApiKey, 'Content-Type':'application/json' }, options.headers||{})
-  });
+  /* #260: ทุกเส้นทางยกเว้น /auth/login ต้องแนบบัตรผ่าน (Bearer token) ที่ได้จากการล็อกอินที่ Worker */
+  const token = getWorkerToken();
+  if(path !== '/auth/login' && !token){
+    const e = new Error('ยังไม่ได้เข้าสู่ระบบ (ไม่มีบัตรผ่านสำหรับเรียก Proxy)'); e.status = 401; throw e;
+  }
+  const headers = Object.assign({ 'Content-Type':'application/json' }, token ? { 'Authorization':'Bearer '+token } : {}, options.headers||{});
+  const res = await fetch(cfg.workerUrl + path, { ...options, headers });
   const text = await res.text();
   let data = {};
   try{ data = text ? JSON.parse(text) : {}; }catch(e){ data = { raw:text }; }
-  if(!res.ok) throw new Error(data.error || ('Proxy HTTP '+res.status));
+  if(!res.ok){
+    /* บัตรผ่านหมดอายุ/ไม่ถูกต้อง (401 บนเส้นทางอื่นที่ไม่ใช่ล็อกอิน) → กลับไปหน้าล็อกอิน ครั้งเดียว */
+    if(res.status === 401 && path !== '/auth/login' && !_workerReauthPending){
+      _workerReauthPending = true;
+      clearWorkerToken();
+      try{ sessionStorage.removeItem(SML_SESSION_KEY); }catch(e){}
+      try{ if(typeof smlToast === 'function') smlToast('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่', 'warn'); }catch(e){}
+      setTimeout(()=>location.reload(), 1500);
+    }
+    const err = new Error(data.error || ('Proxy HTTP '+res.status)); err.status = res.status; throw err;
+  }
   return data;
 }
 
@@ -14850,6 +14893,8 @@ document.addEventListener('input',e=>{
     try{
       const raw = sessionStorage.getItem(SML_SESSION_KEY);
       if(!raw) return;
+      /* #260: ใช้ Worker ยืนยันตัวตนอยู่ แต่ไม่มีบัตรผ่านค้างอยู่ (เช่นปิดแท็บแล้วเปิดใหม่/หมดอายุ) → ต้องล็อกอินใหม่ */
+      if(useServerAuth() && !getWorkerToken()){ sessionStorage.removeItem(SML_SESSION_KEY); return; }
       const s = JSON.parse(raw);
       const u = MASTER_USERS.find(x => x[0] === s.code);
       if(!u){ sessionStorage.removeItem(SML_SESSION_KEY); return; }

@@ -20,7 +20,9 @@
  *        CLIENT_SECRET   = Client secret ที่สร้างไว้ใน Azure AD (เห็นครั้งเดียวตอนสร้าง)
  *        SITE_URL        = เช่น https://siammotor.sharepoint.com/sites/Chosiya-HR
  *        FILE_PATH       = เช่น _SML_PMS_Professiona/SML_PMS_Master.xlsx
- *        PROXY_API_KEY   = กุญแจที่ตั้งเอง (สุ่มยาวๆ) ให้ตรงกับที่กรอกในหน้า MS365 ของเว็บ
+ *        SESSION_SECRET  = สตริงสุ่มยาว 48 ตัวขึ้นไป (ชนิด Secret) ใช้เซ็นบัตรผ่านล็อกอิน (token) อายุ 8 ชม.
+ *                          — ไม่ต้องกรอกที่เว็บ และไม่มีกุญแจ API ฝังในเว็บอีกต่อไป (#260 แทน PROXY_API_KEY เดิม
+ *                          ซึ่งถูกยกเลิกแล้ว ลบทิ้งจาก Cloudflare ได้) สร้างด้วย: openssl rand -hex 32
  *        SEND_AS_EMAIL   = อีเมล HR/Admin จริงใน Microsoft 365 ที่จะใช้เป็น "ผู้ส่ง" เวลาส่ง PIN
  *                          ให้พนักงานทางอีเมล (เช่น hr@siammotor.com) — ต้องเป็นกล่องอีเมลจริง
  *                          ที่มีอยู่ในองค์กร ไม่ใช่ที่อยู่ลอยๆ
@@ -82,34 +84,39 @@
  *     IT จำกัดด้วย Exchange Online Application Access Policy ให้ส่งได้แค่ในนาม SEND_AS_EMAIL
  *     กล่องเดียว (ดูคำสั่งท้ายไฟล์นี้)
  *
- * ความปลอดภัยของ PROXY_API_KEY: เป็นกุญแจร่วมง่ายๆ กันคนแปลกหน้ายิงคำขอมาที่ Worker เฉยๆ
- * ไม่ใช่ความปลอดภัยระดับสูง (ใครเปิด DevTools ดู Network request จากเว็บที่ตั้งค่าไว้แล้วจะเห็นได้)
- * — ความปลอดภัยจริงของสถาปัตยกรรมนี้อยู่ที่ Application Access Policy ข้างต้นที่จำกัดว่า Worker
- * เข้าถึงได้แค่ไฟล์ Excel ไฟล์เดียว ไม่ใช่ทั้ง Tenant
+ * ความปลอดภัยของการเข้าถึง (#260): ผู้ใช้ต้อง POST /auth/login ด้วยรหัสพนักงาน + PIN ก่อน Worker ตรวจ PIN
+ * เองฝั่งเซิร์ฟเวอร์ (เทียบ SHA-256 กับ PinHash ในตาราง EmployeeSettings ซึ่งไม่ส่งออกไปให้ไคลเอนต์ที่ไม่ใช่
+ * Admin) แล้วออกบัตรผ่านที่เซ็นด้วย SESSION_SECRET ทุก endpoint อื่นต้องแนบ "Authorization: Bearer <token>"
+ * และตรวจสิทธิ์ตามบทบาท (เขียนตารางสำคัญ/ลบ/dedupe = Admin เท่านั้น) — ไม่มีกุญแจร่วมฝังในหน้าเว็บอีกต่อไป
+ * ข้อจำกัดที่เหลือ (รอบ 1): ยังไม่กรอง "รายแถว" ตามสังกัด (ผู้ล็อกอินอ่านตารางที่ไม่ใช่ EmployeeSettings ได้ทั้งตาราง)
+ * และตัวนับ PIN ผิดอยู่ในหน่วยความจำของ Worker (รีเซ็ตเมื่อ isolate ถูกรีไซเคิล) — Application Access Policy
+ * ที่จำกัดให้แอปเข้าถึงได้แค่ site เดียวยังจำเป็นเสมอ
  */
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const cors = {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || '*',
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Api-Key',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
 
-    /* /webhook/line: LINE platform เป็นคนยิงเข้ามาตรง ไม่ใช่เบราว์เซอร์ของเว็บ SML PMS ที่ตั้งค่า
-       X-Api-Key ไว้ — LINE ไม่มีทางส่ง header นั้นมา ใช้ x-line-signature (HMAC-SHA256 ของ body
-       ด้วย LINE_CHANNEL_SECRET) เป็นตัวพิสูจน์ตัวตนของ route นี้เองแทน จึงต้องเช็คเส้นทางนี้ก่อน
-       ผ่าน PROXY_API_KEY gate ด้านล่างไปเลย ไม่งั้นจะถูกตีกลับ 401 ก่อนได้ตรวจลายเซ็นจริงด้วยซ้ำ */
+    /* /webhook/line: LINE platform ยิงเข้ามาตรง ไม่มีบัตรผ่านของเว็บ — ใช้ x-line-signature
+       (HMAC-SHA256 ของ body ด้วย LINE_CHANNEL_SECRET) พิสูจน์ตัวตนของ route นี้เอง จึงต้องเช็คก่อนด่านบัตรผ่าน */
     if (url.pathname === '/webhook/line' && request.method === 'POST') {
       return handleLineWebhook(request, env, ctx);
     }
 
-    const apiKey = request.headers.get('X-Api-Key');
-    if (!env.PROXY_API_KEY || apiKey !== env.PROXY_API_KEY) {
-      return json({ error: 'unauthorized' }, 401, cors);
+    /* #260: ล็อกอินที่ Worker — เป็น route เดียวที่เปิดโดยไม่ต้องมีบัตรผ่าน (ตรวจ PIN เองแล้วออกบัตรให้) */
+    if (url.pathname === '/auth/login' && request.method === 'POST') {
+      try { return await handleLogin(request, env, cors); }
+      catch (e) { return json({ error: String((e && e.message) || e) }, 500, cors); }
     }
+
+    const auth = await authenticate(request, env);
+    if (!auth) return json({ error: 'unauthorized' }, 401, cors);
 
     try {
       /* /send-line ไม่เกี่ยวกับ Microsoft/Azure เลยแม้แต่น้อย — ไม่ต้องขอ getAppToken() (ซึ่งเป็น
@@ -119,6 +126,11 @@ export default {
         const { userIds, message } = await request.json();
         if (!Array.isArray(userIds) || !userIds.length || !message) return json({ error: 'missing userIds/message' }, 400, cors);
         if (!env.LINE_CHANNEL_ACCESS_TOKEN) return json({ error: 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN ใน Worker' }, 500, cors);
+        /* #260: ผู้ใช้ที่ไม่ใช่ Admin ส่งได้เฉพาะ LINE User ID ที่ลงทะเบียนไว้ในระบบจริง (กันใช้ Worker ยิงข้อความหาใครก็ได้) */
+        if (!isAdminAuth(auth)) {
+          const known = await registeredLineIds(env);
+          if (userIds.some((u) => !known.has(String(u)))) return json({ error: 'forbidden: userId ไม่ได้ลงทะเบียนในระบบ' }, 403, cors);
+        }
         await sendLineMulticast(env.LINE_CHANNEL_ACCESS_TOKEN, userIds, message);
         return json({ ok: true, count: userIds.length }, 200, cors);
       }
@@ -132,6 +144,8 @@ export default {
       if (url.pathname === '/send-line-ack' && request.method === 'POST') {
         const { userId, empCode, empName, cycle, Y, Z, X, ackLink } = await request.json();
         if (!userId || !empCode || !cycle) return json({ error: 'missing userId/empCode/cycle' }, 400, cors);
+        /* #260: userId ต้องเป็นของ empCode นั้นจริงตามตาราง EmployeeSettings (กันส่งปุ่มรับทราบของคนหนึ่งไปหาอีกคน) */
+        if (!(await lineIdMatchesEmp(env, String(userId), String(empCode)))) return json({ error: 'forbidden: userId ไม่ตรงกับพนักงาน' }, 403, cors);
         if (!env.LINE_CHANNEL_ACCESS_TOKEN) return json({ error: 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN ใน Worker' }, 500, cors);
         /* #174: พนักงานต้องเห็นผลประเมินของตนเอง (Y/Z/X) ก่อนกดปุ่มรับทราบ — ไม่ใช่กดรับทราบ
            ข้อความทั่วไปแบบเดิมโดยไม่เห็นตัวเลขจริงเลย เกรดยังไม่ใส่ (ล็อกไว้จนกว่า MD อนุมัติ
@@ -176,6 +190,13 @@ export default {
         const { toEmail, toName, subject, body } = await request.json();
         if (!toEmail || !subject || !body) return json({ error: 'missing toEmail/subject/body' }, 400, cors);
         if (!env.SEND_AS_EMAIL) return json({ error: 'ยังไม่ได้ตั้งค่า SEND_AS_EMAIL ใน Worker' }, 500, cors);
+        /* #260: ผู้ใช้ที่ไม่ใช่ Admin ส่งได้เฉพาะถึงอีเมลของพนักงานที่มีในตาราง Employees (กันใช้ Worker ส่งหาคนนอก) */
+        if (!isAdminAuth(auth)) {
+          const { driveId: d0, itemId: i0 } = await resolveSite(env, token);
+          const emps = await listRows(token, d0, i0, 'Employees');
+          const want = String(toEmail).trim().toLowerCase();
+          if (!emps.some((r) => String(r[9] || '').trim().toLowerCase() === want)) return json({ error: 'forbidden: ผู้รับไม่ใช่พนักงานในระบบ' }, 403, cors);
+        }
         await sendMail(token, env.SEND_AS_EMAIL, toEmail, toName, subject, body);
         return json({ ok: true }, 200, cors);
       }
@@ -185,13 +206,16 @@ export default {
       if (url.pathname === '/rows' && request.method === 'GET') {
         const table = url.searchParams.get('table');
         if (!table) return json({ error: 'missing table' }, 400, cors);
-        const rows = await listRows(token, driveId, itemId, table);
+        let rows = await listRows(token, driveId, itemId, table);
+        /* #260: PinHash (คอลัมน์ 1 ของ EmployeeSettings) ไม่ส่งให้ผู้ใช้ที่ไม่ใช่ Admin — กัน hash ของ PIN ทุกคนรั่ว */
+        if (table === 'EmployeeSettings' && !isAdminAuth(auth)) rows = rows.map((r) => { const c = r.slice(); c[1] = ''; return c; });
         return json({ rows }, 200, cors);
       }
 
       if (url.pathname === '/rows/add' && request.method === 'POST') {
         const { table, values } = await request.json();
         if (!table || !values) return json({ error: 'missing table/values' }, 400, cors);
+        if (!canWrite(auth, table, 'add')) return json({ error: 'forbidden: ไม่มีสิทธิ์เขียนตาราง ' + table }, 403, cors);
         await addRow(token, driveId, itemId, table, values);
         return json({ ok: true }, 200, cors);
       }
@@ -201,6 +225,7 @@ export default {
         if (!table || keyColIndex === undefined || keyValue === undefined || !values) {
           return json({ error: 'missing table/keyColIndex/keyValue/values' }, 400, cors);
         }
+        if (!canWrite(auth, table, 'upsert')) return json({ error: 'forbidden: ไม่มีสิทธิ์เขียนตาราง ' + table }, 403, cors);
         const result = await upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values);
         return json({ ok: true, result }, 200, cors);
       }
@@ -215,6 +240,7 @@ export default {
         if (!table || keyColIndex === undefined || keyValue === undefined || !values) {
           return json({ error: 'missing table/keyColIndex/keyValue/values' }, 400, cors);
         }
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
         const result = await upsertRowPartial(token, driveId, itemId, table, keyColIndex, keyValue, values, protectedCols || []);
         return json({ ok: true, result }, 200, cors);
       }
@@ -228,6 +254,7 @@ export default {
         if (!table || keyColIndex === undefined || keyValue === undefined || keys.some((k) => String(k ?? '').trim() === '')) {
           return json({ error: 'missing table/keyColIndex/keyValue (คีย์ต้องไม่ว่าง)' }, 400, cors);
         }
+        if (!canWrite(auth, table, 'delete')) return json({ error: 'forbidden: ไม่มีสิทธิ์ลบตาราง ' + table }, 403, cors);
         const deleted = await deleteRows(token, driveId, itemId, table, keyColIndex, keyValue);
         return json({ ok: true, deleted }, 200, cors);
       }
@@ -241,6 +268,7 @@ export default {
         if (!table || !Array.isArray(keyCols) || !keyCols.length) {
           return json({ error: 'missing table/keyCols' }, 400, cors);
         }
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
         const result = await dedupeRows(token, driveId, itemId, table, keyCols, !!dryRun);
         return json({ ok: true, ...result }, 200, cors);
       }
@@ -836,6 +864,149 @@ async function upsertRowPartial(token, driveId, itemId, table, keyColIndex, keyV
   }
   await graphSend(token, base + '/add', 'POST', { values: [values] });
   return 'added';
+}
+
+/* ===== #260: ล็อกอิน/บัตรผ่าน/สิทธิ์ตามบทบาท ===== */
+const ADMIN_ROLES = ['admin', 'sysadmin'];
+const SESSION_TTL_SEC = 8 * 3600;
+/* ตารางที่ผู้ใช้ "ไม่ใช่ Admin" เขียนได้ (op: add/upsert/delete) — ที่เหลือทั้งหมด Admin เท่านั้น */
+const NONADMIN_WRITE = {
+  Appraisals: ['upsert'],
+  Approvals: ['add'],
+  AuditLog: ['add'],
+  IDP: ['upsert', 'delete'],
+};
+function isAdminAuth(auth) { return !!auth && ADMIN_ROLES.includes(auth.role); }
+function canWrite(auth, table, op) {
+  if (isAdminAuth(auth)) return true;
+  if (table === 'IDP' && auth.role === 'emp') return false;
+  return (NONADMIN_WRITE[table] || []).includes(op);
+}
+/* เหมือน normalizeMs365Employee() ฝั่งเว็บ: แปลงข้อความบทบาทใน Excel เป็นรหัสบทบาท */
+function normalizeRole(raw) {
+  const r = String(raw || '').trim().toLowerCase();
+  if (r.includes('sysadmin') || r.includes('super')) return 'sysadmin';
+  if (r.includes('admin')) return 'admin';
+  return r || 'emp';
+}
+function b64urlEncode(bytes) {
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(str) {
+  let t = String(str).replace(/-/g, '+').replace(/_/g, '/');
+  while (t.length % 4) t += '=';
+  const bin = atob(t);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function hmacKey(secret) {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+}
+async function issueToken(env, payload) {
+  const body = b64urlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await hmacKey(env.SESSION_SECRET);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body)));
+  return body + '.' + b64urlEncode(sig);
+}
+async function verifyToken(env, token) {
+  if (!env.SESSION_SECRET || !token) return null;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return null;
+  try {
+    const key = await hmacKey(env.SESSION_SECRET);
+    const ok = await crypto.subtle.verify('HMAC', key, b64urlDecode(parts[1]), new TextEncoder().encode(parts[0]));
+    if (!ok) return null;
+    const p = JSON.parse(new TextDecoder().decode(b64urlDecode(parts[0])));
+    if (!p || !p.sub || !p.exp || p.exp < Math.floor(Date.now() / 1000)) return null;
+    return p;
+  } catch (e) { return null; }
+}
+async function authenticate(request, env) {
+  const m = /^Bearer\s+(.+)$/i.exec(request.headers.get('Authorization') || '');
+  return m ? verifyToken(env, m[1].trim()) : null;
+}
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+function timingSafeEqualStr(a, b) {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+/* ตัวนับล็อกอินผิด (หน่วยความจำของ isolate — ดูข้อจำกัดในหัวไฟล์) */
+const loginFails = new Map();
+const LOGIN_MAX_PER_CODE = 5;
+const LOGIN_MAX_PER_IP = 40;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+function lockRemainingMin(key) {
+  const r = loginFails.get(key);
+  if (!r || !r.until || r.until <= Date.now()) return 0;
+  return Math.ceil((r.until - Date.now()) / 60000);
+}
+function registerFail(key, max) {
+  if (loginFails.size > 5000) loginFails.clear();
+  const r = loginFails.get(key) || { n: 0, until: 0 };
+  if (r.until && r.until <= Date.now()) { r.n = 0; r.until = 0; }
+  r.n++;
+  if (r.n >= max) { r.until = Date.now() + LOGIN_LOCK_MS; r.n = 0; }
+  loginFails.set(key, r);
+}
+async function handleLogin(request, env, cors) {
+  if (!env.SESSION_SECRET) return json({ error: 'ยังไม่ได้ตั้งค่า SESSION_SECRET ใน Worker' }, 500, cors);
+  let bodyIn = {};
+  try { bodyIn = await request.json(); } catch (e) { /* ว่าง */ }
+  const code = String(bodyIn.code || '').trim();
+  const pin = String(bodyIn.pin || '').trim();
+  if (!code || !pin) return json({ error: 'กรุณากรอกรหัสพนักงานและ PIN' }, 400, cors);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const kc = 'c:' + code.toLowerCase();
+  const ki = ip ? 'i:' + ip : '';
+  const lc = lockRemainingMin(kc);
+  const li = ki ? lockRemainingMin(ki) : 0;
+  if (lc || li) return json({ error: 'ใส่ PIN ผิดหลายครั้ง — ลองใหม่ในอีก ' + Math.max(lc, li) + ' นาที หรือให้ HR รีเซ็ต PIN' }, 429, cors);
+  const token = await getAppToken(env);
+  const { driveId, itemId } = await resolveSite(env, token);
+  const [emps, sets] = await Promise.all([
+    listRows(token, driveId, itemId, 'Employees'),
+    listRows(token, driveId, itemId, 'EmployeeSettings'),
+  ]);
+  const fail = () => {
+    registerFail(kc, LOGIN_MAX_PER_CODE);
+    if (ki) registerFail(ki, LOGIN_MAX_PER_IP);
+    return json({ error: 'รหัสพนักงานหรือ PIN ไม่ถูกต้อง' }, 401, cors);
+  };
+  const emp = emps.find((r) => String(r[0] || '').trim().toLowerCase() === code.toLowerCase());
+  if (!emp) return fail();
+  if (String(emp[15] || '').toLowerCase().includes('resign')) return fail();
+  const setRow = sets.find((r) => String(r[0] || '').trim() === String(emp[0]).trim());
+  const stored = String((setRow && setRow[1]) || '').trim().toLowerCase();
+  if (!stored) return json({ error: 'บัญชีนี้ยังไม่ได้ตั้ง PIN — ติดต่อ HR เพื่อตั้ง PIN ก่อนเข้าใช้งาน' }, 403, cors);
+  const given = await sha256Hex(pin);
+  if (!timingSafeEqualStr(given, stored)) return fail();
+  loginFails.delete(kc);
+  const now = Math.floor(Date.now() / 1000);
+  const role = normalizeRole(emp[2]);
+  const payload = { sub: String(emp[0]).trim(), name: String(emp[1] || '').trim(), role, iat: now, exp: now + SESSION_TTL_SEC };
+  return json({ token: await issueToken(env, payload), exp: payload.exp, user: { code: payload.sub, name: payload.name, role } }, 200, cors);
+}
+/* LINE User ID ที่ลงทะเบียนไว้ (EmployeeSettings คอลัมน์ 5) */
+async function registeredLineIds(env) {
+  const token = await getAppToken(env);
+  const { driveId, itemId } = await resolveSite(env, token);
+  const sets = await listRows(token, driveId, itemId, 'EmployeeSettings');
+  return new Set(sets.map((r) => String(r[5] || '').trim()).filter(Boolean));
+}
+async function lineIdMatchesEmp(env, userId, empCode) {
+  const token = await getAppToken(env);
+  const { driveId, itemId } = await resolveSite(env, token);
+  const sets = await listRows(token, driveId, itemId, 'EmployeeSettings');
+  const row = sets.find((r) => String(r[0] || '').trim() === empCode.trim());
+  return !!row && String(row[5] || '').trim() === userId.trim();
 }
 
 function json(obj, status, headers) {
