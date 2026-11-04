@@ -1647,6 +1647,18 @@ img,svg,canvas{max-width:100%}
 .dp-st{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700}
 .dp-st.open{background:#fee2e2;color:#b91c1c}.dp-st.scheduled{background:#fef3c7;color:#92400e}.dp-st.resolved{background:#dcfce7;color:#166534}
 </style>
+<style>
+/* #257: เปิด/ปิดระบบ */
+#sysClosedOverlay{display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.96);color:#fff;align-items:center;justify-content:center;text-align:center;padding:24px}
+#sysClosedOverlay .box{max-width:460px}
+#sysClosedOverlay h2{font-size:26px;margin:10px 0}
+#sysClosedOverlay p{font-size:16px;line-height:1.6;white-space:pre-wrap}
+#sysClosedAdminBar{display:none;margin:0 0 14px;padding:10px 16px;border-radius:12px;background:#fff7ed;border:2px solid #f59e0b;color:#92400e;font-weight:600}
+.sysopen-card{border:2px solid #e2e8f0;border-radius:14px;padding:16px 18px;margin:0 0 16px;background:#fff}
+.sysopen-card.closed{border-color:#f59e0b;background:#fffbeb}
+.sysopen-card .so-st{display:inline-block;padding:3px 12px;border-radius:12px;font-weight:700;font-size:13px}
+.so-st.on{background:#dcfce7;color:#166534}.so-st.off{background:#fee2e2;color:#b91c1c}
+</style>
 </head>
 <body>
 
@@ -1749,6 +1761,7 @@ img,svg,canvas{max-width:100%}
   <div class="content">
 
   <!-- ========== DASHBOARD ========== -->
+  <div id="sysClosedAdminBar"></div>
   <div class="dispute-banner" id="disputeBanner"></div>
   <section class="page on" id="pg-dash">
     <div class="ph">
@@ -3343,6 +3356,19 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     <div class="hero-status"><i></i> FY2026 • กำลังดำเนินการ</div>
   </div>
 
+  <div class="sysopen-card" id="sysOpenCard">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <b style="font-size:16px">🔌 เปิด / ปิดระบบ</b><span class="so-st on" id="sysOpenBadge">เปิดอยู่</span>
+    </div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:10px">ใช้ปิดระบบช่วงที่ยังไม่ถึงรอบประเมิน — พนักงานทุกคนยกเว้น Admin/HR จะเข้าระบบไม่ได้และเห็นข้อความด้านล่าง เปิดใหม่เมื่อถึงรอบ (ค่าเริ่มต้น = เปิด)</div>
+    <div class="fg"><label>ข้อความแจ้งผู้ใช้ตอนปิดระบบ</label><textarea id="sysOpenMsg" rows="2" placeholder="เช่น ระบบจะเปิดให้ประเมินวันที่ 1 ธ.ค. 2569"></textarea></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-ok" id="sysOpenBtn" onclick="setSystemOpen(true)">🔓 เปิดระบบ</button>
+      <button class="btn btn-dg" id="sysCloseBtn" onclick="setSystemOpen(false)">🔒 ปิดระบบ</button>
+      <span id="sysOpenMeta" style="font-size:12px;color:#94a3b8"></span>
+    </div>
+  </div>
+
   <div class="cycle-summary">
     <div class="cycle-stat"><span>รอบปัจจุบัน</span><b>FY2026</b></div>
     <div class="cycle-stat"><span>พนักงานในรอบ</span><b id="csTotalCount">0 คน</b></div>
@@ -3667,6 +3693,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   <div class="md-b" id="dpListBody"></div>
   <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button></div>
 </div></div>
+<div id="sysClosedOverlay"><div class="box"><div style="font-size:54px">🔒</div><h2>ระบบปิดให้บริการชั่วคราว</h2><p id="sysClosedMsg"></p><button class="btn btn-p" onclick="doLogout()">ออกจากระบบ</button></div></div>
 <div class="ov" id="mReminder"><div class="md" style="max-width:470px">
   <div class="md-h"><h3>📢 ส่งการแจ้งเตือน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
@@ -4886,6 +4913,7 @@ async function sha256Hex(str){
 }
 
 function applySession(u){
+  setTimeout(()=>{ try{ applySystemGate(); }catch(e){} },0);
   CURRENT_SESSION_USER = u;
   if(typeof renderGoalKpi==='function') setTimeout(()=>{ try{ filterGoalKpi(); }catch(e){} },0);
   document.getElementById('loginGate').style.display = 'none';
@@ -5025,6 +5053,12 @@ async function doLogin(){
   if(!u || u[12] === 'resigned'){
     setLoginLoading(false);
     errEl.textContent = 'ไม่พบรหัสพนักงานนี้ในระบบ (หรือพนักงานลาออกแล้ว)';
+    errEl.style.display = 'block';
+    return;
+  }
+  if(isSystemClosedFor(u)){
+    setLoginLoading(false);
+    errEl.textContent = '🔒 ระบบปิดให้บริการชั่วคราว — ' + systemClosedMessage();
     errEl.style.display = 'block';
     return;
   }
@@ -9278,6 +9312,47 @@ async function ms365SyncDisputes(silent=true){
     appendSyncLog('Sync ข้อโต้แย้งผลประเมิน: ตรวจ '+rows.length+' แถว'+(changed?' (มีการอัปเดต)':''),true);
   }catch(e){ appendSyncLog('ms365SyncDisputes: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e),false); }
 }
+
+/* #257: เปิด/ปิดระบบ (Admin/sysadmin) — ปิด = ผู้ใช้ที่ไม่ใช่ admin/sysadmin เข้า/ใช้ระบบไม่ได้
+   เก็บใน localStorage + sync ข้ามเครื่องผ่าน FormWeights แถว '__sysopen__' (ใหม่กว่าชนะด้วย at)
+   ค่าเริ่มต้น = เปิด (ไม่เปลี่ยนพฤติกรรมเดิม). เป็นการกั้นฝั่งหน้าเว็บ ไม่ใช่ความปลอดภัยจริง (#17) */
+const SYSTEM_OPEN_KEY='smlPmsSystemOpen';
+function getSystemState(){ try{ const s=JSON.parse(localStorage.getItem(SYSTEM_OPEN_KEY)||'null'); if(s&&typeof s.open==='boolean') return s; }catch(e){} return {open:true,msg:'',at:'',by:''}; }
+function isSystemClosedFor(u){ const s=getSystemState(); return !s.open && !(u && ['admin','sysadmin'].includes(u[2])); }
+function systemClosedMessage(){ const s=getSystemState(); return s.msg ? s.msg : 'ขณะนี้ยังไม่ถึงรอบประเมิน กรุณากลับมาใช้งานใหม่เมื่อระบบเปิด'; }
+function applySystemGate(){
+  const s=getSystemState(); const u=CURRENT_SESSION_USER;
+  const ov=document.getElementById('sysClosedOverlay'), bar=document.getElementById('sysClosedAdminBar');
+  if(ov){ const lock = !!u && isSystemClosedFor(u); ov.style.display = lock ? 'flex' : 'none'; if(lock) document.getElementById('sysClosedMsg').textContent = systemClosedMessage(); }
+  if(bar){ const adm=!!u && ['admin','sysadmin'].includes(u[2]); bar.style.display = (!s.open && adm) ? 'block' : 'none'; if(!s.open&&adm) bar.innerHTML='🔒 ระบบปิดอยู่ — พนักงานทั่วไปเข้าใช้ไม่ได้ (เฉพาะ Admin/HR ใช้ได้) <button class="btn btn-sm" style="margin-left:10px" onclick="setSystemOpen(true)">🔓 เปิดระบบ</button>'; }
+  renderSystemOpenCard();
+}
+function renderSystemOpenCard(){
+  const s=getSystemState(); const card=document.getElementById('sysOpenCard'); if(!card) return;
+  card.classList.toggle('closed',!s.open);
+  const b=document.getElementById('sysOpenBadge'); b.textContent=s.open?'เปิดอยู่':'ปิดอยู่'; b.className='so-st '+(s.open?'on':'off');
+  const m=document.getElementById('sysOpenMsg'); if(m && document.activeElement!==m) m.value=s.msg||'';
+  document.getElementById('sysOpenMeta').textContent = s.at ? ('เปลี่ยนล่าสุด '+new Date(s.at).toLocaleString('th-TH')+(s.by?' โดย '+s.by:'')) : '';
+  const adm=isAdminOrSysadmin();
+  ['sysOpenBtn','sysCloseBtn','sysOpenMsg'].forEach(id=>{ const e=document.getElementById(id); if(e) e.disabled=!adm; });
+}
+async function setSystemOpen(open){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เปิด-ปิดระบบได้','warn'); return; }
+  const cur=getSystemState();
+  if(cur.open===open){ smlToast(open?'ระบบเปิดอยู่แล้ว':'ระบบปิดอยู่แล้ว','info'); return; }
+  if(!confirm(open?'เปิดระบบให้พนักงานทุกคนใช้งานได้?':'ปิดระบบ? พนักงานทุกคนยกเว้น Admin/HR จะเข้าใช้งานไม่ได้จนกว่าจะเปิดใหม่')) return;
+  const me=CURRENT_SESSION_USER;
+  const st={open, msg:(document.getElementById('sysOpenMsg')?.value||'').trim(), at:new Date().toISOString(), by:(me&&me[1])||''};
+  localStorage.setItem(SYSTEM_OPEN_KEY,JSON.stringify(st));
+  appendAuditLog('system', open?'เปิดระบบ':'ปิดระบบ', 'ระบบ', st.msg||'');
+  applySystemGate();
+  const cfg=loadMs365Config(); let pushed=false;
+  if(isMs365Configured(cfg)){
+    try{ await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__sysopen__',['__sysopen__',JSON.stringify(st),st.at]); appendSyncLog('Push สถานะเปิด/ปิดระบบเข้า Excel',true); pushed=true; }
+    catch(e){ appendSyncLog('Push สถานะเปิด/ปิดระบบเข้า Excel ไม่สำเร็จ: '+(e&&e.message||e),false); }
+  } else appendSyncLog('setSystemOpen: ยังไม่ได้ตั้งค่า MS365 — บันทึกเฉพาะเครื่องนี้',false);
+  smlToast((open?'เปิดระบบแล้ว':'ปิดระบบแล้ว')+(pushed?'':' (บันทึกเฉพาะเครื่องนี้ — ส่งขึ้น Excel ไม่สำเร็จ เครื่องอื่นจะยังไม่ถูกปิด/เปิด)'),pushed?'ok':'warn');
+}
 async function acknowledgeMyResult(empCode, cycle, objection){
   if(hasOpenDispute(empCode,cycle)){ smlToast('คุณขอหารือผลประเมินไว้ — ต้องรอปิดเรื่องก่อนจึงรับทราบได้','warn'); return; }
   const drafts = getDrafts();
@@ -13227,6 +13302,12 @@ async function ms365SyncFormWeights(silent=false){
     rows.forEach(r=>{
       if(String(r[0]??'').trim()!=='__custom__') return;
       try{ const remote=JSON.parse(r[1])?.defs||{}; const local=loadCustomFormDefs(); Object.keys(remote).forEach(k=>{ if(!local[k]) local[k]=remote[k]; }); saveCustomFormDefs(local); registerAllCustomForms(); renderCustomFormUi(); }catch(e){}
+    });
+    rows.forEach(r=>{
+      if(String(r[0]??'').trim()!=='__sysopen__') return;
+      try{ const remote=JSON.parse(r[1]); const local=getSystemState();
+        if(remote && typeof remote.open==='boolean' && (!local.at || (remote.at && remote.at>local.at))){ localStorage.setItem(SYSTEM_OPEN_KEY,JSON.stringify(remote)); applySystemGate(); }
+      }catch(e){}
     });
     applyCycleStepsRows(rows);
     rows.forEach(r=>{
