@@ -5539,6 +5539,11 @@ function filterOrg(){
    (u[10]===ชื่อ L2 ตัวเอง) ไม่ใช่ L1 ทั้งบริษัท admin/sysadmin/exec ยังเห็นหัวหน้าทุกคนเหมือนเดิม
    (เพื่อกำกับดูแลภาพรวม) — สร้างจากรายชื่อ "คนที่มีบทบาทเป็น L1 จริงใต้สายนี้" แทนการไล่หา u[9] ที่มี
    ใครใช้อยู่บ้าง จึงไม่พลาดหัวหน้าที่ยังไม่มีลูกทีมในรอบนี้ด้วย */
+/* #268: บทบาทที่ผู้ประเมินระดับถัดไป "ประเมินแทน" ได้ในหน้า 2. ประเมินทีมงาน — เดิมมีแค่ emp/unit ทำให้ MGR (l2) ที่มี GM เป็นผู้ประเมินคนเดียว
+   และหัวหน้าแผนก (l1) ที่ไม่มีหัวหน้าหน่วย/ผจก.ส่วนคั่นกลาง ไม่ถูกแสดงให้ใครประเมินเลย (resolveL1/L2 คืน null ให้บทบาทตัวเองและสูงกว่าเสมอ ซึ่งถูกต้องตามกติกา #22 แต่ไม่ได้แปลว่าไม่ต้องมีคนประเมิน)
+   __noL1__ (ผจก.ส่วนดู): emp/unit/l1 ที่ผจก.ส่วนคนนี้เป็นผู้สอบทาน L2Reviewed; __noL1L2__ (GM ดู): emp/unit/l1/l2 ที่ GM คนนี้เป็นผู้อนุมัติ */
+const TEAM_BUCKET_ROLES_NOL1 = ['emp','unit','l1'];
+const TEAM_BUCKET_ROLES_NOL1L2 = ['emp','unit','l1','l2'];
 function populateTeamManagerSelect(){
   const sel = document.getElementById('teamManagerSelect');
   if(!sel) return;
@@ -5565,7 +5570,7 @@ function populateTeamManagerSelect(){
        ขั้น L1Reviewed ให้คนกลุ่มนี้อยู่แล้ว) ให้ L2 "ดู/ประเมินแทน" คนกลุ่มนี้ได้ตรงในหน้านี้เลย แทนที่
        dropdown จะว่างเพราะไม่มีหัวหน้า L1 ให้เลือก (คือสิ่งที่ผู้ใช้รายงานว่า "ยังไม่เห็นใบประเมิน") —
        เพิ่มเป็นตัวเลือกพิเศษ ไม่ใช่ชื่อคนจริง จึงต้องแยกจาก managerNames (string ชื่อ) ข้างล่าง */
-    const noL1Count = MASTER_USERS.filter(u=>u[12]==='active' && u[0]!==me[0] && (u[2]==='emp'||u[2]==='unit')
+    const noL1Count = MASTER_USERS.filter(u=>u[12]==='active' && u[0]!==me[0] && TEAM_BUCKET_ROLES_NOL1.includes(u[2])
       && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
       && typeof resolveL2Reviewer==='function' && (resolveL2Reviewer(u)||{})[0]===me[0]).length;
     sel.dataset.noL1Count = noL1Count;
@@ -5580,7 +5585,7 @@ function populateTeamManagerSelect(){
        'gm' เดินสายแค่ 1 ชั้นจาก u[19] เท่านั้น ยังไม่รองรับไล่ลึกผ่าน L2 — นอกขอบเขตคำขอนี้) */
     managerNames = [];
     const myCodeGm = me[0];
-    const noL1L2Count = MASTER_USERS.filter(u=>u[12]==='active' && u[0]!==myCodeGm && (u[2]==='emp'||u[2]==='unit')
+    const noL1L2Count = MASTER_USERS.filter(u=>u[12]==='active' && u[0]!==myCodeGm && TEAM_BUCKET_ROLES_NOL1L2.includes(u[2])
       && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
       && typeof resolveL2Reviewer==='function' && !resolveL2Reviewer(u)
       && typeof resolveGmReviewer==='function' && (resolveGmReviewer(u)||{})[0]===myCodeGm).length;
@@ -5665,7 +5670,7 @@ function renderTeamFromMaster() {
     : (managerName ? (myScoped ? `ผู้ใต้บังคับบัญชาทุกสายของ ${managerName}` : `ผู้ใต้บังคับบัญชาทางตรงของ ${managerName}`) : 'เลือกหัวหน้าเพื่อดูทีมงาน');
 
   const allDirectReports = isNoL1Mode
-    ? MASTER_USERS.filter(u => u[12]==='active' && u[0]!==me[0] && (u[2]==='emp'||u[2]==='unit')
+    ? MASTER_USERS.filter(u => u[12]==='active' && u[0]!==me[0] && TEAM_BUCKET_ROLES_NOL1.includes(u[2])
         /* จำกัดเฉพาะ role 'emp'/'unit' — resolveL1Reviewer() คืน null ให้ role l1 เองเสมอ (ไม่ต้องมีใคร
            สอบทานขั้น L1 ของตัวเอง ตามกติกา #22/#128) ซึ่งถูกต้องสำหรับกฎการสอบทาน แต่ถ้าไม่กรอง role ออก
            ตรงนี้ หัวหน้าแผนก (l1) เองจะโผล่มาเป็น "ลูกทีมที่ไม่มีหัวหน้า L1" ในหน้านี้ด้วย ทั้งที่หัวหน้า
@@ -5673,7 +5678,7 @@ function renderTeamFromMaster() {
         && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
         && typeof resolveL2Reviewer==='function' && (resolveL2Reviewer(u)||{})[0]===me[0])
     : isNoL1L2Mode
-    ? MASTER_USERS.filter(u => u[12]==='active' && u[0]!==me[0] && (u[2]==='emp'||u[2]==='unit')
+    ? MASTER_USERS.filter(u => u[12]==='active' && u[0]!==me[0] && TEAM_BUCKET_ROLES_NOL1L2.includes(u[2])
         && typeof resolveL1Reviewer==='function' && !resolveL1Reviewer(u)
         && typeof resolveL2Reviewer==='function' && !resolveL2Reviewer(u)
         && typeof resolveGmReviewer==='function' && (resolveGmReviewer(u)||{})[0]===me[0])
@@ -10493,7 +10498,7 @@ function rejectInfoHtml(key){
   if(!i||!i.reason) return '';
   return '<br><b>เหตุผลที่ตีกลับ'+(i.by?' (โดย '+escH(i.by)+')':'')+':</b> '+escH(i.reason);
 }
-const REJECT_STEP_TARGET = { RejectedL1Review:'Draft', RejectedSubmitted:'Draft', RejectedL2Review:'Submitted', RejectedL1Reviewed:'Submitted', RejectedGmApproval:'L1Reviewed', RejectedL2Reviewed:'L1Reviewed' };
+const REJECT_STEP_TARGET = { RejectedL1Review:'Draft', RejectedSubmitted:'Draft', RejectedL2Review:'Submitted', RejectedL1Reviewed:'Submitted', RejectedGmApproval:'L1Reviewed', RejectedL2Reviewed:'L1Reviewed', RejectedGmSole:'Draft' };
 /* ธง "ถูกตีกลับ" เดิมอยู่ในเครื่องที่กดตีกลับเท่านั้น → ผู้ประเมินที่เปิดจากเครื่องอื่นไม่ถูกบังคับ.
    อ่านจาก Approvals: แถวล่าสุดของ empCode|cycle เป็น Rejected* และใบยังอยู่สถานะปลายทางของการตีกลับนั้น
    (ยังไม่มีใครส่งต่อ) และยังไม่เคยปลดธงหลังเวลาตีกลับ → ตั้งธง + เหตุผลในเครื่องนี้ */
@@ -11062,7 +11067,7 @@ function renderGmApproveQueue(){
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
       <td style="font-size:12px">${dept}</td>
       <td style="text-align:center">${X}</td>
-      <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
+      <td>${isSoleGmReviewer(r.emp,me)?`<button class="btn btn-sm btn-p" title="คุณเป็นผู้ประเมินคนเดียวของพนักงานคนนี้ — ให้คะแนน/แก้ไขแล้วอนุมัติได้ในฟอร์ม" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',false)">ประเมิน/อนุมัติในฟอร์ม</button> `:''}<button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
   }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
   /* #238: ตารางที่ 2 — GM อนุมัติแล้ว รอ "ยืนยันส่งผลให้พนักงาน" (สถานะ GMApproved) + ที่ส่งแล้ว (ResultSent ขึ้นไป) แสดงสถานะ */
@@ -11141,8 +11146,13 @@ async function rejectGmSelected(){
      ใหม่โดยตรง ตอนนี้ต้องส่งกลับ 'L1Reviewed' (ขั้นก่อนหน้า L2Reviewed) เพื่อให้ landing ตรงคิว
      สอบทานผู้จัดการส่วนอีกครั้ง ไม่ใช่ย้อนไปถึงคิวหัวหน้าแผนกที่ไม่ได้ทำอะไรผิด */
   const _why = askRejectReason(keys.length); if(!_why) return;
-  updateDraftStatus(keys,'L1Reviewed');
-  keys.forEach(k=>recordReject(k,'RejectedGmApproval',_why));
+  /* #268: GM ที่เป็นผู้ประเมินคนเดียว (ไม่มี L1/L2 ตัวจริง) ตีกลับไป L1Reviewed ไม่ได้ — ระบบข้ามขั้นกลับมารอ GM เหมือนเดิม จึงตีกลับไป Draft (ให้ประเมินใหม่) */
+  const _soleKeys = keys.filter(k=>isSoleGmReviewer(MASTER_USERS.find(u=>u[0]===k.split('|')[0]), CURRENT_SESSION_USER));
+  const _normKeys = keys.filter(k=>!_soleKeys.includes(k));
+  if(_normKeys.length) updateDraftStatus(_normKeys,'L1Reviewed');
+  if(_soleKeys.length) updateDraftStatus(_soleKeys,'Draft');
+  _normKeys.forEach(k=>recordReject(k,'RejectedGmApproval',_why));
+  _soleKeys.forEach(k=>recordReject(k,'RejectedGmSole',_why));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากอนุมัติ GM', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้ผู้จัดการส่วนสอบทานอีกครั้ง '+keys.length+' รายการ','warn');
 }
@@ -14175,6 +14185,10 @@ async function sendHeldTeamSelected(){
   smlToast('ส่งต่อผู้ประเมินคนถัดไปแล้ว '+keys.length+' คน — แก้ไขไม่ได้แล้ว'+nextNotifyToast(nextRes),'ok');
   renderWorkflowPages();
 }
+function isSoleGmReviewer(emp, me){
+  return !!(emp && me && typeof resolveGmReviewer==='function' && (resolveGmReviewer(emp)||{})[0]===me[0]
+    && !resolveL1Reviewer(emp) && !resolveL2Reviewer(emp));
+}
 async function submitReviewerForm(){
   const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
   const cfg = LEVEL_CONFIG[lv];
@@ -14217,6 +14231,8 @@ async function submitReviewerForm(){
   const STEP = { Draft:{next:'Submitted', label:'บันทึกคะแนนรอบแรกโดยหัวหน้า'},
                  Submitted:{next:'L1Reviewed', label:'ผ่านสอบทานหัวหน้าแผนก'},
                  L1Reviewed:{next:'L2Reviewed', label:'ผ่านสอบทานผู้จัดการส่วน'} };
+  /* #268: GM ที่เป็นผู้ประเมินคนเดียวของพนักงาน (ไม่มีผู้สอบทาน L1/L2 ตัวจริงคั่น เช่น MGR) ต้องแก้/ให้คะแนนในฟอร์มแล้วอนุมัติเองได้ — เดิมฟอร์มฝั่ง GM เป็นอ่านอย่างเดียว */
+  if(curStatus==='L2Reviewed' && emp && isSoleGmReviewer(emp, CURRENT_SESSION_USER)) STEP.L2Reviewed = {next:'GMApproved', label:'GM ประเมินและอนุมัติแล้ว'};
   const step = STEP[curStatus];
   if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการบันทึกจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
   /* ผู้ใช้ขอ "ต้องมีคนประเมินอย่างน้อย 1 คน" — บล็อกเฉพาะการส่งครั้งแรกจริง (Draft→Submitted) เหมือน
