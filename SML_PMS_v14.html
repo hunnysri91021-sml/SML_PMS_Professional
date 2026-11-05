@@ -4867,7 +4867,7 @@ function getMyScopedEmpCodes(){
      ไม่แตะ role ที่คืน null (emp/admin/sysadmin/exec) เพราะ null แปลว่า "ไม่จำกัดอยู่แล้ว" การเพิ่ม
      เงื่อนไขจะกลายเป็นจำกัดแคบลงแทน ซึ่งผิดเจตนา */
   const addGmNamedScope = (set)=>{
-    MASTER_USERS.forEach(u=>{ if((u[11]||'').trim()===myName) set.add(u[0]); });
+    MASTER_USERS.forEach(u=>{ if((u[11]||'').trim()===myName || (u[19]||'').trim()===myName) set.add(u[0]); }); /* #270: รวมคนที่ชื่อเราอยู่ในช่อง L3 (u[19]) ด้วย */
     return set;
   };
   if(role==='unit'){
@@ -4907,7 +4907,7 @@ function getMyScopedEmpCodes(){
        ใช้ scope ตรงนี้มาก่อน #145 ไม่ใช่ฟิลด์ GM จริงตามป้ายหน้าจอ แต่เป็นฟิลด์ "ผู้ตรวจ MGR") */
     const codes = MASTER_USERS.filter(u=>(u[11]||'').trim()===myName).map(u=>u[0]);
     codes.push(myCode);
-    return new Set(codes);
+    return addGmNamedScope(new Set(codes)); /* #270: GM ที่ถูกระบุเป็นผู้ตรวจ L3 ของใครก็เห็นคนนั้นด้วย */
   }
   return null;
 }
@@ -4956,6 +4956,12 @@ function applySession(u){
     const myName = (u[1]||'').trim();
     const isNamedGmApprover = MASTER_USERS.some(x=>(x[11]||'').trim()===myName);
     if(isNamedGmApprover) gmNavEl.style.display = 'flex';
+  }
+  /* #270: คนที่ role ไม่ใช่ l2 แต่ถูกระบุในช่อง "ผู้ตรวจ MGR (L3)" ของใคร ต้องเข้าเมนู "4. สอบทานผู้จัดการส่วน (L3)" ได้ */
+  const l3NavEl = document.querySelector('.nav-item[data-pg="review"]');
+  if(l3NavEl && !['l2','exec','admin','sysadmin'].includes(u[2])){
+    const myName3 = (u[1]||'').trim();
+    if(MASTER_USERS.some(x=>(x[19]||'').trim()===myName3)) l3NavEl.style.display = 'flex';
   }
   const badge = document.getElementById('sessionBadge');
   const nameEl = document.getElementById('sessionName');
@@ -10222,7 +10228,9 @@ function resolveL2Reviewer(emp){
   if(['l2','gm','exec','admin','sysadmin'].includes(emp[2])) return null;
   const name = (emp[19]||'').trim();
   if(!name || name==='—') return null;
-  return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[2]==='l2') || null;
+  /* #270: ไม่บังคับ role==='l2' แล้ว (เหมือน #158 ของ GM) — HR อาจใส่ชื่อคนที่ role อื่น (เช่น GM/หัวหน้าแผนกที่ทำหน้าที่ผู้ตรวจแทน) ในช่อง "ผู้ตรวจ MGR (L3)" ได้
+     ใครที่ชื่อตรงช่องนี้และยัง active (และไม่ใช่ตัวเอง) ถือเป็นผู้สอบทานขั้น L2Reviewed ของคนนี้จริง; scope/เมนูตามด้วย addNamedApproverScope + applySession */
+  return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active' && u[0]!==emp[0]) || null;
 }
 function resolveGmReviewer(emp){
   if(!emp) return null;
