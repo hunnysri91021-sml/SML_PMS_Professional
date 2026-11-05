@@ -566,7 +566,7 @@ async function handleLineAckPostback(ev, env, token, driveId, itemId) {
         const updated = row.slice();
         updated[statusIdx] = 'Acknowledged';
         await upsertRow(token, driveId, itemId, 'Appraisals', [0, 2, 3], [code, cycle, level], updated);
-        await addRow(token, driveId, itemId, 'Approvals', [code, empName, cycle, 'Acknowledged', empName, new Date().toISOString(), 'รับทราบผลการประเมินผ่าน LINE']);
+        await appendRow(env, token, driveId, itemId, 'Approvals', [code, empName, cycle, 'Acknowledged', empName, new Date().toISOString(), 'รับทราบผลการประเมินผ่าน LINE']);
         outcome = 'saved';
       } else if (evalStatusRank(status) > evalStatusRank('ResultSent')) {
         outcome = 'already';
@@ -750,7 +750,7 @@ async function handleLineWebhook(request, env, ctx) {
    เปิดใช้ด้วย env LIST_TABLES="AuditLog" (คั่นด้วยจุลภาค) — ถ้าไม่ตั้ง ทุกอย่างทำงานผ่าน Excel เหมือนเดิม
    สัญญา API กับเว็บ (/rows, /rows/add) ไม่เปลี่ยน: Worker แปลง list item <-> array ตามลำดับคอลัมน์เดิม
    List ใช้คอลัมน์ข้อความหลายบรรทัดชื่อ F0..F{n-1} (n จาก LIST_SCHEMAS) ชื่อ list = ชื่อตาราง */
-const LIST_SCHEMAS = { AuditLog: 7 };
+const LIST_SCHEMAS = { AuditLog: 7, Approvals: 7 };
 function isListBacked(env, table) {
   if (!(table in LIST_SCHEMAS)) return false;
   return String(env.LIST_TABLES || '').split(',').map((x) => x.trim()).includes(table);
@@ -890,6 +890,14 @@ async function listRows(token, driveId, itemId, table) {
     guard++;
   }
   return rows;
+}
+// #264: เพิ่มแถวต่อท้าย โดยเคารพ LIST_TABLES (ตารางที่ย้ายไป SharePoint List ต้องเขียนที่ List ไม่ใช่ Excel)
+async function appendRow(env, token, driveId, itemId, table, values) {
+  if (isListBacked(env, table)) {
+    const { siteId } = await resolveSite(env, token);
+    return addListItem(token, siteId, table, values);
+  }
+  return addRow(token, driveId, itemId, table, values);
 }
 async function addRow(token, driveId, itemId, table, values) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows/add`;

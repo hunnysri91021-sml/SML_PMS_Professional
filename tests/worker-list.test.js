@@ -61,5 +61,10 @@ global.fetch=async(url,opt={})=>{
   ok(ne.j.rows.length===0,'ไม่ใช่ Admin ยังอ่าน AuditLog ไม่ได้เหมือนเดิม');
   ok((await call(ENV2,'/rows/upsert','POST',{table:'AuditLog',keyColIndex:0,keyValue:'x',values:['x']},A)).s===400,'upsert บนตารางใน List → 400');
   ok((await call(ENV2,'/rows/delete','POST',{table:'AuditLog',keyColIndex:0,keyValue:'x'},A)).s===400,'delete บนตารางใน List → 400');
+  // Approvals ก็ย้ายได้ (append-only) และ LINE ack ต้องเขียนผ่าน appendRow เคารพ LIST_TABLES
+  const ENV3=Object.assign({},BASE,{LIST_TABLES:'Approvals'});
+  const m2=calls.length;
+  const ap=await call(ENV3,'/rows/add','POST',{table:'Approvals',values:['E1','พนง','2569','Submitted','พนง','t','']},E);
+  ok(ap.s===200&&calls.slice(m2).some(c=>/lists\/Approvals\/items/.test(c.u)&&c.m==='POST')&&!calls.slice(m2).some(c=>c.excelAdd),'Approvals ที่เปิด LIST_TABLES → เพิ่มแถวลง List ไม่ใช่ Excel');
   done();
 })();
