@@ -755,11 +755,28 @@ function isListBacked(env, table) {
   return String(env.LIST_TABLES || '').split(',').map((x) => x.trim()).includes(table);
 }
 function listFieldNames(table) { return Array.from({ length: LIST_SCHEMAS[table] }, (_, i) => 'F' + i); }
+// SharePoint อาจตั้งชื่อภายในของคอลัมน์ "F0" เป็น "_x0046_0" — อ่านชื่อภายในจริงจาก list แล้วใช้ตามนั้น (cache ต่อ isolate)
+const _listFieldCache = {};
+async function resolveListFields(token, siteId, table) {
+  const def = listFieldNames(table);
+  const ck = siteId + '|' + table;
+  if (_listFieldCache[ck]) return _listFieldCache[ck];
+  try {
+    const c = await graphGet(token, `${listBase(siteId, table)}/columns?$select=name,displayName&$top=200`);
+    const cols = c.value || [];
+    const out = def.map((n, i) => {
+      const hit = cols.find((x) => x.name === n) || cols.find((x) => x.name === '_x0046_' + i) || cols.find((x) => x.displayName === n);
+      return hit ? hit.name : n;
+    });
+    _listFieldCache[ck] = out;
+    return out;
+  } catch (e) { return def; }
+}
 function listBase(siteId, table) {
   return `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${encodeURIComponent(table)}`;
 }
 async function listItemRows(token, siteId, table, limit) {
-  const names = listFieldNames(table);
+  const names = await resolveListFields(token, siteId, table);
   let url = `${listBase(siteId, table)}/items?$expand=${encodeURIComponent('fields($select=' + names.join(',') + ')')}&$top=999`;
   let rows = [];
   let guard = 0;
@@ -772,13 +789,14 @@ async function listItemRows(token, siteId, table, limit) {
   const lim = parseInt(limit, 10);
   return lim > 0 && rows.length > lim ? rows.slice(rows.length - lim) : rows;
 }
-function listFieldsFromValues(table, values) {
+function listFieldsFromValues(names, values) {
   const f = {};
-  listFieldNames(table).forEach((n, i) => { f[n] = String(values[i] ?? ''); });
+  names.forEach((n, i) => { f[n] = String(values[i] ?? ''); });
   return f;
 }
 async function addListItem(token, siteId, table, values) {
-  return graphSend(token, `${listBase(siteId, table)}/items`, 'POST', { fields: listFieldsFromValues(table, values) });
+  const names = await resolveListFields(token, siteId, table);
+  return graphSend(token, `${listBase(siteId, table)}/items`, 'POST', { fields: listFieldsFromValues(names, values) });
 }
 async function countListItems(token, siteId, table) {
   let url = `${listBase(siteId, table)}/items?$select=id&$top=999`;
@@ -824,6 +842,7 @@ async function ensureList(token, siteId, table) {
 /* ย้ายข้อมูลจาก Excel เข้า list ทีละก้อน (ทำซ้ำได้: เริ่มต่อจากจำนวนที่ย้ายไปแล้ว — ใช้ได้เพราะ AuditLog เป็น append-only) */
 async function migrateTableToList(token, driveId, itemId, siteId, table, offset, chunk) {
   const rows = await listRows(token, driveId, itemId, table);
+  const fnames = await resolveListFields(token, siteId, table);
   let start = offset;
   if (start === 0) start = await countListItems(token, siteId, table);
   const part = rows.slice(start, start + chunk);
@@ -832,7 +851,7 @@ async function migrateTableToList(token, driveId, itemId, siteId, table, offset,
       id: String(j + 1), method: 'POST',
       url: `/sites/${siteId}/lists/${encodeURIComponent(table)}/items`,
       headers: { 'Content-Type': 'application/json' },
-      body: { fields: listFieldsFromValues(table, vals) },
+      body: { fields: listFieldsFromValues(fnames, vals) },
     }));
     const res = await graphSend(token, 'https://graph.microsoft.com/v1.0/$batch', 'POST', { requests: batch });
     const bad = (res.responses || []).filter((r) => r.status >= 300);
