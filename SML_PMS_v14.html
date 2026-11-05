@@ -4954,7 +4954,8 @@ function applySession(u){
   const gmNavEl = document.querySelector('.nav-item[data-pg="gmapprove"]');
   if(gmNavEl && !['gm','exec','admin','sysadmin'].includes(u[2])){
     const myName = (u[1]||'').trim();
-    const isNamedGmApprover = MASTER_USERS.some(x=>(x[11]||'').trim()===myName);
+    const isNamedGmApprover = MASTER_USERS.some(x=>(x[11]||'').trim()===myName)
+      || MASTER_USERS.some(x=>{ const sd=resolveResultSender(x); return sd && sd[0]===u[0]; }); /* #271: ผู้กดส่งผลแทน GM ในสายที่ไม่มี GM */
     if(isNamedGmApprover) gmNavEl.style.display = 'flex';
   }
   /* #270: คนที่ role ไม่ใช่ l2 แต่ถูกระบุในช่อง "ผู้ตรวจ MGR (L3)" ของใคร ต้องเข้าเมนู "4. สอบทานผู้จัดการส่วน (L3)" ได้ */
@@ -10242,6 +10243,11 @@ function resolveGmReviewer(emp){
      "ผู้อนุมัติ GM (L4)" (u[11]) และยัง active อยู่ ถือเป็นผู้อนุมัติ GM ของคนนี้จริง */
   return MASTER_USERS.find(u=>(u[1]||'').trim()===name && u[12]==='active') || null;
 }
+/* #271: ผู้กด "ยืนยันส่งผลให้พนักงาน" — GM ถ้ามี; สายที่ไม่มี GM เลย ใบหยุดที่ GMApproved (ข้ามขั้น) จึงให้ผู้สอบทานคนสุดท้ายจริงในสาย (L3 แล้วค่อย L2) เป็นผู้กดแทน
+   เดิมมีแต่ Admin/exec ที่เห็นและกดได้ */
+function resolveResultSender(emp){
+  return resolveGmReviewer(emp) || resolveL2Reviewer(emp) || resolveL1Reviewer(emp) || null;
+}
 function getRealReviewChain(emp){
   return [
     { stage:'L1Reviewed', reviewer: resolveL1Reviewer(emp) },
@@ -11082,7 +11088,8 @@ function renderGmApproveQueue(){
   const sendBody = document.getElementById('gmSendRows'), sendCnt = document.getElementById('gmSendCount');
   if(sendBody){
     const sendChecked = new Set(getCheckedKeys('gmsend-chk'));
-    const sendRows = roster.filter(r=>r.state==='done' && r.draft && evalStatusRank(r.draft[r.draft.length-1])>=evalStatusRank('GMApproved') && evalStatusRank(r.draft[r.draft.length-1])<evalStatusRank('Calibrated'));
+    const sendRoster = me ? buildTierRoster(effectiveResolver(resolveResultSender, me[2]), me[0], 'L2Reviewed', cycle) : [];
+    const sendRows = sendRoster.filter(r=>r.state==='done' && r.draft && evalStatusRank(r.draft[r.draft.length-1])>=evalStatusRank('GMApproved') && evalStatusRank(r.draft[r.draft.length-1])<evalStatusRank('Calibrated'));
     const waiting = sendRows.filter(r=>r.draft[r.draft.length-1]==='GMApproved').length;
     if(sendCnt) sendCnt.textContent = waiting+' รอส่ง';
     sendBody.innerHTML = sendRows.length ? deptGroupMapK('gmapprove',sendRows,5,r=>{
@@ -12016,7 +12023,7 @@ function renderNavBadges(){
     navBadgeTeam: teamPending,
     navBadgeReviewL1: readyCount(resolveL1Reviewer, 'Submitted'),
     navBadgeReview: readyCount(resolveL2Reviewer, 'L1Reviewed'),
-    navBadgeGm: readyCount(resolveGmReviewer, 'L2Reviewed') + readyCount(resolveGmReviewer, 'GMApproved'),
+    navBadgeGm: readyCount(resolveGmReviewer, 'L2Reviewed') + readyCount(resolveResultSender, 'GMApproved'),
     navBadgeCalib: readyCount(null, 'Acknowledged'),
     navBadgeApprove: readyCount(null, 'CalibChecked'),
   };
@@ -12891,7 +12898,7 @@ function getNotifications(){
   const submitted = readyCount(resolveL1Reviewer, 'Submitted');
   const l1reviewed = readyCount(resolveL2Reviewer, 'L1Reviewed');
   const l2reviewed = readyCount(resolveGmReviewer, 'L2Reviewed');
-  const gmToSend = readyCount(resolveGmReviewer, 'GMApproved');
+  const gmToSend = readyCount(resolveResultSender, 'GMApproved');
   const calibrated = readyCount(null, 'CalibChecked');
   const toCheck = readyCount(null, 'Calibrated');
   if(submitted) items.push({ icon:'📝', text:`มีใบประเมิน ${submitted} รายการ รอสอบทานหัวหน้าแผนก`, page:'reviewl1' });
