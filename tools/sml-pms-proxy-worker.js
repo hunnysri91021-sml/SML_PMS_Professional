@@ -225,6 +225,27 @@ export default {
         return json({ ok: true, ...r }, 200, cors);
       }
 
+      /* #267: เก็บถาวร — ลบแถวเก่าออกจาก List (AuditLog/Approvals) หลังเว็บ export ไฟล์เก็บไว้แล้ว
+         ทำได้เฉพาะตารางที่สลับไปใช้ List แล้ว, วันที่ตัดต้องเก่ากว่า 60 วัน (กันลบข้อมูลรอบปัจจุบัน), ลบทีละ ≤400 แถวต่อครั้ง */
+      if (url.pathname === '/admin/list-archive' && request.method === 'POST') {
+        const { table, before, dryRun } = await request.json();
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
+        if (!(table in ARCHIVE_DATE_COL)) return json({ error: 'ตารางนี้ไม่รองรับการเก็บถาวร' }, 400, cors);
+        if (!isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' ยังไม่ได้สลับไปใช้ SharePoint List (LIST_TABLES) — เก็บถาวรได้เฉพาะตารางที่อยู่ใน List' }, 400, cors);
+        const cutoff = Date.parse(before);
+        if (isNaN(cutoff)) return json({ error: 'วันที่ตัดไม่ถูกต้อง' }, 400, cors);
+        if (cutoff > Date.now() - 60 * 86400000) return json({ error: 'เก็บถาวรได้เฉพาะข้อมูลที่เก่ากว่า 60 วัน' }, 400, cors);
+        const col = ARCHIVE_DATE_COL[table];
+        const items = await listItemsPick(token, siteId, table, [col]);
+        const old = items.filter((x) => { const t = Date.parse(x.v[col]); return !isNaN(t) && t < cutoff; });
+        if (dryRun) return json({ ok: true, count: old.length, total: items.length, dryRun: true }, 200, cors);
+        const batch = old.slice(0, 400);
+        const reqs = batch.map((x) => ({ method: 'DELETE', url: `/sites/${siteId}/lists/${listSeg(table)}/items/${x.id}` }));
+        try { await sendListBatches(token, siteId, table, reqs); }
+        catch (e) { return json({ error: String(e.message || e).replace('ย้ายไม่สำเร็จ', 'ลบไม่สำเร็จ') }, 500, cors); }
+        return json({ ok: true, deleted: batch.length, remaining: old.length - batch.length, total: items.length }, 200, cors);
+      }
+
       if (url.pathname === '/rows' && request.method === 'GET') {
         const table = url.searchParams.get('table');
         if (!table) return json({ error: 'missing table' }, 400, cors);
@@ -771,6 +792,8 @@ async function handleLineWebhook(request, env, ctx) {
 const LIST_SCHEMAS = { AuditLog: 7, Approvals: 7, Appraisals: 24 };
 // ตารางที่ "แก้แถวเดิม" (upsert/ลบ/ลบซ้ำ) ต้องระบุคอลัมน์คีย์ — ตารางที่ไม่อยู่ในนี้เป็นแบบเพิ่มแถวอย่างเดียว
 const LIST_KEYS = { Appraisals: [0, 2, 3] };
+// #267: คอลัมน์วันที่/เวลา (ISO) ของตารางที่เก็บถาวรได้ — AuditLog F0, Approvals F5
+const ARCHIVE_DATE_COL = { AuditLog: 0, Approvals: 5 };
 const DEDUPE_STATUS_COL = 22;
 function isListBacked(env, table) {
   if (!(table in LIST_SCHEMAS)) return false;

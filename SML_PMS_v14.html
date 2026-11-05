@@ -2863,6 +2863,8 @@ img,svg,canvas{max-width:100%}
           <div class="card-b">
             <div style="font-size:12px;color:#475569;margin-bottom:10px">Pending: <b id="appraisalPending">0 รายการ</b></div>
             <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAppraisals()">📤 Push ผลประเมิน → Excel</button>
+            <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="Export ข้อมูลเก่าของ Audit Log เป็นไฟล์เก็บไว้ แล้วลบออกจาก SharePoint List — Admin/HR เท่านั้น" onclick="ms365ArchiveOldRows('AuditLog')">🗄️ เก็บถาวร Audit Log เก่า</button>
+            <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="Export ประวัติ Approvals ของรอบเก่าเป็นไฟล์เก็บไว้ แล้วลบออกจาก SharePoint List — Admin/HR เท่านั้น" onclick="ms365ArchiveOldRows('Approvals')">🗄️ เก็บถาวร Approvals เก่า</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ลบแถวซ้ำเก่า (รหัส+รอบ+ระดับเดียวกัน) เก็บแถวสถานะล่าสุด — Admin/HR เท่านั้น" onclick="ms365DedupeAppraisals()">🧹 ลบแถวซ้ำเก่าใน Appraisals</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Audit Log จาก Excel ไปเก็บเป็น SharePoint List (เร็วกว่า) — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateAuditLogToList()">🚚 ย้าย Audit Log ไป SharePoint List</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Approvals จาก Excel ไปเก็บเป็น SharePoint List — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateTableToList('Approvals')">🚚 ย้าย Approvals ไป SharePoint List</button>
@@ -8339,6 +8341,48 @@ async function ms365MigrateTableToList(table){
   }
 }
 function ms365MigrateAuditLogToList(){ return ms365MigrateTableToList('AuditLog'); }
+
+/* #267: ปุ่ม Admin — เก็บถาวรแถวเก่าของ AuditLog/Approvals: ดึงทั้งตาราง → export CSV (ต้องได้ไฟล์ก่อน) → นับตรงกับที่ Worker จะลบ → ยืนยัน → ลบจาก List ทีละก้อน
+   ทำได้เฉพาะตารางที่สลับไปใช้ List แล้ว และเก่ากว่า 60 วัน (Worker บังคับ) — ห้ามเลือกวันที่ในรอบประเมินปัจจุบัน เพราะ Approvals ใช้สร้างธงตีกลับ/ลายเซ็น/ความเห็น */
+const ARCHIVE_DATE_COL = { AuditLog:0, Approvals:5 };
+const ARCHIVE_HEADERS = {
+  AuditLog:['เวลา','ผู้ใช้','ประเภท','การกระทำ','เป้าหมาย','รายละเอียด','IP'],
+  Approvals:['EmpID','ชื่อ-สกุล','รอบ','ขั้นตอน','ผู้อนุมัติ','วันที่/เวลา','ความเห็น']
+};
+async function ms365ArchiveOldRows(table){
+  const label = LIST_TABLE_LABEL[table] || table;
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg) || !isWorkerConfigured(cfg)){ smlToast('ต้องตั้งค่า MS365 + Proxy ก่อน','warn'); return; }
+  const def = new Date(Date.now()-365*86400000).toISOString().slice(0,10);
+  const inp = prompt('เก็บถาวร '+label+'\n\nระบุวันที่ตัด (YYYY-MM-DD) — ข้อมูลที่เก่ากว่าวันนี้จะถูก export เป็นไฟล์แล้วลบออกจาก List\n(ต้องเก่ากว่า 60 วัน และไม่ควรอยู่ในรอบประเมินที่กำลังดำเนินอยู่):', def);
+  if(inp===null) return;
+  const before = String(inp).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(before) || isNaN(Date.parse(before))){ smlToast('รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD ปี ค.ศ.)','warn'); return; }
+  try{
+    const col = ARCHIVE_DATE_COL[table], cutoff = Date.parse(before);
+    const dry = await workerFetch(cfg, '/admin/list-archive', { method:'POST', body: JSON.stringify({ table, before, dryRun:true }) });
+    if(!dry.count){ smlToast('ไม่มีข้อมูล '+label+' ที่เก่ากว่า '+before,'info'); return; }
+    const all = await graphListTableRows(table);
+    const old = all.filter(r=>{ const t=Date.parse(r[col]); return !isNaN(t) && t<cutoff; });
+    if(old.length!==dry.count){ smlToast('จำนวนที่ export ('+old.length+') ไม่ตรงกับที่จะลบ ('+dry.count+') — ยกเลิกเพื่อความปลอดภัย ลองใหม่อีกครั้ง','err'); return; }
+    downloadCsv('archive_'+table+'_before_'+before+'.csv', ARCHIVE_HEADERS[table], old);
+    if(!confirm('ดาวน์โหลดไฟล์ archive_'+table+'_before_'+before+'.csv แล้ว ('+old.length+' แถว)\n\nตรวจว่าได้ไฟล์และเก็บไว้ในที่ปลอดภัยแล้ว จึงกดตกลงเพื่อ "ลบ '+old.length+' แถวนี้ออกจาก SharePoint List" (ลบแล้วกู้คืนไม่ได้ นอกจากจากไฟล์นี้)\n\nลบเลย?')){ smlToast('ยกเลิกการลบ — ไฟล์ export ยังอยู่ ข้อมูลใน List ไม่ถูกแตะ','info'); return; }
+    let deleted = 0, guard = 0, r;
+    do{
+      r = await workerFetch(cfg, '/admin/list-archive', { method:'POST', body: JSON.stringify({ table, before }) });
+      deleted += r.deleted; guard++;
+      smlToast('กำลังลบ '+label+' '+deleted+'/'+dry.count+' แถว...','info');
+    }while(r.remaining>0 && r.deleted>0 && guard<100);
+    appendSyncLog('เก็บถาวร '+table+': export + ลบ '+deleted+' แถวที่เก่ากว่า '+before, true);
+    if(typeof appendAuditLog==='function') appendAuditLog('ms365','เก็บถาวร '+label, deleted+' แถว', 'เก่ากว่า '+before);
+    smlToast('เก็บถาวรเสร็จ — ลบ '+deleted+' แถว (ไฟล์สำรองอยู่ในเครื่องที่ดาวน์โหลด)','ok');
+  }catch(e){
+    const msg = e?.message||String(e);
+    appendSyncLog('เก็บถาวร '+table+' ไม่สำเร็จ: '+msg, false);
+    smlToast('เก็บถาวรไม่สำเร็จ: '+msg+(/not found|404/i.test(msg)?' (ต้อง redeploy Worker ตัวล่าสุดก่อน)':''),'err');
+  }
+}
 
 /* ปุ่ม Admin: ลบแถวซ้ำเก่าใน Appraisals — นับก่อน (dry-run) → confirm บอกจำนวน+ให้สำรองไฟล์ → ลบจริง → ดึงข้อมูลใหม่ */
 async function ms365DedupeAppraisals(){
