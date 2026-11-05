@@ -5031,7 +5031,7 @@ async function runLoginSyncsCritical(){
 function runLoginSyncsBackground(){
   return Promise.all([
     'ms365SyncKpiGoals','ms365SyncIdp','ms365SyncAuditLog','ms365SyncOrgMaster','ms365SyncApprovalSignatures',
-    'ms365SyncStageSigners','ms365SyncDisputes','ms365SyncHrNotes','ms365SyncEvalComments','ms365SyncAckChannel'
+    'ms365SyncStageSigners','ms365SyncDisputes','ms365SyncHrNotes','ms365SyncEvalComments','ms365SyncAckChannel','ms365SyncRejectFlags'
   ].map(n=>_loginSyncCall(n, true))).then(()=>{
     try{ if(typeof renderWorkflowPages==='function') renderWorkflowPages(); }catch(e){}
     try{ if(typeof renderNavBadges==='function') renderNavBadges(); }catch(e){}
@@ -7495,7 +7495,7 @@ function applyEvalReconfirmState(lv, empCode, cycle){
   note.id = 'evalReconfirmNote';
   note.className = 'al al-w';
   note.style.cssText = 'margin-bottom:10px';
-  note.innerHTML = '⚠️ <b>ใบประเมินนี้ถูกตีกลับ</b> — คะแนนที่เห็นคือค่าเดิมก่อนถูกตีกลับ กรุณาตรวจสอบหรือแก้ไขก่อนส่งใหม่ '+
+  note.innerHTML = '⚠️ <b>ใบประเมินนี้ถูกตีกลับ</b> — คะแนนที่เห็นคือค่าเดิมก่อนถูกตีกลับ กรุณาตรวจสอบหรือแก้ไขก่อนส่งใหม่ '+rejectInfoHtml(key)+'<br>'+
     '<button class="btn btn-sm btn-ok" style="margin-left:8px" onclick="confirmEvalReconfirm()">✓ ยืนยันว่าตรวจสอบแล้ว</button>';
   const box = document.getElementById('evalPrevCommentsBox');
   if(box && box.parentNode) box.parentNode.insertBefore(note, box); else document.getElementById('formArea')?.prepend(note);
@@ -10413,9 +10413,71 @@ function markNeedsReconfirm(key){
 function clearNeedsReconfirm(key){
   if(!key) return;
   const s = loadNeedsReconfirmSet(); if(s.delete(key)) saveNeedsReconfirmSet(s);
+  /* #259: จำเวลาที่ปลดธงไว้ — ms365SyncRejectFlags() จะไม่ตั้งธงซ้ำจากแถวตีกลับที่เก่ากว่าเวลานี้ */
+  try{ const m=JSON.parse(localStorage.getItem(EVAL_RECONFIRM_CLEARED_KEY)||'{}'); m[key]=new Date().toISOString(); localStorage.setItem(EVAL_RECONFIRM_CLEARED_KEY, JSON.stringify(m)); }catch(e){}
 }
 function needsReconfirm(key){
   return loadNeedsReconfirmSet().has(key);
+}
+/* #259: เหตุผลตีกลับ (บังคับกรอกทุกครั้งที่ตีกลับ) + ธงตีกลับข้ามเครื่อง */
+const EVAL_REJECT_INFO_KEY = 'smlPmsEvalRejectInfo';
+const EVAL_RECONFIRM_CLEARED_KEY = 'smlPmsEvalReconfirmCleared';
+function getRejectInfo(key){ try{ return (JSON.parse(localStorage.getItem(EVAL_REJECT_INFO_KEY)||'{}'))[key]||null; }catch(e){ return null; } }
+function setRejectInfo(key, info){ try{ const m=JSON.parse(localStorage.getItem(EVAL_REJECT_INFO_KEY)||'{}'); m[key]=info; localStorage.setItem(EVAL_REJECT_INFO_KEY, JSON.stringify(m)); }catch(e){} }
+function askRejectReason(count){
+  const r = prompt('ตีกลับใบประเมิน '+count+' รายการ\n\nกรุณาระบุเหตุผลที่ตีกลับ (อย่างน้อย 5 ตัวอักษร) — ผู้ประเมินที่รับต่อจะเห็นเหตุผลนี้:');
+  if(r===null) return null;
+  const t = r.trim();
+  if(t.length<5){ smlToast('ต้องระบุเหตุผลตีกลับอย่างน้อย 5 ตัวอักษร — ยังไม่ได้ตีกลับ','warn'); return null; }
+  return t;
+}
+/* บันทึกการตีกลับ 1 ใบ: ธง + เหตุผล + แถว Approvals (เหตุผลอยู่ในคอลัมน์ความเห็น) — ใช้ร่วมทุกจุดตีกลับ */
+function recordReject(key, step, reason){
+  const [empCode,cycle] = key.split('|');
+  const actor = CURRENT_SESSION_USER;
+  pushApprovalRecordToExcel(empCode, cycle, step, '| เหตุผลตีกลับ: '+reason);
+  markNeedsReconfirm(key);
+  setRejectInfo(key, {reason, by:actor?actor[1]:'', byCode:actor?actor[0]:'', at:new Date().toISOString(), step});
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','เหตุผลตีกลับ',empCode,reason);
+}
+function rejectInfoHtml(key){
+  const i = getRejectInfo(key);
+  if(!i||!i.reason) return '';
+  return '<br><b>เหตุผลที่ตีกลับ'+(i.by?' (โดย '+escH(i.by)+')':'')+':</b> '+escH(i.reason);
+}
+const REJECT_STEP_TARGET = { RejectedL1Review:'Draft', RejectedSubmitted:'Draft', RejectedL2Review:'Submitted', RejectedL1Reviewed:'Submitted', RejectedGmApproval:'L1Reviewed', RejectedL2Reviewed:'L1Reviewed' };
+/* ธง "ถูกตีกลับ" เดิมอยู่ในเครื่องที่กดตีกลับเท่านั้น → ผู้ประเมินที่เปิดจากเครื่องอื่นไม่ถูกบังคับ.
+   อ่านจาก Approvals: แถวล่าสุดของ empCode|cycle เป็น Rejected* และใบยังอยู่สถานะปลายทางของการตีกลับนั้น
+   (ยังไม่มีใครส่งต่อ) และยังไม่เคยปลดธงหลังเวลาตีกลับ → ตั้งธง + เหตุผลในเครื่องนี้ */
+async function ms365SyncRejectFlags(silent=true){
+  const cfg = loadMs365Config();
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncRejectFlags: ยังไม่ได้ตั้งค่า MS365', false); return; }
+  try{
+    const rows = await graphListTableRows('Approvals');
+    const latest = {};
+    rows.forEach(r=>{
+      const code=String(r[0]??'').trim(), cycle=String(r[2]??'').trim(), step=String(r[3]??'').trim(), at=String(r[5]??'');
+      if(!code||!cycle||!step||!at) return;
+      const k=code+'|'+cycle;
+      if(!latest[k] || new Date(at)>new Date(latest[k].at)) latest[k]={step,at,by:String(r[4]??''),comment:String(r[6]??'')};
+    });
+    let cleared={}; try{ cleared=JSON.parse(localStorage.getItem(EVAL_RECONFIRM_CLEARED_KEY)||'{}'); }catch(e){}
+    const drafts = getDrafts();
+    Object.keys(latest).forEach(k=>{
+      const L = latest[k], target = REJECT_STEP_TARGET[L.step];
+      if(!target) return;
+      const [code,cycle] = k.split('|');
+      const d = findCurrentCycleDraft(drafts, code, cycle);
+      if(!d || d[d.length-1]!==target) return;
+      const dk = draftKey(d);
+      if(cleared[dk] && new Date(cleared[dk]) >= new Date(L.at)) return;
+      if(!needsReconfirm(dk)){
+        markNeedsReconfirm(dk);
+        const m = (L.comment||'').match(/เหตุผลตีกลับ:\s*([\s\S]*)$/);
+        setRejectInfo(dk, {reason:m?m[1].trim():'', by:L.by, at:L.at, step:L.step});
+      }
+    });
+  }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncRejectFlags: ดึงจาก Excel ล้มเหลว — '+(e&&e.message||e), false); }
 }
 
 /* เดิม ms365PushAppraisals() เอารายการที่ Approved+push สำเร็จแล้ว "ลบออกจาก" MS365_LOCAL_DRAFT_KEY
@@ -10806,8 +10868,9 @@ async function rejectReviewL1Selected(){
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   keys = await guardFreshStatus(keys,'Submitted');
   if(!keys.length) return;
+  const _why = askRejectReason(keys.length); if(!_why) return;
   updateDraftStatus(keys,'Draft');
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedL1Review',''); markNeedsReconfirm(k); });
+  keys.forEach(k=>recordReject(k,'RejectedL1Review',_why));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากสอบทานหัวหน้าแผนก', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้แก้ไข '+keys.length+' รายการ','warn');
 }
@@ -10903,8 +10966,9 @@ async function rejectReviewSelected(){
   /* #92: ตีกลับ 1 ขั้นตามหลักการเดียวกับ rejectGmSelected()/#61 — ส่งกลับไปที่ 'Submitted' (ให้หัวหน้า
      แผนกสอบทานใหม่) ไม่ใช่ 'Draft' (ย้อนไปทั้งหมดถึงพนักงาน) เพราะตอนนี้มีขั้นสอบทานหัวหน้าแผนกคั่นอยู่
      ก่อนขั้นนี้แล้ว */
+  const _why = askRejectReason(keys.length); if(!_why) return;
   updateDraftStatus(keys,'Submitted');
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedL2Review',''); markNeedsReconfirm(k); });
+  keys.forEach(k=>recordReject(k,'RejectedL2Review',_why));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากสอบทานผู้จัดการส่วน', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้หัวหน้าแผนกสอบทานใหม่ '+keys.length+' รายการ','warn');
 }
@@ -11028,8 +11092,9 @@ async function rejectGmSelected(){
   /* #92: ตีกลับ 1 ขั้นเช่นกัน — เดิม (ก่อนมีขั้นสอบทานหัวหน้าแผนก) ส่งกลับ 'Submitted' ให้ L2 สอบทาน
      ใหม่โดยตรง ตอนนี้ต้องส่งกลับ 'L1Reviewed' (ขั้นก่อนหน้า L2Reviewed) เพื่อให้ landing ตรงคิว
      สอบทานผู้จัดการส่วนอีกครั้ง ไม่ใช่ย้อนไปถึงคิวหัวหน้าแผนกที่ไม่ได้ทำอะไรผิด */
+  const _why = askRejectReason(keys.length); if(!_why) return;
   updateDraftStatus(keys,'L1Reviewed');
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'RejectedGmApproval',''); markNeedsReconfirm(k); });
+  keys.forEach(k=>recordReject(k,'RejectedGmApproval',_why));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากอนุมัติ GM', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้ผู้จัดการส่วนสอบทานอีกครั้ง '+keys.length+' รายการ','warn');
 }
@@ -13814,7 +13879,7 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
   if(submitBtn) submitBtn.disabled = pending;
   document.getElementById('reviewerReconfirmNote')?.remove();
   if(pending){
-    area.insertAdjacentHTML('afterbegin', `<div id="reviewerReconfirmNote" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ใบนี้เคยถูกตีกลับ — คะแนนที่เห็นคือคะแนนเดิมก่อนตีกลับ กรุณาตรวจสอบ แล้วเลือกอย่างใดอย่างหนึ่ง: <b>(1) แก้ไขคะแนน</b>อย่างน้อย 1 ข้อ หรือ <b>(2) กด "✓ ยืนยันผลเดิม"</b> พร้อมระบุเหตุผล — จากนั้นจึงส่งต่อผู้บังคับบัญชาตามขั้นตอนเดิมได้</div></div>`);
+    area.insertAdjacentHTML('afterbegin', `<div id="reviewerReconfirmNote" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ใบนี้เคยถูกตีกลับ — คะแนนที่เห็นคือคะแนนเดิมก่อนตีกลับ กรุณาตรวจสอบ แล้วเลือกอย่างใดอย่างหนึ่ง: <b>(1) แก้ไขคะแนน</b>อย่างน้อย 1 ข้อ หรือ <b>(2) กด "✓ ยืนยันผลเดิม"</b> พร้อมระบุเหตุผล — จากนั้นจึงส่งต่อผู้บังคับบัญชาตามขั้นตอนเดิมได้${rejectInfoHtml(reconfirmKey)}</div></div>`);
   }
   openM('mReview');
 }
@@ -14159,10 +14224,9 @@ async function rejectReviewerForm(){
                  L2Reviewed:{prev:'L1Reviewed', label:'ตีกลับจากสอบทานผู้จัดการส่วน'} };
   const step = STEP[curStatus];
   if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการตีกลับจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
-  if(!confirm('ยืนยันตีกลับใบประเมินนี้?')) return;
+  const _why = askRejectReason(1); if(!_why) return;
   updateDraftStatus([draftKey(existing)], step.prev);
-  pushApprovalRecordToExcel(code, cycle, 'Rejected'+curStatus, '');
-  markNeedsReconfirm(draftKey(existing));
+  recordReject(draftKey(existing), 'Rejected'+curStatus, _why);
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, '');
   smlToast(step.label+'เรียบร้อย','warn');
   closeM();
