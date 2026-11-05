@@ -7507,9 +7507,14 @@ function unlockEvalSubmit(){
   const btn = document.getElementById('evalBtnSubmit');
   if(btn){ btn.disabled=false; btn.style.opacity=''; btn.style.cursor=''; btn.title=''; }
 }
+let _evalReconfirmReason = null; /* #258 */
 function confirmEvalReconfirm(){
+  const key = _evalReconfirmKey;
+  const reason = askReconfirmReason(1);
+  if(!reason) return;
   unlockEvalSubmit();
-  smlToast('ยืนยันแล้ว — สามารถส่งแบบประเมินได้','ok');
+  _evalReconfirmReason = {key, reason};
+  smlToast('ยืนยันผลเดิมแล้ว (บันทึกเหตุผลไว้) — สามารถส่งแบบประเมินได้','ok');
 }
 function onEvalCodeGateChange(){
   const code = (document.getElementById('evalCodeGate')?.value || '').trim();
@@ -9503,11 +9508,15 @@ async function saveEvaluationToMs365(status='Draft'){
      ผู้เขียนจาก CURRENT_SESSION_USER จริง ไม่ใช่ payload[1] (evalName) ที่เป็น fallback เท่านั้นตาม #107 */
   if(status==='Submitted' && typeof saveEvalCommentStage==='function'){
     const actor = CURRENT_SESSION_USER;
+    /* #258: พนักงานยืนยันผลเดิมหลังถูกตีกลับ → แนบเหตุผล */
+    const rr = (_evalReconfirmReason && _evalReconfirmReason.key===draftKey(payload)) ? _evalReconfirmReason.reason : '';
+    const devTxt = (document.getElementById('evalDevelopment')?.value || '');
     const t = saveEvalCommentStage(payload[0], payload[2], 'Submitted', {
       by: actor ? actor[1] : payload[1], byCode: actor ? actor[0] : payload[0], byRole: actor ? actor[2] : 'emp',
       strength: document.getElementById('evalStrengths')?.value || '',
-      dev: document.getElementById('evalDevelopment')?.value || ''
+      dev: rr ? (devTxt.trim() ? devTxt.trim()+'\n' : '')+RECONFIRM_TAG+rr : devTxt
     });
+    if(rr){ _evalReconfirmReason = null; if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผลเดิมหลังถูกตีกลับ',payload[0],'เหตุผล: '+rr); }
     /* saveEvaluationToMs365() ไม่เคย push แถว Approvals สำหรับขั้น 'Submitted' เลยมาก่อน (การสอบทาน/
        อนุมัติเท่านั้นที่ push ผ่าน pushApprovalRecordToExcel() — ดู CLAUDE.md #58) — push แถวใหม่เฉพาะ
        ตอนมี comment จริงเท่านั้น (t ไม่ว่าง) เพื่อไม่เพิ่ม noise ใน Approvals/EVAL_LAST_ACTOR_KEY ให้
@@ -10777,13 +10786,16 @@ async function approveReviewL1Selected(){
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   keys = await guardFreshStatus(keys,'Submitted');
   if(!keys.length) return;
+  /* #258: ใบที่เพิ่งถูกตีกลับ = ส่งต่อโดยไม่แก้ → ต้องระบุเหตุผลก่อน */
+  const _gate = bulkReconfirmGate(keys); if(!_gate.ok) return;
   /* #114b: อ่าน prevActor ของทุก key ไว้ "ก่อน" pushApprovalRecordToExcel() ทับ แล้วแจ้งทีหลัง */
   const prevActors = {};
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
   if(!confirm('ยืนยันส่ง '+keys.length+' รายการให้ผู้ประเมินคนถัดไป?\n\nระบบจะแจ้งเตือนผู้ประเมินคนถัดไป และหลังส่งแล้วจะแก้ไขไม่ได้อีก')) return;
+  const _rc = bulkReconfirmApply(_gate,'L1Reviewed');
   updateDraftStatus(keys,'L1Reviewed');
   keys.forEach(k=>setHeld(k,false));
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L1Reviewed',''); });
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L1Reviewed',_rc[k]||''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทานหัวหน้าแผนก', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   const nextRes = await notifyNextEvaluators(keys.map(k=>{const [c,y]=k.split('|');return {empCode:c,cycle:y};})).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
   smlToast('ส่งต่อผู้ประเมินคนถัดไปแล้ว '+keys.length+' รายการ — แก้ไขไม่ได้แล้ว'+nextNotifyToast(nextRes),'ok');
@@ -10870,12 +10882,14 @@ async function approveReviewSelected(){
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   keys = await guardFreshStatus(keys,'L1Reviewed');
   if(!keys.length) return;
+  const _gate = bulkReconfirmGate(keys); if(!_gate.ok) return;
   const prevActors = {};
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
   if(!confirm('ยืนยันส่ง '+keys.length+' รายการให้ผู้ประเมินคนถัดไป (GM)?\n\nระบบจะแจ้งเตือนผู้ประเมินคนถัดไป และหลังส่งแล้วจะแก้ไขไม่ได้อีก')) return;
+  const _rc = bulkReconfirmApply(_gate,'L2Reviewed');
   updateDraftStatus(keys,'L2Reviewed');
   keys.forEach(k=>setHeld(k,false));
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L2Reviewed',''); });
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'L2Reviewed',_rc[k]||''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ผ่านสอบทาน L2', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   const nextRes = await notifyNextEvaluators(keys.map(k=>{const [c,y]=k.split('|');return {empCode:c,cycle:y};})).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
   smlToast('ส่งต่อผู้ประเมินคนถัดไปแล้ว '+keys.length+' รายการ — แก้ไขไม่ได้แล้ว'+nextNotifyToast(nextRes),'ok');
@@ -10966,12 +10980,14 @@ async function approveGmSelected(){
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 รายการ','warn'); return; }
   keys = await guardFreshStatus(keys,'L2Reviewed');
   if(!keys.length) return;
+  const _gate = bulkReconfirmGate(keys); if(!_gate.ok) return;
   const drafts = getDrafts();
   const rows = keys.map(k=>drafts.find(d=>draftKey(d)===k)).filter(Boolean);
   const prevActors = {};
   keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); prevActors[k]=getEvalLastActor(empCode,cycle); });
+  const _rc = bulkReconfirmApply(_gate,'GMApproved');
   updateDraftStatus(keys,'GMApproved');
-  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'GMApproved',''); });
+  keys.forEach(k=>{ const [empCode,cycle]=k.split('|'); pushApprovalRecordToExcel(empCode,cycle,'GMApproved',_rc[k]||''); });
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','อนุมัติ GM', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   for(const k of keys){ const [empCode,cycle]=k.split('|'); await notifyPrevTierOnAdvance(empCode,cycle,prevActors[k]).catch(()=>null); }
   /* #238: ไม่ส่งอีเมล/LINE ให้พนักงานอัตโนมัติตอนอนุมัติแล้ว — ผู้ใช้สั่งให้ต้องกด "ยืนยันส่งผลให้พนักงาน"
@@ -13791,13 +13807,14 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
      ดู markNeedsReconfirm()/unlockReviewerSubmit() ด้านบน */
   const reconfirmKey = code+'|'+currentReviewerCycle+'|'+lv;
   const pending = !viewOnly && typeof needsReconfirm==='function' && needsReconfirm(reconfirmKey);
+  _reconfirmReason = null;
   const confirmBtn = document.getElementById('reviewerConfirmBtn');
   const submitBtn = document.getElementById('reviewerSubmitBtn');
   if(confirmBtn) confirmBtn.style.display = pending ? '' : 'none';
   if(submitBtn) submitBtn.disabled = pending;
   document.getElementById('reviewerReconfirmNote')?.remove();
   if(pending){
-    area.insertAdjacentHTML('afterbegin', `<div id="reviewerReconfirmNote" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ใบนี้เคยถูกตีกลับ — คะแนนที่เห็นคือคะแนนเดิมก่อนตีกลับ กรุณาตรวจสอบ/แก้ไขให้เรียบร้อย แล้วกด "✓ ยืนยันว่าตรวจสอบแล้ว" หรือแก้ไขคะแนนอย่างน้อย 1 ข้อ ก่อนจึงจะส่งได้</div></div>`);
+    area.insertAdjacentHTML('afterbegin', `<div id="reviewerReconfirmNote" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ใบนี้เคยถูกตีกลับ — คะแนนที่เห็นคือคะแนนเดิมก่อนตีกลับ กรุณาตรวจสอบ แล้วเลือกอย่างใดอย่างหนึ่ง: <b>(1) แก้ไขคะแนน</b>อย่างน้อย 1 ข้อ หรือ <b>(2) กด "✓ ยืนยันผลเดิม"</b> พร้อมระบุเหตุผล — จากนั้นจึงส่งต่อผู้บังคับบัญชาตามขั้นตอนเดิมได้</div></div>`);
   }
   openM('mReview');
 }
@@ -13814,8 +13831,46 @@ function unlockReviewerSubmit(){
   document.getElementById('reviewerReconfirmNote')?.remove();
 }
 function confirmReviewerReconfirm(){
+  /* #258: ยืนยัน "ผลเดิม" หลังถูกตีกลับ ต้องระบุเหตุผล (แก้คะแนนจริงไม่ต้อง) — เหตุผลถูกแนบกับความเห็น
+     ขั้นนี้ → ผู้ประเมินคนถัดไปเห็นในประวัติความเห็น + Approvals + Audit Log */
+  const reason = askReconfirmReason(1);
+  if(!reason) return;
+  const key = currentReviewerCode+'|'+currentReviewerCycle+'|'+currentReviewerLevel;
   unlockReviewerSubmit();
-  smlToast('ยืนยันแล้ว — สามารถบันทึกและส่งต่อได้','ok');
+  _reconfirmReason = {key, reason};
+  smlToast('ยืนยันผลเดิมแล้ว (บันทึกเหตุผลไว้) — สามารถบันทึกและส่งต่อได้','ok');
+}
+/* #258: เหตุผลที่ผู้ประเมินยืนยันผลเดิมหลังใบถูกตีกลับ (ไม่แก้คะแนน) */
+let _reconfirmReason = null;
+const RECONFIRM_TAG = '[ยืนยันผลเดิมหลังถูกตีกลับ] เหตุผล: ';
+function askReconfirmReason(count){
+  const r = prompt('ใบประเมิน '+count+' รายการนี้เคยถูกตีกลับ และคุณจะส่งต่อโดย "ไม่แก้คะแนน" (ยืนยันผลเดิม)\n\nกรุณาระบุเหตุผลที่ยืนยันผลเดิม (อย่างน้อย 5 ตัวอักษร)\nหากต้องการเปลี่ยนผล ให้กดยกเลิกแล้วแก้คะแนนในฟอร์ม "สอบทานแบบฟอร์ม" ก่อน:');
+  if(r===null) return null;
+  const t = r.trim();
+  if(t.length<5){ smlToast('ต้องระบุเหตุผลอย่างน้อย 5 ตัวอักษร — ยังไม่ได้ส่งต่อ','warn'); return null; }
+  return t;
+}
+/* ส่งต่อจากหน้ารายการ (bulk) โดยไม่เปิดฟอร์ม = ยืนยันผลเดิม → ถ้ามีใบที่เพิ่งถูกตีกลับ ต้องมีเหตุผลก่อน */
+function bulkReconfirmGate(keys){
+  const pend = keys.filter(k=>needsReconfirm(k));
+  if(!pend.length) return {ok:true, comments:{}, pend:[]};
+  const reason = askReconfirmReason(pend.length);
+  if(!reason) return {ok:false};
+  return {ok:true, reason, pend, comments:{}};
+}
+/* เรียกหลังผู้ใช้ยืนยันส่งจริง: บันทึกเหตุผลเป็นความเห็นของขั้นนี้ + ปลดธง + Audit Log; คืน map key→comment สำหรับ Approvals */
+function bulkReconfirmApply(gate, stage){
+  const out = {};
+  if(!gate || !gate.pend || !gate.pend.length) return out;
+  const actor = CURRENT_SESSION_USER;
+  gate.pend.forEach(k=>{
+    const [code,cycle] = k.split('|');
+    const t = saveEvalCommentStage(code, cycle, stage, {by:actor?actor[1]:'', byCode:actor?actor[0]:'', byRole:actor?actor[2]:'', strength:'', dev:RECONFIRM_TAG+gate.reason});
+    if(t) out[k] = '| ความเห็นผู้ประเมิน: '+t;
+    clearNeedsReconfirm(k);
+    if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผลเดิมหลังถูกตีกลับ',code,'เหตุผล: '+gate.reason);
+  });
+  return out;
 }
 /* เหมือน restoreEvalFormFromDraft() (CLAUDE.md #108) แต่สำหรับหน้าต่างนี้ — ถ้าคนนี้มีใบที่เคยให้
    คะแนนไว้แล้วในรอบ/ระดับเดียวกัน (ไม่ว่าจะเพิ่งส่งเอง, ผ่านสอบทานหัวหน้าแผนกมาแล้ว ฯลฯ) ต้องติ๊ก
@@ -13889,7 +13944,7 @@ function selectReviewScore(btn,grade,score,isRestore){
   /* isRestore=true มาจาก restoreReviewerFormFromDraft() เอง (ติ๊กคะแนนเดิมคืนตอนเปิดฟอร์ม) — ไม่นับเป็น
      การแก้ไขจริง คลิกจริงของผู้ใช้เท่านั้น (onclick ในแม่แบบ HTML ไม่ส่ง isRestore เลย จึง undefined/falsy)
      ที่ถือว่า "สัมผัส" ใบนี้แล้วและปลดล็อกปุ่มส่งได้ (ดู unlockReviewerSubmit() ด้านบน) */
-  if(!isRestore && typeof unlockReviewerSubmit==='function') unlockReviewerSubmit();
+  if(!isRestore && typeof unlockReviewerSubmit==='function'){ unlockReviewerSubmit(); _reconfirmReason = null; /* แก้คะแนนจริง = เปลี่ยนผล ไม่ต้องมีเหตุผลยืนยันผลเดิม */ }
 }
 function clearReviewerForm(){
   const area=document.getElementById('reviewerFormArea'); if(!area)return;
@@ -14067,11 +14122,16 @@ async function submitReviewerForm(){
   let commentText = '';
   if(typeof saveEvalCommentStage==='function'){
     const actor = CURRENT_SESSION_USER;
+    /* #258: ยืนยันผลเดิมหลังถูกตีกลับ → แนบเหตุผลไปกับความเห็นขั้นนี้ (เห็นในประวัติ/Approvals/Audit Log) */
+    const rr = (_reconfirmReason && _reconfirmReason.key===code+'|'+cycle+'|'+lv) ? _reconfirmReason.reason : '';
+    const devTxt = (document.getElementById('reviewDev')?.value || '');
     const t = saveEvalCommentStage(code, cycle, step.next, {
       by: actor ? actor[1] : '', byCode: actor ? actor[0] : '', byRole: actor ? actor[2] : '',
       strength: document.getElementById('reviewStrength')?.value || '',
-      dev: document.getElementById('reviewDev')?.value || ''
+      dev: rr ? (devTxt.trim() ? devTxt.trim()+'\n' : '')+RECONFIRM_TAG+rr : devTxt
     });
+    if(rr && typeof appendAuditLog==='function') appendAuditLog('evaluation','ยืนยันผลเดิมหลังถูกตีกลับ',code,'เหตุผล: '+rr);
+    _reconfirmReason = null;
     if(t) commentText = '| ความเห็นผู้ประเมิน: '+t;
   }
   pushApprovalRecordToExcel(code, cycle, step.next, commentText);

@@ -4,7 +4,7 @@ const {open,ok,done,INJECT}=require('./helpers');
   const {b,p,errs}=await open();
   await p.evaluate(INJECT);
   const r=await p.evaluate(async()=>{
-    __mockGraph(); window.confirm=()=>true; window.isWorkerConfigured=()=>false;
+    __mockGraph(); window.confirm=()=>true; window.prompt=()=>'ตรวจแล้วผลถูกต้อง ยืนยันตามเดิม'; window.isWorkerConfigured=()=>false;
     const out={};
     __emp('SE1',{name:'พนง.ตีกลับ',level:'of'});
     const emp=MASTER_USERS.find(u=>u[0]==='SE1');
