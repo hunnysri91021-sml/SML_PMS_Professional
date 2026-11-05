@@ -14302,11 +14302,14 @@ async function rejectReviewerForm(){
   const STEP = { Submitted:{prev:'Draft', label:'ตีกลับให้แก้ไข'},
                  L1Reviewed:{prev:'Submitted', label:'ตีกลับจากสอบทานหัวหน้าแผนก'},
                  L2Reviewed:{prev:'L1Reviewed', label:'ตีกลับจากสอบทานผู้จัดการส่วน'} };
+  /* #269: GM ที่เป็นผู้ประเมินคนเดียว ตีกลับไป L1Reviewed ไม่ได้ (ระบบข้ามขั้นกลับมารอ GM) → ตีกลับไป Draft เหมือน rejectGmSelected */
+  const _soleRej = curStatus==='L2Reviewed' && isSoleGmReviewer(MASTER_USERS.find(u=>u[0]===code), CURRENT_SESSION_USER);
+  if(_soleRej) STEP.L2Reviewed = {prev:'Draft', label:'GM ตีกลับให้ประเมินใหม่', sole:true};
   const step = STEP[curStatus];
   if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการตีกลับจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
   const _why = askRejectReason(1); if(!_why) return;
   updateDraftStatus([draftKey(existing)], step.prev);
-  recordReject(draftKey(existing), 'Rejected'+curStatus, _why);
+  recordReject(draftKey(existing), step.sole ? 'RejectedGmSole' : 'Rejected'+curStatus, _why);
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', step.label, code, '');
   smlToast(step.label+'เรียบร้อย','warn');
   closeM();
