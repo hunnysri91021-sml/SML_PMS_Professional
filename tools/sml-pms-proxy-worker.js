@@ -836,7 +836,16 @@ async function migrateTableToList(token, driveId, itemId, siteId, table, offset,
     }));
     const res = await graphSend(token, 'https://graph.microsoft.com/v1.0/$batch', 'POST', { requests: batch });
     const bad = (res.responses || []).filter((r) => r.status >= 300);
-    if (bad.length) throw new Error('ย้ายไม่สำเร็จ ' + bad.length + ' แถว: ' + JSON.stringify((bad[0].body && bad[0].body.error && bad[0].body.error.message) || bad[0].status));
+    if (bad.length) {
+      const msg = JSON.stringify((bad[0].body && bad[0].body.error && bad[0].body.error.message) || bad[0].status);
+      let cols = '';
+      try {
+        const c = await graphGet(token, `${listBase(siteId, table)}/columns?$select=name,displayName&$top=100`);
+        const li = await graphGet(token, `${listBase(siteId, table)}?$select=id,displayName,webUrl`);
+        cols = ' | list ที่ใช้: ' + (li.webUrl || li.displayName) + ' | คอลัมน์ (ชื่อภายใน): ' + (c.value || []).map((x) => x.name).join(', ');
+      } catch (e2) { cols = ' | อ่านคอลัมน์ไม่ได้: ' + e2.message; }
+      throw new Error('ย้ายไม่สำเร็จ ' + bad.length + ' แถว: ' + msg + cols);
+    }
   }
   const next = start + part.length;
   return { total: rows.length, start, migrated: part.length, next, done: next >= rows.length };
