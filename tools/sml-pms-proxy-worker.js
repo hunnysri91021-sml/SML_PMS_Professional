@@ -95,6 +95,7 @@
 
 export default {
   async fetch(request, env, ctx) {
+    _listEnv = env;
     const url = new URL(request.url);
     const cors = {
       'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || '*',
@@ -759,21 +760,29 @@ function listFieldNames(table) { return Array.from({ length: LIST_SCHEMAS[table]
 const _listFieldCache = {};
 async function resolveListFields(token, siteId, table) {
   const def = listFieldNames(table);
-  const ck = siteId + '|' + table;
+  const ck = siteId + '|' + table + '|' + listSeg(table);
   if (_listFieldCache[ck]) return _listFieldCache[ck];
   try {
     const c = await graphGet(token, `${listBase(siteId, table)}/columns?$select=name,displayName&$top=200`);
     const cols = c.value || [];
+    let allFound = true;
     const out = def.map((n, i) => {
       const hit = cols.find((x) => x.name === n) || cols.find((x) => x.name === '_x0046_' + i) || cols.find((x) => x.displayName === n);
+      if (!hit) allFound = false;
       return hit ? hit.name : n;
     });
-    _listFieldCache[ck] = out;
+    if (allFound) _listFieldCache[ck] = out;
     return out;
   } catch (e) { return def; }
 }
+// ระบุ List ด้วยรหัส (GUID) ผ่าน env LIST_ID_<ชื่อตาราง> เช่น LIST_ID_AuditLog — ใช้เมื่อมี list ชื่อซ้ำหรือชื่อจับผิดตัว
+let _listEnv = null;
+function listSeg(table) {
+  const id = _listEnv && String(_listEnv['LIST_ID_' + table] || '').trim().replace(/^(\{|%7B)/i, '').replace(/(\}|%7D)$/i, '');
+  return id ? id : encodeURIComponent(table);
+}
 function listBase(siteId, table) {
-  return `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${encodeURIComponent(table)}`;
+  return `https://graph.microsoft.com/v1.0/sites/${siteId}/lists/${listSeg(table)}`;
 }
 async function listItemRows(token, siteId, table, limit) {
   const names = await resolveListFields(token, siteId, table);
@@ -849,7 +858,7 @@ async function migrateTableToList(token, driveId, itemId, siteId, table, offset,
   for (let i = 0; i < part.length; i += 20) {
     const batch = part.slice(i, i + 20).map((vals, j) => ({
       id: String(j + 1), method: 'POST',
-      url: `/sites/${siteId}/lists/${encodeURIComponent(table)}/items`,
+      url: `/sites/${siteId}/lists/${listSeg(table)}/items`,
       headers: { 'Content-Type': 'application/json' },
       body: { fields: listFieldsFromValues(fnames, vals) },
     }));
