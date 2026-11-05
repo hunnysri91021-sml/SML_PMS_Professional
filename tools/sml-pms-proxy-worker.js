@@ -810,7 +810,14 @@ async function ensureList(token, siteId, table) {
       list: { template: 'genericList' },
     });
   } catch (e) {
-    throw new Error('เข้าถึง List "' + table + '" ไม่ได้ (' + getErr + ') และสร้างเองไม่ได้ (' + e.message + ')');
+    // บอกว่า Worker เชื่อม site ไหนและเห็น list อะไรบ้าง เพื่อหาว่า list อยู่คนละ site หรือชื่อไม่ตรง
+    let seen = '';
+    try {
+      const s = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${siteId}?$select=webUrl`);
+      const ls = await graphGet(token, `https://graph.microsoft.com/v1.0/sites/${siteId}/lists?$select=displayName&$top=100`);
+      seen = ' | site ที่ Worker ใช้: ' + (s.webUrl || siteId) + ' | list ที่เห็น: ' + ((ls.value || []).map((x) => x.displayName).join(', ') || '(ไม่มี)');
+    } catch (e2) { seen = ' | อ่านรายชื่อ list ไม่ได้: ' + e2.message; }
+    throw new Error('เข้าถึง List "' + table + '" ไม่ได้ (' + getErr + ') และสร้างเองไม่ได้ (' + e.message + ')' + seen);
   }
   return 'created';
 }
