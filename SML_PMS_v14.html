@@ -4910,7 +4910,7 @@ function getMyScopedEmpCodes(){
   return null;
 }
 
-/* #260: ใช้ล็อกอินกับ Worker เมื่อตั้ง MS365 + Proxy แล้ว (โหมดอื่นใช้ PIN ในเครื่องแบบเดิม) */
+/* #265: ใช้ล็อกอินกับ Worker เมื่อตั้ง MS365 + Proxy แล้ว (โหมดอื่นใช้ PIN ในเครื่องแบบเดิม) */
 function useServerAuth(){
   try{
     const cfg = loadMs365Config();
@@ -5050,7 +5050,7 @@ async function doLogin(){
   const lockMin = loginLockRemainingMin(code);
   if(lockMin>0){ errEl.textContent='🔒 ใส่ PIN ผิดหลายครั้ง — รหัสนี้ถูกล็อกชั่วคราว ลองใหม่ในอีก '+lockMin+' นาที หรือให้ HR รีเซ็ต PIN'; errEl.style.display='block'; return; }
   setLoginLoading(true, '🔄 ระบบกำลังโหลดข้อมูล...');
-  /* #260: ตรวจรหัสพนักงาน + PIN ที่ Worker (เซิร์ฟเวอร์) ก่อน แล้วรับบัตรผ่านชั่วคราวไว้เรียกข้อมูลทั้งหมดหลังจากนี้
+  /* #265: ตรวจรหัสพนักงาน + PIN ที่ Worker (เซิร์ฟเวอร์) ก่อน แล้วรับบัตรผ่านชั่วคราวไว้เรียกข้อมูลทั้งหมดหลังจากนี้
      ใช้ได้เมื่อตั้ง MS365 + Proxy แล้วเท่านั้น (โหมดไม่มี Proxy/โหมดทดสอบ ยังตรวจ PIN ในเครื่องแบบเดิม) */
   let serverVerified = false;
   if(useServerAuth()){
@@ -7911,7 +7911,7 @@ const DEFAULT_MS365_CONFIG = {
      แม้ตอนที่ต้องกรอกเอง) ความปลอดภัยจริงมาจาก SharePoint Application Access Policy ฝั่ง Worker
      ไม่ใช่ตัว Key เอง ฝังไว้ตรงนี้จึงไม่ได้ลดความปลอดภัยลงกว่าที่เป็นอยู่ */
   workerUrl: 'https://smlpmsms365proxy.hunnysri91021.workers.dev',
-  /* #260: ไม่มีกุญแจ API ฝังในหน้าเว็บอีกต่อไป — ล็อกอินด้วยรหัส+PIN ที่ Worker แล้วรับบัตรผ่านชั่วคราว (token) */
+  /* #265: ไม่มีกุญแจ API ฝังในหน้าเว็บอีกต่อไป — ล็อกอินด้วยรหัส+PIN ที่ Worker แล้วรับบัตรผ่านชั่วคราว (token) */
   /* #175/#207: URL จริงที่พนักงานเปิดเว็บแอปนี้ (ใช้ทำลิงก์ในข้อความ LINE/อีเมลแจ้งผล) */
   /* ฝังค่าเริ่มต้นไว้ในโค้ด (เหมือน workerUrl/tenantId #31) — เดิมว่างเปล่า ต้องกรอกที่หน้านี้เองทุกเครื่อง
      และค่าเก็บแค่ใน localStorage ของเบราว์เซอร์นั้น จึงหายทุกครั้งที่เปลี่ยนเครื่อง/ล้างข้อมูล/เปิด Incognito
@@ -8129,7 +8129,7 @@ function getWorkerToken(){ try{ return sessionStorage.getItem(WORKER_TOKEN_KEY) 
 function clearWorkerToken(){ try{ sessionStorage.removeItem(WORKER_TOKEN_KEY); }catch(e){} }
 let _workerReauthPending = false;
 async function workerFetch(cfg, path, options={}){
-  /* #260: ทุกเส้นทางยกเว้น /auth/login ต้องแนบบัตรผ่าน (Bearer token) ที่ได้จากการล็อกอินที่ Worker */
+  /* #265: ทุกเส้นทางยกเว้น /auth/login ต้องแนบบัตรผ่าน (Bearer token) ที่ได้จากการล็อกอินที่ Worker */
   const token = getWorkerToken();
   if(path !== '/auth/login' && !token){
     const e = new Error('ยังไม่ได้เข้าสู่ระบบ (ไม่มีบัตรผ่านสำหรับเรียก Proxy)'); e.status = 401; throw e;
@@ -10330,8 +10330,12 @@ var evalAutoSyncTimer = null;
 function startEvalAutoSync(){
   if(typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true);
   if(typeof ms365SyncDisputes==='function') ms365SyncDisputes(true);
+  /* #265: ธงตีกลับข้ามเครื่องต้องรีเฟรชทุกรอบ ไม่ใช่เฉพาะตอน login — ทำหลัง Appraisals เสร็จเพื่อให้สถานะใบเป็นปัจจุบัน */
+  const _syncFlags=()=>{ if(typeof ms365SyncRejectFlags==='function') ms365SyncRejectFlags(true); };
+  const _syncAll=()=>{ Promise.resolve(typeof ms365SyncAppraisals==='function'?ms365SyncAppraisals(true):0).then(_syncFlags,_syncFlags); if(typeof ms365SyncDisputes==='function') ms365SyncDisputes(true); };
+  _syncFlags();
   if(evalAutoSyncTimer) return;
-  evalAutoSyncTimer = setInterval(()=>{ if(typeof ms365SyncAppraisals==='function') ms365SyncAppraisals(true); if(typeof ms365SyncDisputes==='function') ms365SyncDisputes(true); }, 30*1000);
+  evalAutoSyncTimer = setInterval(_syncAll, 30*1000);
 }
 function stopEvalAutoSync(){
   if(evalAutoSyncTimer){ clearInterval(evalAutoSyncTimer); evalAutoSyncTimer=null; }
@@ -10432,11 +10436,11 @@ function askRejectReason(count){
   return t;
 }
 /* บันทึกการตีกลับ 1 ใบ: ธง + เหตุผล + แถว Approvals (เหตุผลอยู่ในคอลัมน์ความเห็น) — ใช้ร่วมทุกจุดตีกลับ */
-function recordReject(key, step, reason){
+function recordReject(key, step, reason, noFlag){
   const [empCode,cycle] = key.split('|');
   const actor = CURRENT_SESSION_USER;
   pushApprovalRecordToExcel(empCode, cycle, step, '| เหตุผลตีกลับ: '+reason);
-  markNeedsReconfirm(key);
+  if(!noFlag) markNeedsReconfirm(key);
   setRejectInfo(key, {reason, by:actor?actor[1]:'', byCode:actor?actor[0]:'', at:new Date().toISOString(), step});
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','เหตุผลตีกลับ',empCode,reason);
 }
@@ -11568,12 +11572,13 @@ async function rejectCalibCheckSelected(){
   keys = await guardFreshStatus(keys,'Calibrated');
   if(!keys.length) return;
   if(!confirm('ตีกลับ '+keys.length+' รายการ ไปทำ Calibration ใหม่?\n(เกรดจะกลับเป็นเกรดชั่วคราว)')) return;
+  const _why = askRejectReason(keys.length); if(!_why) return;
   const drafts = getDrafts();
   keys.forEach(k=>{ const d=drafts.find(x=>draftKey(x)===k); if(d) d[d.length-2]=gradeFromX(Number(d[d.length-3])||0); });
   saveDrafts(drafts);
   bellCurveResult = null;
   updateDraftStatus(keys,'Acknowledged');
-  keys.forEach(k=>{ const [c,cy]=k.split('|'); pushApprovalRecordToExcel(c,cy,'RejectedCalibCheck','ตีกลับจากการตรวจสอบหลัง Calibration'); });
+  keys.forEach(k=>recordReject(k,'RejectedCalibCheck',_why,true)); /* #265: บังคับเหตุผล; ไม่ตั้งธง reconfirm (ขั้นนี้ไม่ใช่หน้าต่างสอบทานคะแนน) */
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากการตรวจสอบหลัง Calibration', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับแล้ว '+keys.length+' รายการ — กลับไปคำนวณ/ยืนยัน Calibration ใหม่','warn');
 }
@@ -11902,8 +11907,9 @@ async function rejectApproveAll(){
   /* ตีกลับหลังอนุมัติขั้นสุดท้ายไม่ผ่าน ต้องส่งกลับไปที่ HR (Calibration) ไม่ใช่ L2 — พนักงานรับทราบ
      ผลไปแล้วตั้งแต่ก่อน Calibration (#61) ย้อนไปไกลถึง L2 จะทำให้ขั้นที่พนักงานรับทราบไปแล้วเสียเปล่า */
   if(!confirm('ตีกลับรายการที่รออนุมัติขั้นสุดท้ายทั้งหมด '+rows.length+' รายการ กลับไปขั้น "ตรวจหลัง Calibration" ให้ HR ตรวจ/ปรับใหม่?')) return;
+  const _why = askRejectReason(rows.length); if(!_why) return;
   updateDraftStatus(rows.map(draftKey),'Calibrated');
-  rows.forEach(d=>pushApprovalRecordToExcel(d[0], d[2], 'RejectedFinalApproval', ''));
+  rows.forEach(d=>recordReject(draftKey(d),'RejectedFinalApproval',_why,true));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากอนุมัติขั้นสุดท้าย', rows.length+' รายการ', rows.map(d=>d[0]).join(', '));
   smlToast('ตีกลับแล้ว '+rows.length+' รายการ','warn');
 }
@@ -15036,7 +15042,7 @@ document.addEventListener('input',e=>{
     try{
       const raw = sessionStorage.getItem(SML_SESSION_KEY);
       if(!raw) return;
-      /* #260: ใช้ Worker ยืนยันตัวตนอยู่ แต่ไม่มีบัตรผ่านค้างอยู่ (เช่นปิดแท็บแล้วเปิดใหม่/หมดอายุ) → ต้องล็อกอินใหม่ */
+      /* #265: ใช้ Worker ยืนยันตัวตนอยู่ แต่ไม่มีบัตรผ่านค้างอยู่ (เช่นปิดแท็บแล้วเปิดใหม่/หมดอายุ) → ต้องล็อกอินใหม่ */
       if(useServerAuth() && !getWorkerToken()){ sessionStorage.removeItem(SML_SESSION_KEY); return; }
       const s = JSON.parse(raw);
       const u = MASTER_USERS.find(x => x[0] === s.code);
