@@ -793,15 +793,25 @@ async function countListItems(token, siteId, table) {
 }
 /* สร้าง list ถ้ายังไม่มี (ต้องมีสิทธิ์สร้าง list บน site — ถ้าไม่พอ คืนข้อความจาก Graph ให้สร้างมือ) */
 async function ensureList(token, siteId, table) {
+  let getErr = '';
   try {
     await graphGet(token, listBase(siteId, table));
     return 'exists';
-  } catch (e) { /* ยังไม่มี → สร้าง */ }
-  await graphSend(token, `https://graph.microsoft.com/v1.0/sites/${siteId}/lists`, 'POST', {
-    displayName: table,
-    columns: listFieldNames(table).map((n) => ({ name: n, text: { allowMultipleLines: true } })),
-    list: { template: 'genericList' },
-  });
+  } catch (e) { getErr = e.message; }
+  // สิทธิ์ Sites.Selected(write) อาจอ่าน "ตัวรายการ list" ไม่ได้ แต่อ่าน/เขียน item ได้ — ถ้าเข้าถึง item ได้ถือว่ามี list แล้ว
+  try {
+    await graphGet(token, `${listBase(siteId, table)}/items?$top=1&$select=id`);
+    return 'exists';
+  } catch (e) { getErr += ' | items: ' + e.message; }
+  try {
+    await graphSend(token, `https://graph.microsoft.com/v1.0/sites/${siteId}/lists`, 'POST', {
+      displayName: table,
+      columns: listFieldNames(table).map((n) => ({ name: n, text: { allowMultipleLines: true } })),
+      list: { template: 'genericList' },
+    });
+  } catch (e) {
+    throw new Error('เข้าถึง List "' + table + '" ไม่ได้ (' + getErr + ') และสร้างเองไม่ได้ (' + e.message + ')');
+  }
   return 'created';
 }
 /* ย้ายข้อมูลจาก Excel เข้า list ทีละก้อน (ทำซ้ำได้: เริ่มต่อจากจำนวนที่ย้ายไปแล้ว — ใช้ได้เพราะ AuditLog เป็น append-only) */
