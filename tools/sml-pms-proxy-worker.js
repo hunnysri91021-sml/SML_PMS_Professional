@@ -210,12 +210,17 @@ export default {
         if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
         if (!(table in LIST_SCHEMAS)) return json({ error: 'ตารางนี้ยังไม่รองรับการย้ายไป List' }, 400, cors);
         const r = await ensureList(token, siteId, table);
-        return json({ ok: true, list: r }, 200, cors);
+        const ec = await ensureListColumns(token, siteId, table);
+        if (ec.failed.length) {
+          return json({ error: 'List "' + table + '" ขาดคอลัมน์ ' + ec.failed.map((f) => f.name).join(', ') + ' และเพิ่มเองไม่ได้ (' + ec.failed[0].error + ') — สร้างคอลัมน์ข้อความหลายบรรทัด (Plain text) ชื่อเหล่านี้ใน List แล้วลองใหม่' }, 400, cors);
+        }
+        return json({ ok: true, list: r, addedColumns: ec.added }, 200, cors);
       }
       if (url.pathname === '/admin/list-migrate' && request.method === 'POST') {
         const { table, offset } = await request.json();
         if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
         if (!(table in LIST_SCHEMAS)) return json({ error: 'ตารางนี้ยังไม่รองรับการย้ายไป List' }, 400, cors);
+        if (table in LIST_KEYS && isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' สลับไปใช้ List แล้ว — ห้ามย้ายซ้ำ (Excel เก่ากว่า List จะทับข้อมูลใหม่) ถ้าจะย้ายใหม่ให้ลบ ' + table + ' ออกจาก LIST_TABLES ก่อน' }, 400, cors);
         const r = await migrateTableToList(token, driveId, itemId, siteId, table, parseInt(offset, 10) || 0, 200);
         return json({ ok: true, ...r }, 200, cors);
       }
@@ -253,13 +258,16 @@ export default {
         if (!table || keyColIndex === undefined || keyValue === undefined || !values) {
           return json({ error: 'missing table/keyColIndex/keyValue/values' }, 400, cors);
         }
-        if (isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
+        const listBacked = isListBacked(env, table);
+        if (listBacked && !(table in LIST_KEYS)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
         if (!canWrite(auth, table, 'upsert')) return json({ error: 'forbidden: ไม่มีสิทธิ์เขียนตาราง ' + table }, 403, cors);
         if (!isAdminAuth(auth) && table in ROW_SCOPE_COL) {
           const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
           if (!writeKeyOk(table, values[0], scope) || !writeKeyOk(table, keyValue, scope)) return json({ error: 'forbidden: เขียนได้เฉพาะข้อมูลของพนักงานในสังกัดตน' }, 403, cors);
         }
-        const result = await upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values);
+        const result = listBacked
+          ? await upsertListItem(token, siteId, table, keyColIndex, keyValue, values)
+          : await upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values);
         return json({ ok: true, result }, 200, cors);
       }
 
@@ -288,13 +296,16 @@ export default {
         if (!table || keyColIndex === undefined || keyValue === undefined || keys.some((k) => String(k ?? '').trim() === '')) {
           return json({ error: 'missing table/keyColIndex/keyValue (คีย์ต้องไม่ว่าง)' }, 400, cors);
         }
-        if (isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
+        const listBacked = isListBacked(env, table);
+        if (listBacked && !(table in LIST_KEYS)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
         if (!canWrite(auth, table, 'delete')) return json({ error: 'forbidden: ไม่มีสิทธิ์ลบตาราง ' + table }, 403, cors);
         if (!isAdminAuth(auth) && table in ROW_SCOPE_COL) {
           const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
           if (!writeKeyOk(table, keyValue, scope)) return json({ error: 'forbidden: ลบได้เฉพาะข้อมูลของพนักงานในสังกัดตน' }, 403, cors);
         }
-        const deleted = await deleteRows(token, driveId, itemId, table, keyColIndex, keyValue);
+        const deleted = listBacked
+          ? await deleteListItems(token, siteId, table, keyColIndex, keyValue)
+          : await deleteRows(token, driveId, itemId, table, keyColIndex, keyValue);
         return json({ ok: true, deleted }, 200, cors);
       }
 
@@ -307,9 +318,12 @@ export default {
         if (!table || !Array.isArray(keyCols) || !keyCols.length) {
           return json({ error: 'missing table/keyCols' }, 400, cors);
         }
-        if (isListBacked(env, table)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
+        const listBacked = isListBacked(env, table);
+        if (listBacked && !(table in LIST_KEYS)) return json({ error: 'ตาราง ' + table + ' อยู่ใน SharePoint List ไม่รองรับการแก้/ลบรายแถว' }, 400, cors);
         if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
-        const result = await dedupeRows(token, driveId, itemId, table, keyCols, !!dryRun);
+        const result = listBacked
+          ? await dedupeListItems(token, siteId, table, keyCols, !!dryRun)
+          : await dedupeRows(token, driveId, itemId, table, keyCols, !!dryRun);
         return json({ ok: true, ...result }, 200, cors);
       }
 
@@ -553,7 +567,10 @@ async function handleLineAckPostback(ev, env, token, driveId, itemId) {
 
   let outcome = 'error'; // 'saved' | 'already' | 'notfound' | 'error'
   try {
-    const appraisalRows = await listRows(token, driveId, itemId, 'Appraisals');
+    const { siteId: ackSiteId } = await resolveSite(env, token);
+    const appraisalRows = isListBacked(env, 'Appraisals')
+      ? await listItemRows(token, ackSiteId, 'Appraisals')
+      : await listRows(token, driveId, itemId, 'Appraisals');
     const row = appraisalRows.find((r) => String(r[0] || '').trim() === code && String(r[2] || '').trim() === cycle);
     if (!row) {
       outcome = 'notfound';
@@ -565,7 +582,8 @@ async function handleLineAckPostback(ev, env, token, driveId, itemId) {
         const level = String(row[3] || '').trim();
         const updated = row.slice();
         updated[statusIdx] = 'Acknowledged';
-        await upsertRow(token, driveId, itemId, 'Appraisals', [0, 2, 3], [code, cycle, level], updated);
+        if (isListBacked(env, 'Appraisals')) await upsertListItem(token, ackSiteId, 'Appraisals', [0, 2, 3], [code, cycle, level], updated);
+        else await upsertRow(token, driveId, itemId, 'Appraisals', [0, 2, 3], [code, cycle, level], updated);
         await appendRow(env, token, driveId, itemId, 'Approvals', [code, empName, cycle, 'Acknowledged', empName, new Date().toISOString(), 'รับทราบผลการประเมินผ่าน LINE']);
         outcome = 'saved';
       } else if (evalStatusRank(status) > evalStatusRank('ResultSent')) {
@@ -750,7 +768,10 @@ async function handleLineWebhook(request, env, ctx) {
    เปิดใช้ด้วย env LIST_TABLES="AuditLog" (คั่นด้วยจุลภาค) — ถ้าไม่ตั้ง ทุกอย่างทำงานผ่าน Excel เหมือนเดิม
    สัญญา API กับเว็บ (/rows, /rows/add) ไม่เปลี่ยน: Worker แปลง list item <-> array ตามลำดับคอลัมน์เดิม
    List ใช้คอลัมน์ข้อความหลายบรรทัดชื่อ F0..F{n-1} (n จาก LIST_SCHEMAS) ชื่อ list = ชื่อตาราง */
-const LIST_SCHEMAS = { AuditLog: 7, Approvals: 7 };
+const LIST_SCHEMAS = { AuditLog: 7, Approvals: 7, Appraisals: 24 };
+// ตารางที่ "แก้แถวเดิม" (upsert/ลบ/ลบซ้ำ) ต้องระบุคอลัมน์คีย์ — ตารางที่ไม่อยู่ในนี้เป็นแบบเพิ่มแถวอย่างเดียว
+const LIST_KEYS = { Appraisals: [0, 2, 3] };
+const DEDUPE_STATUS_COL = 22;
 function isListBacked(env, table) {
   if (!(table in LIST_SCHEMAS)) return false;
   return String(env.LIST_TABLES || '').split(',').map((x) => x.trim()).includes(table);
@@ -818,6 +839,97 @@ async function countListItems(token, siteId, table) {
   }
   return n;
 }
+/* อ่าน item ของ list เฉพาะบางคอลัมน์ + id ของ item — คืน [{id, v:[...ยาวเท่าจำนวนคอลัมน์ ช่องที่ไม่ได้เลือกเป็น '']}] เรียงตาม id */
+async function listItemsPick(token, siteId, table, cols) {
+  const names = await resolveListFields(token, siteId, table);
+  const n = LIST_SCHEMAS[table];
+  const sel = cols.map((c) => names[c]).join(',');
+  let url = `${listBase(siteId, table)}/items?$expand=${encodeURIComponent('fields($select=' + sel + ')')}&$top=999`;
+  const out = []; let guard = 0;
+  while (url && guard < 200) {
+    const data = await graphGet(token, url);
+    for (const it of (data.value || [])) {
+      const v = Array(n).fill('');
+      cols.forEach((c) => { v[c] = String((it.fields && it.fields[names[c]]) ?? ''); });
+      out.push({ id: String(it.id), v });
+    }
+    url = data['@odata.nextLink'] || null;
+    guard++;
+  }
+  return out;
+}
+// upsert/ลบ/ลบซ้ำบน list — ตรรกะจับคู่เดียวกับ Excel ทุกประการ (rowMatchesUpsertKey / planDedupe)
+async function upsertListItem(token, siteId, table, keyColIndex, keyValue, values) {
+  const kc = Array.isArray(keyColIndex) ? keyColIndex : [keyColIndex];
+  const items = await listItemsPick(token, siteId, table, kc);
+  const matches = items.filter((x) => rowMatchesUpsertKey(x.v, keyColIndex, keyValue));
+  if (matches.length) {
+    const names = await resolveListFields(token, siteId, table);
+    // อัปเดต "ทุกรายการ" ที่คีย์ตรงกัน (เหมือนฝั่ง Excel — #205) ไม่ใช่แค่รายการแรก
+    for (const m of matches) {
+      await graphSend(token, `${listBase(siteId, table)}/items/${m.id}/fields`, 'PATCH', listFieldsFromValues(names, values));
+    }
+    return 'updated';
+  }
+  await addListItem(token, siteId, table, values);
+  return 'added';
+}
+async function deleteListItems(token, siteId, table, keyColIndex, keyValue) {
+  const kc = Array.isArray(keyColIndex) ? keyColIndex : [keyColIndex];
+  const items = await listItemsPick(token, siteId, table, kc);
+  const matches = items.filter((x) => rowMatchesUpsertKey(x.v, keyColIndex, keyValue));
+  for (const m of matches) await graphSend(token, `${listBase(siteId, table)}/items/${m.id}`, 'DELETE');
+  return matches.length;
+}
+async function dedupeListItems(token, siteId, table, keyCols, dryRun) {
+  const cols = Array.from(new Set([...keyCols, ...(LIST_SCHEMAS[table] > DEDUPE_STATUS_COL ? [DEDUPE_STATUS_COL] : [])]));
+  const items = await listItemsPick(token, siteId, table, cols);
+  const plan = planDedupe(items.map((x) => ({ index: parseInt(x.id, 10), values: [x.v] })), keyCols);
+  if (!dryRun) {
+    for (const idx of plan.toDelete) await graphSend(token, `${listBase(siteId, table)}/items/${idx}`, 'DELETE');
+  }
+  return { totalRows: items.length, dupGroups: plan.dupGroups, toDelete: plan.toDelete.length, deleted: dryRun ? 0 : plan.toDelete.length, dryRun };
+}
+// ส่ง $batch ทีละ 20 แล้วรายงานสาเหตุจริงถ้ามีรายการล้ม (รวมชื่อคอลัมน์ภายในของ list ให้เห็นว่าขาดอะไร)
+async function sendListBatches(token, siteId, table, reqs) {
+  for (let i = 0; i < reqs.length; i += 20) {
+    const batch = reqs.slice(i, i + 20).map((r, j) => Object.assign({ id: String(j + 1) }, r));
+    const res = await graphSend(token, 'https://graph.microsoft.com/v1.0/$batch', 'POST', { requests: batch });
+    const bad = (res.responses || []).filter((r) => r.status >= 300);
+    if (bad.length) {
+      const msg = JSON.stringify((bad[0].body && bad[0].body.error && bad[0].body.error.message) || bad[0].status);
+      let cols = '';
+      try {
+        const c = await graphGet(token, `${listBase(siteId, table)}/columns?$select=name,displayName&$top=100`);
+        const li = await graphGet(token, `${listBase(siteId, table)}?$select=id,displayName,webUrl`);
+        cols = ' | list ที่ใช้: ' + (li.webUrl || li.displayName) + ' | คอลัมน์ (ชื่อภายใน): ' + (c.value || []).map((x) => x.name).join(', ');
+      } catch (e2) { cols = ' | อ่านคอลัมน์ไม่ได้: ' + e2.message; }
+      throw new Error('ย้ายไม่สำเร็จ ' + bad.length + ' แถว: ' + msg + cols);
+    }
+  }
+}
+// เพิ่มคอลัมน์ F0..Fn ที่ขาดใน list (ถ้าสิทธิ์พอ) — ถ้าเพิ่มเองไม่ได้ คืนรายการที่ขาดให้ผู้ใช้สร้างเอง
+async function ensureListColumns(token, siteId, table) {
+  let cols;
+  try {
+    const c = await graphGet(token, `${listBase(siteId, table)}/columns?$select=name,displayName&$top=200`);
+    cols = c.value || [];
+  } catch (e) { return { added: [], failed: [], skipped: true }; }
+  const added = [], failed = [];
+  listFieldNames(table).forEach((n, i) => {
+    const hit = cols.find((x) => x.name === n) || cols.find((x) => x.name === '_x0046_' + i) || cols.find((x) => x.displayName === n);
+    if (!hit) failed.push({ name: n });
+  });
+  const stillMissing = [];
+  for (const f of failed) {
+    try {
+      await graphSend(token, `${listBase(siteId, table)}/columns`, 'POST', { name: f.name, text: { allowMultipleLines: true } });
+      added.push(f.name);
+    } catch (e) { stillMissing.push({ name: f.name, error: e.message }); }
+  }
+  if (added.length) delete _listFieldCache[siteId + '|' + table + '|' + listSeg(table)];
+  return { added, failed: stillMissing, skipped: false };
+}
 /* สร้าง list ถ้ายังไม่มี (ต้องมีสิทธิ์สร้าง list บน site — ถ้าไม่พอ คืนข้อความจาก Graph ให้สร้างมือ) */
 async function ensureList(token, siteId, table) {
   let getErr = '';
@@ -848,8 +960,35 @@ async function ensureList(token, siteId, table) {
   }
   return 'created';
 }
+/* ตารางที่ "แก้แถวเดิม" (Appraisals): ย้ายแบบ upsert ตามคีย์ — รันซ้ำได้ (อัปเดตรายการที่มีแล้ว/เพิ่มที่ยังไม่มี) จึงใช้ได้
+   แม้ Excel ยังถูกแก้ระหว่างรอสลับ และลบแถวซ้ำเก่าให้ในตัว (เก็บแถวสถานะก้าวหน้าสุดต่อคีย์) — เหตุผลเดียวกับ planDedupe
+   ห้ามรันหลังสลับ LIST_TABLES แล้ว (Excel จะเก่ากว่า list → ทับข้อมูลใหม่) ดูที่ route /admin/list-migrate */
+async function migrateKeyedTableToList(token, driveId, itemId, siteId, table, offset, chunk) {
+  const keyCols = LIST_KEYS[table];
+  const excel = await listRows(token, driveId, itemId, table);
+  const plan = planDedupe(excel.map((v, i) => ({ index: i, values: [v] })), keyCols);
+  const drop = new Set(plan.toDelete);
+  const surv = excel.filter((_, i) => !drop.has(i));
+  const part = surv.slice(offset, offset + chunk);
+  const fnames = await resolveListFields(token, siteId, table);
+  const existing = await listItemsPick(token, siteId, table, keyCols);
+  const keyOf = (v) => { const ps = keyCols.map((c) => String(v[c] ?? '').trim()); return ps.some((x) => x === '') ? null : ps.join('|'); };
+  const idByKey = new Map();
+  for (const x of existing) { const k = keyOf(x.v); if (k && !idByKey.has(k)) idByKey.set(k, x.id); }
+  const reqs = part.map((vals) => {
+    const k = keyOf(vals);
+    const id = k ? idByKey.get(k) : null;
+    return id
+      ? { method: 'PATCH', url: `/sites/${siteId}/lists/${listSeg(table)}/items/${id}/fields`, headers: { 'Content-Type': 'application/json' }, body: listFieldsFromValues(fnames, vals) }
+      : { method: 'POST', url: `/sites/${siteId}/lists/${listSeg(table)}/items`, headers: { 'Content-Type': 'application/json' }, body: { fields: listFieldsFromValues(fnames, vals) } };
+  });
+  await sendListBatches(token, siteId, table, reqs);
+  const next = offset + part.length;
+  return { total: surv.length, start: offset, migrated: part.length, next, done: next >= surv.length, droppedDuplicates: plan.toDelete.length };
+}
 /* ย้ายข้อมูลจาก Excel เข้า list ทีละก้อน (ทำซ้ำได้: เริ่มต่อจากจำนวนที่ย้ายไปแล้ว — ใช้ได้เพราะ AuditLog เป็น append-only) */
 async function migrateTableToList(token, driveId, itemId, siteId, table, offset, chunk) {
+  if (table in LIST_KEYS) return migrateKeyedTableToList(token, driveId, itemId, siteId, table, offset, chunk);
   const rows = await listRows(token, driveId, itemId, table);
   const fnames = await resolveListFields(token, siteId, table);
   let start = offset;

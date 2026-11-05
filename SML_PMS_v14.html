@@ -2866,6 +2866,7 @@ img,svg,canvas{max-width:100%}
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ลบแถวซ้ำเก่า (รหัส+รอบ+ระดับเดียวกัน) เก็บแถวสถานะล่าสุด — Admin/HR เท่านั้น" onclick="ms365DedupeAppraisals()">🧹 ลบแถวซ้ำเก่าใน Appraisals</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Audit Log จาก Excel ไปเก็บเป็น SharePoint List (เร็วกว่า) — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateAuditLogToList()">🚚 ย้าย Audit Log ไป SharePoint List</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Approvals จาก Excel ไปเก็บเป็น SharePoint List — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateTableToList('Approvals')">🚚 ย้าย Approvals ไป SharePoint List</button>
+            <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายผลประเมิน (Appraisals) จาก Excel ไปเก็บเป็น SharePoint List — Admin/HR เท่านั้น ย้ายซ้ำได้จนกว่าจะสลับ" onclick="ms365MigrateTableToList('Appraisals')">🚚 ย้าย Appraisals ไป SharePoint List</button>
             <div id="pendingListArea" style="margin-top:10px;max-height:180px;overflow:auto"></div>
           </div>
         </div>
@@ -8306,13 +8307,14 @@ async function graphDedupeTableRows(tableName, keyCols, dryRun){
 /* #264: ปุ่ม Admin — สร้าง SharePoint List ชื่อ table (ถ้ายังไม่มี) แล้วย้ายประวัติจาก Excel ทีละก้อน (ทำซ้ำได้: เริ่มต่อจากที่ย้ายแล้ว)
    ย้ายเสร็จยังไม่สลับใช้งานเอง — ต้องตั้ง LIST_TABLES ใน Cloudflare (คั่นด้วยจุลภาค) ก่อน เว็บจึงจะอ่าน/เขียนที่ List
    ใช้ได้เฉพาะตารางแบบ "เพิ่มแถวอย่างเดียว" (AuditLog, Approvals) */
-const LIST_TABLE_LABEL = { AuditLog:'Audit Log', Approvals:'Approvals' };
+const LIST_TABLE_LABEL = { AuditLog:'Audit Log', Approvals:'Approvals', Appraisals:'Appraisals (ผลประเมิน)' };
+const LIST_TABLE_KEYED = { Appraisals:true }; // ตารางที่แก้แถวเดิม — ย้ายแบบ upsert รันซ้ำได้จนกว่าจะสลับ แต่ห้ามรันหลังสลับ
 async function ms365MigrateTableToList(table){
   const label = LIST_TABLE_LABEL[table] || table;
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg) || !isWorkerConfigured(cfg)){ smlToast('ต้องตั้งค่า MS365 + Proxy ก่อน','warn'); return; }
-  if(!confirm('ย้ายข้อมูล '+label+' จาก Excel ไปเก็บเป็น SharePoint List\n\n• ระบบจะสร้าง List ชื่อ '+table+' ถ้ายังไม่มี (ต้อง redeploy Worker ตัวล่าสุดก่อน)\n• คัดลอกอย่างเดียว ไม่ลบข้อมูลใน Excel\n• ทำซ้ำได้ปลอดภัย (ไม่ย้ายซ้ำ)\n• ย้ายเสร็จแล้วต้องเพิ่ม '+table+' ใน LIST_TABLES ใน Cloudflare (เช่น AuditLog,Approvals) จึงจะเริ่มใช้ List\n\nเริ่มย้าย?')) return;
+  if(!confirm('ย้ายข้อมูล '+label+' จาก Excel ไปเก็บเป็น SharePoint List\n\n• ระบบจะสร้าง List ชื่อ '+table+' ถ้ายังไม่มี (ต้อง redeploy Worker ตัวล่าสุดก่อน)\n• คัดลอกอย่างเดียว ไม่ลบข้อมูลใน Excel\n• ทำซ้ำได้ปลอดภัย (ไม่ย้ายซ้ำ)'+(LIST_TABLE_KEYED[table]?'\n• ตารางนี้ย้ายแบบอัปเดตตามคีย์ (รหัส+รอบ+ระดับ) และตัดแถวซ้ำเก่าให้ในตัว — กดย้ายซ้ำได้จนกว่าจะสลับ ⚠️ หลังสลับแล้วห้ามกดย้ายอีก (Excel เก่ากว่า List)\n• สำรองไฟล์ Excel ไว้ก่อน':'')+'\n• ย้ายเสร็จแล้วต้องเพิ่ม '+table+' ใน LIST_TABLES ใน Cloudflare (เช่น AuditLog,Approvals,Appraisals) จึงจะเริ่มใช้ List\n\nเริ่มย้าย?')) return;
   try{
     const su = await workerFetch(cfg, '/admin/list-setup', { method:'POST', body: JSON.stringify({ table }) });
     appendSyncLog('ย้าย '+table+' → List: ' + (su.list==='created' ? 'สร้าง List ใหม่แล้ว' : 'มี List อยู่แล้ว'), true);
