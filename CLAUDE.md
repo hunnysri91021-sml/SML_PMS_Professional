@@ -8925,6 +8925,8 @@ touches employee/attendance/evaluation data.
 
 265. **ตีกลับของ MD และของ HR (หลัง Calibration) บังคับเหตุผลแล้ว + ธงตีกลับข้ามเครื่องรีเฟรชทุก 30 วินาที (ปิดข้อจำกัดของ #259).** `rejectApproveAll()` (MD → Calibrated) และ `rejectCalibCheckSelected()` (HR → Acknowledged) เรียก `askRejectReason` แล้ว `recordReject(key,step,reason,true)` — พารามิเตอร์ที่ 4 `noFlag` ข้ามการตั้งธง reconfirm เพราะสองขั้นนี้ไม่ใช่หน้าต่างสอบทานคะแนน (เหตุผลยังลง Approvals ความเห็น `| เหตุผลตีกลับ:`, Audit Log, `EVAL_REJECT_INFO_KEY`). `startEvalAutoSync()` เรียก `ms365SyncRejectFlags(true)` ตอนเข้าหน้าและต่อท้าย `ms365SyncAppraisals` ทุก 30 วินาที (เดิมเฉพาะ login/reload). ข้อจำกัดที่เหลือ: ธง reconfirm ยังเป็น localStorage ต่อเครื่อง (สร้างใหม่จาก Approvals เฉพาะขั้นที่อยู่ใน `REJECT_STEP_TARGET`). ทดสอบ: `tests/reject-reason-md.test.js`.
 
+266. **ธงตีกลับข้ามเครื่องถูกบังคับทันที ไม่ต้องรอ login/รอบ auto-sync (ปิดข้อจำกัดของ #259/#265).** ธง `needsReconfirm` ยังเก็บใน localStorage ต่อเครื่อง แต่ตอนนี้ดึงจาก Approvals (`ms365SyncRejectFlags`) ก่อนทุกจุดที่ใช้ตัดสิน: (1) `guardFreshStatus()` — ทุกปุ่มส่งต่อ/อนุมัติแบบหลายรายการและ `submitReviewerForm()` sync ธงต่อจาก Appraisals ก่อนเช็ก `bulkReconfirmGate`/`needsReconfirm`; (2) `openReviewerForm()` เปิดฟอร์มทันทีแล้ว sync ธงเบื้องหลัง ถ้าเพิ่งพบธงจากเครื่องอื่นจะใส่ banner + ล็อกปุ่มส่งต่อ (`applyReviewerReconfirmUi()` แยกเป็นฟังก์ชันเรียกซ้ำได้; ทำเฉพาะเมื่อตั้ง MS365 แล้ว). ข้อจำกัดที่เหลือ: ถ้าดึง Excel ไม่ได้ก็ใช้ธงในเครื่องตามเดิม, ธงที่ปลดแล้วบนเครื่อง A (ยืนยัน/แก้คะแนนแต่ยังไม่ส่ง) จะถูกตั้งซ้ำบนเครื่อง B เพราะเวลาปลดเก็บต่อเครื่อง. ทดสอบ: `tests/reject-flag-crossdevice.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

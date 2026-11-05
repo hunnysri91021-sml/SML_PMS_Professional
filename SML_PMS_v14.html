@@ -10545,7 +10545,7 @@ function pushDraftRowToExcel(d, label){
 async function guardFreshStatus(keys, expectedStatus){
   try{
     const cfg = loadMs365Config();
-    if(typeof isMs365Configured==='function' && isMs365Configured(cfg)) await ms365SyncAppraisals(true);
+    if(typeof isMs365Configured==='function' && isMs365Configured(cfg)){ await ms365SyncAppraisals(true); await ms365SyncRejectFlags(true); /* #266: ธงตีกลับจากเครื่องอื่นต้องมาก่อนเช็ก reconfirm */ }
   }catch(e){ if(typeof appendSyncLog==='function') appendSyncLog('ตรวจสถานะล่าสุด: ดึงข้อมูลไม่สำเร็จ — ใช้ข้อมูลในเครื่อง: '+(e?.message||e), false); }
   const drafts = getDrafts();
   const ok = [], stale = [];
@@ -13876,18 +13876,32 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
   }
   /* ผู้ใช้ยืนยัน: ถ้าใบนี้เพิ่งถูกตีกลับ คะแนนเดิมยังติ๊กไว้ให้ (ด้านบน) แต่ต้องกดยืนยัน/แก้ไขก่อนส่งซ้ำ —
      ดู markNeedsReconfirm()/unlockReviewerSubmit() ด้านบน */
-  const reconfirmKey = code+'|'+currentReviewerCycle+'|'+lv;
-  const pending = !viewOnly && typeof needsReconfirm==='function' && needsReconfirm(reconfirmKey);
   _reconfirmReason = null;
+  applyReviewerReconfirmUi(viewOnly);
+  /* #266: ธงตีกลับที่เกิดจากเครื่องอื่นอาจยังไม่ถูก sync มา → ดึงจาก Approvals เบื้องหลังแล้วใส่ banner/ล็อกปุ่มถ้าเพิ่งพบ */
+  if(!viewOnly && typeof ms365SyncRejectFlags==='function' && isMs365Configured(loadMs365Config())){
+    const _openKey = code+'|'+currentReviewerCycle+'|'+lv;
+    Promise.resolve(ms365SyncRejectFlags(true)).then(()=>{
+      if(currentReviewerCode+'|'+currentReviewerCycle+'|'+currentReviewerLevel===_openKey && !document.getElementById('reviewerReconfirmNote')) applyReviewerReconfirmUi(false);
+    }).catch(()=>{});
+  }
+  openM('mReview');
+}
+/* ผู้ใช้ยืนยัน: ถ้าใบนี้เพิ่งถูกตีกลับ คะแนนเดิมยังติ๊กไว้ให้ แต่ต้องกดยืนยัน/แก้ไขก่อนส่งซ้ำ — ดู markNeedsReconfirm()/unlockReviewerSubmit()
+   #266: แยกเป็นฟังก์ชันเพื่อเรียกซ้ำได้หลัง sync ธงจากเครื่องอื่นเสร็จ */
+function applyReviewerReconfirmUi(viewOnly){
+  const area = document.getElementById('reviewerFormArea');
+  const reconfirmKey = currentReviewerCode+'|'+currentReviewerCycle+'|'+currentReviewerLevel;
+  const pending = !viewOnly && typeof needsReconfirm==='function' && needsReconfirm(reconfirmKey);
+  if(!_reconfirmReason || _reconfirmReason.key!==reconfirmKey) _reconfirmReason = null;
   const confirmBtn = document.getElementById('reviewerConfirmBtn');
   const submitBtn = document.getElementById('reviewerSubmitBtn');
   if(confirmBtn) confirmBtn.style.display = pending ? '' : 'none';
   if(submitBtn) submitBtn.disabled = pending;
   document.getElementById('reviewerReconfirmNote')?.remove();
-  if(pending){
+  if(pending && area){
     area.insertAdjacentHTML('afterbegin', `<div id="reviewerReconfirmNote" class="al al-w" style="margin-bottom:12px"><span>⚠️</span><div>ใบนี้เคยถูกตีกลับ — คะแนนที่เห็นคือคะแนนเดิมก่อนตีกลับ กรุณาตรวจสอบ แล้วเลือกอย่างใดอย่างหนึ่ง: <b>(1) แก้ไขคะแนน</b>อย่างน้อย 1 ข้อ หรือ <b>(2) กด "✓ ยืนยันผลเดิม"</b> พร้อมระบุเหตุผล — จากนั้นจึงส่งต่อผู้บังคับบัญชาตามขั้นตอนเดิมได้${rejectInfoHtml(reconfirmKey)}</div></div>`);
   }
-  openM('mReview');
 }
 /* เรียกตอนผู้สอบทาน "สัมผัส" ใบที่เคยถูกตีกลับจริง — กดยืนยันตรงๆ หรือแก้ไขคะแนนจริงอย่างน้อย 1 ข้อ
    (ดู selectReviewScore()'s isRestore param ด้านล่าง — การติ๊กคะแนนคืนตอนเปิดฟอร์มไม่นับเป็นการสัมผัส) */
@@ -14127,7 +14141,7 @@ async function submitReviewerForm(){
       const _ok = await guardFreshStatus([_k], currentReviewerOpenStatus);
       if(!_ok.length){ closeM(); return; }
     } else {
-      try{ if(isMs365Configured(loadMs365Config())) await ms365SyncAppraisals(true); }catch(e){}
+      try{ if(isMs365Configured(loadMs365Config())){ await ms365SyncAppraisals(true); await ms365SyncRejectFlags(true); } }catch(e){}
       const _ex = getDrafts().find(d=>d[0]===code && d[2]===cycle && d[3]===lv);
       if(_ex && _ex[_ex.length-1]!=='Draft'){ smlToast('ใบนี้ถูกส่งเข้าสายอนุมัติไปแล้วโดยคนอื่น — หน้าจอรีเฟรชให้แล้ว','warn'); renderWorkflowPages(); closeM(); return; }
     }
