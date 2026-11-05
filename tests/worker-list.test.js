@@ -23,7 +23,7 @@ global.fetch=async(url,opt={})=>{
   if(/sites\/SITE\/lists$/.test(u)&&m==='POST'){ listExists=true; return j({id:'L'},201); }
   if(/sites\/SITE\/lists\/AuditLog$/.test(u)) return listExists?j({id:'L'}):j({error:{message:'nf'}},404);
   if(/lists\/AuditLog\/items/.test(u)&&m==='POST'){ items.push(JSON.parse(opt.body).fields); return j({id:'1'},201); }
-  if(/lists\/AuditLog\/items/.test(u)&&m==='GET'){ return j({value:items.map(f=>({id:'x',fields:f}))}); }
+  if(/lists\/AuditLog\/items/.test(u)&&m==='GET'){ if(!listExists) return j({error:{message:'nf'}},404); return j({value:items.map(f=>({id:'x',fields:f}))}); }
   return j({value:[]});
 };
 (async()=>{
