@@ -33,7 +33,7 @@ global.fetch=async(url,opt={})=>{
   const E=(await call(BASE,'/auth/login','POST',{code:'E1',pin:'1234'})).j.token;
 
   ok((await call(BASE,'/admin/list-setup','POST',{table:'AuditLog'},E)).s===403,'พนักงานทั่วไปสร้าง/ย้าย list ไม่ได้');
-  ok((await call(BASE,'/admin/list-setup','POST',{table:'Appraisals'},A)).s===400,'ตารางที่ไม่รองรับ → 400');
+  ok((await call(BASE,'/admin/list-setup','POST',{table:'Employees'},A)).s===400,'ตารางที่ไม่รองรับ → 400');
   const su=await call(BASE,'/admin/list-setup','POST',{table:'AuditLog'},A);
   ok(su.s===200&&su.j.list==='created','สร้าง list สำเร็จ');
   ok((await call(BASE,'/admin/list-setup','POST',{table:'AuditLog'},A)).j.list==='exists','เรียกซ้ำ → exists ไม่สร้างซ้ำ');
