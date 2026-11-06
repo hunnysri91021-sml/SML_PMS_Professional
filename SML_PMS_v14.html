@@ -4777,6 +4777,12 @@ function pushIdpToExcel(p){
     .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push IDP (${p.code}) เข้า Excel`, true); })
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push IDP (${p.code}) ไม่สำเร็จ: `+(err?.message||err), false); });
 }
+/* #280: วันครบกำหนด IDP — ถ้าคอลัมน์ใน Excel เป็นชนิดวันที่ Graph ส่งเป็นเลข serial (#78) แปลงกลับเป็น yyyy-mm-dd (รูปแบบที่ฟอร์มใช้) ไม่งั้นคงข้อความเดิม */
+function idpDueIn(v){
+  const t=String(v??'').trim();
+  if(/^\d{5}(\.\d+)?$/.test(t)){ const d=new Date(Math.round((Number(t)-25569)*86400000)); if(!isNaN(d)) return d.toISOString().slice(0,10); }
+  return t;
+}
 async function ms365SyncIdp(silent=false){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncIdp: ยังไม่ได้ตั้งค่า MS365', false); return; }
@@ -4785,7 +4791,7 @@ async function ms365SyncIdp(silent=false){
     if(!rows.length) return;
     const parsed = rows.map(r=>({
       code:String(r[0]??'').trim(), name:String(r[1]??'').trim(), dept:String(r[2]??'').trim(),
-      grade:String(r[3]??'').trim(), plan:String(r[4]??'').trim(), due:String(r[5]??'').trim(),
+      grade:String(r[3]??'').trim(), plan:String(r[4]??'').trim(), due:idpDueIn(r[5]),
       owner:String(r[6]??'').trim(), metric:String(r[7]??'').trim(), status:String(r[8]??'').trim()||'pending'
     })).filter(p=>p.code && p.name);
     if(!parsed.length) return;
@@ -6539,6 +6545,10 @@ function loadOrgMaster(){
 }
 loadOrgMaster();
 function saveOrgMaster(){ localStorage.setItem(ORG_MASTER_KEY, JSON.stringify(ORG_MASTER)); }
+/* #280: เวลาที่ "แก้เอง" ล่าสุดต่อ field (เก็บแยกจากข้อมูลรายการ) — ใช้ตัดสิน newer-wins ตอน sync เพื่อให้การลบรายการข้ามเครื่องได้ (union อย่างเดียวทำให้ของที่ลบถูกเครื่องอื่นดันกลับมา) */
+const ORG_MASTER_AT_KEY = 'smlPmsOrgMasterAt';
+function loadOrgMasterAt(){ try{ return JSON.parse(localStorage.getItem(ORG_MASTER_AT_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function touchOrgMasterAt(fieldKey, at){ const m=loadOrgMasterAt(); m[fieldKey]=at||new Date().toISOString(); localStorage.setItem(ORG_MASTER_AT_KEY, JSON.stringify(m)); return m[fieldKey]; }
 function getOrgMasterValues(fieldKey){
   const spec = ORG_MASTER_FIELDS.find(f=>f.key===fieldKey);
   const real = spec ? MASTER_USERS.map(u=>u[spec.empIdx]).filter(v=>v && v!=='—') : [];
@@ -6647,7 +6657,7 @@ function addOrgMasterItem(fieldKey, rawValue){
   if(!value){ smlToast('กรุณากรอกชื่อ'+spec.label,'warn'); return; }
   if(getOrgMasterValues(fieldKey).includes(value)){ smlToast('มีรายการนี้อยู่แล้ว','warn'); return; }
   ORG_MASTER[fieldKey] = [...(ORG_MASTER[fieldKey]||[]), value];
-  saveOrgMaster();
+  saveOrgMaster(); touchOrgMasterAt(fieldKey);
   renderOrgMasterLists();
   if(typeof populateOrgSelects==='function') populateOrgSelects();
   if(typeof pushOrgMasterFieldToExcel==='function') pushOrgMasterFieldToExcel(fieldKey);
@@ -6668,7 +6678,7 @@ function deleteSelectedOrgMasterItems(fieldKey){
   if(!removable.length){ smlToast('ลบไม่ได้ — ทุกรายการที่เลือกมีพนักงานใช้งานอยู่จริง','warn'); return; }
   if(!confirm(`ลบ ${removable.length} รายการที่เลือกออกจาก${spec.label}?` + (inUse.length ? ` (ข้าม ${inUse.length} รายการที่มีพนักงานใช้งานอยู่)` : ''))) return;
   ORG_MASTER[fieldKey] = (ORG_MASTER[fieldKey]||[]).filter(v=>!removable.includes(v));
-  saveOrgMaster();
+  saveOrgMaster(); touchOrgMasterAt(fieldKey);
   renderOrgMasterLists();
   if(typeof populateOrgSelects==='function') populateOrgSelects();
   if(typeof pushOrgMasterFieldToExcel==='function') pushOrgMasterFieldToExcel(fieldKey);
@@ -6684,7 +6694,7 @@ async function pushOrgMasterFieldToExcel(fieldKey){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushOrgMasterFieldToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
-    await graphUpsertTableRow(ORG_MASTER_TABLE, 0, fieldKey, [fieldKey, JSON.stringify(ORG_MASTER[fieldKey]||[]), new Date().toISOString()]);
+    await graphUpsertTableRow(ORG_MASTER_TABLE, 0, fieldKey, [fieldKey, JSON.stringify(ORG_MASTER[fieldKey]||[]), loadOrgMasterAt()[fieldKey]||new Date().toISOString()]);
     if(typeof appendSyncLog==='function') appendSyncLog(`Push รายการหลัก (${fieldKey}) เข้า Excel อัตโนมัติ`, true);
   }catch(e){
     if(typeof appendSyncLog==='function') appendSyncLog(`Push รายการหลัก (${fieldKey}) ไม่สำเร็จ: ${e.message}`, false);
@@ -6708,6 +6718,17 @@ async function ms365SyncOrgMaster(silent=true){
       try{ remoteValues = JSON.parse(r[1]||'[]'); }catch(e){ remoteValues = []; }
       if(!Array.isArray(remoteValues)) return;
       const before = ORG_MASTER[fieldKey] || [];
+      /* #280: ถ้า Excel ใหม่กว่าที่เครื่องนี้แก้เองล่าสุด → ใช้ของ Excel ทั้งก้อน (รวมการลบ); ถ้าเครื่องนี้ใหม่กว่า → คงของเครื่องนี้;
+         ถ้าเครื่องนี้ไม่เคยแก้เอง/เวลาอ่านไม่ได้ → union แบบเดิม (#52) */
+      const remoteAt = String(r[2]??'').trim(), localAt = loadOrgMasterAt()[fieldKey];
+      const iso = /^\d{4}-\d{2}-\d{2}T/;
+      if(localAt && iso.test(remoteAt) && iso.test(localAt)){
+        if(remoteAt > localAt){
+          const same = remoteValues.length===before.length && remoteValues.every((v,i)=>v===before[i]);
+          ORG_MASTER[fieldKey] = remoteValues; touchOrgMasterAt(fieldKey, remoteAt); if(!same) changed = true;
+        }
+        return;
+      }
       const merged = [...new Set([...before, ...remoteValues])];
       if(merged.length !== before.length){ ORG_MASTER[fieldKey] = merged; changed = true; }
     });
