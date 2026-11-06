@@ -10949,6 +10949,21 @@ async function rejectReviewL1Selected(){
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ตีกลับจากสอบทานหัวหน้าแผนก', keys.length+' รายการ', keys.map(k=>k.split('|')[0]).join(', '));
   smlToast('ตีกลับให้แก้ไข '+keys.length+' รายการ','warn');
 }
+/* #274: พนักงานที่ไม่มี L1/L2 (หรือ L1–L3) ตัวจริง ไม่มีใครประเมินรอบแรกก่อน — คิว L3/L4 เดิมแสดงแค่ "รอผลประเมิน" ไม่มีปุ่ม ผู้สอบทานที่เป็นผู้ประเมินคนแรกของคนนั้นจึงกดประเมินไม่ได้
+   ตอนนี้ถ้าคนนี้ยังไม่ส่ง (ไม่มีใบ/Draft) และผู้ประเมินตามช่องของคิวนี้คือผู้ล็อกอิน และไม่มีผู้สอบทานจริงในขั้นก่อนหน้า → แสดงปุ่ม "ประเมิน" เปิดฟอร์มเดียวกับหน้า 2. ประเมินทีมงาน */
+function pendingEvalBtn(emp, resolverFn){
+  const me = CURRENT_SESSION_USER;
+  if(!me || !emp) return '';
+  const earlier = resolverFn===resolveGmReviewer ? (resolveL1Reviewer(emp)||resolveL2Reviewer(emp)) : resolveL1Reviewer(emp);
+  if(earlier) return '';
+  const rv = resolverFn(emp);
+  if(!rv || rv[0]!==me[0]) return '';
+  const cyc = getCurrentEvalCycleYear();
+  const d = findCurrentCycleDraft(getDrafts(), emp[0], cyc);
+  if(d && d[d.length-1]!=='Draft') return '';
+  const lv = (d ? d[3] : '') || getAssignedEvalLevel(emp) || inferLevelFromPosition(emp[7]);
+  return `<br><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(lv)}','${escJs(emp[1])}','${escJs(emp[0])}','${escJs(emp[7])}','${escJs(cyc)}',false)">ประเมิน</button>`;
+}
 function renderReviewQueue(){
   const tbody=document.getElementById('reviewRows'); const cnt=document.getElementById('reviewCount');
   if(!tbody) return;
@@ -10971,7 +10986,7 @@ function renderReviewQueue(){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveL2Reviewer)}</td></tr>`;
     }
     /* L3/L4 ไม่แสดงเกรด (ผู้ใช้สั่ง) — เกรดที่เห็นระหว่างทางเป็นเกรดชั่วคราว อาจทำให้เข้าใจผิดว่าเป็นเกรดจริง */
     const d = r.draft, X = d[d.length-3];
@@ -11074,7 +11089,7 @@ function renderGmApproveQueue(){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveGmReviewer)}</td></tr>`;
     }
     /* L3/L4 ไม่แสดงเกรด (ผู้ใช้สั่ง) — เกรดที่เห็นระหว่างทางเป็นเกรดชั่วคราว อาจทำให้เข้าใจผิดว่าเป็นเกรดจริง */
     const d = r.draft, X = d[d.length-3];

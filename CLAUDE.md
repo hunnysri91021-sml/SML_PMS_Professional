@@ -8939,6 +8939,8 @@ touches employee/attendance/evaluation data.
 
 273. **ตัวกรองหัวหน้าในคิว L2/L3/L4 ต้องแสดงรายชื่อของ "ขั้นนั้นเอง" ไม่ซ้ำกับหน้า "2. ประเมินทีมงาน" (L1).** เดิมคิว L2 (`reviewl1`) กรองด้วยชื่อหัวหน้าหน่วย L1 (`resolveUnitHeadFor`) ซ้ำกับตัวกรองหน้า L1 และครอบเพียงส่วนหนึ่งของคนในคิว. ตอนนี้ `reviewl1Filter` = หัวหน้าแผนก L2 (`resolveL1Reviewer`, ช่อง u[10]), `reviewFilter` = ผู้ตรวจ MGR L3 (`resolveL2Reviewer`, u[19]), `gmApproveFilter` = ผู้อนุมัติ GM L4 (`resolveGmReviewer`, u[11]) พร้อมกล่องวินิจฉัยช่องว่างชี้ช่องเดียวกัน (ชื่อ resolver เป็นชื่อ "สถานะ" ไม่ใช่ tier — ดู #272). `resolveUnitHeadFor` ยังคงอยู่แต่ไม่มีที่เรียกใช้ในคิว.
 
+274. **พนักงานที่ไม่มี L1/L2 ตัวจริง — L3 กดประเมินจากคิวของตัวเองได้.** คิว L3 (`review`) และ L4 (`gmapprove`) เดิมแสดงคนที่ยังไม่ส่งเป็น "รอผลประเมิน" ไม่มีปุ่ม ทั้งที่ไม่มีใครประเมินรอบแรกก่อน (ต้องไปหน้า 2. ประเมินทีมงาน). `pendingEvalBtn(emp,resolverFn)` แสดงปุ่ม "ประเมิน" (เปิด `openReviewerForm` เดียวกัน) เมื่อ: ใบยังไม่มี/เป็น Draft, ผู้ประเมินตามช่องของคิวนั้นคือผู้ล็อกอิน, และไม่มีผู้สอบทานจริงในขั้นก่อนหน้า (L3: ไม่มี resolveL1Reviewer; L4: ไม่มี L1/L2). ส่งแล้วระบบข้ามขั้นตามปกติ (`skipEmptyReviewStages`). ทดสอบ: `tests/pending-eval-btn.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
