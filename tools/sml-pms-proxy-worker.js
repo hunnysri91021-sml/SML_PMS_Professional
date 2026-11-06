@@ -246,6 +246,59 @@ export default {
         return json({ ok: true, deleted: batch.length, remaining: old.length - batch.length, total: items.length }, 200, cors);
       }
 
+      /* #281: ล้างข้อมูลทดสอบ (Admin เท่านั้น) — เฉพาะตารางใน CLEARABLE_TABLES (ผล/ประวัติ/IDP ที่ระบบเขียนเอง)
+         ลบทีละไม่เกิน CLEAR_CHUNK แถวต่อครั้ง ส่ง remaining กลับให้เว็บเรียกซ้ำจนหมด; dryRun=true นับอย่างเดียว */
+      if (url.pathname === '/admin/clear-table' && request.method === 'POST') {
+        const { table, dryRun } = await request.json();
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
+        if (!CLEARABLE_TABLES.includes(table)) return json({ error: 'ตารางนี้ไม่อนุญาตให้ล้าง' }, 400, cors);
+        let total, deleted = 0;
+        if (isListBacked(env, table)) {
+          const items = await listItemsPick(token, siteId, table, [0]);
+          total = items.length;
+          if (!dryRun) {
+            const batch = items.slice(0, 400);
+            const reqs = batch.map((x) => ({ method: 'DELETE', url: `/sites/${siteId}/lists/${listSeg(table)}/items/${x.id}` }));
+            try { await sendListBatches(token, siteId, table, reqs); }
+            catch (e) { return json({ error: String(e.message || e).replace('ย้ายไม่สำเร็จ', 'ลบไม่สำเร็จ') }, 500, cors); }
+            deleted = batch.length;
+          }
+        } else {
+          const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
+          const rows = (await fetchAllTableRowsRaw(token, base)).filter((r) => r.index !== undefined).sort((a, b) => b.index - a.index);
+          total = rows.length;
+          if (!dryRun) {
+            // ลบจาก index มากไปน้อย — แถวที่เหลืออยู่ข้างบนไม่เลื่อนตำแหน่ง
+            for (const r of rows.slice(0, CLEAR_CHUNK)) { await graphSend(token, base + `/itemAt(index=${r.index})`, 'DELETE'); deleted++; }
+          }
+        }
+        return json({ ok: true, total, deleted, remaining: dryRun ? total : total - deleted, dryRun: !!dryRun }, 200, cors);
+      }
+      /* #281: เคลียร์ "ช่องกรอก" ของตารางที่มีคอลัมน์สูตร (Attendance) — คอลัมน์ที่เคลียร์กำหนดฝั่ง Worker เท่านั้น
+         ไม่เคลียร์ EmpID/ชื่อ/รอบ และไม่แตะคอลัมน์สูตร (วันลารวม/Z Score) */
+      if (url.pathname === '/admin/clear-columns' && request.method === 'POST') {
+        const { table, dryRun } = await request.json();
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
+        const cols = CLEARABLE_COLUMNS[table];
+        if (!cols) return json({ error: 'ตารางนี้ไม่รองรับการเคลียร์คอลัมน์' }, 400, cors);
+        if (isListBacked(env, table)) return json({ error: 'ตารางอยู่ใน SharePoint List ไม่รองรับ' }, 400, cors);
+        const tbl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')`;
+        let rangeData = null;
+        try { rangeData = await graphGet(token, tbl + '/dataBodyRange?$select=address,rowCount'); } catch (e) { rangeData = null; }
+        const m = rangeData && /^(.+)!([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rangeData.address || '');
+        if (!m) return json({ ok: true, rows: 0, cleared: 0, dryRun: !!dryRun }, 200, cors);
+        const sheetName = m[1], startCol = colLetterToIndex(m[2]), r1 = parseInt(m[3], 10), r2 = parseInt(m[5], 10);
+        const nRows = r2 - r1 + 1;
+        if (!dryRun) {
+          for (const group of groupContiguous(cols.slice().sort((a, b) => a - b))) {
+            const addr = `${sheetName}!${colIndexToLetter(startCol + group[0])}${r1}:${colIndexToLetter(startCol + group[group.length - 1])}${r2}`;
+            const rangeUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(sheetName)}')/range(address='${encodeURIComponent(addr)}')`;
+            await graphSend(token, rangeUrl, 'PATCH', { values: Array.from({ length: nRows }, () => group.map(() => '')) });
+          }
+        }
+        return json({ ok: true, rows: nRows, cleared: dryRun ? 0 : nRows, dryRun: !!dryRun }, 200, cors);
+      }
+
       if (url.pathname === '/rows' && request.method === 'GET') {
         const table = url.searchParams.get('table');
         if (!table) return json({ error: 'missing table' }, 400, cors);
@@ -794,6 +847,10 @@ const LIST_SCHEMAS = { AuditLog: 7, Approvals: 7, Appraisals: 24 };
 const LIST_KEYS = { Appraisals: [0, 2, 3] };
 // #267: คอลัมน์วันที่/เวลา (ISO) ของตารางที่เก็บถาวรได้ — AuditLog F0, Approvals F5
 const ARCHIVE_DATE_COL = { AuditLog: 0, Approvals: 5 };
+/* #281: ตารางที่ปุ่ม "ล้างข้อมูลทดสอบ" ลบได้ทั้งตาราง + คอลัมน์ช่องกรอกของ Attendance (D–H สาย/กลับก่อน/ป่วย/กิจ/ขาด, K หมายเหตุ) */
+const CLEARABLE_TABLES = ['Appraisals', 'Approvals', 'AuditLog', 'IDP'];
+const CLEARABLE_COLUMNS = { Attendance: [3, 4, 5, 6, 7, 10] };
+const CLEAR_CHUNK = 100;
 const DEDUPE_STATUS_COL = 22;
 function isListBacked(env, table) {
   if (!(table in LIST_SCHEMAS)) return false;

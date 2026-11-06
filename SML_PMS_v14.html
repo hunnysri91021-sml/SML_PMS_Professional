@@ -2865,6 +2865,7 @@ img,svg,canvas{max-width:100%}
             <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAppraisals()">📤 Push ผลประเมิน → Excel</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="Export ข้อมูลเก่าของ Audit Log เป็นไฟล์เก็บไว้ แล้วลบออกจาก SharePoint List — Admin/HR เท่านั้น" onclick="ms365ArchiveOldRows('AuditLog')">🗄️ เก็บถาวร Audit Log เก่า</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="Export ประวัติ Approvals ของรอบเก่าเป็นไฟล์เก็บไว้ แล้วลบออกจาก SharePoint List — Admin/HR เท่านั้น" onclick="ms365ArchiveOldRows('Approvals')">🗄️ เก็บถาวร Approvals เก่า</button>
+            <button class="btn" style="width:100%;justify-content:center;margin-top:6px;color:#b91c1c;border-color:#fca5a5" title="ล้างผลประเมิน/Approvals/Audit Log/ผลจริง KPI/ข้อมูลเวลา/IDP ทั้งเว็บและ Excel สำหรับช่วงทดสอบระบบ — Admin/HR เท่านั้น ต้องพิมพ์ยืนยัน" onclick="resetTestData()">🧹 ล้างข้อมูลทดสอบ (ทั้งเว็บและ Excel)</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ลบแถวซ้ำเก่า (รหัส+รอบ+ระดับเดียวกัน) เก็บแถวสถานะล่าสุด — Admin/HR เท่านั้น" onclick="ms365DedupeAppraisals()">🧹 ลบแถวซ้ำเก่าใน Appraisals</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Audit Log จาก Excel ไปเก็บเป็น SharePoint List (เร็วกว่า) — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateAuditLogToList()">🚚 ย้าย Audit Log ไป SharePoint List</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Approvals จาก Excel ไปเก็บเป็น SharePoint List — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateTableToList('Approvals')">🚚 ย้าย Approvals ไป SharePoint List</button>
@@ -8447,6 +8448,82 @@ async function ms365DedupeAppraisals(){
   }
 }
 
+/* #281: ปุ่ม Admin "ล้างข้อมูลทดสอบ" — ล้างผลประเมิน/ประวัติอนุมัติ/Audit Log/ผลจริง KPI/ข้อมูลเวลา/IDP ทั้งในเว็บและ Excel/List
+   ไม่แตะ: พนักงาน, PIN, ตั้งค่ารอบ/สัดส่วน/แบบฟอร์ม, รายการหลัก, นิยาม KPI. ลำดับ: นับ → สำรอง CSV → พิมพ์ยืนยัน → ล้างที่ Worker
+   (ล้มเหลวตรงไหนหยุดก่อนล้างในเครื่อง) → ตราเวลา __reset__ ใน FormWeights (เครื่องอื่นล้างของตัวเองตอน sync) → ล้างในเครื่อง */
+const RESET_APPLIED_KEY = 'smlPmsResetAppliedAt';
+const RESET_REMOTE_TABLES = ['Appraisals','Approvals','AuditLog','IDP'];
+function clearLocalTestData(){
+  const keys = [MS365_LOCAL_DRAFT_KEY, PUSHED_APPRAISALS_KEY, RESULT_NOTIFIED_KEY, DISPUTES_KEY, EVAL_LAST_ACTOR_KEY, EVAL_STAGE_SIGNERS_KEY,
+    EVAL_NEEDS_RECONFIRM_KEY, EVAL_REJECT_INFO_KEY, EVAL_RECONFIRM_CLEARED_KEY, APPROVAL_SIGNATURE_KEY, EVAL_HR_NOTE_KEY, EVAL_COMMENTS_KEY,
+    ACK_CHANNEL_KEY, EVAL_HELD_KEY, AUDIT_LOG_KEY, IDP_LOCAL_KEY, ATTENDANCE_KEY];
+  keys.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+  ATTENDANCE = {}; idpData = [];
+  goalKpiData.forEach(k=>{ if(k.scope==='person') k.actualVal=''; }); saveKpiData();
+  bellCurveResult = null;
+  ['renderWorkflowPages','renderCycleStats','renderNavBadges','renderAttendanceList','renderIdpRows','renderAuditLog'].forEach(fn=>{ try{ if(typeof window[fn]==='function') window[fn](); }catch(e){} });
+  try{ renderGoalKpi(goalKpiData); }catch(e){}
+}
+async function resetTestData(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  const cfg = loadMs365Config();
+  const remote = isMs365Configured(cfg);
+  if(remote && !isWorkerConfigured(cfg)){ smlToast('ต้องตั้งค่า Proxy (Worker) ก่อน จึงจะล้างข้อมูลใน Excel ได้','warn'); return; }
+  try{
+    const counts = {};
+    if(remote){
+      for(const t of RESET_REMOTE_TABLES){ counts[t] = (await workerFetch(cfg,'/admin/clear-table',{method:'POST',body:JSON.stringify({table:t,dryRun:true})})).total; }
+      counts.Attendance = (await workerFetch(cfg,'/admin/clear-columns',{method:'POST',body:JSON.stringify({table:'Attendance',dryRun:true})})).rows;
+    }
+    const localDrafts = getDrafts().length;
+    const summary = (remote ? RESET_REMOTE_TABLES.map(t=>'• '+t+': '+counts[t]+' แถว').join('\n')+'\n• Attendance: เคลียร์ช่องกรอก '+counts.Attendance+' แถว (ไม่แตะสูตร)\n' : '')
+      + '• ในเครื่องนี้: ใบประเมิน '+localDrafts+' ใบ + ความเห็น/ลายเซ็น/ข้อโต้แย้ง/Audit Log/IDP/ข้อมูลเวลา + ผลจริง KPI รายบุคคล';
+    if(!confirm('⚠️ ล้างข้อมูลทดสอบ — ลบแล้วกู้คืนไม่ได้\n\n'+summary+'\n\nไม่แตะ: พนักงาน/PIN/ตั้งค่ารอบ/สัดส่วน/แบบฟอร์ม/รายการหลัก/นิยาม KPI\n\nระบบจะดาวน์โหลดไฟล์สำรอง CSV ก่อน แล้วถามยืนยันอีกครั้ง ดำเนินการต่อ?')) return;
+    const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    downloadCsv('สำรอง_ใบประเมินในเครื่อง_'+ts+'.csv', ['รหัส','ชื่อ','รอบ','ระดับ','...คะแนน...ท้ายแถว: Y,Z,X,เกรด,สถานะ'], getDrafts());
+    if(remote){
+      for(const t of RESET_REMOTE_TABLES.concat(['Attendance'])){
+        const rows = await graphListTableRows(t);
+        if(rows.length) downloadCsv('สำรอง_'+t+'_'+ts+'.csv', rows[0].map((_,i)=>'คอลัมน์'+(i+1)), rows);
+      }
+    }
+    const typed = prompt('ได้ดาวน์โหลดไฟล์สำรองแล้ว (ตรวจว่าเก็บไว้ครบ)\n\nพิมพ์คำว่า  ล้างข้อมูล  เพื่อยืนยันลบจริง:');
+    if(String(typed||'').trim()!=='ล้างข้อมูล'){ smlToast('ยกเลิก — ไม่มีข้อมูลถูกลบ (ไฟล์สำรองยังอยู่)','info'); return; }
+    if(remote){
+      for(const t of RESET_REMOTE_TABLES){
+        let guard=0, r;
+        do{ r = await workerFetch(cfg,'/admin/clear-table',{method:'POST',body:JSON.stringify({table:t})}); guard++; smlToast('กำลังล้าง '+t+' (เหลือ '+r.remaining+')...','info'); }while(r.remaining>0 && r.deleted>0 && guard<200);
+        if(r.remaining>0) throw new Error('ล้าง '+t+' ไม่หมด (เหลือ '+r.remaining+')');
+      }
+      await workerFetch(cfg,'/admin/clear-columns',{method:'POST',body:JSON.stringify({table:'Attendance'})});
+      const kpis = goalKpiData.filter(k=>k.scope==='person' && k.actualVal!=='' && k.actualVal!=null);
+      for(const k of kpis){ k.actualVal=''; const rr = await pushKpiToExcel(k); if(!rr.ok) throw new Error('ล้างผลจริง KPI '+k.id+' ไม่สำเร็จ: '+rr.error); }
+      const at = new Date().toISOString();
+      await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__reset__',['__reset__',JSON.stringify({at,by:currentActorLabel()}),at]);
+      localStorage.setItem(RESET_APPLIED_KEY, at);
+    }
+    clearLocalTestData();
+    appendSyncLog('ล้างข้อมูลทดสอบสำเร็จ', true);
+    appendAuditLog('ms365','ล้างข้อมูลทดสอบ','ผลประเมิน/Approvals/AuditLog/KPI actual/Attendance/IDP', remote?'ล้างทั้งเว็บและ Excel':'ล้างเฉพาะในเครื่อง');
+    smlToast('ล้างข้อมูลทดสอบเสร็จแล้ว','ok');
+  }catch(e){
+    const msg = e?.message||String(e);
+    appendSyncLog('ล้างข้อมูลทดสอบไม่สำเร็จ: '+msg, false);
+    smlToast('ล้างไม่สำเร็จ: '+msg+(/not found|404/i.test(msg)?' (ต้อง redeploy Worker ตัวล่าสุดก่อน)':'')+' — ข้อมูลในเครื่องยังไม่ถูกล้าง (ใน Excel อาจถูกล้างบางส่วนแล้ว กดล้างซ้ำได้)','err');
+  }
+}
+/* เครื่องอื่นเจอตรา __reset__ ที่ใหม่กว่าที่เคยทำ → ล้างข้อมูลทดสอบในเครื่องตัวเอง (กันดัน draft เก่ากลับขึ้น Excel) */
+function applyResetEpochRows(rows){
+  rows.forEach(r=>{
+    if(String(r[0]??'').trim()!=='__reset__') return;
+    try{
+      const remote = JSON.parse(r[1]); const at = remote && remote.at;
+      const applied = localStorage.getItem(RESET_APPLIED_KEY)||'';
+      if(at && at>applied){ localStorage.setItem(RESET_APPLIED_KEY, at); clearLocalTestData(); appendSyncLog('Admin ล้างข้อมูลทดสอบ ('+at+') — ล้างข้อมูลในเครื่องนี้ตาม', true); }
+    }catch(e){}
+  });
+}
+
 /* graphUpsertTableRowPartial() — เหมือน graphUpsertTableRow() แต่ "ไม่แตะ" คอลัมน์ที่อยู่ใน
    protectedColIndexes เลยตอนอัปเดตแถวเดิม (PATCH เฉพาะช่วงคอลัมน์ที่ไม่ถูกป้องกัน ผ่าน worksheet
    range address แทนการ PATCH ทั้งแถว) — ใช้กับตารางที่มีคอลัมน์สูตร Excel คำนวณสดอยู่ (เช่น
@@ -13644,6 +13721,7 @@ async function ms365SyncFormWeights(silent=false){
     const rows = await graphListTableRows(FORM_WEIGHTS_TABLE);
     if(!rows.length) return;
     let applied = 0;
+    applyResetEpochRows(rows);
     rows.forEach(r=>{
       if(String(r[0]??'').trim()!=='__custom__') return;
       try{ const remote=JSON.parse(r[1])?.defs||{}; const local=loadCustomFormDefs(); Object.keys(remote).forEach(k=>{ if(!local[k]) local[k]=remote[k]; }); saveCustomFormDefs(local); registerAllCustomForms(); renderCustomFormUi(); }catch(e){}

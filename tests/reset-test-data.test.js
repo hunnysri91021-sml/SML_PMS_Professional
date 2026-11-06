@@ -1,0 +1,58 @@
+/* #281: ปุ่มล้างข้อมูลทดสอบ — Admin เท่านั้น, พิมพ์ยืนยัน, สำรองก่อน, ล้มเหลว = ไม่ล้างในเครื่อง, เครื่องอื่นล้างตามตรา __reset__ */
+const {open,ok,done,INJECT}=require('./helpers');
+(async()=>{
+  const {b,p,errs}=await open();
+  await p.evaluate(INJECT);
+  const r=await p.evaluate(async()=>{
+    __mockGraph(); window.isWorkerConfigured=()=>true; window.isMs365Configured=()=>true;
+    const calls=[]; let failClear=false;
+    window.workerFetch=async(cfg,path,o)=>{ const body=JSON.parse(o.body); calls.push({path,table:body.table,dry:!!body.dryRun});
+      if(path==='/admin/clear-columns') return {rows:2};
+      if(failClear&&!body.dryRun) throw new Error('boom');
+      return body.dryRun?{total:3}:{deleted:3,remaining:0}; };
+    window.graphListTableRows=async()=>[['a','b'],['c','d']];
+    const csvs=[]; window.downloadCsv=(n)=>csvs.push(n);
+    const upserts=[]; window.graphUpsertTableRow=async(t,k,key,vals)=>{ upserts.push({t,key}); return 'ok'; };
+    window.confirm=()=>true;
+    const emp=__emp('E9',{role:'emp'}); const sys=__emp('SYS9',{role:'sysadmin'});
+    __draft('E9','Submitted',80);
+    ATTENDANCE['E9']={absentDay:1}; saveAttendance();
+    goalKpiData.length=0; goalKpiData.push({id:'K1',name:'k',unit:'%',pct:10,target:'1',type:'x',scope:'person',year:'2569',status:'active',note:'',empCode:'E9',actualVal:'5',targetVal:'10',direction:'up'}); saveKpiData();
+    const out={};
+    __login(emp); window.prompt=()=>'ล้างข้อมูล';
+    await resetTestData(); out.nonAdminCalls=calls.length; out.draftsAfterNon=getDrafts().length;
+    __login(sys);
+    window.prompt=()=>'ยกเลิก'; calls.length=0;
+    await resetTestData(); out.wrongTypedClears=calls.filter(c=>!c.dry).length; out.draftsAfterWrong=getDrafts().length;
+    window.prompt=()=>'ล้างข้อมูล'; failClear=true; calls.length=0;
+    await resetTestData(); out.failDrafts=getDrafts().length; out.failAtt=Object.keys(ATTENDANCE).length;
+    failClear=false; calls.length=0; csvs.length=0;
+    await resetTestData();
+    out.clearedTables=calls.filter(c=>!c.dry&&c.path==='/admin/clear-table').map(c=>c.table).join();
+    out.clearCols=calls.filter(c=>!c.dry&&c.path==='/admin/clear-columns').length;
+    out.csvCount=csvs.length; out.resetUpsert=upserts.some(u=>u.t==='FormWeights'&&u.key==='__reset__');
+    out.drafts=getDrafts().length; out.att=Object.keys(ATTENDANCE).length; out.kpiActual=goalKpiData[0].actualVal;
+    out.kpiPushed=upserts.some(u=>u.t==='KPI_Goals');
+    out.auditHasReset=JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]').some(e=>/ล้างข้อมูลทดสอบ/.test(e.action));
+    // เครื่องอื่น: เจอตราที่ใหม่กว่า → ล้าง; ตราเดิมซ้ำ → ไม่ล้างข้อมูลใหม่
+    localStorage.setItem(RESET_APPLIED_KEY,'2000-01-01T00:00:00Z');
+    __draft('E9','Submitted',70);
+    applyResetEpochRows([['__reset__',JSON.stringify({at:'2030-01-01T00:00:00Z'}),'x']]); out.otherCleared=getDrafts().length;
+    __draft('E9','Submitted',71);
+    applyResetEpochRows([['__reset__',JSON.stringify({at:'2030-01-01T00:00:00Z'}),'x']]); out.sameEpochKeeps=getDrafts().length;
+    return out;
+  });
+  ok(r.nonAdminCalls===0&&r.draftsAfterNon===1,'ไม่ใช่ Admin → ไม่เรียก Worker ไม่ลบ');
+  ok(r.wrongTypedClears===0&&r.draftsAfterWrong===1,'พิมพ์ยืนยันผิด → ไม่ล้างอะไร');
+  ok(r.failDrafts===1&&r.failAtt===1,'Worker ล้มเหลว → ข้อมูลในเครื่องยังอยู่');
+  ok(r.clearedTables==='Appraisals,Approvals,AuditLog,IDP'&&r.clearCols===1,'ล้างครบ 4 ตาราง + คอลัมน์ Attendance');
+  ok(r.csvCount>=5,'ดาวน์โหลดไฟล์สำรองก่อนล้าง ('+r.csvCount+' ไฟล์)');
+  ok(r.resetUpsert,'บันทึกตรา __reset__ ใน FormWeights');
+  ok(r.drafts===0&&r.att===0&&r.kpiActual==='','ล้างใบประเมิน/Attendance/ผลจริง KPI ในเครื่อง');
+  ok(r.kpiPushed,'push ผลจริง KPI ที่ล้างแล้วขึ้น Excel');
+  ok(r.auditHasReset,'บันทึก Audit Log ว่าล้างข้อมูล');
+  ok(r.otherCleared===0,'เครื่องอื่นเจอตราใหม่ → ล้างในเครื่อง');
+  ok(r.sameEpochKeeps===1,'ตราเดิมซ้ำ → ไม่ล้างข้อมูลที่สร้างหลังจากนั้น');
+  ok(errs.length===0,'ไม่มี page error '+errs.join('|'));
+  await b.close(); done();
+})();
