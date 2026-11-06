@@ -8943,6 +8943,8 @@ touches employee/attendance/evaluation data.
 
 275. **ปุ่ม "ประเมิน" แทนในคิว L2 (`reviewl1`) + Admin/sysadmin เห็นปุ่มในคิว L2/L3/L4 (ต่อจาก #274).** `pendingEvalBtn` รองรับ `resolveL1Reviewer`: ไม่แสดงปุ่มถ้า u[9] ชี้ถึงหัวหน้าหน่วยตัวจริง (active, คนละคนกับผู้สอบทานคิวนี้) เพราะเขาต้องประเมินก่อน; ผู้ไม่ใช่ Admin ต้องเป็นผู้สอบทานของคิวนั้นเอง ส่วน Admin เห็นปุ่มทุกแถวที่ไม่มีผู้ประเมินก่อนหน้า. ทดสอบ: `tests/pending-eval-btn-l2-admin.test.js`.
 
+276. **ปุ่ม 🗑️ ลบใบประเมินลบจริงทั้งในเครื่องและตาราง Appraisals (Excel/SharePoint List) — เดิมลบแค่ในเครื่องแล้ว sync ดึงกลับมาเอง (#113).** `deleteDraftByKey` เป็น async: ลบได้ถึงสถานะ `Calibrated` เท่านั้น (`CalibChecked`/`Approved` ห้าม — ใช้ตีกลับ/รีเซ็ต Calibration), ใบที่ส่งผลให้พนักงานเห็นแล้ว (`ResultSent`+) มีคำเตือนเพิ่ม, ต้องกรอกเหตุผล ≥5 ตัวอักษร, เรียก `graphDeleteTableRows(Appraisals,[0,2,3],[รหัส,รอบ,ระดับ])` (ลบทุกแถวที่คีย์ตรง รวมแถวซ้ำเก่า; Worker รองรับทั้ง Excel และ List ที่อยู่ใน `LIST_KEYS`) **ก่อน** แล้วจึงลบในเครื่อง — ถ้า remote ล้มเหลวไม่ลบอะไรเลย (กัน sync ดึงกลับ) และ log Sync Log; ยังไม่ตั้ง MS365 = ลบเฉพาะในเครื่องและบอกตรงๆ. Audit Log เก็บเหตุผล + สถานะ/X เดิม. **ไม่แตะ Approvals/AuditLog** (ประวัติ; ลบได้เฉพาะเก็บถาวรตามวันที่ #267). ทดสอบ: `tests/delete-draft.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

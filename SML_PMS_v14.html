@@ -10145,19 +10145,44 @@ function isAdminOrSysadmin(){
   const role = (CURRENT_SESSION_USER && CURRENT_SESSION_USER[2]) || '';
   return ['admin','sysadmin'].includes(role);
 }
-function deleteDraftByKey(key){
+/* #276: ลบใบประเมินทั้งใบ = ลบจริงทั้งในเครื่อง "และ" ตาราง Appraisals (Excel/SharePoint List) — เดิมลบแค่ในเครื่องแล้ว sync ดึงกลับมาเอง
+   ลบได้ถึงสถานะ Calibrated เท่านั้น (CalibChecked/Approved ห้ามลบ — ใช้ตีกลับ/รีเซ็ต Calibration แทน), ต้องระบุเหตุผล, ลง Audit Log พร้อมคะแนนเดิม
+   ลบฝั่ง remote สำเร็จก่อนจึงลบในเครื่อง (ถ้า remote ล้มเหลวไม่ลบอะไร เพราะ sync จะดึงกลับมาอยู่ดี) — ไม่แตะ Approvals/AuditLog (เป็นประวัติ) */
+const DELETE_MAX_RANK_STATUS = 'Calibrated';
+async function deleteDraftByKey(key){
   if(!isAdminOrSysadmin()){ smlToast('มีแต่ Admin/HR เท่านั้นที่ลบใบประเมินได้','warn'); return; }
   const drafts = getDrafts();
   const d = drafts.find(x=>draftKey(x)===key);
   if(!d){ smlToast('ไม่พบใบประเมินนี้','warn'); return; }
   const [empCode,cycle,level] = key.split('|');
   const {name} = empDeptLabel(empCode, '');
-  if(!confirm(`ลบใบประเมินของ ${name||empCode} (รอบ ${cycle}, ระดับ ${level}) ทิ้งทั้งใบ?\n\n⚠️ ลบได้เฉพาะข้อมูลในเครื่องนี้เท่านั้น — ถ้าเคย push ขึ้น Excel ไปแล้ว แถวใน Excel จะยังค้างอยู่ ต้องลบเองใน Excel`)) return;
-  const remaining = drafts.filter(x=>draftKey(x)!==key);
-  saveDrafts(remaining);
-  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ลบใบประเมิน (ทั้งใบ)', empCode+' · รอบ '+cycle+' · '+level, name||empCode);
+  const status = d[d.length-1];
+  if(evalStatusRank(status) > evalStatusRank(DELETE_MAX_RANK_STATUS)){
+    smlToast('ลบไม่ได้ — ใบนี้ผ่านขั้น Calibration แล้ว ('+status+') ให้ใช้ "ตีกลับ" หรือ "รีเซ็ต Calibration" แทน','warn'); return;
+  }
+  const seen = evalStatusRank(status) >= evalStatusRank('ResultSent');
+  const cfg = loadMs365Config();
+  const remote = isMs365Configured(cfg);
+  if(!confirm(`ลบใบประเมินของ ${name||empCode} (รอบ ${cycle}, ระดับ ${level}, สถานะ ${status}) ทิ้งทั้งใบ?\n\n⚠️ ลบถาวร กู้คืนไม่ได้ — ลบทั้งในเว็บและตาราง Appraisals (Excel/SharePoint List) ทุกเครื่องจะไม่เห็นใบนี้อีก\n(ประวัติใน Approvals/Audit Log ยังเก็บไว้)`+(seen?'\n\n❗ ใบนี้ส่งผลให้พนักงานเห็น/รับทราบไปแล้ว':'')+(remote?'':'\n\n(ยังไม่ได้ตั้งค่า MS365 — จะลบเฉพาะในเครื่องนี้)'))) return;
+  const reason = prompt('ระบุเหตุผลที่ลบใบประเมินนี้ (อย่างน้อย 5 ตัวอักษร) — จะบันทึกใน Audit Log:');
+  if(reason===null) return;
+  if(reason.trim().length<5){ smlToast('ต้องระบุเหตุผลอย่างน้อย 5 ตัวอักษร — ยังไม่ได้ลบ','warn'); return; }
+  let remoteDeleted = null;
+  if(remote){
+    try{
+      remoteDeleted = await graphDeleteTableRows(cfg.evaluationTable||'Appraisals', [0,2,3], [empCode,cycle,level]);
+      appendSyncLog('ลบใบประเมิน '+empCode+'|'+cycle+'|'+level+': ลบในตาราง Appraisals '+remoteDeleted+' แถว', true);
+    }catch(err){
+      appendSyncLog('ลบใบประเมิน '+empCode+'|'+cycle+'|'+level+' ไม่สำเร็จ: '+(err&&err.message||err), false);
+      smlToast('ลบในตาราง Appraisals ไม่สำเร็จ ('+(err&&err.message||err)+') — ยังไม่ได้ลบอะไร (ถ้าลบเฉพาะในเว็บ ระบบจะดึงใบกลับมาเอง)','err'); return;
+    }
+  }
+  /* อ่านใหม่หลัง await — sync อาจแก้ getDrafts() ระหว่างรอ */
+  saveDrafts(getDrafts().filter(x=>draftKey(x)!==key));
+  setHeld(key,false);
+  if(typeof appendAuditLog==='function') appendAuditLog('evaluation','ลบใบประเมิน (ทั้งใบ)', empCode+' · รอบ '+cycle+' · '+level, (name||empCode)+' · สถานะเดิม '+status+' · X='+d[d.length-3]+' · เหตุผล: '+reason.trim());
   renderWorkflowPages();
-  smlToast('ลบใบประเมินของ '+(name||empCode)+' แล้ว (เฉพาะในเครื่องนี้)','ok');
+  smlToast('ลบใบประเมินของ '+(name||empCode)+' แล้ว'+(remote?' (ลบใน Appraisals '+remoteDeleted+' แถว)':' (เฉพาะในเครื่องนี้)'),'ok');
 }
 /* ลำดับขั้นจริงที่ระบบติดตามได้ (ดู renderDashboardWorkflowSteps เดิม) — ยกออกมาเป็นค่ากลางจุดเดียว
    เพราะ ms365SyncAppraisals() ด้านล่างต้องใช้ตัดสิน "remote ไปไกลกว่า local ไหม" ด้วยลำดับเดียวกันนี้

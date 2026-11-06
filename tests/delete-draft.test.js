@@ -1,0 +1,47 @@
+/* #276: ลบใบประเมินทั้งใบ = ลบทั้งในเครื่องและตาราง Appraisals, จำกัดสถานะ, ต้องมีเหตุผล */
+const {open,ok,done,INJECT}=require('./helpers');
+(async()=>{
+  const {b,p,errs}=await open(); await p.evaluate(INJECT);
+  const r=await p.evaluate(async()=>{
+    __mockGraph(); window.isWorkerConfigured=()=>false;
+    const out={}; window.confirm=()=>true; let reason='ใส่ผิดคน'; window.prompt=()=>reason;
+    const adm=__emp('A1',{name:'แอดมิน',role:'admin',level:'mgr'});
+    __emp('E1',{name:'พนงหนึ่ง',role:'emp',level:'of'});
+    __emp('E2',{name:'พนงสอง',role:'emp',level:'of'});
+    __emp('E3',{name:'พนงสาม',role:'emp',level:'of'});
+    const cy=getCurrentEvalCycleYear();
+    const mk=(c,st)=>{ __draft(c,st,80); };
+    mk('E1','Submitted'); mk('E2','Approved'); mk('E3','ResultSent');
+    __login(adm);
+    window.isMs365Configured=()=>true;
+    window.__del=[]; window.graphDeleteTableRows=async(t,c,v)=>{ window.__del.push([t,c,v]); return 1; };
+    await deleteDraftByKey('E1|'+cy+'|of');
+    out.e1Gone=!getDrafts().some(d=>d[0]==='E1'); out.del=window.__del.slice();
+    await deleteDraftByKey('E2|'+cy+'|of');
+    out.e2Kept=getDrafts().some(d=>d[0]==='E2');
+    reason='abc'; await deleteDraftByKey('E3|'+cy+'|of');
+    out.e3ShortKept=getDrafts().some(d=>d[0]==='E3');
+    reason='ใส่ผิดคน'; window.graphDeleteTableRows=async()=>{ throw new Error('boom'); };
+    await deleteDraftByKey('E3|'+cy+'|of');
+    out.e3FailKept=getDrafts().some(d=>d[0]==='E3');
+    window.graphDeleteTableRows=async()=>1;
+    await deleteDraftByKey('E3|'+cy+'|of');
+    out.e3Gone=!getDrafts().some(d=>d[0]==='E3');
+    out.audit=getAuditLog().some(e=>/ลบใบประเมิน/.test(e.action||'')&&/ใส่ผิดคน/.test(e.detail||''));
+    __emp('E4',{name:'พนงสี่',role:'emp',level:'of'}); __draft('E4','Submitted',80);
+    __login(__emp('U9',{name:'หัวหน้า',role:'l1',level:'ldr'}));
+    await deleteDraftByKey('E4|'+cy+'|of');
+    out.nonAdminKept=getDrafts().some(d=>d[0]==='E4');
+    return out;
+  });
+  ok(r.e1Gone,'ลบใบ Submitted ในเครื่อง');
+  ok(JSON.stringify(r.del)===JSON.stringify([['Appraisals',[0,2,3],['E1',String(r.del[0]&&r.del[0][2][1]),'of']]]),'เรียกลบ Appraisals ด้วยคีย์ รหัส+รอบ+ระดับ');
+  ok(r.e2Kept,'Approved ลบไม่ได้');
+  ok(r.e3ShortKept,'เหตุผลสั้นไป = ไม่ลบ');
+  ok(r.e3FailKept,'ลบ remote ล้มเหลว = ไม่ลบในเครื่อง');
+  ok(r.e3Gone,'ResultSent ลบได้ (ถึง Calibrated)');
+  ok(r.audit,'Audit Log มีเหตุผล');
+  ok(r.nonAdminKept,'ไม่ใช่ Admin ลบไม่ได้');
+  ok(errs.length===0,'ไม่มี page error '+errs.join('|'));
+  await b.close(); done();
+})();
