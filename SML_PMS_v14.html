@@ -14686,12 +14686,28 @@ function saveCycleFromModal(){
 /* รอบแต่ละรอบคือ "สถานะปัจจุบันของรอบนั้น" (แก้ไขซ้ำได้ เช่น เปลี่ยนจาก Draft เป็น Active แล้วปิดรอบ
    ภายหลัง) จึง upsert ด้วยรหัสรอบ (col 0) เหมือน KPI/Employees ไม่ใช่ append — ใช้ตาราง Excel
    "Cycles" ตัวเดียวกับที่หน้าตั้งค่ารอบสั้น (#34) ใช้ แต่คนละแถวกัน (key คนละค่า ไม่ชนกัน) */
+/* #278: วันที่ในตาราง Cycles เป็นข้อความ dd/mm/yy (พ.ศ. 2 หลัก เช่น 01/01/69) ตามภาพจริง — อ่านได้ทั้ง dd/mm/yy, dd/mm/yyyy (พ.ศ./ค.ศ.), yyyy-mm-dd และเลข serial ของ Excel */
+const CYCLES_EXCEL_PROTECTED_COLS = [4,5,6];
+function cyclesDateOut(iso){
+  const m = String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return '';
+  return m[3]+'/'+m[2]+'/'+String((Number(m[1])+543)%100).padStart(2,'0');
+}
+function cyclesDateIn(v){
+  const t = String(v??'').trim(); if(!t) return '';
+  if(/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0,10);
+  if(/^\d{5}(\.\d+)?$/.test(t)){ const d=new Date(Math.round((Number(t)-25569)*86400000)); return isNaN(d)?'':d.toISOString().slice(0,10); }
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if(!m) return '';
+  let y = Number(m[3]); if(y<100) y += 2500; if(y>=2400) y -= 543;
+  return y+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+}
 function pushCycleToExcel(c){
   if(!c) return {ok:false, error:'ไม่มีรอบ'};
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushCycleToExcel: ยังไม่ได้ตั้งค่า MS365', false); return {ok:false, error:'ยังไม่ได้ตั้งค่า MS365'}; }
-  /* #277: ใส่ปี (รหัสรอบ) เป็นคอลัมน์ที่ 7 เหมือนแถว CURRENT — ใช้จับคู่ล็อกรอบที่ปิดแล้วหลัง sync (เดิม sync เดาปีจากชื่อรอบ) */
-  return graphUpsertTableRow('Cycles', 0, c.id, [c.id, c.name, c.start||'', c.end||'', c.status||'', new Date().toISOString(), c.year||''])
+  /* #278: ตาราง Cycles จริง (ภาพหัวตาราง) มี 8 คอลัมน์: Cycle_ID · ปีรอบ · วันเริ่มต้น · วันสิ้นสุด · Y:Z Mode · โหมดปล่อยผล · ผู้สร้าง · Status
+     (ไม่มีคอลัมน์ชื่อรอบ) — แถวที่มีอยู่แล้วอัปเดตเฉพาะ ปีรอบ/วันที่/Status ส่วน Y:Z Mode, โหมดปล่อยผล, ผู้สร้าง เป็นของ HR ไม่เขียนทับ (partial upsert) */
+  const creator = (typeof CURRENT_SESSION_USER!=='undefined' && CURRENT_SESSION_USER) ? CURRENT_SESSION_USER[1] : 'SML PMS';
+  return graphUpsertTableRowPartial('Cycles', 0, c.id, [c.id, c.year||'', cyclesDateOut(c.start), cyclesDateOut(c.end), '', '', creator, c.status||'Draft'], CYCLES_EXCEL_PROTECTED_COLS)
     .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) เข้า Excel`, true); return {ok:true}; })
     .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) ไม่สำเร็จ: `+(err?.message||err), false); return {ok:false, error:(err&&err.message)||String(err)}; });
 }
@@ -14860,11 +14876,12 @@ async function ms365SyncCyclesList(silent=false){
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncCyclesList: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
     const rows = await graphListTableRows('Cycles');
+    /* #278: อ่านตามตารางจริง 8 คอลัมน์ (ดู pushCycleToExcel) — ไม่มีชื่อรอบใน Excel จึงใช้ชื่อเดิมในเครื่องถ้ามี ไม่งั้น 'ประเมินประจำปี <ปี>' */
     const parsed = rows
       .filter(r => String(r[0]??'').trim() && String(r[0]??'').trim() !== 'CURRENT')
-      .map(r => ({ id: String(r[0]).trim(), name: String(r[1]??'').trim(), start: String(r[2]??'').trim(),
-        end: String(r[3]??'').trim(), status: String(r[4]??'').trim()||'Draft',
-        year: String(r[6]??'').trim() || (String(r[1]??'').match(/\d{4}/)||[])[0] || '' }));
+      .map(r => { const id=String(r[0]).trim(), year=String(r[1]??'').trim(); const old=cyclesList.find(x=>x.id===id);
+        const st=String(r[7]??'').trim(); return { id, name: (old&&old.name)||('ประเมินประจำปี '+year), year,
+          start: cyclesDateIn(r[2]), end: cyclesDateIn(r[3]), status: ['Draft','Active','Closed'].includes(st)?st:'Draft' }; });
     if(!parsed.length) return;
     cyclesList = parsed;
     saveCyclesList();
