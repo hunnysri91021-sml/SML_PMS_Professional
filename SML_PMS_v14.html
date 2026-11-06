@@ -2254,7 +2254,7 @@ img,svg,canvas{max-width:100%}
         <thead><tr><th>ลำดับ</th><th>ขั้นตอน</th><th>ผู้รับผิดชอบ</th><th>เริ่ม</th><th>ครบกำหนด</th><th>ตีกลับได้</th><th>เตือนล่วงหน้า</th><th>สถานะ</th><th></th></tr></thead>
         <tbody id="cycleStepsRows"></tbody>
       </table></div>
-      <div style="padding:8px 14px;font-size:11.5px;color:#94a3b8">กำหนดการนี้เป็นข้อมูลที่ Admin กรอกเอง (ไม่ผูกกับสถานะใบประเมินจริง) — เก็บแยกตามรอบ และ sync ขึ้น Excel ตาราง FormWeights (แถว __steps__&lt;รหัสรอบ&gt;)</div>
+      <div style="padding:8px 14px;font-size:11.5px;color:#94a3b8">กำหนดการ/วันที่ Admin กรอกเอง ส่วนสถานะของขั้นที่ผูกกับขั้นจริงของระบบคำนวณจากใบประเมินจริงอัตโนมัติ (ขั้นที่แสดง "ตั้งเอง" ใช้สถานะที่ตั้งไว้) — เก็บแยกตามรอบ และ sync ขึ้น Excel ตาราง FormWeights (แถว __steps__&lt;รหัสรอบ&gt;)</div>
     </div>
   </section>
 
@@ -3643,6 +3643,8 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <div class="fg"><label>ครบกำหนด</label><input id="cs_end" type="date"></div></div>
     <div class="fr"><div class="fg"><label>เตือนล่วงหน้า (วัน เช่น 7,3,1)</label><input id="cs_remind"></div>
       <div class="fg"><label>สถานะ</label><select id="cs_status"><option value="wait">รอ</option><option value="active">กำลังดำเนินการ</option><option value="done">เสร็จสิ้น</option></select></div></div>
+    <div class="fg"><label>ผูกสถานะกับขั้นจริงของระบบ</label><select id="cs_stage" onchange="onCsStageChange()"></select>
+      <div style="font-size:11px;color:#64748b;margin-top:3px">ถ้าเลือกขั้นจริง สถานะ (รอ/กำลังดำเนินการ/เสร็จ) จะคำนวณจากใบประเมินของทุกคนในรอบนี้ ไม่ต้องกดเอง</div></div>
     <label style="font-size:13px"><input type="checkbox" id="cs_reject"> ตีกลับได้</label>
   </div>
   <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="saveCycleStepFromModal()">💾 บันทึก</button></div>
@@ -14877,14 +14879,42 @@ async function reopenCycle(id){
    เก็บแยกตามรหัสรอบใน localStorage แล้ว sync ผ่านตาราง FormWeights แถว '__steps__<id>' (JSON) */
 const CYCLE_STEPS_KEY='smlPmsCycleSteps';
 const CYCLE_STEP_DEFAULTS=[
-  ['พนักงานประเมินตนเอง','พนักงานทุกคน',false,'7,3,1'],
-  ['หัวหน้าแผนก / Leader ประเมิน','หัวหน้าทางตรง',true,'7,3,1'],
-  ['ผู้จัดการส่วน สอบทาน','ผู้จัดการส่วน',true,'5,2'],
-  ['GM อนุมัติ','GM',true,'5,2'],
-  ['Calibration','HR + ผู้จัดการส่วน',false,'3'],
-  ['MD-SML อนุมัติ','AMD/MD',true,'3,1'],
-  ['พนักงานรับทราบผล','พนักงานทุกคน',false,'7,3']
+  ['พนักงานประเมินตนเอง','พนักงานทุกคน',false,'7,3,1','self'],
+  ['หัวหน้าแผนก / Leader ประเมิน','หัวหน้าทางตรง',true,'7,3,1','l1'],
+  ['ผู้จัดการส่วน สอบทาน','ผู้จัดการส่วน',true,'5,2','l2'],
+  ['GM อนุมัติ','GM',true,'5,2','gm'],
+  ['Calibration','HR + ผู้จัดการส่วน',false,'3','calib'],
+  ['MD-SML อนุมัติ','AMD/MD',true,'3,1','md'],
+  ['พนักงานรับทราบผล','พนักงานทุกคน',false,'7,3','ack']
 ];
+/* #282: สถานะขั้นตอนคำนวณจากใบประเมินจริง — ขั้นที่ผูก stage จะ "เสร็จ" เมื่อทุกคนที่ต้องประเมินถึงสถานะนั้นหรือเลยไปแล้ว
+   (ขั้นที่ไม่ผูก = ใช้สถานะที่ Admin ตั้งเอง) ลำดับใน EVAL_STATUS_ORDER เป็นตัวตัดสิน ขั้นที่ถูกข้ามอัตโนมัติก็นับว่าผ่าน */
+const CYCLE_STAGE_OPTS=[['','— ตั้งสถานะเอง —'],['self','พนักงานส่งแบบประเมิน (Submitted)'],['l1','หัวหน้าแผนกสอบทานแล้ว (L1Reviewed)'],['l2','ผู้จัดการส่วนสอบทานแล้ว (L2Reviewed)'],['gm','GM อนุมัติแล้ว (GMApproved)'],['ack','พนักงานรับทราบผล (Acknowledged)'],['calib','Calibration แล้ว (Calibrated)'],['md','MD/AMD อนุมัติ (Approved)']];
+const CYCLE_STAGE_STATUS={self:'Submitted',l1:'L1Reviewed',l2:'L2Reviewed',gm:'GMApproved',ack:'Acknowledged',calib:'Calibrated',md:'Approved'};
+function cycleStepStage(st){
+  if(st.stage!==undefined&&st.stage!==null) return st.stage;
+  const d=CYCLE_STEP_DEFAULTS.find(x=>x[0]===st.name); return d?d[4]:'';
+}
+function cycleStageProgress(year){
+  const parts=(typeof getEvalParticipants==='function')?getEvalParticipants():[];
+  const drafts=getDrafts(); const res={n:parts.length,counts:{}};
+  Object.keys(CYCLE_STAGE_STATUS).forEach(k=>res.counts[k]=0);
+  parts.forEach(u=>{ const d=findCurrentCycleDraft(drafts,u[0],String(year)); const r=d?evalStatusRank(d[d.length-1]):0;
+    Object.keys(CYCLE_STAGE_STATUS).forEach(k=>{ if(r>=evalStatusRank(CYCLE_STAGE_STATUS[k])) res.counts[k]++; }); });
+  return res;
+}
+/* คืน [{status,progress}] ตามลำดับ steps (progress = 'x/y' หรือ '' ถ้าสถานะตั้งเอง) */
+function computeCycleStepStatuses(steps,year){
+  const pr=cycleStageProgress(year); let prevDone=true;
+  return steps.map(st=>{
+    const stg=cycleStepStage(st);
+    if(!stg||!CYCLE_STAGE_STATUS[stg]){ prevDone=st.status==='done'; return {status:st.status||'wait',progress:'',auto:false}; }
+    const c=pr.counts[stg], n=pr.n; const done=n>0&&c>=n;
+    const status=done?'done':((c>0||(prevDone&&n>0))?'active':'wait');
+    prevDone=done; return {status,progress:n?c+'/'+n:'',auto:true};
+  });
+}
+function cycleYearOf(cid){ const c=(typeof cyclesList!=='undefined')?cyclesList.find(x=>x.id===cid):null; return c?c.year:cid; }
 let cycleStepEditing=null;
 function loadCycleStepsStore(){ try{ return JSON.parse(localStorage.getItem(CYCLE_STEPS_KEY)||'{}')||{}; }catch(e){ return {}; } }
 function saveCycleStepsStore(o){ localStorage.setItem(CYCLE_STEPS_KEY, JSON.stringify(o)); }
@@ -14902,7 +14932,8 @@ function renderCycleSetupTimeline(){
   if(!steps){ steps=defaultCycleSteps(); const o=loadCycleStepsStore(); o[cyc.id]={steps,at:''}; saveCycleStepsStore(o); }
   const fd=v=>v?new Date(v).toLocaleDateString('th-TH',{day:'numeric',month:'short'}):'';
   const range=st=>st.start&&st.end?fd(st.start)+'–'+fd(st.end):(st.end?'ภายใน '+fd(st.end):(st.start?'เริ่ม '+fd(st.start):'ยังไม่กำหนดวัน'));
-  box.innerHTML=steps.length?steps.map(st=>{ const cls=st.status==='done'?'done':(st.status==='active'?'current':''); return '<div class="cycle-step '+cls+'"><div class="cycle-dot">'+(cls==='done'?'✓':st.order)+'</div><b>'+escapeAttrCs(st.name)+'</b><span>'+escapeAttrCs(range(st))+'</span></div>'; }).join(''):'<div style="color:#94a3b8;font-size:12px;padding:8px">ยังไม่มีขั้นตอน — เพิ่มที่หน้า "รอบประเมิน"</div>';
+  const cst=computeCycleStepStatuses(steps,cyc.year);
+  box.innerHTML=steps.length?steps.map((st,i)=>{ const s2=cst[i].status; const cls=s2==='done'?'done':(s2==='active'?'current':''); return '<div class="cycle-step '+cls+'"><div class="cycle-dot">'+(cls==='done'?'✓':st.order)+'</div><b>'+escapeAttrCs(st.name)+'</b><span>'+escapeAttrCs(range(st))+'</span></div>'; }).join(''):'<div style="color:#94a3b8;font-size:12px;padding:8px">ยังไม่มีขั้นตอน — เพิ่มที่หน้า "รอบประเมิน"</div>';
   if(badge) badge.textContent=steps.length+' ขั้นตอน'; if(cnt) cnt.textContent=steps.length+' ขั้นตอน';
 }
 
@@ -14927,7 +14958,8 @@ function renderCycleSteps(){
   if(!steps){ steps=defaultCycleSteps(); const o=loadCycleStepsStore(); o[cid]={steps,at:''}; saveCycleStepsStore(o); }
   if(!steps.length){ tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:14px">ยังไม่มีขั้นตอน — กด "+ เพิ่มขั้นตอน"</td></tr>'; return; }
   const fd=v=>v?new Date(v).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}):'—';
-  tb.innerHTML=steps.map(st=>`<tr${st.status==='active'?' style="background:#eff6ff"':''}><td>${st.order}</td><td><b>${escapeAttrCs(st.name)}</b></td><td>${escapeAttrCs(st.owner)||'—'}</td><td>${fd(st.start)}</td><td>${fd(st.end)}</td><td>${st.canReject?'✓':'—'}</td><td>${st.remind?escapeAttrCs(st.remind)+' วัน':'—'}</td><td>${CYCLE_STEP_STATUS[st.status]||CYCLE_STEP_STATUS.wait}</td><td style="white-space:nowrap">${admin?`<button class="btn btn-sm" onclick="openCycleStepModal('${escJs(st.id)}')">✏️</button> <button class="btn btn-sm" onclick="deleteCycleStep('${escJs(st.id)}')">🗑️</button>`:''}</td></tr>`).join('');
+  const cst=computeCycleStepStatuses(steps,cycleYearOf(cid));
+  tb.innerHTML=steps.map((st,i)=>`<tr${cst[i].status==='active'?' style="background:#eff6ff"':''}><td>${st.order}</td><td><b>${escapeAttrCs(st.name)}</b></td><td>${escapeAttrCs(st.owner)||'—'}</td><td>${fd(st.start)}</td><td>${fd(st.end)}</td><td>${st.canReject?'✓':'—'}</td><td>${st.remind?escapeAttrCs(st.remind)+' วัน':'—'}</td><td>${CYCLE_STEP_STATUS[cst[i].status]||CYCLE_STEP_STATUS.wait}${cst[i].progress?'<div style="font-size:11px;color:#64748b;margin-top:2px">'+cst[i].progress+' คน</div>':'<div style="font-size:10px;color:#94a3b8;margin-top:2px">ตั้งเอง</div>'}</td><td style="white-space:nowrap">${admin?`<button class="btn btn-sm" onclick="openCycleStepModal('${escJs(st.id)}')">✏️</button> <button class="btn btn-sm" onclick="deleteCycleStep('${escJs(st.id)}')">🗑️</button>`:''}</td></tr>`).join('');
 }
 function openCycleStepModal(id){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin ที่แก้กำหนดการได้','warn'); return; }
@@ -14937,10 +14969,12 @@ function openCycleStepModal(id){
   const set=(k,v)=>{ const e=document.getElementById(k); if(e) e.value=v??''; };
   set('cs_order', st?st.order:(steps.reduce((m,x)=>Math.max(m,x.order||0),0)+1)); set('cs_name',st?.name); set('cs_owner',st?.owner);
   set('cs_start',st?.start); set('cs_end',st?.end); set('cs_remind',st?.remind); set('cs_status',st?.status||'wait');
+  const stSel=document.getElementById('cs_stage'); if(stSel){ stSel.innerHTML=CYCLE_STAGE_OPTS.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join(''); stSel.value=st?cycleStepStage(st):''; onCsStageChange(); }
   document.getElementById('cs_reject').checked=!!st?.canReject;
   document.getElementById('mCycleStepTitle').textContent=st?'✏️ แก้ไขขั้นตอน':'➕ เพิ่มขั้นตอน';
   openM('mCycleStep');
 }
+function onCsStageChange(){ const a=document.getElementById('cs_stage')?.value, s=document.getElementById('cs_status'); if(s){ s.disabled=!!a; s.title=a?'คำนวณอัตโนมัติจากใบประเมินจริง':''; } }
 function saveCycleStepFromModal(){
   if(!isAdminOrSysadmin()) return;
   const cid=selectedStepCycleId(); const g=k=>document.getElementById(k)?.value||'';
@@ -14948,7 +14982,7 @@ function saveCycleStepFromModal(){
   const start=g('cs_start'), end=g('cs_end');
   if(start&&end&&end<start){ smlToast('วันครบกำหนดต้องไม่ก่อนวันเริ่ม','warn'); return; }
   const steps=getCycleSteps(cid)||[];
-  const data={order:parseInt(g('cs_order'))||steps.length+1, name, owner:g('cs_owner').trim(), start, end, canReject:document.getElementById('cs_reject').checked, remind:g('cs_remind').trim(), status:g('cs_status')||'wait'};
+  const data={order:parseInt(g('cs_order'))||steps.length+1, name, owner:g('cs_owner').trim(), start, end, canReject:document.getElementById('cs_reject').checked, remind:g('cs_remind').trim(), status:g('cs_status')||'wait', stage:g('cs_stage')||''};
   if(cycleStepEditing){ const st=steps.find(x=>x.id===cycleStepEditing); if(!st){ smlToast('ไม่พบขั้นตอนนี้','warn'); return; } Object.assign(st,data); }
   else steps.push({id:'s'+Date.now().toString(36), ...data});
   putCycleSteps(cid,steps); cycleStepEditing=null; closeM(); renderCycleSteps();
