@@ -2092,7 +2092,7 @@ img,svg,canvas{max-width:100%}
     <div class="ph-act"><button class="btn" onclick="rejectReviewL1Selected()">↩️ ตีกลับที่เลือก</button><button class="btn btn-ok" onclick="approveReviewL1Selected()">✅ ยืนยันและส่งให้ผู้ประเมินคนถัดไป</button></div></div>
 
     <div class="card">
-      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามหัวหน้าหน่วยงาน (หัวหน้าหน่วย/หัวหน้าแผนก) เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><button class="btn btn-sm" onclick="exportQueueToExcel('reviewl1')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
+      <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามผู้สอบทานของขั้นนี้ (หัวหน้าแผนก L2) เพื่อดูว่าใครมีลูกทีมใครบ้าง — ไม่ซ้ำกับรายชื่อหัวหน้าหน่วย L1"></select><button class="btn btn-sm" onclick="exportQueueToExcel('reviewl1')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
       <div class="al al-w" id="reviewl1FilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
         <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.reviewl1-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
@@ -10886,9 +10886,9 @@ function renderReviewL1Queue(){
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveL1Reviewer, me[2]), me[0], 'Submitted', cycle) : [];
   const orgRoster = applyOrgFilter('reviewl1','reviewl1Count', fullRoster, renderReviewL1Queue);
-  populateReviewManagerFilter('reviewl1Filter', orgRoster, resolveUnitHeadFor);
-  renderReviewerFilterDiagNote('reviewl1FilterDiag', fullRoster, resolveUnitHeadFor, 9, 'หัวหน้าหน่วย (L1)');
-  const roster = filterRosterByManager('reviewl1Filter', orgRoster, resolveUnitHeadFor);
+  populateReviewManagerFilter('reviewl1Filter', orgRoster, resolveL1Reviewer);
+  renderReviewerFilterDiagNote('reviewl1FilterDiag', fullRoster, resolveL1Reviewer, 10, 'หัวหน้าแผนก (L2)');
+  const roster = filterRosterByManager('reviewl1Filter', orgRoster, resolveL1Reviewer);
   _queueExportRows['reviewl1'] = roster;
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
@@ -10957,9 +10957,9 @@ function renderReviewQueue(){
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveL2Reviewer, me[2]), me[0], 'L1Reviewed', cycle) : [];
   const orgRoster = applyOrgFilter('review','reviewCount', fullRoster, renderReviewQueue);
-  populateReviewManagerFilter('reviewFilter', orgRoster, resolveL1Reviewer);
-  renderReviewerFilterDiagNote('reviewFilterDiag', fullRoster, resolveL1Reviewer, 10, 'หัวหน้าแผนก (L2)');
-  const roster = filterRosterByManager('reviewFilter', orgRoster, resolveL1Reviewer);
+  populateReviewManagerFilter('reviewFilter', orgRoster, resolveL2Reviewer);
+  renderReviewerFilterDiagNote('reviewFilterDiag', fullRoster, resolveL2Reviewer, 19, 'ผู้ตรวจ MGR (L3)');
+  const roster = filterRosterByManager('reviewFilter', orgRoster, resolveL2Reviewer);
   _queueExportRows['review'] = roster;
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
@@ -11060,9 +11060,9 @@ function renderGmApproveQueue(){
   const cycle = getCurrentEvalCycleYear();
   const fullRoster = me ? buildTierRoster(effectiveResolver(resolveGmReviewer, me[2]), me[0], 'L2Reviewed', cycle) : [];
   const orgRoster = applyOrgFilter('gmapprove','gmApproveCount', fullRoster, renderGmApproveQueue);
-  populateReviewManagerFilter('gmApproveFilter', orgRoster, resolveL2Reviewer);
-  renderReviewerFilterDiagNote('gmApproveFilterDiag', fullRoster, resolveL2Reviewer, 19, 'ผู้ตรวจ MGR (L3)');
-  const roster = filterRosterByManager('gmApproveFilter', orgRoster, resolveL2Reviewer);
+  populateReviewManagerFilter('gmApproveFilter', orgRoster, resolveGmReviewer);
+  renderReviewerFilterDiagNote('gmApproveFilterDiag', fullRoster, resolveGmReviewer, 11, 'ผู้อนุมัติ GM (L4)');
+  const roster = filterRosterByManager('gmApproveFilter', orgRoster, resolveGmReviewer);
   _queueExportRows['gmapprove'] = roster;
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
