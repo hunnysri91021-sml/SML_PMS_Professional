@@ -8453,6 +8453,15 @@ async function ms365DedupeAppraisals(){
    (ล้มเหลวตรงไหนหยุดก่อนล้างในเครื่อง) → ตราเวลา __reset__ ใน FormWeights (เครื่องอื่นล้างของตัวเองตอน sync) → ล้างในเครื่อง */
 const RESET_APPLIED_KEY = 'smlPmsResetAppliedAt';
 const RESET_REMOTE_TABLES = ['Appraisals','Approvals','AuditLog','IDP'];
+/* หัวคอลัมน์จริงของแต่ละตาราง (ยืนยันจากภาพหัวตารางจริง #107/#97/#104/#280) ใช้ในไฟล์สำรองก่อนล้างข้อมูล */
+const APPRAISAL_BACKUP_HEADERS = ['EmpID','ชื่อ-สกุล','รอบ','ระดับ','m0','m1','m2','m3','m4','m5','m6','m7','m8','m9','l01','l02','l03','l04','Y','Z','X','เกรด','Status'];
+const RESET_BACKUP_HEADERS = {
+  Appraisals: APPRAISAL_BACKUP_HEADERS.concat(['KPI']),
+  Approvals: ARCHIVE_HEADERS.Approvals,
+  AuditLog: ARCHIVE_HEADERS.AuditLog,
+  IDP: ['EmpCode','Name','Dept','Grade','Plan','Due','Owner','Metric','Status'],
+  Attendance: ['EmpID','ชื่อ-สกุล','รอบ (Period)','มาสาย','กลับก่อน','ลาป่วย','ลากิจ','ขาดงาน','วันลารวม (Auto)','Z Score (Auto)','หมายเหตุ']
+};
 function clearLocalTestData(){
   const keys = [MS365_LOCAL_DRAFT_KEY, PUSHED_APPRAISALS_KEY, RESULT_NOTIFIED_KEY, DISPUTES_KEY, EVAL_LAST_ACTOR_KEY, EVAL_STAGE_SIGNERS_KEY,
     EVAL_NEEDS_RECONFIRM_KEY, EVAL_REJECT_INFO_KEY, EVAL_RECONFIRM_CLEARED_KEY, APPROVAL_SIGNATURE_KEY, EVAL_HR_NOTE_KEY, EVAL_COMMENTS_KEY,
@@ -8480,11 +8489,12 @@ async function resetTestData(){
       + '• ในเครื่องนี้: ใบประเมิน '+localDrafts+' ใบ + ความเห็น/ลายเซ็น/ข้อโต้แย้ง/Audit Log/IDP/ข้อมูลเวลา + ผลจริง KPI รายบุคคล';
     if(!confirm('⚠️ ล้างข้อมูลทดสอบ — ลบแล้วกู้คืนไม่ได้\n\n'+summary+'\n\nไม่แตะ: พนักงาน/PIN/ตั้งค่ารอบ/สัดส่วน/แบบฟอร์ม/รายการหลัก/นิยาม KPI\n\nระบบจะดาวน์โหลดไฟล์สำรอง CSV ก่อน แล้วถามยืนยันอีกครั้ง ดำเนินการต่อ?')) return;
     const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-    downloadCsv('สำรอง_ใบประเมินในเครื่อง_'+ts+'.csv', ['รหัส','ชื่อ','รอบ','ระดับ','...คะแนน...ท้ายแถว: Y,Z,X,เกรด,สถานะ'], getDrafts());
+    downloadCsv('สำรอง_ใบประเมินในเครื่อง_'+ts+'.csv', APPRAISAL_BACKUP_HEADERS, getDrafts());
     if(remote){
       for(const t of RESET_REMOTE_TABLES.concat(['Attendance'])){
         const rows = await graphListTableRows(t);
-        if(rows.length) downloadCsv('สำรอง_'+t+'_'+ts+'.csv', rows[0].map((_,i)=>'คอลัมน์'+(i+1)), rows);
+        const hd = RESET_BACKUP_HEADERS[t] || [];
+        if(rows.length) downloadCsv('สำรอง_'+t+'_'+ts+'.csv', rows[0].map((_,i)=>hd[i]||('คอลัมน์'+(i+1))), rows);
       }
     }
     const typed = prompt('ได้ดาวน์โหลดไฟล์สำรองแล้ว (ตรวจว่าเก็บไว้ครบ)\n\nพิมพ์คำว่า  ล้างข้อมูล  เพื่อยืนยันลบจริง:');
