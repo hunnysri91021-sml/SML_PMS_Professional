@@ -9373,6 +9373,7 @@ function openDisputeModal(code,cycle,mode){
 async function submitDispute(){
   const code=document.getElementById('dpCode').value, cycle=document.getElementById('dpCycle').value, me=CURRENT_SESSION_USER;
   if(!me||me[0]!==code){ smlToast('ทำได้เฉพาะเจ้าของผลประเมิน','warn'); return; }
+  if(cycleLockedBlock(cycle,'ขอหารือไม่ได้')) return;
   const d=findCurrentCycleDraft(getDrafts(),code,cycle);
   if(!d||d[d.length-1]!=='ResultSent'){ smlToast('ทำได้เฉพาะช่วงที่ GM ส่งผลแล้วและยังไม่ได้รับทราบ','warn'); return; }
   if(document.getElementById('dpMode').value==='ack'){
@@ -9431,6 +9432,7 @@ async function confirmDisputeDate(code,cycle){
 }
 async function resolveDispute(code,cycle){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ HR/Admin บันทึกผลการพูดคุยได้','warn'); return; }
+  if(cycleLockedBlock(cycle,'ปิดเรื่องขอหารือไม่ได้')) return;
   const m=loadDisputes(); const r=m[code+'|'+cycle]; if(!r||r.status!=='scheduled'){ smlToast('ต้องยืนยันวันนัดก่อนจึงปิดเรื่องได้','warn'); return; }
   const out=(document.getElementById('dpOut_'+code)||{}).value||'keep';
   const note=((document.getElementById('dpNote_'+code)||{}).value||'').trim();
@@ -9507,6 +9509,7 @@ async function setSystemOpen(open){
   smlToast((open?'เปิดระบบแล้ว':'ปิดระบบแล้ว')+(pushed?'':' (บันทึกเฉพาะเครื่องนี้ — ส่งขึ้น Excel ไม่สำเร็จ เครื่องอื่นจะยังไม่ถูกปิด/เปิด)'),pushed?'ok':'warn');
 }
 async function acknowledgeMyResult(empCode, cycle, objection){
+  if(cycleLockedBlock(cycle,'รับทราบผลไม่ได้')) return;
   if(hasOpenDispute(empCode,cycle)){ smlToast('คุณขอหารือผลประเมินไว้ — ต้องรอปิดเรื่องก่อนจึงรับทราบได้','warn'); return; }
   const drafts = getDrafts();
   const d = findCurrentCycleDraft(drafts, empCode, cycle);
@@ -9545,6 +9548,7 @@ async function acknowledgeMyResult(empCode, cycle, objection){
 
 async function saveEvaluationToMs365(status='Draft'){
   const payload = collectEvaluationPayload(status);
+  if(cycleLockedBlock(payload[2],'บันทึก/ส่งแบบประเมินไม่ได้')) return {blocked:true};
   /* ผู้ใช้ขอ "ต้องมีคนประเมินอย่างน้อย 1 คน" — บล็อกตั้งแต่ก่อนบันทึกเป็น Submitted ถ้าทั้งสายบังคับ
      บัญชา (L1/L2/GM) ไม่มีผู้สอบทานจริงเหลือเลยสักระดับ (ดู hasAnyRealReviewer()/getRealReviewChain())
      — ไม่บล็อกตอนบันทึกร่าง (Draft) เพราะยังไม่ใช่การส่งจริง */
@@ -10108,6 +10112,7 @@ function findCurrentCycleDraft(drafts, empCode, cycle){
    (#155) แทนถ้าจำเป็นจริงๆ */
 function recalcKpiScoreForRecord(empCode, cycle, quiet){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่คำนวณคะแนนใหม่ได้','warn'); return; }
+  if(quiet ? isCycleLocked(cycle) : cycleLockedBlock(cycle,'คำนวณคะแนนใหม่ไม่ได้')) return;
   const drafts = getDrafts();
   const d = findCurrentCycleDraft(drafts, empCode, cycle);
   if(!d){ smlToast('ไม่พบใบประเมินนี้','warn'); return; }
@@ -10155,6 +10160,7 @@ async function deleteDraftByKey(key){
   const d = drafts.find(x=>draftKey(x)===key);
   if(!d){ smlToast('ไม่พบใบประเมินนี้','warn'); return; }
   const [empCode,cycle,level] = key.split('|');
+  if(cycleLockedBlock(cycle,'ลบใบประเมินไม่ได้')) return;
   const {name} = empDeptLabel(empCode, '');
   const status = d[d.length-1];
   if(evalStatusRank(status) > evalStatusRank(DELETE_MAX_RANK_STATUS)){
@@ -10638,7 +10644,25 @@ function pushDraftRowToExcel(d, label){
    และ re-render คิวให้ตรงข้อมูลล่าสุด คืนเฉพาะ key ที่ยังอยู่ขั้นเดิมจริง
    ข้อจำกัดจริง: ms365SyncAppraisals() merge เฉพาะ "ขั้นที่ก้าวหน้ากว่า" (#58) — จึงจับกรณีมีคนเลื่อนขั้นไปแล้วได้
    แต่ไม่จับกรณีมีคนตีกลับย้อนลงจากอีกเครื่อง */
+/* #277: รอบที่ปิดแล้ว (cyclesList status 'Closed', จับคู่ด้วย year = รหัสรอบที่ใช้ในใบประเมิน d[2]) ห้ามแก้ใบประเมิน/ความเห็น/ใบเตือน/ข้อโต้แย้งทุกทาง
+   — ล็อกฝั่งหน้าเว็บ (ไม่ใช่ความปลอดภัยระดับเซิร์ฟเวอร์ #17) และเครื่องอื่นเห็นสถานะ Closed ตอน sync ตารางรอบ (login/reload) */
+function isCycleLocked(cycle){
+  const y = String(cycle??'').trim(); if(!y) return false;
+  try{ return (cyclesList||[]).some(c=>c && c.status==='Closed' && String(c.year??'').trim()===y); }catch(e){ return false; }
+}
+function cycleLockedBlock(cycle, what){
+  if(!isCycleLocked(cycle)) return false;
+  smlToast('รอบ '+cycle+' ปิดรอบแล้ว — '+(what||'แก้ไขไม่ได้')+' (Admin เปิดรอบอีกครั้งได้ที่หน้า "รอบประเมิน" ถ้าจำเป็น)','warn');
+  return true;
+}
 async function guardFreshStatus(keys, expectedStatus){
+  { const locked = keys.filter(k=>isCycleLocked(String(k).split('|')[1]));
+    if(locked.length){
+      smlToast('ข้าม '+locked.length+' รายการ — รอบที่ปิดแล้วแก้ไข/ส่งต่อไม่ได้ ('+[...new Set(locked.map(k=>String(k).split('|')[1]))].join(', ')+')','warn');
+      keys = keys.filter(k=>!isCycleLocked(String(k).split('|')[1]));
+    }
+    if(!keys.length) return [];
+  }
   try{
     const cfg = loadMs365Config();
     if(typeof isMs365Configured==='function' && isMs365Configured(cfg)){ await ms365SyncAppraisals(true); await ms365SyncRejectFlags(true); /* #266: ธงตีกลับจากเครื่องอื่นต้องมาก่อนเช็ก reconfirm */ }
@@ -10661,7 +10685,7 @@ async function guardFreshStatus(keys, expectedStatus){
 function updateDraftStatus(keys, newStatus){
   const keySet = new Set(keys);
   const drafts = getDrafts();
-  const changed = drafts.filter(d=>keySet.has(draftKey(d)));
+  const changed = drafts.filter(d=>keySet.has(draftKey(d)) && !isCycleLocked(d[2])); /* #277: ด่านสุดท้าย — ไม่แตะใบของรอบที่ปิดแล้ว */
   changed.forEach(d=>{ d[d.length-1] = newStatus; });
   saveDrafts(drafts);
   renderWorkflowPages();
@@ -11523,6 +11547,7 @@ function runBellCurveCalculation(){
 async function resetCalibration(){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่รีเซ็ต Calibration ได้','warn'); return; }
   const cycle = getCurrentEvalCycleYear();
+  if(cycleLockedBlock(cycle,'รีเซ็ต Calibration ไม่ได้')) return;
   const drafts = getDrafts();
   const targets = drafts.filter(d=>d[2]===cycle && ['Calibrated','CalibChecked'].includes(d[d.length-1]));
   if(!targets.length){ smlToast('ไม่มีรายการที่ Calibrate แล้วในรอบ '+cycle+' ให้รีเซ็ต (รายการที่ Approved แล้วย้อนไม่ได้)','warn'); return; }
@@ -11639,6 +11664,7 @@ async function confirmCalibration(){
    (Excel) แยกจากบันทึก Calibration ปกติ ให้ตรวจสอบย้อนหลังได้ว่าใครปรับ เมื่อไหร่ เพราะอะไร */
 function overrideEmployeeGrade(code, cycle){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ปรับเกรดเองได้','warn'); return; }
+  if(cycleLockedBlock(cycle,'ปรับเกรดไม่ได้')) return;
   const grade = (prompt('ระบุเกรดใหม่ (A / B / C / D / E):')||'').trim().toUpperCase();
   if(!['A','B','C','D','E'].includes(grade)){ if(grade) smlToast('เกรดต้องเป็น A, B, C, D หรือ E เท่านั้น — ไม่บันทึก','err'); return; }
   const reason = (prompt('ระบุเหตุผลที่ปรับเกรดเอง (บังคับกรอก — จะถูกบันทึกลง Audit Log):')||'').trim();
@@ -14197,6 +14223,7 @@ function saveHrNoteFromReviewer(){
   const code=currentReviewerCode, cycle=currentReviewerCycle;
   const el=document.getElementById('reviewHrNote');
   if(!code||!cycle||!el) return;
+  if(cycleLockedBlock(cycle,'บันทึกใบเตือนไม่ได้')) return;
   const note=el.value.trim();
   saveEvalHrNote(code+'|'+cycle, note);
   appendAuditLog('hrnote', 'บันทึกใบเตือน/หมายเหตุวินัย', code, note?note.slice(0,80):'(ล้างหมายเหตุ)');
@@ -14213,6 +14240,7 @@ function saveHrNoteFromReviewer(){
 }
 async function saveReviewerHold(){
   const code=currentReviewerCode, cycle=currentReviewerCycle, lv=currentReviewerLevel;
+  if(cycleLockedBlock(cycle,'บันทึกไม่ได้')) return;
   const cfg=LEVEL_CONFIG[lv];
   if(!code||!cycle||!lv||!cfg){ smlToast('ไม่พบข้อมูลพนักงานสำหรับฟอร์มนี้','warn'); return; }
   const table=document.querySelector('#reviewerFormArea .reviewer-table');
@@ -14264,6 +14292,7 @@ function isSoleGmReviewer(emp, me){
 }
 async function submitReviewerForm(){
   const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
+  if(cycleLockedBlock(cycle,'บันทึก/ส่งต่อไม่ได้')) return;
   const cfg = LEVEL_CONFIG[lv];
   if(!code || !cycle || !lv || !cfg){ smlToast('ไม่พบข้อมูลพนักงานสำหรับฟอร์มนี้','warn'); return; }
   /* #224: ตรวจสถานะล่าสุดก่อน — ถ้าใบถูกเลื่อนขั้นโดยคนอื่นหลังเปิดฟอร์มนี้ ไม่บันทึกทับ */
@@ -14364,6 +14393,7 @@ async function submitReviewerForm(){
 }
 async function rejectReviewerForm(){
   const code = currentReviewerCode, cycle = currentReviewerCycle, lv = currentReviewerLevel;
+  if(cycleLockedBlock(cycle,'ตีกลับไม่ได้')) return;
   if(!code || !cycle || !lv) return;
   if(currentReviewerOpenStatus && currentReviewerOpenStatus!=='Draft'){
     const _ok = await guardFreshStatus([code+'|'+cycle+'|'+lv], currentReviewerOpenStatus);
@@ -14545,7 +14575,8 @@ function renderCyclesTable(){
       <td style="width:150px"><div class="pg"><i class="${pct>=100?'ok':''}" style="width:${Math.min(pct,100)}%"></i></div><small style="font-size:11px;color:#94a3b8">${pct}%</small></td>
       <td>${CYCLE_STATUS_BADGE[c.status]||c.status}</td>
       <td><button class="btn btn-sm" onclick="openCycleParticipantsModal('${escJs(c.id)}')" title="ดูรายชื่อผู้เข้าร่วมประเมินในรอบนี้">👥 รายชื่อ</button>
-          <button class="btn btn-sm" onclick="editCycleFromList('${escJs(c.id)}')">${actionLabel}</button></td></tr>`;
+          <button class="btn btn-sm" onclick="editCycleFromList('${escJs(c.id)}')">${actionLabel}</button>
+          ${isAdminOrSysadmin()?(c.status==='Closed'?`<button class="btn btn-sm" onclick="reopenCycle('${escJs(c.id)}')" title="เปิดรอบอีกครั้งเพื่อแก้ไข (ต้องระบุเหตุผล)">🔓 เปิดรอบอีกครั้ง</button>`:`<button class="btn btn-sm btn-dg" onclick="closeCycle('${escJs(c.id)}')" title="export ข้อมูลทั้งรอบ แล้วล็อกการแก้ไข">🔒 ปิดรอบ</button>`):''}</td></tr>`;
   }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีรอบการประเมิน — กด "+ สร้างรอบใหม่"</td></tr>';
 }
 /* #146: "ผู้เข้าร่วม" บนตารางด้านบนเป็นแค่ตัวเลขนับจาก getEvalParticipants() (ของจริง, คำนวณสด) —
@@ -14633,10 +14664,13 @@ function saveCycleFromModal(){
   if(editingCycleId){
     const c = cyclesList.find(x=>x.id===editingCycleId);
     if(!c){ smlToast('ไม่พบรอบการประเมินนี้ในระบบ (อาจถูกลบไปแล้ว)','warn'); editingCycleId=null; closeM(); return; }
+    if(c.status==='Closed'){ smlToast('รอบนี้ปิดแล้ว แก้ไขไม่ได้ — ต้องกด "เปิดรอบอีกครั้ง" ในตารางก่อน','warn'); return; }
+    if(status==='Closed'){ smlToast('การปิดรอบต้องกดปุ่ม "ปิดรอบ" ในตาราง (ระบบจะตรวจใบค้างและ export ข้อมูลให้ก่อน)','warn'); return; }
     Object.assign(c, {name, year, start, end, status});
     if(typeof appendAuditLog==='function') appendAuditLog('cycle','แก้ไขรอบการประเมิน', c.id, name+' — '+status);
   } else {
     if(cyclesList.some(x=>x.id===id)){ smlToast('รหัสรอบนี้มีอยู่แล้วในระบบ','warn'); return; }
+    if(status==='Closed'){ smlToast('สร้างรอบใหม่เป็นสถานะ Closed ไม่ได้ — ปิดรอบด้วยปุ่ม "ปิดรอบ" หลังมีข้อมูลแล้ว','warn'); return; }
     cyclesList.push({id, name, year, start, end, status});
     if(typeof appendAuditLog==='function') appendAuditLog('cycle','สร้างรอบการประเมินใหม่', id, name+' — '+status);
   }
@@ -14653,12 +14687,62 @@ function saveCycleFromModal(){
    ภายหลัง) จึง upsert ด้วยรหัสรอบ (col 0) เหมือน KPI/Employees ไม่ใช่ append — ใช้ตาราง Excel
    "Cycles" ตัวเดียวกับที่หน้าตั้งค่ารอบสั้น (#34) ใช้ แต่คนละแถวกัน (key คนละค่า ไม่ชนกัน) */
 function pushCycleToExcel(c){
-  if(!c) return;
+  if(!c) return {ok:false, error:'ไม่มีรอบ'};
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushCycleToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
-  graphUpsertTableRow('Cycles', 0, c.id, [c.id, c.name, c.start||'', c.end||'', c.status||'', new Date().toISOString()])
-    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) เข้า Excel`, true); })
-    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) ไม่สำเร็จ: `+(err?.message||err), false); });
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushCycleToExcel: ยังไม่ได้ตั้งค่า MS365', false); return {ok:false, error:'ยังไม่ได้ตั้งค่า MS365'}; }
+  /* #277: ใส่ปี (รหัสรอบ) เป็นคอลัมน์ที่ 7 เหมือนแถว CURRENT — ใช้จับคู่ล็อกรอบที่ปิดแล้วหลัง sync (เดิม sync เดาปีจากชื่อรอบ) */
+  return graphUpsertTableRow('Cycles', 0, c.id, [c.id, c.name, c.start||'', c.end||'', c.status||'', new Date().toISOString(), c.year||''])
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) เข้า Excel`, true); return {ok:true}; })
+    .catch(err => { if(typeof appendSyncLog==='function') appendSyncLog(`Push รอบ (${c.id}) ไม่สำเร็จ: `+(err?.message||err), false); return {ok:false, error:(err&&err.message)||String(err)}; });
+}
+
+/* #277: ปิดรอบ = (1) ตรวจใบค้าง/คนที่ยังไม่ส่งแล้วเตือนก่อน (2) export CSV ทั้งรอบ (3) ตั้งสถานะ Closed → isCycleLocked() ล็อกการแก้ไขทุกทาง
+   (4) push สถานะขึ้นตาราง Cycles ให้เครื่องอื่นเห็น — ไม่ลบข้อมูลรอบนั้น; เปิดรอบอีกครั้งต้องระบุเหตุผลและลง Audit Log */
+async function closeCycle(id){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่ปิดรอบได้','warn'); return; }
+  const c = cyclesList.find(x=>x.id===id);
+  if(!c){ smlToast('ไม่พบรอบการประเมินนี้','warn'); return; }
+  if(c.status==='Closed'){ smlToast('รอบนี้ปิดไปแล้ว','warn'); return; }
+  const year = String(c.year??'').trim();
+  if(!year){ smlToast('รอบนี้ไม่มีปีงบประมาณ/รหัสรอบ — ปิดไม่ได้ (กด แก้ไข เพื่อใส่ปีก่อน)','warn'); return; }
+  const drafts = getDrafts().filter(d=>String(d[2]).trim()===year);
+  const notFinal = drafts.filter(d=>!isFinalStatus(d[d.length-1]));
+  const noDraft = getEvalParticipants().filter(u=>!drafts.some(d=>d[0]===u[0]));
+  const nm = code=>(MASTER_USERS.find(u=>u[0]===code)||[])[1]||code;
+  const list = (arr,f)=>arr.slice(0,8).map(f).join(', ')+(arr.length>8?' ฯลฯ':'');
+  let msg = `ปิดรอบ "${c.name}" (รหัสรอบ ${year})?\n\nใบประเมินในรอบนี้ ${drafts.length} ใบ · อนุมัติขั้นสุดท้ายแล้ว ${drafts.length-notFinal.length} ใบ`;
+  if(notFinal.length) msg += `\n\n⚠️ ยังไม่อนุมัติขั้นสุดท้าย ${notFinal.length} ใบ: ${list(notFinal,d=>nm(d[0])+'('+d[d.length-1]+')')}`;
+  if(noDraft.length) msg += `\n⚠️ ยังไม่มีใบประเมินเลย ${noDraft.length} คน: ${list(noDraft,u=>u[1])}`;
+  msg += `\n\nระบบจะ:\n1) ดาวน์โหลดไฟล์ CSV สรุปทั้งรอบ\n2) ล็อกการแก้ไขทุกอย่างของรอบนี้ (ประเมิน/สอบทาน/ตีกลับ/Calibration/รับทราบ/ลบ)\n3) ไม่ลบข้อมูลใดๆ — ดูย้อนหลัง/พิมพ์ได้ตามปกติ`;
+  if(String(getCurrentEvalCycleYear())===year) msg += `\n\n❗ รหัสรอบที่ใช้อยู่ตอนนี้ (หน้า ตั้งค่ารอบประเมิน) คือ ${year} — หลังปิด ทุกคนจะแก้ไม่ได้จนกว่าจะเปลี่ยนรหัสรอบเป็นปีใหม่`;
+  if(!confirm(msg)) return;
+  const rows = drafts.map(d=>{
+    const u = MASTER_USERS.find(x=>x[0]===d[0]) || [];
+    const st = d[d.length-1];
+    const grade = evalStatusRank(st)>=evalStatusRank('Calibrated') ? d[d.length-2] : ''; /* ไม่ export เกรดชั่วคราวของใบที่ยังไม่ Calibrate (#246) */
+    return [year,d[0],u[1]||d[1]||'',u[3]||'',u[4]||'',u[6]||'',d[3],st,d[d.length-5],d[d.length-4],d[d.length-3],appraisalExcelRow(d)[23]??'',grade,...attendanceExportCells(d[0])];
+  }).concat(noDraft.map(u=>[year,u[0],u[1],u[3]||'',u[4]||'',u[6]||'','','ยังไม่ส่งแบบประเมิน','','','','','',...attendanceExportCells(u[0])]));
+  if(rows.length) downloadCsv('ปิดรอบ_'+year+'_สรุปทั้งรอบ_'+Date.now()+'.csv',
+    ['รอบ','รหัสพนักงาน','ชื่อ-สกุล','กลุ่มงาน','ส่วน','ฝ่าย','ระดับแบบฟอร์ม','สถานะ','คะแนนผลงาน (Y)','คะแนนเวลาทำงาน (Z)','คะแนนรวม (X)','คะแนน KPI','เกรด',...ATT_EXPORT_HEADERS], rows);
+  c.status = 'Closed'; c.closedAt = new Date().toISOString(); c.closedBy = CURRENT_SESSION_USER ? CURRENT_SESSION_USER[1] : '';
+  saveCyclesList(); renderCyclesTable(); renderWorkflowPages(); try{ renderCycleStats(); renderNavBadges(); }catch(e){}
+  appendAuditLog('cycle','ปิดรอบการประเมิน', c.id, `รอบ ${year} · ใบ ${drafts.length} (อนุมัติแล้ว ${drafts.length-notFinal.length}, ค้าง ${notFinal.length}, ยังไม่ส่ง ${noDraft.length})`);
+  const r = await pushCycleToExcel(c);
+  if(r && r.ok) smlToast('ปิดรอบ '+year+' แล้ว — export ไฟล์ทั้งรอบและล็อกการแก้ไขแล้ว','ok');
+  else smlToast('ปิดรอบ '+year+' และล็อกในเครื่องนี้แล้ว แต่บันทึกสถานะขึ้นตาราง Cycles ไม่สำเร็จ ('+((r&&r.error)||'ไม่ทราบสาเหตุ')+') — เครื่องอื่นยังไม่ล็อก และอาจถูกดึงกลับเป็นเปิดตอน sync ถัดไป','warn');
+}
+async function reopenCycle(id){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่เปิดรอบอีกครั้งได้','warn'); return; }
+  const c = cyclesList.find(x=>x.id===id);
+  if(!c || c.status!=='Closed'){ smlToast('รอบนี้ไม่ได้อยู่ในสถานะปิด','warn'); return; }
+  if(!confirm('เปิดรอบ "'+c.name+'" อีกครั้ง?\n\nทุกคนจะแก้ไขใบประเมินของรอบนี้ได้อีก — ใช้เมื่อจำเป็นต้องแก้ข้อมูลหลังปิดรอบเท่านั้น')) return;
+  const why = (prompt('ระบุเหตุผลที่เปิดรอบอีกครั้ง (อย่างน้อย 5 ตัวอักษร) — จะบันทึกใน Audit Log:')||'').trim();
+  if(why.length<5){ smlToast('ต้องระบุเหตุผลอย่างน้อย 5 ตัวอักษร — ยังไม่ได้เปิดรอบ','warn'); return; }
+  c.status = 'Active'; delete c.closedAt; delete c.closedBy;
+  saveCyclesList(); renderCyclesTable(); renderWorkflowPages();
+  appendAuditLog('cycle','เปิดรอบอีกครั้ง', c.id, 'เหตุผล: '+why);
+  const r = await pushCycleToExcel(c);
+  smlToast(r&&r.ok ? 'เปิดรอบ '+c.year+' อีกครั้งแล้ว' : 'เปิดรอบในเครื่องนี้แล้ว แต่บันทึกขึ้นตาราง Cycles ไม่สำเร็จ ('+((r&&r.error)||'')+') — เครื่องอื่นอาจยังเห็นเป็นปิด','warn');
 }
 
 /* ===== กำหนดการขั้นตอนของรอบประเมิน (แก้ไข/ลบ/เพิ่มได้จริง) =====
@@ -14780,7 +14864,7 @@ async function ms365SyncCyclesList(silent=false){
       .filter(r => String(r[0]??'').trim() && String(r[0]??'').trim() !== 'CURRENT')
       .map(r => ({ id: String(r[0]).trim(), name: String(r[1]??'').trim(), start: String(r[2]??'').trim(),
         end: String(r[3]??'').trim(), status: String(r[4]??'').trim()||'Draft',
-        year: (String(r[1]??'').match(/\d{4}/)||[])[0] || '' }));
+        year: String(r[6]??'').trim() || (String(r[1]??'').match(/\d{4}/)||[])[0] || '' }));
     if(!parsed.length) return;
     cyclesList = parsed;
     saveCyclesList();
