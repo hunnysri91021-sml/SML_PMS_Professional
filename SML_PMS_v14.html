@@ -2456,8 +2456,12 @@ img,svg,canvas{max-width:100%}
           <div class="fg" style="max-width:110px"><label>ขาดงาน (วัน)</label><input type="number" id="mn_absent" min="0" value="0"></div>
           <div class="fg" style="max-width:110px"><label>มาสาย (ครั้ง)</label><input type="number" id="mn_late" min="0" value="0"></div>
           <div class="fg" style="max-width:110px"><label>กลับก่อน (ครั้ง)</label><input type="number" id="mn_early" min="0" value="0"></div>
-          <div class="fg" style="max-width:110px"><label>กิจ,กิจย่อย (วัน)</label><input type="number" id="mn_personal" min="0" value="0"></div>
-          <div class="fg" style="max-width:110px"><label>ป่วย (วัน)</label><input type="number" id="mn_sick" min="0" value="0"></div>
+          <div class="fg" style="max-width:90px"><label>กิจ (วัน)</label><input type="number" id="mn_personal" min="0" step="0.5" value="0"></div>
+          <div class="fg" style="max-width:80px"><label>กิจ (ชม.)</label><input type="number" id="mn_personalHr" min="0" value="0"></div>
+          <div class="fg" style="max-width:80px"><label>กิจ (นาที)</label><input type="number" id="mn_personalMin" min="0" value="0"></div>
+          <div class="fg" style="max-width:90px"><label>ป่วย (วัน)</label><input type="number" id="mn_sick" min="0" step="0.5" value="0"></div>
+          <div class="fg" style="max-width:80px"><label>ป่วย (ชม.)</label><input type="number" id="mn_sickHr" min="0" value="0"></div>
+          <div class="fg" style="max-width:80px"><label>ป่วย (นาที)</label><input type="number" id="mn_sickMin" min="0" value="0"></div>
           <div class="fg"><label>ใบรับรองแพทย์สะสม</label><input type="text" id="mn_medcert" placeholder="เช่น 10.5.0"></div>
         </div>
         <div class="template-actions">
@@ -2470,7 +2474,7 @@ img,svg,canvas{max-width:100%}
       <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" title="Push จะไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร Excel" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button><button class="btn btn-sm" title="รายละเอียด สาย/กลับก่อน/กิจ/ป่วย/ขาด ของพนักงานทุกคน (ระบุคนที่ยังไม่มีข้อมูล)" onclick="exportAttendanceList()">📥 Export ข้อมูลเวลา (CSV)</button></div></div>
       <div id="attPushStatus" style="padding:0 16px 4px;font-size:11.5px;color:#64748b"></div>
       <div class="tw"><table>
-        <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ(วัน)</th><th>ป่วย(วัน)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
+        <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ (วัน ชม. นาที)</th><th>ป่วย (วัน ชม. นาที)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
         <tbody id="attRows"></tbody>
       </table></div>
     </div>
@@ -2540,8 +2544,8 @@ img,svg,canvas{max-width:100%}
         <div class="grid g4" style="margin-bottom:15px">
           <div class="fg" style="margin:0"><label>มาสาย (ครั้ง)</label><input type="number" value="6" oninput="calcSim()" id="s1"></div>
           <div class="fg" style="margin:0"><label>ขาดงาน (วัน)</label><input type="number" value="0" oninput="calcSim()" id="s2"></div>
-          <div class="fg" style="margin:0"><label>ลาป่วย (วัน)</label><input type="number" value="4" oninput="calcSim()" id="s3"></div>
-          <div class="fg" style="margin:0"><label>ลากิจ (วัน)</label><input type="number" value="2" oninput="calcSim()" id="s4"></div>
+          <div class="fg" style="margin:0"><label>ลาป่วย (วัน)</label><input type="number" step="0.5" value="4" oninput="calcSim()" id="s3"></div>
+          <div class="fg" style="margin:0"><label>ลากิจ (วัน)</label><input type="number" step="0.5" value="2" oninput="calcSim()" id="s4"></div>
         </div>
         <div style="background:#f8fafc;border-radius:9px;padding:15px" id="simOut"></div>
       </div>
@@ -5296,10 +5300,36 @@ function getAttendanceFor(empCode){
 /* สูตรตามเกณฑ์ SML (หน้า "เกณฑ์คะแนน Z"): ขาด 1 วัน = ลากิจ 3 วัน · สาย/กลับก่อน ทุกๆ 8 ครั้ง = 1 วันลา
    ไม่ถึง 8 ครั้งไม่นับ และเศษถูกตัดทิ้ง (ปัดลง) — 7 ครั้ง = 0 วัน, 8 ครั้ง = 1 วัน, 15 ครั้ง = 1 วัน, 16 ครั้ง = 2 วัน
    วันลารวม = ลาป่วย + ลากิจ + (ขาด × 3) + floor((สาย+กลับก่อน) ÷ 8) */
+/* #283: วันลาป่วย+ลากิจมีหน่วย วัน/ชั่วโมง/นาที (ตามไฟล์ HRGO) — 1 วัน = 8 ชม. = 480 นาที
+   กติกา: รวมป่วย+กิจทั้งสองประเภทก่อน แล้วดูเศษที่เหลือหลังหักวันเต็ม — เศษ < 4 ชม. ไม่นับ,
+   เศษ ≥ 4 ชม. (ไม่ถึง 8 ชม.) นับเป็น 4 ชม. = 0.5 วัน. วันลา x.5 หาคะแนน Z โดยเฉลี่ยตารางวัน x กับ x+1 (zTableValue) */
+function leaveMinutes(att,type){
+  const d=Number(att[type+'Day'])||0, h=Number(att[type+'Hr'])||0, m=Number(att[type+'Min'])||0;
+  return Math.round(d*480 + h*60 + m);
+}
+function splitLeaveMinutes(totalMin){
+  const days=Math.floor(totalMin/480), rem=totalMin-days*480;
+  return { days, hours:Math.floor(rem/60), minutes:rem%60 };
+}
+function fmtLeaveDHM(totalMin){
+  const x=splitLeaveMinutes(totalMin);
+  return x.days+' วัน '+x.hours+' ชม.'+(x.minutes?' '+x.minutes+' นาที':'');
+}
+function leaveCountedDays(att){
+  const t = leaveMinutes(att,'sick') + leaveMinutes(att,'personal');
+  const days = Math.floor(t/480), rem = t - days*480;
+  return days + (rem>=240 ? 0.5 : 0);
+}
+function zTableValue(key, days){
+  const t = Z_TABLE[key] || Z_TABLE.emp;
+  const d = Math.max(0, Math.min(30, Number(days)||0));
+  const lo = Math.floor(d), hi = Math.min(30, Math.ceil(d)), f = d - lo;
+  return Math.round(((t[lo]??0)*(1-f) + (t[hi]??0)*f)*1000)/1000;
+}
 function computeZDays(att){
   const lateEarly = (att.lateCount||0) + (att.earlyCount||0);
   const lateDays = Math.floor(lateEarly/8);
-  const raw = (att.sickDay||0) + (att.personalDay||0) + (att.absentDay||0)*3 + lateDays;
+  const raw = leaveCountedDays(att) + (att.absentDay||0)*3 + lateDays;
   return Math.min(30, Math.round(raw*1000)/1000);
 }
 /* #229: ตัวช่วยเดียวสำหรับ "รายละเอียดเวลาทำงาน" ของพนักงานหนึ่งคน ใช้ร่วมกันทุก export และแบนเนอร์ Calibration
@@ -5307,22 +5337,24 @@ function computeZDays(att){
    ห้ามนำไปแสดงใน export เป็นข้อมูลจริง (CLAUDE.md #14) จึงคืนค่าว่างแทน */
 function attendanceBreakdown(code){
   const a = ATTENDANCE[code];
-  if(!a) return { hasRecord:false, late:'', early:'', lateEarly:'', lateDays:'', personal:'', sick:'', absent:'', zDays:'' };
+  if(!a) return { hasRecord:false, late:'', early:'', lateEarly:'', lateDays:'', personal:'', sick:'', absent:'', zDays:'', personalDHM:'', sickDHM:'', totalDHM:'', leaveCounted:'' };
   const late=a.lateCount||0, early=a.earlyCount||0;
   return { hasRecord:true, late, early, lateEarly:late+early, lateDays:Math.floor((late+early)/8),
-    personal:a.personalDay||0, sick:a.sickDay||0, absent:a.absentDay||0, zDays:computeZDays(a) };
+    personal:a.personalDay||0, sick:a.sickDay||0, absent:a.absentDay||0, zDays:computeZDays(a),
+    personalDHM:fmtLeaveDHM(leaveMinutes(a,'personal')), sickDHM:fmtLeaveDHM(leaveMinutes(a,'sick')),
+    totalDHM:fmtLeaveDHM(leaveMinutes(a,'personal')+leaveMinutes(a,'sick')), leaveCounted:leaveCountedDays(a) };
 }
-const ATT_EXPORT_HEADERS = ['สาย (ครั้ง)','กลับก่อน (ครั้ง)','สาย+กลับก่อน (ครั้ง)','เทียบเป็นวันลา (÷8 ปัดลง)','ลากิจ (วัน)','ลาป่วย (วัน)','ขาดงาน (วัน)','วันลารวม (สูตร Z)','สถานะข้อมูลเวลา'];
+const ATT_EXPORT_HEADERS = ['สาย (ครั้ง)','กลับก่อน (ครั้ง)','สาย+กลับก่อน (ครั้ง)','เทียบเป็นวันลา (÷8 ปัดลง)','ลากิจ (วัน)','ลาป่วย (วัน)','ขาดงาน (วัน)','วันลารวม (สูตร Z)','สถานะข้อมูลเวลา','ลากิจ (วัน ชม. นาที)','ลาป่วย (วัน ชม. นาที)','รวมป่วย+กิจ (วัน ชม. นาที)','ป่วย+กิจที่นับคะแนน (วัน, เศษ≥4ชม.=0.5)'];
 function attendanceExportCells(code){
   const b = attendanceBreakdown(code);
-  return [b.late,b.early,b.lateEarly,b.lateDays,b.personal,b.sick,b.absent,b.zDays, b.hasRecord?'มีข้อมูล':'ไม่มีข้อมูลเวลา'];
+  return [b.late,b.early,b.lateEarly,b.lateDays,b.personal,b.sick,b.absent,b.zDays, b.hasRecord?'มีข้อมูล':'ไม่มีข้อมูลเวลา', b.personalDHM,b.sickDHM,b.totalDHM,b.leaveCounted];
 }
 function zKeyForLevel(lv){ lv=(typeof LEVEL_CONFIG!=='undefined'&&LEVEL_CONFIG[lv]&&LEVEL_CONFIG[lv].base)||lv; return lv==='mgr' ? 'mgr' : (lv==='ldr'||lv==='super') ? 'ldr' : 'emp'; }
 function computeZScore(lv, empCode){
   const att = getAttendanceFor(empCode);
   const zDaysExact = computeZDays(att);
-  const zDaysIdx = Math.min(30, Math.round(zDaysExact));
-  const score = Z_TABLE[zKeyForLevel(lv)][zDaysIdx] ?? 0;
+  const zDaysIdx = Math.min(30, Math.floor(zDaysExact));
+  const score = zTableValue(zKeyForLevel(lv), zDaysExact);
   return { att, zDaysExact, zDaysIdx, score };
 }
 /* แสดงสถิติเวลาทำงาน + คะแนน Z จริงในหน้าประเมินตนเอง ตามระดับที่เลือก */
@@ -5335,12 +5367,12 @@ function renderZStats(lv){
   el('zsEarly', (att.earlyCount||0) + ' ครั้ง');
   el('zsLateEarly', lateEarly + ' ครั้ง ÷ 8 (ปัดลง) = ' + Math.floor(lateEarly/8) + ' วัน');
   el('zsAbsent', (att.absentDay||0) + ' วัน');
-  el('zsSick', (att.sickDay||0) + ' วัน');
-  el('zsPersonal', (att.personalDay||0) + ' วัน');
-  el('zsTotal', zDaysExact.toFixed(3) + ' วัน (≈ ' + zDaysIdx + ' วัน)');
-  el('zRaw', (Z_TABLE.emp[zDaysIdx] ?? 0).toFixed(2));
-  el('zsBandLdr', (Z_TABLE.ldr[zDaysIdx] ?? 0).toFixed(2));
-  el('zsBandMgr', (Z_TABLE.mgr[zDaysIdx] ?? 0).toFixed(2));
+  el('zsSick', fmtLeaveDHM(leaveMinutes(att,'sick')));
+  el('zsPersonal', fmtLeaveDHM(leaveMinutes(att,'personal')));
+  el('zsTotal', zDaysExact + ' วัน (ป่วย+กิจที่นับ ' + leaveCountedDays(att) + ' วัน — เศษ ≥ 4 ชม. = 0.5 วัน)');
+  el('zRaw', zTableValue('emp', zDaysExact).toFixed(2));
+  el('zsBandLdr', zTableValue('ldr', zDaysExact).toFixed(2));
+  el('zsBandMgr', zTableValue('mgr', zDaysExact).toFixed(2));
 }
 
 /* helpers */
@@ -6351,10 +6383,10 @@ function printEvalForm() {
   <div class="F-zbox">
     <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zResult.att.lateCount||0} ครั้ง</span></div>
     <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">${zResult.att.earlyCount||0} ครั้ง</span></div>
-    <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">${zResult.att.sickDay||0} วัน</span></div>
-    <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">${zResult.att.personalDay||0} วัน</span></div>
+    <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">${fmtLeaveDHM(leaveMinutes(zResult.att,'sick'))}</span></div>
+    <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">${fmtLeaveDHM(leaveMinutes(zResult.att,'personal'))}</span></div>
     <div class="zc"><span class="zl">ขาดงาน:</span><span class="zv">${zResult.att.absentDay||0} วัน</span></div>
-    <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zDays} วัน</span></div>
+    <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zResult.zDaysExact} วัน</span></div>
     <div class="ztotal">Z = ${zScore.toFixed(2)}</div>
   </div>
   ${buildKpiPrintBoxHtml(empCode, (typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'), lv)}
@@ -7363,8 +7395,6 @@ document.querySelectorAll('.ov').forEach(o=>o.onclick=e=>{if(e.target===o)closeM
 /* Audit Log ตอนนี้เป็นบันทึกเหตุการณ์จริง (appendAuditLog/renderAuditLog) — ดูฟังก์ชันด้านล่าง */
 
 /* ====== SIMULATOR ====== */
-// ตาราง Z สำหรับพนักงาน (30%) ตามเกณฑ์ SML
-const zTableEmp=[30,30,30,30,30,30,28.85,27.70,26.55,25.40,24.25,23.10,21.95,20.80,19.65,18.50,17.35,16.20,15.05,13.90,12.75,11.60,10.45,9.30,8.15,7.00,5.85,4.70,3.55,2.40,1.25];
 function calcSim(){
   const late=+document.getElementById('s1').value||0;
   const abs=+document.getElementById('s2').value||0;
@@ -7379,11 +7409,11 @@ function calcSim(){
   if(abs>0){rows.push(['ขาดงาน '+abs+' วัน (×3 = '+absDays+' วันลากิจ)',absDays]);totalDays+=absDays;}
   if(sick>0){rows.push(['ลาป่วย '+sick+' วัน',sick]);totalDays+=sick;}
   if(per>0){rows.push(['ลากิจ '+per+' วัน',per]);totalDays+=per;}
-  const totalRounded=Math.min(Math.floor(totalDays),31);
-  const score=totalRounded<zTableEmp.length?zTableEmp[totalRounded]:0;
+  const totalRounded=Math.min(totalDays,30);
+  const score=zTableValue('emp',totalRounded);
   const color=score>=25?'#16a34a':score>=15?'#f59e0b':'#dc2626';
   document.getElementById('simOut').innerHTML=`
-    <div class="kv"><span>วันลารวมทั้งหมด</span><b>${totalDays.toFixed(3)} วัน (นับจริง ${totalRounded} วัน)</b></div>
+    <div class="kv"><span>วันลารวมทั้งหมด</span><b>${totalDays.toFixed(3)} วัน (เศษครึ่งวันเฉลี่ยตารางวันบน-ล่าง)</b></div>
     ${rows.map(r=>`<div class="kv"><span>${escH(r[0])}</span><b style="color:#475569">+ ${typeof r[1]==='number'?r[1].toFixed(3):r[1]}</b></div>`).join('')}
     <div class="kv" style="border-top:2px solid #0f172a;margin-top:8px;padding-top:12px">
       <span style="font-weight:700;color:#0f172a">คะแนน Z (พนักงาน 30%)</span><b style="font-size:21px;color:${color}">${score.toFixed(2)}</b></div>
@@ -10049,10 +10079,14 @@ function buildAttendanceExcelRow(code, a){
   const emp = MASTER_USERS.find(u=>u[0]===code);
   const name = emp ? emp[1] : (a.name || code);
   const cycle = (typeof getCurrentEvalCycleYear==='function') ? getCurrentEvalCycleYear() : '2569';
+  /* #283: ตาราง Excel จริงมีแค่คอลัมน์ "วัน" (ไม่มีชม./นาที) และสูตร วันลารวม = ลาป่วย+ลากิจ+ขาด×3+สาย÷8
+     จึงส่ง "วันที่นับตามกติกาเศษ 4 ชม." แทนค่าดิบ: ป่วย = วันเต็มของป่วย, กิจ = ส่วนที่เหลือของยอดรวมที่นับ
+     (ผลรวมสองคอลัมน์เท่ากับวันที่ระบบใช้คิดคะแนน จึงทำให้ Excel กับเว็บให้ Z ตรงกัน — การแบ่งป่วย/กิจในชีทอาจคลาดจากค่าจริงเมื่อมีเศษชั่วโมง) */
+  const sickCol = Math.floor(leaveMinutes(a,'sick')/480);
   return [
     code, name, cycle,
     a.lateCount||0, a.earlyCount||0,
-    a.sickDay||0, a.personalDay||0, a.absentDay||0,
+    sickCol, Math.max(0, leaveCountedDays(a) - sickCol), a.absentDay||0,
     '', '',
     a.medCert||''
   ];
@@ -12604,8 +12638,8 @@ function buildEvalPrintPage(d, printDate){
     <div class="F-zbox">
       <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zr.att.lateCount||0} ครั้ง</span></div>
       <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">${zr.att.earlyCount||0} ครั้ง</span></div>
-      <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">${zr.att.sickDay||0} วัน</span></div>
-      <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">${zr.att.personalDay||0} วัน</span></div>
+      <div class="zc"><span class="zl">ลาป่วย:</span><span class="zv">${fmtLeaveDHM(leaveMinutes(zr.att,'sick'))}</span></div>
+      <div class="zc"><span class="zl">ลากิจ:</span><span class="zv">${fmtLeaveDHM(leaveMinutes(zr.att,'personal'))}</span></div>
       <div class="zc"><span class="zl">ขาดงาน:</span><span class="zv">${zr.att.absentDay||0} วัน</span></div>
       <div class="zc"><span class="zl">วันลารวม:</span><span class="zv">${zr.zDaysExact||0} วัน</span></div>
       <div class="ztotal">Z = ${zScore.toFixed(2)}</div>
@@ -14061,8 +14095,8 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
       <div><span>มาสาย</span><b>${att.lateCount||0} ครั้ง</b></div>
       <div><span>กลับก่อนเวลา</span><b>${att.earlyCount||0} ครั้ง</b></div>
       <div><span>ขาดงาน</span><b>${att.absentDay||0} วัน</b></div>
-      <div><span>ลาป่วย</span><b>${att.sickDay||0} วัน</b></div>
-      <div><span>ลากิจ</span><b>${att.personalDay||0} วัน</b></div>
+      <div><span>ลาป่วย</span><b>${fmtLeaveDHM(leaveMinutes(att,'sick'))}</b></div>
+      <div><span>ลากิจ</span><b>${fmtLeaveDHM(leaveMinutes(att,'personal'))}</b></div>
       <div><span>สาย+กลับก่อน ÷ 8 (ปัดลง)</span><b>${lateEarly} ครั้ง = ${Math.floor(lateEarly/8)} วัน</b></div>
     </div>
     <div class="review-z-highlight">
@@ -15685,7 +15719,11 @@ function onManualEmpChange(){
     setVal('mn_late', existing.lateCount||0);
     setVal('mn_early', existing.earlyCount||0);
     setVal('mn_personal', existing.personalDay||0);
+    setVal('mn_personalHr', existing.personalHr||0);
+    setVal('mn_personalMin', existing.personalMin||0);
     setVal('mn_sick', existing.sickDay||0);
+    setVal('mn_sickHr', existing.sickHr||0);
+    setVal('mn_sickMin', existing.sickMin||0);
     setVal('mn_medcert', existing.medCert||'');
     if(saveBtn) saveBtn.textContent='✏️ บันทึกการแก้ไข';
   } else if(saveBtn) saveBtn.textContent='💾 บันทึกข้อมูลวันลา';
@@ -15708,7 +15746,9 @@ function writeAttendanceRecord(code, vals){
     lateCount: vals.lateCount,
     earlyCount: vals.earlyCount,
     personalDay: vals.personalDay,
+    personalHr: vals.personalHr||0, personalMin: vals.personalMin||0,
     sickDay: vals.sickDay,
+    sickHr: vals.sickHr||0, sickMin: vals.sickMin||0,
     medCert: vals.medCert
   };
   saveAttendance();
@@ -15728,13 +15768,13 @@ function saveManualAttendance(){
     absentDay:num('mn_absent'),
     lateCount:num('mn_late'),
     earlyCount:num('mn_early'),
-    personalDay:num('mn_personal'),
-    sickDay:num('mn_sick'),
+    personalDay:num('mn_personal'), personalHr:num('mn_personalHr'), personalMin:num('mn_personalMin'),
+    sickDay:num('mn_sick'), sickHr:num('mn_sickHr'), sickMin:num('mn_sickMin'),
     medCert:(document.getElementById('mn_medcert')?.value||'').trim()
   });
   renderAttendanceList();
   smlToast((result.isEdit?'อัปเดต':'บันทึก')+'ข้อมูลวันลาของ '+result.emp[1]+' ('+code+') เรียบร้อย','ok');
-  ['mn_emp','mn_absent','mn_late','mn_early','mn_personal','mn_sick','mn_medcert'].forEach(id=>{
+  ['mn_emp','mn_absent','mn_late','mn_early','mn_personal','mn_personalHr','mn_personalMin','mn_sick','mn_sickHr','mn_sickMin','mn_medcert'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value = id==='mn_emp'||id==='mn_medcert' ? '' : '0';
   });
   onManualEmpChange();
@@ -15760,8 +15800,8 @@ function saveAttendanceRowInline(code){
     absentDay:num('attEdit_absent'),
     lateCount:num('attEdit_late'),
     earlyCount:num('attEdit_early'),
-    personalDay:num('attEdit_personal'),
-    sickDay:num('attEdit_sick'),
+    personalDay:num('attEdit_personal'), personalHr:num('attEdit_personalHr'), personalMin:num('attEdit_personalMin'),
+    sickDay:num('attEdit_sick'), sickHr:num('attEdit_sickHr'), sickMin:num('attEdit_sickMin'),
     medCert: ATTENDANCE[code]?.medCert || ''
   });
   if(!result){ smlToast('ไม่พบรหัสพนักงาน '+code+' ในข้อมูลพนักงานจริง','warn'); return; }
@@ -15789,18 +15829,19 @@ function renderAttendanceList(){
     const name=emp?.[1] || a.name || '—';
     const zDays=computeZDays(a);
     if(editingAttendanceCode===code){
-      const numIn=(id,val)=>`<input type="number" id="${id}" min="0" value="${val||0}" style="width:60px">`;
+      const numIn=(id,val)=>`<input type="number" id="${id}" min="0" step="0.5" value="${val||0}" style="width:60px">`;
+      const numS=(id,val,ph)=>`<input type="number" id="${id}" min="0" value="${val||0}" title="${ph}" style="width:46px">`;
       return `<tr style="background:#fffbea">
         <td><b>${code}</b></td><td>${name}</td>
         <td>${numIn('attEdit_absent', a.absentDay)}</td>
         <td>${numIn('attEdit_late', a.lateCount)}</td>
         <td>${numIn('attEdit_early', a.earlyCount)}</td>
-        <td>${numIn('attEdit_personal', a.personalDay)}</td>
-        <td>${numIn('attEdit_sick', a.sickDay)}</td>
+        <td style="white-space:nowrap">${numIn('attEdit_personal', a.personalDay)} ${numS('attEdit_personalHr', a.personalHr,'ชม.')}ชม ${numS('attEdit_personalMin', a.personalMin,'นาที')}น</td>
+        <td style="white-space:nowrap">${numIn('attEdit_sick', a.sickDay)} ${numS('attEdit_sickHr', a.sickHr,'ชม.')}ชม ${numS('attEdit_sickMin', a.sickMin,'นาที')}น</td>
         <td>${zDays.toFixed(2)}</td>
         <td><button class="btn btn-sm btn-p" onclick="saveAttendanceRowInline('${code}')">💾</button> <button class="btn btn-sm" onclick="cancelEditAttendanceRow()">✖️</button></td></tr>`;
     }
-    return `<tr><td><b>${code}</b></td><td>${name}</td><td>${a.absentDay||0}</td><td>${a.lateCount||0}</td><td>${a.earlyCount||0}</td><td>${a.personalDay||0}</td><td>${a.sickDay||0}</td><td>${zDays.toFixed(2)}</td>
+    return `<tr><td><b>${code}</b></td><td>${name}</td><td>${a.absentDay||0}</td><td>${a.lateCount||0}</td><td>${a.earlyCount||0}</td><td>${fmtLeaveDHM(leaveMinutes(a,'personal'))}</td><td>${fmtLeaveDHM(leaveMinutes(a,'sick'))}</td><td title="ป่วย+กิจที่นับคะแนน ${leaveCountedDays(a)} วัน (เศษ ≥ 4 ชม. = 0.5)">${zDays.toFixed(2)}</td>
       <td><button class="btn btn-sm" onclick="editAttendanceRow('${code}')">✏️</button> <button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${code}')">🗑️</button></td></tr>`;
   }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน</td></tr>';
   if(typeof renderAttendancePushStatus==='function') renderAttendancePushStatus();
