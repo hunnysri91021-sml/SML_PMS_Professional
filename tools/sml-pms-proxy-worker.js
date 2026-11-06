@@ -849,7 +849,7 @@ const LIST_KEYS = { Appraisals: [0, 2, 3] };
 const ARCHIVE_DATE_COL = { AuditLog: 0, Approvals: 5 };
 /* #281: ตารางที่ปุ่ม "ล้างข้อมูลทดสอบ" ลบได้ทั้งตาราง + คอลัมน์ช่องกรอกของ Attendance (D–H สาย/กลับก่อน/ป่วย/กิจ/ขาด, K หมายเหตุ) */
 const CLEARABLE_TABLES = ['Appraisals', 'Approvals', 'AuditLog', 'IDP'];
-const CLEARABLE_COLUMNS = { Attendance: [3, 4, 5, 6, 7, 10] };
+const CLEARABLE_COLUMNS = { Attendance: [3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16] }; /* #284: L–Q = ค่าดิบ วัน/ชม./นาที (ถ้าตารางมีคอลัมน์เหล่านี้) */
 const CLEAR_CHUNK = 100;
 const DEDUPE_STATUS_COL = 22;
 function isListBacked(env, table) {

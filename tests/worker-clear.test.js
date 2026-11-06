@@ -44,7 +44,7 @@ global.fetch=async(url,opt={})=>{
   ok(l.j.deleted===3&&l.j.remaining===0&&listItems.length===0&&batchDeleted.join()==='1,2,3','List: ลบทุก item ผ่าน $batch');
   const cc=await call('/admin/clear-columns',{table:'Attendance'},A);
   ok(cc.j.rows===3&&patches.length===2,'Attendance: PATCH 2 ช่วงคอลัมน์ (D–H และ K) ไม่แตะ I,J ที่เป็นสูตร');
-  ok(patches[0].u.includes('Attendance!D2:H4')&&patches[1].u.includes('Attendance!K2:K4'),'ช่วงที่เคลียร์ตรง D2:H4 และ K2:K4');
+  ok(patches[0].u.includes('Attendance!D2:H4')&&patches[1].u.includes('Attendance!K2:Q4'),'ช่วงที่เคลียร์ตรง D2:H4 และ K2:Q4 (รวมคอลัมน์ดิบ #284)');
   ok(patches[0].body.values.length===3&&patches[0].body.values[0].length===5&&patches[0].body.values.every(r=>r.every(v=>v==='')),'ค่าที่เขียนเป็นช่องว่างทั้งหมด');
   done();
 })();

@@ -8492,7 +8492,7 @@ const RESET_BACKUP_HEADERS = {
   Approvals: ARCHIVE_HEADERS.Approvals,
   AuditLog: ARCHIVE_HEADERS.AuditLog,
   IDP: ['EmpCode','Name','Dept','Grade','Plan','Due','Owner','Metric','Status'],
-  Attendance: ['EmpID','ชื่อ-สกุล','รอบ (Period)','มาสาย','กลับก่อน','ลาป่วย','ลากิจ','ขาดงาน','วันลารวม (Auto)','Z Score (Auto)','หมายเหตุ']
+  Attendance: ['EmpID','ชื่อ-สกุล','รอบ (Period)','มาสาย','กลับก่อน','ลาป่วย','ลากิจ','ขาดงาน','วันลารวม (Auto)','Z Score (Auto)','หมายเหตุ','กิจ-ดิบ (วัน)','กิจ ชม.','กิจ นาที','ป่วย-ดิบ (วัน)','ป่วย ชม.','ป่วย นาที']
 };
 function clearLocalTestData(){
   const keys = [MS365_LOCAL_DRAFT_KEY, PUSHED_APPRAISALS_KEY, RESULT_NOTIFIED_KEY, DISPUTES_KEY, EVAL_LAST_ACTOR_KEY, EVAL_STAGE_SIGNERS_KEY,
@@ -10027,15 +10027,24 @@ async function ms365SyncAttendance(silent=false){
       if(!code) continue;
       const emp = MASTER_USERS.find(u=>u[0]===code);
       if(!emp){ unmatched.push(code); continue; }
-      const num=(v)=>Number(v)||0;
+      /* #284: อ่านเลขทศนิยม (4.5, "4,5", " 4.5 ") ได้ถูกต้อง — Excel/Graph อาจส่งเป็นข้อความ */
+      const num=excelNum;
       /* ลำดับคอลัมน์จริง: 0 EmpID, 1 ชื่อ-สกุล, 2 รอบ, 3 มาสาย, 4 กลับก่อน, 5 ลาป่วย, 6 ลากิจ,
-         7 ขาดงาน, 8 วันลารวม(Auto), 9 Z Score(Auto), 10 หมายเหตุ */
-      ATTENDANCE[code] = {
+         7 ขาดงาน, 8 วันลารวม(Auto), 9 Z Score(Auto), 10 หมายเหตุ
+         #284 (ไม่บังคับ — ต่อท้าย): 11 กิจ(ดิบ วัน), 12 กิจ ชม., 13 กิจ นาที, 14 ป่วย(ดิบ วัน), 15 ป่วย ชม., 16 ป่วย นาที */
+      const hasRaw = ATTENDANCE_RAW_COL_IDX.some(k=>String(c[k] ?? '').trim()!=='');
+      const rec = {
         name: emp[1],
         lateCount:num(c[3]), earlyCount:num(c[4]),
         sickDay:num(c[5]), personalDay:num(c[6]), absentDay:num(c[7]),
         medCert:String(c[10] ?? '').trim()
       };
+      if(hasRaw){
+        /* มีคอลัมน์ดิบ → ใช้ค่าดิบ (วัน/ชม./นาที) แทนวันที่นับในคอลัมน์ F/G เพื่อไม่ให้สูญเสียเศษชั่วโมง */
+        rec.personalDay=num(c[11]); rec.personalHr=num(c[12]); rec.personalMin=num(c[13]);
+        rec.sickDay=num(c[14]);     rec.sickHr=num(c[15]);     rec.sickMin=num(c[16]);
+      }
+      ATTENDANCE[code] = rec;
       imported++;
     }
     if(!imported && !unmatched.length) throw new Error('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าตาราง Attendance ตรงตาม Template HRGO');
@@ -10088,9 +10097,18 @@ function buildAttendanceExcelRow(code, a){
     a.lateCount||0, a.earlyCount||0,
     sickCol, Math.max(0, leaveCountedDays(a) - sickCol), a.absentDay||0,
     '', '',
-    a.medCert||''
+    a.medCert||'',
+    /* #284: ค่าดิบ (ไม่ใช้ในสูตร Excel) เพื่อให้ดึงกลับมาได้ครบ วัน/ชม./นาที — ว่างเมื่อเป็น 0 */
+    ...[a.personalDay,a.personalHr,a.personalMin,a.sickDay,a.sickHr,a.sickMin].map(v=>Number(v)>0?Number(v):'')
   ];
 }
+/* #284: ตัวช่วยอ่านตัวเลขจากเซลล์ Excel (รองรับข้อความ ทศนิยมจุด/จุลภาค) และตำแหน่งคอลัมน์ดิบ */
+function excelNum(v){
+  if(typeof v==='number') return isFinite(v)?v:0;
+  const n = Number(String(v ?? '').replace(/\s/g,'').replace(',','.'));
+  return isFinite(n)?n:0;
+}
+const ATTENDANCE_RAW_COL_IDX = [11,12,13,14,15,16];
 /* Push ข้อมูลเวลา "คนเดียว" ขึ้น Excel ทันทีหลังบันทึก — best-effort, fire-and-forget (ไม่บล็อกการกดบันทึก),
    log ผลลง Sync Log เสมอทั้งสำเร็จ/ไม่สำเร็จ (ตามแบบแผน CLAUDE.md #66/#68/#69/#100) ใช้
    graphUpsertTableRowPartial() แทน graphUpsertTableRow() เดิม (#101) เพื่อไม่ให้เขียนทับคอลัมน์
@@ -15640,7 +15658,7 @@ function importHrgoFile(input){
            5 personal_day, 6 personal_hr, 7 personal_min,
            8 sick_day, 9 sick_hr, 10 sick_min,
            11 total_day, 12 total_hr, 13 total_min, 14 med_cert_cumulative */
-        const num=(v)=>Number(v)||0;
+        const num=excelNum; /* #284: รองรับ 4,5 / 4.5 */
         const rec={
           name: emp[1],
           lateCount:num(c[3]), earlyCount:0, // มาสาย/กลับก่อน รวมเป็นครั้งเดียวในไฟล์ (ดูหมายเหตุ)
