@@ -8941,6 +8941,8 @@ touches employee/attendance/evaluation data.
 
 274. **พนักงานที่ไม่มี L1/L2 ตัวจริง — L3 กดประเมินจากคิวของตัวเองได้.** คิว L3 (`review`) และ L4 (`gmapprove`) เดิมแสดงคนที่ยังไม่ส่งเป็น "รอผลประเมิน" ไม่มีปุ่ม ทั้งที่ไม่มีใครประเมินรอบแรกก่อน (ต้องไปหน้า 2. ประเมินทีมงาน). `pendingEvalBtn(emp,resolverFn)` แสดงปุ่ม "ประเมิน" (เปิด `openReviewerForm` เดียวกัน) เมื่อ: ใบยังไม่มี/เป็น Draft, ผู้ประเมินตามช่องของคิวนั้นคือผู้ล็อกอิน, และไม่มีผู้สอบทานจริงในขั้นก่อนหน้า (L3: ไม่มี resolveL1Reviewer; L4: ไม่มี L1/L2). ส่งแล้วระบบข้ามขั้นตามปกติ (`skipEmptyReviewStages`). ทดสอบ: `tests/pending-eval-btn.test.js`.
 
+275. **ปุ่ม "ประเมิน" แทนในคิว L2 (`reviewl1`) + Admin/sysadmin เห็นปุ่มในคิว L2/L3/L4 (ต่อจาก #274).** `pendingEvalBtn` รองรับ `resolveL1Reviewer`: ไม่แสดงปุ่มถ้า u[9] ชี้ถึงหัวหน้าหน่วยตัวจริง (active, คนละคนกับผู้สอบทานคิวนี้) เพราะเขาต้องประเมินก่อน; ผู้ไม่ใช่ Admin ต้องเป็นผู้สอบทานของคิวนั้นเอง ส่วน Admin เห็นปุ่มทุกแถวที่ไม่มีผู้ประเมินก่อนหน้า. ทดสอบ: `tests/pending-eval-btn-l2-admin.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

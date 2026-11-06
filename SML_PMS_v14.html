@@ -10900,7 +10900,7 @@ function renderReviewL1Queue(){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveL1Reviewer)}</td></tr>`;
     }
     const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
     if(r.state==='done'){
@@ -10954,10 +10954,20 @@ async function rejectReviewL1Selected(){
 function pendingEvalBtn(emp, resolverFn){
   const me = CURRENT_SESSION_USER;
   if(!me || !emp) return '';
-  const earlier = resolverFn===resolveGmReviewer ? (resolveL1Reviewer(emp)||resolveL2Reviewer(emp)) : resolveL1Reviewer(emp);
-  if(earlier) return '';
   const rv = resolverFn(emp);
-  if(!rv || rv[0]!==me[0]) return '';
+  if(!rv) return '';
+  let earlier;
+  if(resolverFn===resolveL1Reviewer){
+    /* #275: คิว L2 — ถ้ามีหัวหน้าหน่วย L1 ตัวจริง (u[9] เป็นคนอื่นที่ไม่ใช่ผู้สอบทานคิวนี้) ให้เขาประเมินก่อน */
+    const n9=(emp[9]||'').trim();
+    const u9=n9&&n9!=='—' ? MASTER_USERS.find(x=>x[12]==='active'&&(x[1]||'').trim()===n9) : null;
+    earlier = (u9 && u9[0]!==rv[0]) ? u9 : null;
+  } else {
+    earlier = resolverFn===resolveGmReviewer ? (resolveL1Reviewer(emp)||resolveL2Reviewer(emp)) : resolveL1Reviewer(emp);
+  }
+  if(earlier) return '';
+  /* #275: Admin/HR เห็นปุ่มประเมินแทนด้วย (ผู้อื่นต้องเป็นผู้สอบทานของคิวนี้เอง) */
+  if(!isAdminOrSysadmin() && rv[0]!==me[0]) return '';
   const cyc = getCurrentEvalCycleYear();
   const d = findCurrentCycleDraft(getDrafts(), emp[0], cyc);
   if(d && d[d.length-1]!=='Draft') return '';
