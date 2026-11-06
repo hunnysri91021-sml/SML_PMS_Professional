@@ -14512,14 +14512,16 @@ function getCurrentEvalCycleYear(){
    ด้วย key คงที่ 'CURRENT' เสมอ (ไม่ใช้ชื่อรอบเป็น key เพราะชื่อแก้ได้ จะได้แถวใหม่ซ้อนทุกครั้งที่
    เปลี่ยนชื่อ) เพิ่มคอลัมน์ year ต่อท้าย (ไม่แทรกกลางแถวเดิม ตาม CLAUDE.md #5) เพราะ #58/#59 เดิมพึ่ง
    ลำดับคอลัมน์ [key,name,start,end,status,savedAt] อยู่แล้วในที่อื่น */
+/* #279: ตั้งค่ารอบประเมินแบบสั้น (ชื่อรอบ/รหัสรอบ/วันที่/สถานะ) เดิมเขียนแถว 'CURRENT' ลงตาราง Cycles แต่ตาราง Cycles จริงมี 8 คอลัมน์ไม่มีชื่อรอบ (#278)
+   → push ล้มเหลวมาตลอด. ย้ายไปเก็บเป็น JSON ในตาราง FormWeights แถว '__cyclesetup__' (รูปแบบเดียวกับ __sysopen__/__tie__/__steps__ — ตารางนั้นเป็น key/JSON อยู่แล้ว) */
 async function pushCycleSetupToExcel(silent=true){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushCycleSetupToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
   const data = getCycleSetupData();
   if(!data || !data.name) return;
   try{
-    await graphUpsertTableRow('Cycles', 0, 'CURRENT', ['CURRENT', data.name, data.start||'', data.end||'', data.status||'', data.savedAt||'', data.year||'']);
-    appendSyncLog(`Push การตั้งค่ารอบประเมิน "${data.name}" เข้า Excel`, true);
+    await graphUpsertTableRow(FORM_WEIGHTS_TABLE, 0, '__cyclesetup__', ['__cyclesetup__', JSON.stringify(data), data.savedAt||new Date().toISOString()]);
+    appendSyncLog(`Push การตั้งค่ารอบประเมิน "${data.name}" เข้า Excel (FormWeights)`, true);
   }catch(e){
     appendSyncLog(`Push การตั้งค่ารอบประเมินไม่สำเร็จ: ${e.message}`, false);
   }
@@ -14896,10 +14898,14 @@ async function ms365SyncCycleSetup(silent=false){
   const cfg = loadMs365Config();
   if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('ms365SyncCycleSetup: ยังไม่ได้ตั้งค่า MS365', false); return; }
   try{
-    const rows = await graphListTableRows('Cycles');
-    const row = rows.find(r => String(r[0]??'').trim() === 'CURRENT');
+    const rows = await graphListTableRows(FORM_WEIGHTS_TABLE);
+    const row = rows.find(r => String(r[0]??'').trim() === '__cyclesetup__');
     if(!row || !row[1]) return;
-    const data = { name: row[1]||'', start: row[2]||'', end: row[3]||'', status: row[4]||'', savedAt: row[5]||new Date().toISOString(), year: row[6]||'' };
+    let remote; try{ remote = JSON.parse(row[1]); }catch(e){ return; }
+    if(!remote || !remote.name) return;
+    const local = (typeof getCycleSetupData==='function') ? getCycleSetupData() : null;
+    if(local && local.savedAt && remote.savedAt && remote.savedAt <= local.savedAt) return; /* ของในเครื่องใหม่กว่า/เท่ากัน — ไม่ทับ */
+    const data = { name: remote.name||'', start: remote.start||'', end: remote.end||'', status: remote.status||'', savedAt: remote.savedAt||new Date().toISOString(), year: remote.year||'' };
     localStorage.setItem('smlPmsCycleSetup', JSON.stringify(data));
     if(typeof loadScoreWeightsOverride==='function') loadScoreWeightsOverride();
     const n=document.getElementById('cycleNameSetup'), y=document.getElementById('cycleYearSetup'), s=document.getElementById('cycleStatusSetup'), a=document.getElementById('cycleStartSetup'), b=document.getElementById('cycleEndSetup');
