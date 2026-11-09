@@ -45,7 +45,7 @@ const {open,ok,done,INJECT}=require('./helpers');
   ok(r.nonAdminCalls===0&&r.draftsAfterNon===1,'ไม่ใช่ Admin → ไม่เรียก Worker ไม่ลบ');
   ok(r.wrongTypedClears===0&&r.draftsAfterWrong===1,'พิมพ์ยืนยันผิด → ไม่ล้างอะไร');
   ok(r.failDrafts===1&&r.failAtt===1,'Worker ล้มเหลว → ข้อมูลในเครื่องยังอยู่');
-  ok(r.clearedTables==='Appraisals,Approvals,AuditLog,IDP'&&r.clearCols===1,'ล้างครบ 4 ตาราง + คอลัมน์ Attendance');
+  ok(r.clearedTables==='Appraisals,Approvals,AuditLog,IDP,AttendanceDetail'&&r.clearCols===1,'ล้างครบ 4 ตาราง + AttendanceDetail + คอลัมน์ Attendance');
   ok(r.csvCount>=5,'ดาวน์โหลดไฟล์สำรองก่อนล้าง ('+r.csvCount+' ไฟล์)');
   ok(r.hdrApp==='EmpID|ชื่อ-สกุล|รอบ|ระดับ|m0..X|เกรด|Status'||r.hdrApp.startsWith('EmpID|ชื่อ-สกุล|รอบ|ระดับ|m0'),'ไฟล์สำรองใช้หัวคอลัมน์จริง ('+r.hdrApp+')');
   ok(r.hdrAtt==='EmpID|ชื่อ-สกุล|รอบ (Period)|มาสาย','Attendance สำรองมีหัวจริง ('+r.hdrAtt+')');
