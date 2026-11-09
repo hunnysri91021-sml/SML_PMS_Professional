@@ -8492,7 +8492,7 @@ const RESET_BACKUP_HEADERS = {
   Approvals: ARCHIVE_HEADERS.Approvals,
   AuditLog: ARCHIVE_HEADERS.AuditLog,
   IDP: ['EmpCode','Name','Dept','Grade','Plan','Due','Owner','Metric','Status'],
-  Attendance: ['EmpID','ชื่อ-สกุล','รอบ (Period)','มาสาย','กลับก่อน','ลาป่วย','ลากิจ','ขาดงาน','วันลารวม (Auto)','Z Score (Auto)','หมายเหตุ','กิจ-ดิบ (วัน)','กิจ ชม.','กิจ นาที','ป่วย-ดิบ (วัน)','ป่วย ชม.','ป่วย นาที']
+  Attendance: ['EmpID','ชื่อ-สกุล','รอบ (Period)','มาสาย','กลับก่อน','ลาป่วย','ลากิจ','ขาดงาน','วันลารวม (Auto)','Z Score (Auto)','หมายเหตุ']
 };
 function clearLocalTestData(){
   const keys = [MS365_LOCAL_DRAFT_KEY, PUSHED_APPRAISALS_KEY, RESULT_NOTIFIED_KEY, DISPUTES_KEY, EVAL_LAST_ACTOR_KEY, EVAL_STAGE_SIGNERS_KEY,
@@ -8538,6 +8538,7 @@ async function resetTestData(){
         if(r.remaining>0) throw new Error('ล้าง '+t+' ไม่หมด (เหลือ '+r.remaining+')');
       }
       await workerFetch(cfg,'/admin/clear-columns',{method:'POST',body:JSON.stringify({table:'Attendance'})});
+      try{ let g=0,rr; do{ rr = await workerFetch(cfg,'/admin/clear-table',{method:'POST',body:JSON.stringify({table:'AttendanceDetail'})}); g++; }while(rr.remaining>0 && rr.deleted>0 && g<50); }catch(e){ /* ไม่มีตาราง AttendanceDetail — ข้าม */ }
       const kpis = goalKpiData.filter(k=>k.scope==='person' && k.actualVal!=='' && k.actualVal!=null);
       for(const k of kpis){ k.actualVal=''; const rr = await pushKpiToExcel(k); if(!rr.ok) throw new Error('ล้างผลจริง KPI '+k.id+' ไม่สำเร็จ: '+rr.error); }
       const at = new Date().toISOString();
@@ -10032,22 +10033,27 @@ async function ms365SyncAttendance(silent=false){
       /* ลำดับคอลัมน์จริง: 0 EmpID, 1 ชื่อ-สกุล, 2 รอบ, 3 มาสาย, 4 กลับก่อน, 5 ลาป่วย, 6 ลากิจ,
          7 ขาดงาน, 8 วันลารวม(Auto), 9 Z Score(Auto), 10 หมายเหตุ
          #284 (ไม่บังคับ — ต่อท้าย): 11 กิจ(ดิบ วัน), 12 กิจ ชม., 13 กิจ นาที, 14 ป่วย(ดิบ วัน), 15 ป่วย ชม., 16 ป่วย นาที */
-      const hasRaw = ATTENDANCE_RAW_COL_IDX.some(k=>String(c[k] ?? '').trim()!=='');
       const rec = {
         name: emp[1],
         lateCount:num(c[3]), earlyCount:num(c[4]),
         sickDay:num(c[5]), personalDay:num(c[6]), absentDay:num(c[7]),
         medCert:String(c[10] ?? '').trim()
       };
-      if(hasRaw){
-        /* มีคอลัมน์ดิบ → ใช้ค่าดิบ (วัน/ชม./นาที) แทนวันที่นับในคอลัมน์ F/G เพื่อไม่ให้สูญเสียเศษชั่วโมง */
-        rec.personalDay=num(c[11]); rec.personalHr=num(c[12]); rec.personalMin=num(c[13]);
-        rec.sickDay=num(c[14]);     rec.sickHr=num(c[15]);     rec.sickMin=num(c[16]);
-      }
       ATTENDANCE[code] = rec;
       imported++;
     }
     if(!imported && !unmatched.length) throw new Error('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าตาราง Attendance ตรงตาม Template HRGO');
+    /* #286: ค่าดิบ วัน/ชม./นาที อยู่ในตารางแยก "AttendanceDetail" (ไม่ใช่คอลัมน์ในตาราง Attendance เพราะคอลัมน์ L–O
+       ของชีทนั้นเป็นตารางคะแนน Z ที่สูตรอ้างอิง) — ไม่มีตารางนี้ = ใช้วันที่นับจากคอลัมน์ F/G ตามเดิม */
+    try{
+      const det = await graphListTableRows('AttendanceDetail');
+      det.forEach(d=>{
+        const dc = String(d[0] ?? '').trim();
+        if(!ATTENDANCE[dc]) return;
+        if(![2,3,4,5,6,7].some(k=>String(d[k] ?? '').trim()!=='')) return;
+        Object.assign(ATTENDANCE[dc], { personalDay:excelNum(d[2]), personalHr:excelNum(d[3]), personalMin:excelNum(d[4]), sickDay:excelNum(d[5]), sickHr:excelNum(d[6]), sickMin:excelNum(d[7]) });
+      });
+    }catch(e){ /* ไม่มีตาราง AttendanceDetail — ข้ามได้ */ }
 
     saveAttendance();
     renderAttendanceList();
@@ -10097,10 +10103,20 @@ function buildAttendanceExcelRow(code, a){
     a.lateCount||0, a.earlyCount||0,
     sickCol, Math.max(0, leaveCountedDays(a) - sickCol), a.absentDay||0,
     '', '',
-    a.medCert||'',
-    /* #284: ค่าดิบ (ไม่ใช้ในสูตร Excel) เพื่อให้ดึงกลับมาได้ครบ วัน/ชม./นาที — ว่างเมื่อเป็น 0 */
-    ...[a.personalDay,a.personalHr,a.personalMin,a.sickDay,a.sickHr,a.sickMin].map(v=>Number(v)>0?Number(v):'')
+    a.medCert||''
   ];
+}
+/* #286: แถวตาราง "AttendanceDetail" (EmpID, ชื่อ, กิจ วัน/ชม./นาที, ป่วย วัน/ชม./นาที — ค่าดิบ ว่างเมื่อเป็น 0) */
+function buildAttendanceDetailRow(code, a){
+  const emp = MASTER_USERS.find(u=>u[0]===code);
+  return [code, emp ? emp[1] : (a.name||code),
+    ...[a.personalDay,a.personalHr,a.personalMin,a.sickDay,a.sickHr,a.sickMin].map(v=>Number(v)>0?Number(v):'')];
+}
+function pushAttendanceDetailToExcel(code){
+  const a = ATTENDANCE[code]; if(!a) return Promise.resolve();
+  return graphUpsertTableRow('AttendanceDetail', 0, code, buildAttendanceDetailRow(code, a))
+    .then(()=>{ appendSyncLog(`Push รายละเอียดวัน/ชม./นาที (${code}) เข้า AttendanceDetail`, true); })
+    .catch(err=>{ appendSyncLog(`Push AttendanceDetail (${code}) ไม่สำเร็จ (ไม่มีตาราง AttendanceDetail ใน Excel?): `+(err?.message||err), false); });
 }
 /* #284: ตัวช่วยอ่านตัวเลขจากเซลล์ Excel (รองรับข้อความ ทศนิยมจุด/จุลภาค) และตำแหน่งคอลัมน์ดิบ */
 function excelNum(v){
@@ -10108,7 +10124,6 @@ function excelNum(v){
   const n = Number(String(v ?? '').replace(/\s/g,'').replace(',','.'));
   return isFinite(n)?n:0;
 }
-const ATTENDANCE_RAW_COL_IDX = [11,12,13,14,15,16];
 /* Push ข้อมูลเวลา "คนเดียว" ขึ้น Excel ทันทีหลังบันทึก — best-effort, fire-and-forget (ไม่บล็อกการกดบันทึก),
    log ผลลง Sync Log เสมอทั้งสำเร็จ/ไม่สำเร็จ (ตามแบบแผน CLAUDE.md #66/#68/#69/#100) ใช้
    graphUpsertTableRowPartial() แทน graphUpsertTableRow() เดิม (#101) เพื่อไม่ให้เขียนทับคอลัมน์
@@ -10118,7 +10133,7 @@ function pushAttendanceRowToExcel(code){
   if(!isMs365Configured(cfg)){ appendSyncLog(`pushAttendanceRowToExcel (${code}): ยังไม่ได้ตั้งค่า MS365`, false); return; }
   const a = ATTENDANCE[code]; if(!a) return;
   graphUpsertTableRowPartial('Attendance', 0, code, buildAttendanceExcelRow(code, a), ATTENDANCE_EXCEL_PROTECTED_COLS)
-    .then(()=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) เข้า Excel (ไม่แตะคอลัมน์สูตร)`, true); updateMs365Status('ok','Connected'); })
+    .then(()=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) เข้า Excel (ไม่แตะคอลัมน์สูตร)`, true); updateMs365Status('ok','Connected'); pushAttendanceDetailToExcel(code); })
     .catch(err=>{ appendSyncLog(`Push ข้อมูลเวลา (${code}) ไม่สำเร็จ: `+(err?.message||err), false); updateMs365Status('warn','Sync error'); });
 }
 async function ms365PushAttendance(){
@@ -10133,7 +10148,7 @@ async function ms365PushAttendance(){
   let ok=0, fail=0;
   for(const code of codes){
     const row = buildAttendanceExcelRow(code, ATTENDANCE[code]);
-    try{ await graphUpsertTableRowPartial('Attendance', 0, code, row, ATTENDANCE_EXCEL_PROTECTED_COLS); ok++; }
+    try{ await graphUpsertTableRowPartial('Attendance', 0, code, row, ATTENDANCE_EXCEL_PROTECTED_COLS); ok++; await pushAttendanceDetailToExcel(code); }
     catch(e){ fail++; }
   }
   updateMs365Status(fail?'warn':'ok', fail?'บาง Push ไม่สำเร็จ':'Connected');
