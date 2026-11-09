@@ -2088,7 +2088,7 @@ img,svg,canvas{max-width:100%}
     <div class="card">
       <div class="card-h"><h3>รายชื่อลูกน้องทางตรง</h3><div class="r"><input id="teamSearch" oninput="renderTeamFromMaster()" placeholder="🔍 ค้นหาชื่อ / รหัสพนักงาน" style="padding:7px 11px;border:1px solid var(--bd);border-radius:7px;font-size:12.5px;width:220px"></div></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" title="เลือกทั้งหมดที่พักไว้" onchange="document.querySelectorAll('.team-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>ตำแหน่ง</th><th>ตนเอง</th><th>วินัย</th><th>คะแนน L1 (ของคุณ)</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <thead><tr><th><input type="checkbox" title="เลือกทั้งหมดที่พักไว้" onchange="document.querySelectorAll('.team-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>ตำแหน่ง</th><th>ตนเอง</th><th>วินัย</th><th>คะแนนผลงาน (Y)</th><th>คะแนนเวลา/สถิติ (Z)</th><th>คะแนนรวม (X)</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
         <tbody id="teamRows"></tbody>
       </table></div>
     </div>
@@ -5782,6 +5782,8 @@ function renderTeamFromMaster() {
     const discipline = disciplineRaw > 0 ? disciplineRaw : null;
     return { u, wf, X, discipline, d };
   });
+  /* #289: เรียงคะแนนรวม (X) สูง→ต่ำ (คนที่ยังไม่มีคะแนนไปท้าย) */
+  withStatus.sort((a,b)=>(b.X==null||isNaN(b.X)?-1:b.X)-(a.X==null||isNaN(a.X)?-1:a.X));
 
   const filtered = withStatus.filter(r =>
     (!statusFilter || r.wf===statusFilter) &&
@@ -5789,7 +5791,7 @@ function renderTeamFromMaster() {
   );
 
   const _teamChecked = new Set(getCheckedKeys('team-chk'));
-  el.innerHTML = filtered.length ? deptGroupMap(filtered.map(r=>({...r,emp:r.u})),8,({u,wf,X,discipline,d}) => {
+  el.innerHTML = filtered.length ? deptGroupMap(filtered.map(r=>({...r,emp:r.u})),10,({u,wf,X,discipline,d}) => {
     const st = stMap[wf];
     /* เดิมใช้ inferLevelFromPosition(u[7]) เดา "ระดับฟอร์ม" จากคำในตำแหน่งงานเสมอ — ถ้าคนนี้เคยมีร่าง/
        ส่งแบบประเมินไว้จริงแล้วภายใต้ระดับจริงที่ Admin กำหนด (emp[18], ดู CLAUDE.md #23) ซึ่งอาจไม่ตรง
@@ -5816,6 +5818,8 @@ function renderTeamFromMaster() {
       <td style="font-size:12px">${escH(u[7])}</td>
       <td style="color:#cbd5e1">—</td>
       <td>${discipline==null?'<span style="color:#cbd5e1">—</span>':'<b>'+discipline+'</b>'}</td>
+      <td>${d?Number(d[d.length-5]).toFixed(2):'<span style="color:#cbd5e1">—</span>'}</td>
+      <td>${d?Number(d[d.length-4]).toFixed(2):'<span style="color:#cbd5e1">—</span>'}</td>
       <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
       <td><span class="bd ${escH(st[0])}">${escH(st[1])}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
@@ -5823,7 +5827,7 @@ function renderTeamFromMaster() {
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
       </button></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px 0">${managerName ? 'ไม่พบลูกทีมตรงตามเงื่อนไข' : 'กรุณาเลือกหัวหน้าที่มุมขวาบนก่อน'}</td></tr>`;
+  }).join('') : `<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:20px 0">${managerName ? 'ไม่พบลูกทีมตรงตามเงื่อนไข' : 'กรุณาเลือกหัวหน้าที่มุมขวาบนก่อน'}</td></tr>`;
 
   restoreCheckedKeys('team-chk', _teamChecked);
   const total = allDirectReports.length;

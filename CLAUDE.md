@@ -8971,6 +8971,8 @@ touches employee/attendance/evaluation data.
 
 288. **คิว L2–L4 (`reviewl1`/`review`/`gmapprove` + ตารางส่งผลของ GM) แสดงคะแนนผลงาน (Y) · เวลา/สถิติ (Z) · รวม (X) แยกคอลัมน์ และเรียงตามคะแนนรวมสูง→ต่ำเป็นค่าเริ่มต้น.** `yzCells(d,raw)` อ่าน Y=`d[len-5]`, Z=`d[len-4]`, X=`d[len-3]` (แบบแผนท้ายแถว) ใช้ทุกแถว ready/done; `applyOrgFilter` ใช้ `scoreDesc` เมื่อไม่ได้เลือกเรียงเอง (คนรอผลไปท้ายกลุ่มฝ่าย) — colspan ตาราง 5→7. ทดสอบ: `tests/queue-yzx-sort.test.js`.
 
+289. **หน้า "2. ประเมินทีมงาน" (L1) ต่อจาก #288: เพิ่มคอลัมน์ Y/Z/X (แทน "คะแนน L1") และเรียงคะแนนรวมสูง→ต่ำ (คนยังไม่มีคะแนนไปท้าย, คงการจัดกลุ่มตามฝ่าย) colspan 8→10.** ทดสอบ: `tests/team-yzx-sort.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
