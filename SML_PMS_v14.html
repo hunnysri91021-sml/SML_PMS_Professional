@@ -1658,6 +1658,14 @@ img,svg,canvas{max-width:100%}
 .sysopen-card.closed{border-color:#f59e0b;background:#fffbeb}
 .sysopen-card .so-st{display:inline-block;padding:3px 12px;border-radius:12px;font-weight:700;font-size:13px}
 .so-st.on{background:#dcfce7;color:#166534}.so-st.off{background:#fee2e2;color:#b91c1c}
+/* #291 หัวตารางสถิติสะสม (สองชั้น) */
+#attRows td,#attRows th{white-space:nowrap}
+.att-stat-head th{text-align:center;vertical-align:middle;font-size:11.5px;line-height:1.25}
+.att-stat-head tr:first-child th:nth-child(4){background:#fce7f3}
+.att-stat-head tr:first-child th:nth-child(5){background:#dcfce7}
+.att-stat-head tr:first-child th:nth-child(6){background:#dbeafe}
+.att-stat-head tr:first-child th:nth-child(7){background:#fbcfe8}
+#attRows td:nth-child(n+4){text-align:center}
 </style>
 </head>
 <body>
@@ -2456,6 +2464,7 @@ img,svg,canvas{max-width:100%}
           <div class="fg" style="max-width:110px"><label>ขาดงาน (วัน)</label><input type="number" id="mn_absent" min="0" value="0"></div>
           <div class="fg" style="max-width:110px"><label>มาสาย (ครั้ง)</label><input type="number" id="mn_late" min="0" value="0"></div>
           <div class="fg" style="max-width:110px"><label>กลับก่อน (ครั้ง)</label><input type="number" id="mn_early" min="0" value="0"></div>
+          <div class="fg" style="max-width:130px"><label>สาย/กลับก่อน (นาที)</label><input type="number" id="mn_lateMin" min="0" value="0"></div>
           <div class="fg" style="max-width:90px"><label>กิจ (วัน)</label><input type="number" id="mn_personal" min="0" step="0.5" value="0"></div>
           <div class="fg" style="max-width:80px"><label>กิจ (ชม.)</label><input type="number" id="mn_personalHr" min="0" value="0"></div>
           <div class="fg" style="max-width:80px"><label>กิจ (นาที)</label><input type="number" id="mn_personalMin" min="0" value="0"></div>
@@ -2471,10 +2480,13 @@ img,svg,canvas{max-width:100%}
     </div>
 
     <div class="card">
-      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" title="Push จะไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร Excel" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button><button class="btn btn-sm" title="รายละเอียด สาย/กลับก่อน/กิจ/ป่วย/ขาด ของพนักงานทุกคน (ระบุคนที่ยังไม่มีข้อมูล)" onclick="exportAttendanceList()">📥 Export ข้อมูลเวลา (CSV)</button></div></div>
+      <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" title="Push จะไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร Excel" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button><button class="btn btn-sm" title="รายละเอียด สาย/กลับก่อน/กิจ/ป่วย/ขาด ของพนักงานทุกคน (ระบุคนที่ยังไม่มีข้อมูล)" onclick="exportAttendanceList()">📥 Export ข้อมูลเวลา (CSV)</button><button class="btn btn-sm" title="รูปแบบเดียวกับใบสรุปสถิติการทำงานสะสม (ขาดงาน/สาย/กิจ/ป่วย/รวม วัน-ช.ม.-นาที/ใบรับรองแพทย์)" onclick="exportAttendanceStatsSheet()">📥 Export สถิติสะสม (รูปแบบใบสรุป)</button></div></div>
       <div id="attPushStatus" style="padding:0 16px 4px;font-size:11.5px;color:#64748b"></div>
       <div class="tw"><table>
-        <thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>ขาดงาน(วัน)</th><th>มาสาย(ครั้ง)</th><th>กลับก่อน(ครั้ง)</th><th>กิจ (วัน ชม. นาที)</th><th>ป่วย (วัน ชม. นาที)</th><th>วันลารวม(≈)</th><th></th></tr></thead>
+        <thead class="att-stat-head">
+          <tr><th rowspan="2">รหัส</th><th rowspan="2">ชื่อ-สกุล</th><th rowspan="2">ขาดงาน<br><small>วัน</small></th><th colspan="2">มาสาย/กลับก่อน</th><th colspan="3">กิจ / กิจย่อย</th><th colspan="3">ป่วย (มี และ ไม่มี<br>ใบรับรองแพทย์)</th><th colspan="3">รวม ป่วย+กิจ</th><th rowspan="2">ใบรับรองแพทย์<br>สะสม<br><small>ว.ชม.น.</small></th><th rowspan="2">วันลารวม<br>(คิดคะแนน Z)</th><th rowspan="2"></th></tr>
+          <tr><th>ครั้ง</th><th>นาที</th><th>วัน</th><th>ช.ม.</th><th>นาที</th><th>วัน</th><th>ช.ม.</th><th>นาที</th><th>วัน</th><th>ช.ม.</th><th>นาที</th></tr>
+        </thead>
         <tbody id="attRows"></tbody>
       </table></div>
     </div>
@@ -10050,8 +10062,8 @@ async function ms365SyncAttendance(silent=false){
       det.forEach(d=>{
         const dc = String(d[0] ?? '').trim();
         if(!ATTENDANCE[dc]) return;
-        if(![2,3,4,5,6,7].some(k=>String(d[k] ?? '').trim()!=='')) return;
-        Object.assign(ATTENDANCE[dc], { personalDay:excelNum(d[2]), personalHr:excelNum(d[3]), personalMin:excelNum(d[4]), sickDay:excelNum(d[5]), sickHr:excelNum(d[6]), sickMin:excelNum(d[7]) });
+        if(![2,3,4,5,6,7,8].some(k=>String(d[k] ?? '').trim()!=='')) return;
+        Object.assign(ATTENDANCE[dc], { personalDay:excelNum(d[2]), personalHr:excelNum(d[3]), personalMin:excelNum(d[4]), sickDay:excelNum(d[5]), sickHr:excelNum(d[6]), sickMin:excelNum(d[7]), lateMin:excelNum(d[8]) });
       });
     }catch(e){ /* ไม่มีตาราง AttendanceDetail — ข้ามได้ */ }
 
@@ -10110,7 +10122,7 @@ function buildAttendanceExcelRow(code, a){
 function buildAttendanceDetailRow(code, a){
   const emp = MASTER_USERS.find(u=>u[0]===code);
   return [code, emp ? emp[1] : (a.name||code),
-    ...[a.personalDay,a.personalHr,a.personalMin,a.sickDay,a.sickHr,a.sickMin].map(v=>Number(v)>0?Number(v):'')];
+    ...[a.personalDay,a.personalHr,a.personalMin,a.sickDay,a.sickHr,a.sickMin,a.lateMin].map(v=>Number(v)>0?Number(v):'')];
 }
 function pushAttendanceDetailToExcel(code){
   const a = ATTENDANCE[code]; if(!a) return Promise.resolve();
@@ -12767,6 +12779,24 @@ function exportAttendanceVsScore(){
   smlToast('Export สถิติเวลา vs คะแนนแล้ว ('+rows.length+' คน)'+(missing?' · ไม่มีข้อมูลเวลา '+missing+' คน (เว้นว่างไว้ ไม่ใช้ค่าตัวอย่าง)':''),missing?'warn':'ok');
 }
 /* #229: export "ข้อมูลเวลาทำงาน" ของพนักงานทุกคนที่ active — รวมคนที่ยังไม่มีข้อมูล (ระบุสถานะ) ให้ HR เห็นว่าใครยังขาด */
+/* #291: Export รูปแบบเดียวกับใบสรุป "สถิติการทำงานสะสมประจำปี" — รหัส/ชื่อ/ขาดงาน(วัน)/สาย-กลับก่อน(ครั้ง,นาที)/กิจ(วัน,ช.ม.,นาที)/ป่วย(วัน,ช.ม.,นาที)/
+   รวมป่วย+กิจ(วัน,ช.ม.,นาที — บวกรายคอลัมน์ ไม่ทดหน่วย)/ใบรับรองแพทย์สะสม · เฉพาะคนที่มีข้อมูลจริง (ไม่ใส่ค่าตัวอย่าง #14) */
+function attendanceStatsRow(code){
+  const a=ATTENDANCE[code]; if(!a) return null;
+  const emp=MASTER_USERS.find(u=>u[0]===code);
+  const z=v=>Number(v)>0?Number(v):'';
+  return [code, emp?emp[1]:(a.name||''), z(a.absentDay), (a.lateCount||0)+(a.earlyCount||0)||'', z(a.lateMin),
+    z(a.personalDay),z(a.personalHr),z(a.personalMin), z(a.sickDay),z(a.sickHr),z(a.sickMin),
+    z((Number(a.personalDay)||0)+(Number(a.sickDay)||0)), z((Number(a.personalHr)||0)+(Number(a.sickHr)||0)), z((Number(a.personalMin)||0)+(Number(a.sickMin)||0)),
+    a.medCert||''];
+}
+const ATT_STATS_HEADERS=['รหัส','ชื่อ-สกุล','ขาดงาน (วัน)','มาสาย/กลับก่อน (ครั้ง)','มาสาย/กลับก่อน (นาที)','กิจ (วัน)','กิจ (ช.ม.)','กิจ (นาที)','ป่วย (วัน)','ป่วย (ช.ม.)','ป่วย (นาที)','รวมป่วย+กิจ (วัน)','รวมป่วย+กิจ (ช.ม.)','รวมป่วย+กิจ (นาที)','ใบรับรองแพทย์สะสม (ว.ชม.น.)'];
+function exportAttendanceStatsSheet(){
+  const rows=Object.keys(ATTENDANCE).map(attendanceStatsRow).filter(Boolean);
+  if(!rows.length){ smlToast('ยังไม่มีข้อมูลเวลาให้ Export','warn'); return; }
+  downloadCsv('สถิติการทำงานสะสม_'+getCurrentEvalCycleYear()+'_'+Date.now()+'.csv', ATT_STATS_HEADERS, rows);
+  smlToast('Export สถิติสะสมแล้ว ('+rows.length+' คน)','ok');
+}
 function exportAttendanceList(){
   const emps = MASTER_USERS.filter(u=>u[12]==='active');
   if(!emps.length){ smlToast('ไม่มีพนักงานให้ Export','warn'); return; }
@@ -15683,7 +15713,7 @@ function importHrgoFile(input){
         const num=excelNum; /* #284: รองรับ 4,5 / 4.5 */
         const rec={
           name: emp[1],
-          lateCount:num(c[3]), earlyCount:0, // มาสาย/กลับก่อน รวมเป็นครั้งเดียวในไฟล์ (ดูหมายเหตุ)
+          lateCount:num(c[3]), earlyCount:0, lateMin:num(c[4]), // มาสาย/กลับก่อน รวมเป็นครั้งเดียวในไฟล์ (ดูหมายเหตุ) · late_min = นาทีรวม
           absentDay:num(c[2]),
           personalDay:num(c[5]), personalHr:num(c[6]), personalMin:num(c[7]),
           sickDay:num(c[8]), sickHr:num(c[9]), sickMin:num(c[10]),
@@ -15770,6 +15800,7 @@ function onManualEmpChange(){
     setVal('mn_absent', existing.absentDay||0);
     setVal('mn_late', existing.lateCount||0);
     setVal('mn_early', existing.earlyCount||0);
+    setVal('mn_lateMin', existing.lateMin||0);
     setVal('mn_personal', existing.personalDay||0);
     setVal('mn_personalHr', existing.personalHr||0);
     setVal('mn_personalMin', existing.personalMin||0);
@@ -15797,6 +15828,7 @@ function writeAttendanceRecord(code, vals){
     absentDay: vals.absentDay,
     lateCount: vals.lateCount,
     earlyCount: vals.earlyCount,
+    lateMin: vals.lateMin||0,
     personalDay: vals.personalDay,
     personalHr: vals.personalHr||0, personalMin: vals.personalMin||0,
     sickDay: vals.sickDay,
@@ -15820,13 +15852,14 @@ function saveManualAttendance(){
     absentDay:num('mn_absent'),
     lateCount:num('mn_late'),
     earlyCount:num('mn_early'),
+    lateMin:num('mn_lateMin'),
     personalDay:num('mn_personal'), personalHr:num('mn_personalHr'), personalMin:num('mn_personalMin'),
     sickDay:num('mn_sick'), sickHr:num('mn_sickHr'), sickMin:num('mn_sickMin'),
     medCert:(document.getElementById('mn_medcert')?.value||'').trim()
   });
   renderAttendanceList();
   smlToast((result.isEdit?'อัปเดต':'บันทึก')+'ข้อมูลวันลาของ '+result.emp[1]+' ('+code+') เรียบร้อย','ok');
-  ['mn_emp','mn_absent','mn_late','mn_early','mn_personal','mn_personalHr','mn_personalMin','mn_sick','mn_sickHr','mn_sickMin','mn_medcert'].forEach(id=>{
+  ['mn_emp','mn_absent','mn_late','mn_early','mn_lateMin','mn_personal','mn_personalHr','mn_personalMin','mn_sick','mn_sickHr','mn_sickMin','mn_medcert'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value = id==='mn_emp'||id==='mn_medcert' ? '' : '0';
   });
   onManualEmpChange();
@@ -15852,9 +15885,10 @@ function saveAttendanceRowInline(code){
     absentDay:num('attEdit_absent'),
     lateCount:num('attEdit_late'),
     earlyCount:num('attEdit_early'),
+    lateMin:num('attEdit_lateMin'),
     personalDay:num('attEdit_personal'), personalHr:num('attEdit_personalHr'), personalMin:num('attEdit_personalMin'),
     sickDay:num('attEdit_sick'), sickHr:num('attEdit_sickHr'), sickMin:num('attEdit_sickMin'),
-    medCert: ATTENDANCE[code]?.medCert || ''
+    medCert: (document.getElementById('attEdit_medCert')?.value ?? ATTENDANCE[code]?.medCert ?? '').trim()
   });
   if(!result){ smlToast('ไม่พบรหัสพนักงาน '+code+' ในข้อมูลพนักงานจริง','warn'); return; }
   editingAttendanceCode = null;
@@ -15880,22 +15914,32 @@ function renderAttendanceList(){
     const emp=MASTER_USERS.find(u=>u[0]===code);
     const name=emp?.[1] || a.name || '—';
     const zDays=computeZDays(a);
+    const pm=leaveMinutes(a,'personal'), sm=leaveMinutes(a,'sick');
+    /* #291: หน้าตาเหมือนใบสรุปสถิติสะสม — แต่ละประเภทแยก วัน | ช.ม. | นาที และ "รวม ป่วย+กิจ" บวกรายคอลัมน์ตรงๆ (ไม่ทดนาที→ชม.→วัน เหมือนในใบสรุป) */
+    const d3=(day,hr,min)=>[day,hr,min].map(v=>`<td>${Number(v)>0?Number(v):'-'}</td>`).join('');
+    const dTot=[ (Number(a.personalDay)||0)+(Number(a.sickDay)||0), (Number(a.personalHr)||0)+(Number(a.sickHr)||0), (Number(a.personalMin)||0)+(Number(a.sickMin)||0) ];
     if(editingAttendanceCode===code){
-      const numIn=(id,val)=>`<input type="number" id="${id}" min="0" step="0.5" value="${val||0}" style="width:60px">`;
-      const numS=(id,val,ph)=>`<input type="number" id="${id}" min="0" value="${val||0}" title="${ph}" style="width:46px">`;
+      const numIn=(id,val)=>`<input type="number" id="${id}" min="0" step="0.5" value="${val||0}" style="width:58px">`;
+      const numS=(id,val,ph)=>`<input type="number" id="${id}" min="0" value="${val||0}" title="${ph}" style="width:50px">`;
       return `<tr style="background:#fffbea">
-        <td><b>${code}</b></td><td>${name}</td>
+        <td><b>${escH(code)}</b></td><td>${escH(name)}</td>
         <td>${numIn('attEdit_absent', a.absentDay)}</td>
-        <td>${numIn('attEdit_late', a.lateCount)}</td>
-        <td>${numIn('attEdit_early', a.earlyCount)}</td>
-        <td style="white-space:nowrap">${numIn('attEdit_personal', a.personalDay)} ${numS('attEdit_personalHr', a.personalHr,'ชม.')}ชม ${numS('attEdit_personalMin', a.personalMin,'นาที')}น</td>
-        <td style="white-space:nowrap">${numIn('attEdit_sick', a.sickDay)} ${numS('attEdit_sickHr', a.sickHr,'ชม.')}ชม ${numS('attEdit_sickMin', a.sickMin,'นาที')}น</td>
+        <td>${numS('attEdit_late', a.lateCount,'สาย (ครั้ง)')}<small style="color:#64748b"> สาย</small><br>${numS('attEdit_early', a.earlyCount,'กลับก่อน (ครั้ง)')}<small style="color:#64748b"> กลับก่อน</small></td>
+        <td>${numS('attEdit_lateMin', a.lateMin,'นาทีรวม')}</td>
+        <td>${numIn('attEdit_personal', a.personalDay)}</td><td>${numS('attEdit_personalHr', a.personalHr,'ชม.')}</td><td>${numS('attEdit_personalMin', a.personalMin,'นาที')}</td>
+        <td>${numIn('attEdit_sick', a.sickDay)}</td><td>${numS('attEdit_sickHr', a.sickHr,'ชม.')}</td><td>${numS('attEdit_sickMin', a.sickMin,'นาที')}</td>
+        <td colspan="3" style="color:#94a3b8">คำนวณให้อัตโนมัติ</td>
+        <td><input type="text" id="attEdit_medCert" value="${escH(a.medCert||'')}" style="width:70px" placeholder="0.0.0"></td>
         <td>${zDays.toFixed(2)}</td>
-        <td><button class="btn btn-sm btn-p" onclick="saveAttendanceRowInline('${code}')">💾</button> <button class="btn btn-sm" onclick="cancelEditAttendanceRow()">✖️</button></td></tr>`;
+        <td><button class="btn btn-sm btn-p" onclick="saveAttendanceRowInline('${escJs(code)}')">💾</button> <button class="btn btn-sm" onclick="cancelEditAttendanceRow()">✖️</button></td></tr>`;
     }
-    return `<tr><td><b>${code}</b></td><td>${name}</td><td>${a.absentDay||0}</td><td>${a.lateCount||0}</td><td>${a.earlyCount||0}</td><td>${fmtLeaveDHM(leaveMinutes(a,'personal'))}</td><td>${fmtLeaveDHM(leaveMinutes(a,'sick'))}</td><td title="ป่วย+กิจที่นับคะแนน ${leaveCountedDays(a)} วัน (เศษ ≥ 4 ชม. = 0.5)">${zDays.toFixed(2)}</td>
-      <td><button class="btn btn-sm" onclick="editAttendanceRow('${code}')">✏️</button> <button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${code}')">🗑️</button></td></tr>`;
-  }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน</td></tr>';
+    return `<tr><td><b>${escH(code)}</b></td><td>${escH(name)}</td><td>${Number(a.absentDay)>0?a.absentDay:'-'}</td>
+      <td title="สาย ${a.lateCount||0} + กลับก่อน ${a.earlyCount||0} ครั้ง">${(a.lateCount||0)+(a.earlyCount||0)||'-'}</td><td>${Number(a.lateMin)>0?a.lateMin:'-'}</td>
+      ${d3(a.personalDay,a.personalHr,a.personalMin)}${d3(a.sickDay,a.sickHr,a.sickMin)}${d3(dTot[0],dTot[1],dTot[2])}
+      <td>${escH(a.medCert||'')||'-'}</td>
+      <td title="ป่วย+กิจที่นับคะแนน ${leaveCountedDays(a)} วัน (เศษ ≥ 4 ชม. = 0.5)">${zDays.toFixed(2)}</td>
+      <td><button class="btn btn-sm" onclick="editAttendanceRow('${escJs(code)}')">✏️</button> <button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${escJs(code)}')">🗑️</button></td></tr>`;
+  }).join('') : '<tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน</td></tr>';
   if(typeof renderAttendancePushStatus==='function') renderAttendancePushStatus();
 }
 
@@ -16468,7 +16512,7 @@ async function confirmImportEmployees(){
    ใช้ MutationObserver เพราะ tbody ถูก render ใหม่ด้วย innerHTML ตลอด (ผ่านการกรอง/ซิงก์) */
 (function(){
   'use strict';
-  var IDS=['gmSendRows','teamRows','reviewl1Rows','reviewRows','gmApproveRows','calibRows','calibCheckRows','approveRows','attRows','orgRows','reportRows','auditRows','userRows','cyclesListRows','myResultHistoryRows','cycleParticipantsRows'];
+  var IDS=['gmSendRows','teamRows','reviewl1Rows','reviewRows','gmApproveRows','calibRows','calibCheckRows','approveRows','orgRows','reportRows','auditRows','userRows','cyclesListRows','myResultHistoryRows','cycleParticipantsRows'];
   function headerLabels(table){
     var th=table.querySelectorAll('thead tr:last-child th'),out=[];
     th.forEach(function(h){ var n=parseInt(h.getAttribute('colspan')||'1',10)||1; var t=(h.textContent||'').replace(/\s+/g,' ').trim(); for(var i=0;i<n;i++) out.push(i===0?t:''); });
