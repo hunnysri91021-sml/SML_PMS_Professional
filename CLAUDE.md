@@ -8975,6 +8975,8 @@ touches employee/attendance/evaluation data.
 
 290. **Export Excel หน้า "2. ประเมินทีมงาน" มีคอลัมน์ Y/Z/X (เรียงตามจอ) และปุ่ม Export แสดงให้ unit/l1/l2/gm/admin (เดิมเฉพาะ l2/admin); Export คิว L2–L4 (#245) มี Y/Z/X อยู่แล้ว.** ทดสอบ: `tests/team-yzx-sort.test.js`.
 
+293. **ตรวจหน้าอื่นต่อจาก #288–#290: Calibration, ตรวจสอบหลัง Calibration, อนุมัติ MD/AMD แสดงคอลัมน์ Y · Z · X ครบ และเรียงคะแนนรวมสูง→ต่ำเป็นค่าเริ่มต้น (Calibration เปลี่ยนตัวเลือก "ค่าเริ่มต้น" ของ `calibSort` เป็น `scoreDesc`).** คอลัมน์ใหม่ที่ Calibration ทำให้ colspan 9→10 (pending 7→8); การ์ดตรวจหลัง Calibration 7→8; MD approve 5→7 (ใช้ `yzCells`). หน้าสรุปรายฝ่ายเป็นค่าเฉลี่ย ไม่ใช่รายคน จึงไม่เพิ่ม. ทดสอบ: `tests/other-pages-yzx.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

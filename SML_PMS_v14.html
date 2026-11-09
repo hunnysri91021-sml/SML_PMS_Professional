@@ -2202,12 +2202,12 @@ img,svg,canvas{max-width:100%}
         <select id="calibFilterGroup" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
           <option value="">ทุกกลุ่มงาน (Group)</option>
         </select>
-        <select id="calibSort" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit"><option value="">เรียง: ค่าเริ่มต้น</option><option value="code">เรียง: รหัสพนักงาน</option><option value="gradeAE">เรียง: เกรด A→E</option><option value="gradeEA">เรียง: เกรด E→A</option><option value="scoreDesc">เรียง: คะแนน สูง→ต่ำ</option><option value="name">เรียง: ชื่อ ก→ฮ</option></select>
+        <select id="calibSort" onchange="renderCalibQueue()" style="padding:6px 10px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit"><option value="">เรียง: คะแนนรวม สูง→ต่ำ (ค่าเริ่มต้น)</option><option value="code">เรียง: รหัสพนักงาน</option><option value="gradeAE">เรียง: เกรด A→E</option><option value="gradeEA">เรียง: เกรด E→A</option><option value="scoreDesc">เรียง: คะแนน สูง→ต่ำ</option><option value="name">เรียง: ชื่อ ก→ฮ</option></select>
         <button class="btn btn-sm" onclick="resetCalibTableFilters()" title="ล้างตัวกรองทั้งหมด">↩️ ล้างตัวกรอง</button>
         <button class="btn btn-sm" onclick="exportCalibTableList()" title="Export ตารางนี้ (ตามตัวกรองที่เลือกไว้) เป็นไฟล์ Excel (CSV)" style="margin-left:auto">📥 Export Excel (ตารางนี้)</button>
       </div>
       <div class="tw calib-table-wrap"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนที่พนักงาน<br>รับทราบ (X)</th><th>คะแนน<br>การมาทำงาน (Z)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>เกรด<br>Bell Curve</th><th>ใบเตือน /<br>หมายเหตุวินัย (HR)</th><th>การดำเนินการ</th></tr></thead>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนผลงาน (Y)</th><th>คะแนน<br>เวลา/สถิติ (Z)</th><th>คะแนนรวมที่พนักงาน<br>รับทราบ (X)</th><th>เกรดเดิม</th><th>คะแนนหลังปรับ</th><th>เกรด<br>Bell Curve</th><th>ใบเตือน /<br>หมายเหตุวินัย (HR)</th><th>การดำเนินการ</th></tr></thead>
         <tbody id="calibRows"></tbody>
       </table></div>
     </div>
@@ -2216,7 +2216,7 @@ img,svg,canvas{max-width:100%}
       <div class="card-h"><h3>🔎 ตรวจสอบหลัง Calibration ก่อนส่ง MD/AMD</h3><div class="r"><span class="bd b-b" id="calibCheckCount">0 รายการ</span></div></div>
       <div style="font-size:12px;color:#64748b;margin:0 0 8px">ผลที่ยืนยัน Calibration แล้วจะมาอยู่ที่นี่ก่อน — HR ตรวจคะแนน/เกรด/หมายเหตุให้ถูกต้อง แล้วเลือกรายการเพื่อ "ตรวจผ่าน ส่ง MD/AMD" หรือ "ตีกลับไปปรับ Calibration ใหม่"</div>
       <div class="tw"><table>
-        <thead><tr><th style="width:34px"><input type="checkbox" id="calibCheckAll" onchange="toggleAllCalibCheck(this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนหลังปรับ (X)</th><th>Z</th><th>เกรด Bell Curve</th><th>หมายเหตุ HR</th></tr></thead>
+        <thead><tr><th style="width:34px"><input type="checkbox" id="calibCheckAll" onchange="toggleAllCalibCheck(this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนผลงาน (Y)</th><th>คะแนนเวลา/สถิติ (Z)</th><th>คะแนนหลังปรับ (X)</th><th>เกรด Bell Curve</th><th>หมายเหตุ HR</th></tr></thead>
         <tbody id="calibCheckRows"></tbody>
       </table></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -2234,7 +2234,7 @@ img,svg,canvas{max-width:100%}
     <div class="card">
       <div class="card-h"><h3>รายการรออนุมัติ</h3><div class="r"><span class="bd b-b" id="approveCount">0 รายการ</span></div></div>
       <div class="tw"><table>
-        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนน (X)</th><th>เกรด</th><th></th></tr></thead>
+        <thead><tr><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนผลงาน (Y)</th><th>คะแนนเวลา/สถิติ (Z)</th><th>คะแนนรวม (X)</th><th>เกรด</th><th></th></tr></thead>
         <tbody id="approveRows"></tbody>
       </table></div>
     </div>
@@ -11494,7 +11494,7 @@ function filterCalibTableRoster(fullRoster){
     .map(({id,fieldKey})=>({ fieldKey, val: (document.getElementById(id)||{}).value||'' }))
     .filter(f=>f.val);
   const out = active.length ? fullRoster.filter(r=> active.every(f=> getBellCurveGroupValue(r.emp, f.fieldKey) === f.val)) : fullRoster;
-  return sortRosterBy(out, (document.getElementById('calibSort')||{}).value||'', bellCurveResult?bellCurveResult.byKey:null);
+  return sortRosterBy(out, (document.getElementById('calibSort')||{}).value||'scoreDesc', bellCurveResult?bellCurveResult.byKey:null);
 }
 function resetCalibTableFilters(){
   CALIB_TABLE_FILTER_SELECTS.forEach(({id})=>{ const sel = document.getElementById(id); if(sel) sel.value=''; });
@@ -11632,15 +11632,15 @@ function renderCalibQueue(){
     });
     if(!stillValid) bellCurveResult = null;
   }
-  tbody.innerHTML = roster.length ? deptGroupMapK('calib',roster,9,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('calib',roster,10,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr class="calib-row-pending" style="color:#94a3b8"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="7" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="8" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
-    const d = r.draft, X = Number(d[d.length-3]), Zs = (Number(d[d.length-4])||0).toFixed(2), grade = d[d.length-2], statusReal = d[d.length-1];
+    const d = r.draft, X = Number(d[d.length-3]), Zs = (Number(d[d.length-4])||0).toFixed(2), Ys = (Number(d[d.length-5])||0).toFixed(2), grade = d[d.length-2], statusReal = d[d.length-1];
     if(r.state==='done'){
       /* #187: ปุ่ม "คำนวณใหม่ (KPI)" ให้เฉพาะใบที่ยังไม่ Approved จริงๆ — ใบที่ผ่าน Calibrated มาแล้ว
          (roster ตรงนี้ปน Approved กับ Calibrated ด้วยกันในสถานะ 'done') ถือว่า "ยังไม่ปิดจบ" ตามที่
@@ -11650,8 +11650,9 @@ function renderCalibQueue(){
         : '';
       return `<tr class="calib-row-done"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
-        <td style="text-align:center">${X}</td>
+        <td style="text-align:center">${Ys}</td>
         <td style="text-align:center">${Zs}</td>
+        <td style="text-align:center"><b>${X}</b></td>
         <td style="text-align:center"><span class="grade g${grade}" title="เกรดจริงจาก Bell Curve/การปรับเอง ณ ขั้น Calibration — ไม่ใช่เกรดชั่วคราวอีกต่อไป">${grade}</span><br><small style="color:#16a34a;font-size:10px">(ผ่าน Calibration แล้ว)</small></td>
         <td colspan="3" style="text-align:center"><span class="calib-done-pill">✓ ผ่าน Calibration แล้ว</span></td>
         <td><div class="calib-acts">${recalcBtn}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${escJs(d[2])}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</div></td></tr>`;
@@ -11661,14 +11662,15 @@ function renderCalibQueue(){
     const key = draftKey(d);
     return `<tr class="calib-row-ready"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
-      <td style="text-align:center">${X}</td>
+      <td style="text-align:center">${Ys}</td>
       <td style="text-align:center">${Zs}</td>
+      <td style="text-align:center"><b>${X}</b></td>
       <td style="text-align:center;color:#94a3b8">—</td>
       <td><input type="number" step="0.01" class="calib-adj" data-key="${key}" value="${X}" oninput="onCalibScoreInput()"></td>
       <td class="calib-bc-cell" data-key="${key}" style="text-align:center"><span class="calib-bc-pending">ยังไม่คำนวณ</span></td>
       <td><input type="text" class="calib-note" data-notekey="${noteKey}" value="${noteVal}" placeholder="ใบเตือน / หมายเหตุวินัย (ถ้ามี)"></td>
       <td><div class="calib-acts">${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="recalcKpiScoreForRecord('${code}','${escJs(d[2])}')" title="คำนวณ X/Y/KPI ใหม่จากคะแนนดิบเดิม + KPI ปัจจุบัน แล้วเติมลงช่องให้อัตโนมัติ">🔄 คำนวณใหม่ (KPI)</button> `:''}<button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm" onclick="overrideEmployeeGrade('${code}','${escJs(d[2])}')" title="Admin/HR ปรับเกรดรายคนเองด้วยเหตุผลพิเศษ (ไม่ใช่ Bell Curve)">✏️ ปรับเกรดเอง</button> <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</div></td></tr>`;
-  }).join('') : '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
+  }).join('') : '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
   /* ทาสีเซลล์เกรดกลับเข้าไปถ้า bellCurveResult ยัง valid (ดูคอมเมนต์ด้านบน) — เซลล์ที่เพิ่งสร้างใหม่
      ทุกอันเริ่มจาก "ยังไม่คำนวณ" เสมอ ต้องเติมผลที่คำนวณไว้แล้วกลับเข้าไปเอง ไม่งั้นแม้ผลจะยังอยู่จริง
      ในตัวแปรแต่หน้าจอก็จะโชว์เหมือนไม่เคยคำนวณ */
@@ -11898,7 +11900,7 @@ function renderCalibCheckQueue(){
   const cnt = document.getElementById('calibCheckCount');
   const keep = new Set(getCheckedKeys('calib-chk'));
   const cycle = getCurrentEvalCycleYear();
-  const rows = buildTierRoster(null, null, 'Calibrated', cycle).filter(r=>r.state==='ready');
+  const rows = sortRosterBy(buildTierRoster(null, null, 'Calibrated', cycle).filter(r=>r.state==='ready'),'scoreDesc');
   if(cnt) cnt.textContent = rows.length+' รายการ';
   tbody.innerHTML = rows.length ? rows.map(r=>{
     const d = r.draft, key = draftKey(d), {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
@@ -11906,11 +11908,12 @@ function renderCalibCheckQueue(){
     return `<tr><td><input type="checkbox" class="calib-chk" value="${key}"></td>
       <td><b>${name}</b><small style="display:block;color:#94a3b8">${r.emp[0]}</small></td>
       <td style="font-size:12px">${dept}</td>
-      <td style="text-align:center"><b>${(Number(d[d.length-3])||0).toFixed(2)}</b></td>
+      <td style="text-align:center">${(Number(d[d.length-5])||0).toFixed(2)}</td>
       <td style="text-align:center">${(Number(d[d.length-4])||0).toFixed(2)}</td>
+      <td style="text-align:center"><b>${(Number(d[d.length-3])||0).toFixed(2)}</b></td>
       <td style="text-align:center"><span class="grade g${d[d.length-2]}">${d[d.length-2]}</span></td>
       <td style="font-size:11.5px;color:#64748b">${note||'—'}</td></tr>`;
-  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:14px">ไม่มีรายการรอตรวจสอบ</td></tr>';
+  }).join('') : '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:14px">ไม่มีรายการรอตรวจสอบ</td></tr>';
   if(typeof restoreCheckedKeys==='function') restoreCheckedKeys('calib-chk', keep);
 }
 function toggleAllCalibCheck(on){ document.querySelectorAll('.calib-chk').forEach(c=>c.checked=on); }
@@ -11955,28 +11958,28 @@ function renderApproveQueue(){
   const pendingCount = roster.filter(r=>r.state!=='ready' && r.state!=='done').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
   if(btn) btn.textContent = '✅ อนุมัติทั้งหมด ('+readyCount+')';
-  tbody.innerHTML = roster.length ? deptGroupMapK('approve',roster,5,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('approve',roster,7,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="3" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
+        <td colspan="5" style="text-align:center">⏳ รอผลประเมิน</td></tr>`;
     }
     const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
     if(r.state==='done'){
       return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
         <td style="font-size:12px">${dept}</td>
-        <td style="text-align:center">${X}</td>
+        ${yzCells(d,true)}
         <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
         <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><b>${name}</b><small style="display:block;color:#94a3b8">${code}</small></td>
       <td style="font-size:12px">${dept}</td>
-      <td style="text-align:center">${X}</td>
+      ${yzCells(d,true)}
       <td style="text-align:center"><span class="grade g${grade}">${grade}</span></td>
       <td><button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button> ${isAdminOrSysadmin()?`<button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในขอบเขตที่ต้องประเมิน</td></tr>';
 }
 const APPROVAL_SIGNATURE_KEY = 'smlPmsApprovalSignatures';
 /* เก็บลายเซ็นอิเล็กทรอนิกส์แยกต่างหากจาก draft (ไม่ต่อท้าย array ของ draft เพราะโค้ดหลายจุดอ่าน
