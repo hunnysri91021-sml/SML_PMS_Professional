@@ -8973,6 +8973,8 @@ touches employee/attendance/evaluation data.
 
 289. **หน้า "2. ประเมินทีมงาน" (L1) ต่อจาก #288: เพิ่มคอลัมน์ Y/Z/X (แทน "คะแนน L1") และเรียงคะแนนรวมสูง→ต่ำ (คนยังไม่มีคะแนนไปท้าย, คงการจัดกลุ่มตามฝ่าย) colspan 8→10.** ทดสอบ: `tests/team-yzx-sort.test.js`.
 
+290. **Export Excel หน้า "2. ประเมินทีมงาน" มีคอลัมน์ Y/Z/X (เรียงตามจอ) และปุ่ม Export แสดงให้ unit/l1/l2/gm/admin (เดิมเฉพาะ l2/admin); Export คิว L2–L4 (#245) มี Y/Z/X อยู่แล้ว.** ทดสอบ: `tests/team-yzx-sort.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

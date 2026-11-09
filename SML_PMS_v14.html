@@ -5863,15 +5863,16 @@ function renderTeamFromMaster() {
   /* #156: Export หน้านี้เป็น Excel — เก็บแถวที่กำลังแสดงจริง (หลังผ่าน status/search filter แล้ว)
      ไว้ในตัวแปร module-level เดียว ไม่สร้าง query แยกชุดที่สองที่อาจดริฟท์ออกจากตารางบนจอ (บทเรียน
      #126/#127/#138) ปุ่ม Export ที่กดจะอ่านจากตัวแปรนี้ตรงๆ เสมอ จึง "export อะไรก็เหมือนที่เห็นบนจอ" */
-  _teamExportRows = [...filtered].sort((a,b)=>((a.u[6]||'').trim()||'(ไม่ระบุฝ่าย)').localeCompare(((b.u[6]||'').trim()||'(ไม่ระบุฝ่าย)'),'th')).map(({u,wf,X,discipline})=>({
+  _teamExportRows = [...filtered].sort((a,b)=>((a.u[6]||'').trim()||'(ไม่ระบุฝ่าย)').localeCompare(((b.u[6]||'').trim()||'(ไม่ระบุฝ่าย)'),'th')).map(({u,wf,X,discipline,d})=>({
     code:u[0], name:u[1], position:u[7],
+    Y: d?d[d.length-5]:'', Z: d?d[d.length-4]:'',
     dept: u[6]||u[4]||'—',
     discipline: discipline==null?'':discipline,
     X: X==null?'':X,
     statusLabel: stMap[wf][1]
   }));
   const teamExportBtnEl = document.getElementById('teamExportBtn');
-  if(teamExportBtnEl) teamExportBtnEl.style.display = (me && ['l2','admin','sysadmin'].includes(me[2])) ? '' : 'none';
+  if(teamExportBtnEl) teamExportBtnEl.style.display = (me && ['unit','l1','l2','gm','admin','sysadmin'].includes(me[2])) ? '' : 'none';
 }
 let _teamExportRows = [];
 /* ผู้ใช้ขอปุ่ม Export เป็น Excel สำหรับระดับ L3 (ผจก.ส่วน/role 'l2') บนหน้า "2. ประเมินทีมงาน" โดยเฉพาะ
@@ -5882,7 +5883,7 @@ let _teamExportRows = [];
 function exportTeamListToExcel(){
   if(!_teamExportRows.length){ smlToast('ไม่มีรายชื่อในตารางให้ Export ตอนนี้','warn'); return; }
   downloadCsv('รายชื่อพนักงานในสังกัด_'+Date.now()+'.csv',
-    ['รหัสพนักงาน','ชื่อ-สกุล','ตำแหน่ง','แผนก/ฝ่าย','สถานะการประเมิน',...ATT_EXPORT_HEADERS,'คะแนน Z ที่ได้'],
+    ['รหัสพนักงาน','ชื่อ-สกุล','ตำแหน่ง','แผนก/ฝ่าย','สถานะการประเมิน','คะแนนผลงาน (Y)','คะแนนเวลา/สถิติ (Z)','คะแนนรวม (X)',...ATT_EXPORT_HEADERS,'คะแนน Z ที่ได้'],
     _teamExportRows.map(r=>{
       /* #244: เวลาทำงานจาก attendanceExportCells ชุดเดียวกับรายงานอื่น; Z คิดเฉพาะคนที่มีข้อมูลเวลาจริง (ไม่ใช้ค่าตัวอย่าง #14/#229) */
       let z='';
@@ -5892,7 +5893,7 @@ function exportTeamListToExcel(){
         const lv=(dr&&dr[3])||(emp&&getAssignedEvalLevel(emp))||'op';
         try{ z=computeZScore(lv, r.code).score; }catch(e){ z=''; }
       }
-      return [r.code, r.name, r.position, r.dept, r.statusLabel, ...attendanceExportCells(r.code), z];
+      return [r.code, r.name, r.position, r.dept, r.statusLabel, r.Y, r.Z, r.X, ...attendanceExportCells(r.code), z];
     }));
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation','Export รายชื่อพนักงานในสังกัด', _teamExportRows.length+' รายการ', _teamExportRows.map(r=>r.code).join(', '));
   smlToast('Export รายชื่อแล้ว ('+_teamExportRows.length+' คน)','ok');
