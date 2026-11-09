@@ -15666,7 +15666,7 @@ function importHrgoFile(input){
         startIdx = 1; // มีแค่แถว label ไทย ไม่มี machine header
       }
 
-      let imported=0, skipped=0, unmatched=[]; const importedCodes=[];
+      let imported=0, skipped=0, unmatched=[]; const importedCodes=[], pendingRecs=[];
       for(let i=startIdx;i<lines.length;i++){
         const c=parseDelimitedLine(lines[i], delim);
         const code=(c[0]||'').trim();
@@ -15689,11 +15689,19 @@ function importHrgoFile(input){
           sickDay:num(c[8]), sickHr:num(c[9]), sickMin:num(c[10]),
           medCert:(c[14]||'').trim()
         };
-        ATTENDANCE[code]=rec;
-        importedCodes.push(code);
-        imported++;
+        pendingRecs.push([code,rec]);
       }
-      if(!imported && !unmatched.length){ smlToast('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าไฟล์ตรงตาม Template','warn'); return; }
+      if(!pendingRecs.length && !unmatched.length){ smlToast('ไม่พบแถวข้อมูลที่มีรหัสพนักงาน — ตรวจสอบว่าไฟล์ตรงตาม Template','warn'); return; }
+      /* #290: ยืนยันก่อนทับ — คนที่มีข้อมูลเวลาอยู่แล้วจะถูกแทนที่ทั้งแถว (ไม่บวกเพิ่ม) */
+      const overwrites = pendingRecs.filter(([c])=>ATTENDANCE[c]);
+      if(overwrites.length){
+        const sample = overwrites.slice(0,8).map(([c])=>{ const e=MASTER_USERS.find(u=>u[0]===c); return c+' '+(e?e[1]:''); }).join('\n');
+        const msg = `ไฟล์ "${f.name}" มี ${pendingRecs.length} คน — ${overwrites.length} คนมีข้อมูลเวลาอยู่แล้วและจะถูก "แทนที่ทั้งแถว" (ไม่บวกเพิ่ม)\n`+
+          `ส่วนอีก ${pendingRecs.length-overwrites.length} คนเป็นข้อมูลใหม่\n\n${sample}${overwrites.length>8?'\n… และอีก '+(overwrites.length-8)+' คน':''}\n\n`+
+          `หลังนำเข้าระบบจะ push ขึ้น Excel อัตโนมัติ\nยืนยันนำเข้าและทับข้อมูลเดิม?`;
+        if(!confirm(msg)){ smlToast('ยกเลิกการนำเข้า — ไม่มีข้อมูลถูกเปลี่ยน','info'); return; }
+      }
+      pendingRecs.forEach(([code,rec])=>{ ATTENDANCE[code]=rec; importedCodes.push(code); imported++; });
 
       saveAttendance();
       renderAttendanceList();
@@ -15711,6 +15719,7 @@ function importHrgoFile(input){
     }
   };
   reader.readAsArrayBuffer(f);
+  try{ input.value=''; }catch(e){} /* เลือกไฟล์เดิมซ้ำได้ (เช่นหลังกดยกเลิก) */
 }
 
 /* Datalist กลางของทั้งระบบ — ทุกช่อง "กรอกรหัสพนักงาน" (Login, ประเมินตนเอง, เพิ่ม/แก้ไขพนักงาน,
