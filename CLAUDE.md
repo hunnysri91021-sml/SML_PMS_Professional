@@ -8969,6 +8969,8 @@ touches employee/attendance/evaluation data.
 
 292. **Sync Log "Unexpected token '<', "<!DOCTYPE…" is not valid JSON" = Graph/SharePoint ตอบเป็นหน้า HTML ไม่ใช่ JSON (502/503/504, ไฟล์ Excel ถูกล็อกขณะมีคนเปิดแก้, ช่วงไม่ว่าง) — ไม่ใช่บั๊กตรรกะการ push.** `graphGet/graphSend` ใน Worker เดิม `res.json()` ตรงๆ จึงพังโดยไม่บอกสาเหตุ; ตอนนี้ใช้ `graphRequest()` ตัวเดียว: อ่านเป็นข้อความก่อน, ลองใหม่สูงสุด 3 ครั้ง (หน่วง 0.6/1.2 วินาที) เมื่อเป็น 429/423/5xx/HTML แล้วแจ้ง "Graph ตอบกลับไม่ใช่ JSON (HTTP nnn)". **Worker เปลี่ยน → ต้อง redeploy.** ถ้ายังล้มซ้ำหลัง redeploy ให้ตรวจว่าไฟล์ Excel ใน SharePoint ถูกเปิดแก้ค้างอยู่ (ปิดแล้วลองใหม่) ทดสอบ: `tests/worker-graph-html.test.js`.
 
+288. **คิว L2–L4 (`reviewl1`/`review`/`gmapprove` + ตารางส่งผลของ GM) แสดงคะแนนผลงาน (Y) · เวลา/สถิติ (Z) · รวม (X) แยกคอลัมน์ และเรียงตามคะแนนรวมสูง→ต่ำเป็นค่าเริ่มต้น.** `yzCells(d,raw)` อ่าน Y=`d[len-5]`, Z=`d[len-4]`, X=`d[len-3]` (แบบแผนท้ายแถว) ใช้ทุกแถว ready/done; `applyOrgFilter` ใช้ `scoreDesc` เมื่อไม่ได้เลือกเรียงเอง (คนรอผลไปท้ายกลุ่มฝ่าย) — colspan ตาราง 5→7. ทดสอบ: `tests/queue-yzx-sort.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

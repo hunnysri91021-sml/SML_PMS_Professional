@@ -2103,7 +2103,7 @@ img,svg,canvas{max-width:100%}
       <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewl1Filter" onchange="renderReviewL1Queue()" title="กรองตามผู้สอบทานของขั้นนี้ (หัวหน้าแผนก L2) เพื่อดูว่าใครมีลูกทีมใครบ้าง — ไม่ซ้ำกับรายชื่อหัวหน้าหน่วย L1"></select><button class="btn btn-sm" onclick="exportQueueToExcel('reviewl1')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="reviewl1Count">0 รายการ</span></div></div>
       <div class="al al-w" id="reviewl1FilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.reviewl1-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.reviewl1-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนผลงาน (Y)</th><th>คะแนนเวลา/สถิติ (Z)</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
         <tbody id="reviewl1Rows"></tbody>
       </table></div>
     </div>
@@ -2118,7 +2118,7 @@ img,svg,canvas{max-width:100%}
       <div class="card-h"><h3>ใบประเมินรอสอบทาน</h3><div class="r"><select class="btn" id="reviewFilter" onchange="renderReviewQueue()" title="กรองตามหัวหน้าแผนก เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><button class="btn btn-sm" onclick="exportQueueToExcel('review')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="reviewCount">0 รายการ</span></div></div>
       <div class="al al-w" id="reviewFilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.review-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.review-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนผลงาน (Y)</th><th>คะแนนเวลา/สถิติ (Z)</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
         <tbody id="reviewRows"></tbody>
       </table></div>
     </div>
@@ -2133,7 +2133,7 @@ img,svg,canvas{max-width:100%}
       <div class="card-h"><h3>ใบประเมินรออนุมัติ GM</h3><div class="r"><select class="btn" id="gmApproveFilter" onchange="renderGmApproveQueue()" title="กรองตามผู้จัดการส่วน เพื่อดูว่าใครมีลูกทีมใครบ้าง"></select><button class="btn btn-sm" onclick="exportQueueToExcel('gmapprove')" title="Export รายชื่อตามที่แสดงอยู่ (รวมตัวกรอง) เป็น Excel">📊 Export Excel</button><span class="bd b-y" id="gmApproveCount">0 รายการ</span></div></div>
       <div class="al al-w" id="gmApproveFilterDiag" style="display:none;margin:10px 14px"></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gm-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนผลงาน (Y)</th><th>คะแนนเวลา/สถิติ (Z)</th><th>คะแนนรวม (X)</th><th></th></tr></thead>
         <tbody id="gmApproveRows"></tbody>
       </table></div>
     </div>
@@ -2142,7 +2142,7 @@ img,svg,canvas{max-width:100%}
       <div class="card-h"><h3>📤 ผลที่ GM อนุมัติแล้ว — ยืนยันส่งผลให้พนักงาน</h3><div class="r"><span class="bd b-y" id="gmSendCount">0 รอส่ง</span><button class="btn btn-p" onclick="sendResultToEmployeesSelected()">📤 ยืนยันส่งผลให้พนักงาน (ที่เลือก)</button></div></div>
       <div class="al al-i" style="margin:10px 14px"><span>ℹ️</span><div>พนักงานจะเห็นผลและลงชื่อรับทราบได้ <span style="font-weight:700">หลังกดยืนยันส่ง</span> เท่านั้น — เลือกรายการแล้วกดปุ่มด้านบนขวา ระบบจะแจ้งพนักงานทางอีเมล/LINE ให้ด้วย</div></div>
       <div class="tw"><table>
-        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gmsend-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนรวม (X)</th><th>สถานะการส่งผล</th></tr></thead>
+        <thead><tr><th><input type="checkbox" onchange="document.querySelectorAll('.gmsend-chk').forEach(c=>c.checked=this.checked)"></th><th>พนักงาน</th><th>หน่วยงาน</th><th>คะแนนผลงาน (Y)</th><th>คะแนนเวลา/สถิติ (Z)</th><th>คะแนนรวม (X)</th><th>สถานะการส่งผล</th></tr></thead>
         <tbody id="gmSendRows"></tbody>
       </table></div>
     </div>
@@ -10982,12 +10982,19 @@ function deptGroupMap(roster, colspan, fn){
 }
 /* #240: ตัวกรององค์กรแบบ "รวมกันได้" (กลุ่มงาน+แผนก+ส่วน+ฝ่าย พร้อมกัน, ตัวเลือกแคบลงตามที่เลือกอื่น) + ตัวเลือกเรียงลำดับ
    (รหัสพนักงาน / เกรด A→E / E→A / คะแนน / ชื่อ) ใช้ร่วมกันทุกคิว — เรียงภายในแต่ละฝ่ายเพราะ deptGroupMap คงลำดับเดิมในฝ่าย */
-const ORGQ_SORT_OPTIONS = [['','เรียง: ค่าเริ่มต้น'],['code','เรียง: รหัสพนักงาน'],['gradeAE','เรียง: เกรด A→E'],['gradeEA','เรียง: เกรด E→A'],['scoreDesc','เรียง: คะแนน สูง→ต่ำ'],['name','เรียง: ชื่อ ก→ฮ']];
+const ORGQ_SORT_OPTIONS = [['','เรียง: คะแนนรวม สูง→ต่ำ (ค่าเริ่มต้น)'],['code','เรียง: รหัสพนักงาน'],['gradeAE','เรียง: เกรด A→E'],['gradeEA','เรียง: เกรด E→A'],['scoreDesc','เรียง: คะแนน สูง→ต่ำ'],['name','เรียง: ชื่อ ก→ฮ']];
 function rosterGradeOf(r, bcByKey){
   const d = r.draft;
   if(!d || r.state==='pending') return '';
   const bc = bcByKey && bcByKey[draftKey(d)];
   return bc ? bc.grade : String(d[d.length-2]||'');
+}
+/* #288: คิว L2–L4 แสดงคะแนนผลงาน (Y) · เวลา/สถิติ (Z) · รวม (X) แยกคอลัมน์ — อ่านจากท้ายแถวใบประเมินตามแบบแผนเดิม */
+function yzCells(d, raw){
+  const f=v=>{ const n=Number(v); return isFinite(n)?n.toFixed(2):'—'; };
+  const y=f(d[d.length-5]), z=f(d[d.length-4]), x=d[d.length-3];
+  return raw ? `<td style="text-align:center">${y}</td><td style="text-align:center">${z}</td><td style="text-align:center"><b>${x}</b></td>`
+             : `${y}</td><td style="text-align:center">${z}</td><td style="text-align:center"><b>${x}</b>`;
 }
 function sortRosterBy(roster, mode, bcByKey){
   if(!mode) return roster;
@@ -11036,7 +11043,7 @@ function applyOrgFilter(key, countId, roster, rerender, bcByKey){
     cur[f] = sel.value;
   });
   const out = roster.filter(r=>fields.every(f=>!cur[f] || orgValOf(r.emp,f)===cur[f]));
-  return sortRosterBy(out, document.getElementById('orgf_'+key+'_sort').value, bcByKey);
+  return sortRosterBy(out, document.getElementById('orgf_'+key+'_sort').value||'scoreDesc', bcByKey);
 }
 function populateReviewManagerFilter(selectId, roster, resolverFn){
   const sel = document.getElementById(selectId);
@@ -11138,29 +11145,29 @@ function renderReviewL1Queue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? deptGroupMapK('reviewl1',roster,5,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('reviewl1',roster,7,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveL1Reviewer)}</td></tr>`;
+        <td colspan="4" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveL1Reviewer)}</td></tr>`;
     }
     const d = r.draft, X = d[d.length-3], grade = d[d.length-2];
     if(r.state==='done'){
       return `<tr><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td style="text-align:center">${X}</td>
+        <td style="text-align:center">${yzCells(d)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="reviewl1-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
       <td style="font-size:12px">${dept}</td>
-      <td style="text-align:center">${X}</td>
+      <td style="text-align:center">${yzCells(d)}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('reviewl1-chk', checkedKeys);
 }
 async function approveReviewL1Selected(){
@@ -11234,14 +11241,14 @@ function renderReviewQueue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? deptGroupMapK('review',roster,5,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('review',roster,7,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveL2Reviewer)}</td></tr>`;
+        <td colspan="4" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveL2Reviewer)}</td></tr>`;
     }
     /* L3/L4 ไม่แสดงเกรด (ผู้ใช้สั่ง) — เกรดที่เห็นระหว่างทางเป็นเกรดชั่วคราว อาจทำให้เข้าใจผิดว่าเป็นเกรดจริง */
     const d = r.draft, X = d[d.length-3];
@@ -11249,15 +11256,15 @@ function renderReviewQueue(){
       return `<tr><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td style="text-align:center">${X}</td>
+        <td style="text-align:center">${yzCells(d)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="review-chk" value="${draftKey(d)}">${heldBadge(draftKey(d))}</td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
       <td style="font-size:12px">${dept}</td>
-      <td style="text-align:center">${X}</td>
+      <td style="text-align:center">${yzCells(d)}</td>
       <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}')">สอบทานแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่ต้องสอบทาน</td></tr>';
   restoreCheckedKeys('review-chk', checkedKeys);
 }
 /* Push ประวัติการอนุมัติ/ตีกลับแต่ละขั้นขึ้น Excel ตาราง Approvals แบบ append (เหตุการณ์ 1 ครั้ง =
@@ -11337,14 +11344,14 @@ function renderGmApproveQueue(){
   const readyCount = roster.filter(r=>r.state==='ready').length;
   const pendingCount = roster.filter(r=>r.state==='pending').length;
   if(cnt) cnt.textContent = readyCount+' รายการ'+(pendingCount?` (รออีก ${pendingCount} คน)`:'');
-  tbody.innerHTML = roster.length ? deptGroupMapK('gmapprove',roster,5,r=>{
+  tbody.innerHTML = roster.length ? deptGroupMapK('gmapprove',roster,7,r=>{
     const {name,dept} = empDeptLabel(r.emp[0], r.emp[1]);
     const code = r.emp[0];
     if(r.state==='pending'){
       return `<tr style="color:#94a3b8"><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td colspan="2" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveGmReviewer)}</td></tr>`;
+        <td colspan="4" style="text-align:center">⏳ รอผลประเมิน${pendingEvalBtn(r.emp,resolveGmReviewer)}</td></tr>`;
     }
     /* L3/L4 ไม่แสดงเกรด (ผู้ใช้สั่ง) — เกรดที่เห็นระหว่างทางเป็นเกรดชั่วคราว อาจทำให้เข้าใจผิดว่าเป็นเกรดจริง */
     const d = r.draft, X = d[d.length-3];
@@ -11352,15 +11359,15 @@ function renderGmApproveQueue(){
       return `<tr><td></td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
         <td style="font-size:12px">${dept}</td>
-        <td style="text-align:center">${X}</td>
+        <td style="text-align:center">${yzCells(d)}</td>
         <td><button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
     }
     return `<tr><td><input type="checkbox" class="gm-chk" value="${draftKey(d)}"></td>
       <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
       <td style="font-size:12px">${dept}</td>
-      <td style="text-align:center">${X}</td>
+      <td style="text-align:center">${yzCells(d)}</td>
       <td>${isSoleGmReviewer(r.emp,me)?`<button class="btn btn-sm btn-p" title="คุณเป็นผู้ประเมินคนเดียวของพนักงานคนนี้ — ให้คะแนน/แก้ไขแล้วอนุมัติได้ในฟอร์ม" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',false)">ประเมิน/อนุมัติในฟอร์ม</button> `:''}<button class="btn btn-sm btn-p" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button> <button class="btn btn-sm" onclick="printSingleDraft('${code}','${escJs(d[2])}','${escJs(d[3])}')" title="Export ใบประเมินนี้เป็น PDF">🖨️ PDF</button>${isAdminOrSysadmin()?` <button class="btn btn-sm btn-dg" onclick="deleteDraftByKey('${draftKey(d)}')" title="ลบใบประเมินทั้งใบ (Admin/HR เท่านั้น)">🗑️</button>`:''}</td></tr>`;
-  }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานในสังกัดที่รออนุมัติ GM</td></tr>';
   restoreCheckedKeys('gm-chk', checkedKeys);
   /* #238: ตารางที่ 2 — GM อนุมัติแล้ว รอ "ยืนยันส่งผลให้พนักงาน" (สถานะ GMApproved) + ที่ส่งแล้ว (ResultSent ขึ้นไป) แสดงสถานะ */
   const sendBody = document.getElementById('gmSendRows'), sendCnt = document.getElementById('gmSendCount');
@@ -11370,15 +11377,15 @@ function renderGmApproveQueue(){
     const sendRows = sendRoster.filter(r=>r.state==='done' && r.draft && evalStatusRank(r.draft[r.draft.length-1])>=evalStatusRank('GMApproved') && evalStatusRank(r.draft[r.draft.length-1])<evalStatusRank('Calibrated'));
     const waiting = sendRows.filter(r=>r.draft[r.draft.length-1]==='GMApproved').length;
     if(sendCnt) sendCnt.textContent = waiting+' รอส่ง';
-    sendBody.innerHTML = sendRows.length ? deptGroupMapK('gmapprove',sendRows,5,r=>{
+    sendBody.innerHTML = sendRows.length ? deptGroupMapK('gmapprove',sendRows,7,r=>{
       const {name,dept}=empDeptLabel(r.emp[0], r.emp[1]); const d=r.draft, code=r.emp[0], st=d[d.length-1];
       const waitingSend = st==='GMApproved';
       const badge = waitingSend ? '<span class="bd b-y">📤 รอยืนยันส่งผล</span>' : (st==='ResultSent' ? '<span class="bd b-b">ส่งแล้ว — รอพนักงานรับทราบ</span>' : '<span class="bd b-g">✓ ส่งแล้ว/รับทราบแล้ว</span>');
       return `<tr><td>${waitingSend?`<input type="checkbox" class="gmsend-chk" value="${draftKey(d)}">`:''}</td>
         <td><div class="u-cell"><div class="u-av">${(name||'').substr(0,2)}</div><div><b>${name}</b><small>${code}</small>${disputeBadgeHtml(code)}</div></div></td>
-        <td style="font-size:12px">${dept}</td><td style="text-align:center">${d[d.length-3]}</td>
+        <td style="font-size:12px">${dept}</td>${yzCells(d,true)}
         <td>${badge} <button class="btn btn-sm" onclick="openReviewerForm('${escJs(d[3])}','${name}','${code}','','${escJs(d[2])}',true)">ดูแบบฟอร์ม</button></td></tr>`;
-    }).join('') : '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีใบที่ GM อนุมัติแล้ว</td></tr>';
+    }).join('') : '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีใบที่ GM อนุมัติแล้ว</td></tr>';
     restoreCheckedKeys('gmsend-chk', sendChecked);
   }
 }
