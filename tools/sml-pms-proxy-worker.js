@@ -462,23 +462,33 @@ async function resolveSite(env, token) {
   return cachedSite;
 }
 
-async function graphGet(token, url) {
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  const data = await res.json();
-  if (!res.ok) throw new Error((data.error && data.error.message) || 'Graph GET failed: ' + res.status);
-  return data;
+/* #292: Graph/SharePoint บางครั้งตอบเป็นหน้า HTML (502/503/504, ไฟล์ Excel ถูกล็อกขณะมีคนเปิดแก้) แทน JSON —
+   โค้ดเดิม res.json() พังด้วย "Unexpected token '<'" ซึ่งไม่บอกสาเหตุจริง ตอนนี้: อ่านเป็นข้อความก่อน,
+   ลองใหม่สูงสุด 3 ครั้งเมื่อเป็น 429/5xx/423/HTML (หน่วง 0.6s,1.2s) แล้วแจ้ง HTTP status จริง */
+async function graphRequest(token, url, method, body) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 600 * attempt));
+    const res = await fetch(url, {
+      method,
+      headers: method === 'GET' ? { Authorization: 'Bearer ' + token } : { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    let data = {}, isJson = true;
+    try { data = text ? JSON.parse(text) : {}; } catch (e) { isJson = false; }
+    if (res.ok && isJson) return data;
+    const msg = isJson
+      ? ((data.error && data.error.message) || 'Graph ' + method + ' failed: ' + res.status)
+      : 'Graph ตอบกลับไม่ใช่ JSON (HTTP ' + res.status + ') — อาจเป็นช่วง SharePoint/Excel ไม่ว่างหรือไฟล์ถูกล็อก: ' + String(text).replace(/\s+/g, ' ').slice(0, 80);
+    lastErr = new Error(msg);
+    const retryable = !isJson || res.status === 429 || res.status === 423 || res.status >= 500;
+    if (!retryable) throw lastErr;
+  }
+  throw lastErr;
 }
-async function graphSend(token, url, method, body) {
-  const res = await fetch(url, {
-    method,
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
-  if (!res.ok) throw new Error((data.error && data.error.message) || 'Graph ' + method + ' failed: ' + res.status);
-  return data;
-}
+async function graphGet(token, url) { return graphRequest(token, url, 'GET'); }
+async function graphSend(token, url, method, body) { return graphRequest(token, url, method, body); }
 
 /* ส่งอีเมลจริงในนาม SEND_AS_EMAIL (ต้องเป็นกล่องอีเมลจริงในองค์กร) ผ่าน Microsoft Graph
    /users/{email}/sendMail — endpoint นี้คืน 202 Accepted แบบไม่มี body เมื่อสำเร็จ */
