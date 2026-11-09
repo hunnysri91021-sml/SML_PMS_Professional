@@ -10106,11 +10106,16 @@ function buildAttendanceExcelRow(code, a){
     a.medCert||''
   ];
 }
-/* #286: แถวตาราง "AttendanceDetail" (EmpID, ชื่อ, กิจ วัน/ชม./นาที, ป่วย วัน/ชม./นาที — ค่าดิบ ว่างเมื่อเป็น 0) */
+/* #286/#288: แถวตาราง "AttendanceDetail" 11 ช่อง (EmpID, ชื่อ, กิจ วัน/ชม./นาที, ป่วย วัน/ชม./นาที, + ชม.สะสมทศนิยม กิจ/ป่วย/รวม) */
 function buildAttendanceDetailRow(code, a){
   const emp = MASTER_USERS.find(u=>u[0]===code);
   return [code, emp ? emp[1] : (a.name||code),
-    ...[a.personalDay,a.personalHr,a.personalMin,a.sickDay,a.sickHr,a.sickMin].map(v=>Number(v)>0?Number(v):'')];
+    ...[a.personalDay,a.personalHr,a.personalMin,a.sickDay,a.sickHr,a.sickMin].map(v=>Number(v)>0?Number(v):''),
+    /* ต่อท้าย 3 คอลัมน์: ชั่วโมงสะสมเป็นทศนิยม (วัน×8 + ชม. + นาที/60) — อ่านดูใน Excel เท่านั้น ตอนดึงกลับเว็บไม่ใช้ */
+    ...(()=>{ const h=(d,hr,mi)=>(Number(d)||0)*8+(Number(hr)||0)+(Number(mi)||0)/60;
+      const p=h(a.personalDay,a.personalHr,a.personalMin), k=h(a.sickDay,a.sickHr,a.sickMin);
+      const r=v=>v>0?Math.round(v*100)/100:'';
+      return [r(p), r(k), r(p+k)]; })()];
 }
 function pushAttendanceDetailToExcel(code){
   const a = ATTENDANCE[code]; if(!a) return Promise.resolve();
