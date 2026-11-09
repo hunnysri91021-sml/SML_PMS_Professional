@@ -19,7 +19,7 @@
  *        CLIENT_ID       = Azure AD App (client) ID ที่ขอสิทธิ์ Application แล้ว
  *        CLIENT_SECRET   = Client secret ที่สร้างไว้ใน Azure AD (เห็นครั้งเดียวตอนสร้าง)
  *        SITE_URL        = เช่น https://siammotor.sharepoint.com/sites/Chosiya-HR
- *        FILE_PATH       = เช่น _SML_PMS_Professiona/SML_PMS_Master.xlsx
+ *        FILE_PATH       = เช่น _SML_PMS_Professional/SML_PMS_Master.xlsx
  *        SESSION_SECRET  = สตริงสุ่มยาว 48 ตัวขึ้นไป (ชนิด Secret) ใช้เซ็นบัตรผ่านล็อกอิน (token) อายุ 8 ชม.
  *                          — ไม่ต้องกรอกที่เว็บ และไม่มีกุญแจ API ฝังในเว็บอีกต่อไป (#260 แทน PROXY_API_KEY เดิม
  *                          ซึ่งถูกยกเลิกแล้ว ลบทิ้งจาก Cloudflare ได้) สร้างด้วย: openssl rand -hex 32

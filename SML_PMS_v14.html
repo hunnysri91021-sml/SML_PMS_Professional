@@ -2778,7 +2778,7 @@ img,svg,canvas{max-width:100%}
             <div class="fg"><label>Azure Tenant ID <i>*</i></label><input id="ms365TenantId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
             <div class="fg"><label>Azure Client ID (App ID) <i>*</i></label><input id="ms365ClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div>
             <div class="fg"><label>SharePoint Site URL <i>*</i></label><input id="ms365SiteUrl" placeholder="https://siammotor.sharepoint.com/sites/Chosiya-HR"></div>
-            <div class="fg"><label>Excel File Path (นับจาก root ของ Document Library) <i>*</i></label><input id="ms365FilePath" placeholder="_SML_PMS_Professiona/SML_PMS_Master.xlsx"></div>
+            <div class="fg"><label>Excel File Path (นับจาก root ของ Document Library) <i>*</i></label><input id="ms365FilePath" placeholder="_SML_PMS_Professional/SML_PMS_Master.xlsx"></div>
             <div class="fg"><label>ชื่อตาราง Employee</label><input id="ms365EmployeeTable" placeholder="Employees"></div>
             <div class="fg"><label>ชื่อตาราง Evaluation</label><input id="ms365EvaluationTable" placeholder="Appraisals"></div>
           </div>
@@ -7975,7 +7975,7 @@ const DEFAULT_MS365_CONFIG = {
   tenantId: '15405b27-0a7f-4efe-8eff-59f4b8be0969',
   clientId: 'e00dda6c-8f9b-4c9f-bf97-a0f549de0b0c',
   siteUrl: 'https://siammotor.sharepoint.com/sites/Chosiya-HR',
-  filePath: '_SML_PMS_Professiona/SML_PMS_Master.xlsx',
+  filePath: '_SML_PMS_Professional/SML_PMS_Master.xlsx',
   employeeTable: 'Employees',
   evaluationTable: 'Appraisals',
   /* Worker URL/API Key ฝังเป็นค่าเริ่มต้นเหมือน tenantId/clientId ด้านบน — จุดประสงค์ทั้งหมดของ
@@ -8016,7 +8016,7 @@ function applyMs365ConfigToForm(cfg){
   set('ms365TenantId', cfg.tenantId);
   set('ms365ClientId', cfg.clientId);
   set('ms365SiteUrl', cfg.siteUrl);
-  set('ms365FilePath', cfg.filePath || '_SML_PMS_Professiona/SML_PMS_Master.xlsx');
+  set('ms365FilePath', cfg.filePath || '_SML_PMS_Professional/SML_PMS_Master.xlsx');
   set('ms365EmployeeTable', cfg.employeeTable || 'Employees');
   set('ms365EvaluationTable', cfg.evaluationTable || 'Appraisals');
   set('ms365WorkerUrl', cfg.workerUrl);
