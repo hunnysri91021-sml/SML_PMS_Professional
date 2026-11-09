@@ -21,7 +21,7 @@ const {open,ok,done,INJECT}=require('./helpers');
   ok(r.a3.personalDay===0&&r.a3.sickDay===0,'แถว Detail ว่างหมด → ไม่ทับ (ใช้ F/G)');
   ok(r.noTable===1.5,'ไม่มีตาราง AttendanceDetail → ไม่ error ใช้ F/G ตามเดิม');
   ok(r.row.length===11,'แถว Attendance 11 ช่อง ('+r.row.length+')');
-  ok(r.det.length===11&&r.det[2]===1&&r.det[3]===4&&r.det[5]===3&&r.det[4]===''&&r.det[8]===12&&r.det[9]===24&&r.det[10]===36,'แถว AttendanceDetail 11 ช่อง ชม.สะสม 12/24/36 ('+r.det.join('|')+')');
+  ok(r.det.length===8&&r.det[2]===1&&r.det[3]===4&&r.det[5]===3&&r.det[4]==='','แถว AttendanceDetail 8 ช่อง ('+r.det.join('|')+')');
   ok(errs.length===0,'ไม่มี page error '+errs.join('|'));
   await b.close(); done();
 })();
