@@ -1,0 +1,32 @@
+/* #289: Import ไฟล์ HRGO แล้ว push คนที่ import ขึ้น Excel อัตโนมัติ (เฉพาะคนในไฟล์) + แจ้งผลตามจริง */
+const {open,ok,done,INJECT}=require('./helpers');
+(async()=>{
+  const {b,p,errs}=await open(); await p.evaluate(INJECT);
+  const r=await p.evaluate(async()=>{
+    __emp('H1'); __emp('H2'); __emp('H3');
+    ATTENDANCE.H3={name:'x',lateCount:9,earlyCount:0,absentDay:0,personalDay:0,personalHr:0,personalMin:0,sickDay:0,sickHr:0,sickMin:0,medCert:''};
+    isMs365Configured=()=>true;
+    const pushed=[]; let failCode=null;
+    graphUpsertTableRowPartial=async(t,k,code,row)=>{ if(code===failCode) throw new Error('boom'); pushed.push(t+':'+code); };
+    graphUpsertTableRow=async(t,k,code)=>{ pushed.push(t+':'+code); };
+    const hdr=HRGO_TEMPLATE_HEADERS.join(',');
+    const csv=hdr+'\nH1,x,0,2,0,1,4,0,0,0,0,0,0,0,\nH2,x,1,0,0,0,0,0,3,0,0,0,0,0,\nNOPE,x,0,0,0,0,0,0,0,0,0,0,0,0,\n';
+    const file=new File([new TextEncoder().encode(csv)],'t.csv');
+    let toasts=[]; const st=smlToast; smlToast=(m,t)=>{toasts.push(m);};
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    importHrgoFile({files:[file]}); await wait(600);
+    const o={pushed:[...pushed],toasts:[...toasts],h3:ATTENDANCE.H3.lateCount};
+    pushed.length=0; toasts.length=0; failCode='H2';
+    importHrgoFile({files:[file]}); await wait(600);
+    o.pushed2=[...pushed]; o.toasts2=[...toasts];
+    smlToast=st; return o;
+  });
+  ok(r.pushed.includes('Attendance:H1')&&r.pushed.includes('Attendance:H2'),'push Attendance คนที่ import ('+r.pushed.join(',')+')');
+  ok(r.pushed.includes('AttendanceDetail:H1'),'push AttendanceDetail ด้วย');
+  ok(!r.pushed.some(x=>x.endsWith(':H3')||x.endsWith(':NOPE')),'ไม่ push คนที่ไม่อยู่ในไฟล์/รหัสไม่พบ');
+  ok(r.h3===9,'คนนอกไฟล์ไม่ถูกแตะ');
+  ok(r.toasts.some(m=>/Push.*สำเร็จ 2 คน/.test(m)),'toast แจ้ง push 2 คน ('+r.toasts.join(' | ')+')');
+  ok(r.toasts2.some(m=>/ล้มเหลว 1 คน/.test(m)),'ล้มเหลวแจ้งตามจริง');
+  ok(errs.length===0,'ไม่มี page error '+errs.join('|'));
+  await b.close(); done();
+})();
