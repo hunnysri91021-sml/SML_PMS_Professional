@@ -8989,6 +8989,8 @@ touches employee/attendance/evaluation data.
 
 299. **ช่องสัดส่วน Y/Z/KPI เติม Y อัตโนมัติ + log เดิม→ใหม่.** พิมพ์ Z หรือ KPI แล้ว `autoBalanceY(lv)` ตั้ง Y = 100 − Z − KPI (ไม่ติดลบ) — Y ยังแก้เองได้ แต่ `saveScoreWeightsFromForm` ยังบังคับรวม = 100% เหมือนเดิม. Audit Log "ปรับสัดส่วนคะแนน Y/Z/KPI" ตอนนี้บันทึก "เดิม Y/Z/KPI → ใหม่ Y/Z/KPI" (อ่านค่าเดิมจาก `getScoreWeightsFor` ก่อนเขียน) พร้อมรอบที่ใช้. ไม่ต้อง redeploy Worker. ทดสอบ: `tests/weight-autobalance.test.js`.
 
+300. **ต่อจาก #299 (ข้อแนะนำ 3 ข้อ).** (1) ช่อง Z ในการ์ดสัดส่วนล็อก (`readonly`, มาจากตารางวันลา) — ปลดล็อกได้ด้วยลิงก์ "ปลดล็อก" (`unlockWeightZ`, ต้อง confirm) ดังนั้นปกติปรับแค่ KPI แล้ว Y ลดตาม. (2) `saveScoreWeightsFromForm` ถ้ารอบที่ใช้ (ปีที่เลือก หรือรอบปัจจุบัน) มีใบประเมินระดับนั้นอยู่แล้วและสัดส่วนเปลี่ยน → `prompt()` ขอเหตุผล ≥5 ตัวอักษร (ไม่ครบ = ไม่บันทึก) และเก็บ "| เหตุผล: …" ใน Audit Log; ไม่มีใบประเมิน = ไม่ถาม. ใบที่บันทึกแล้วไม่เปลี่ยนจนกว่ากด "คำนวณใหม่" (#187). (3) การ์ดมีข้อความอธิบายว่าคนไม่มี KPI จะได้ส่วน KPI คืนเข้า Y. ทดสอบ: `tests/weight-lock-reason.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
