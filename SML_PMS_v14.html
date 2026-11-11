@@ -1696,7 +1696,21 @@ img,svg,canvas{max-width:100%}
     <div class="fg"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 หลัก (เว้นว่างได้ถ้ายังไม่เคยตั้ง)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn btn-p" id="loginBtn" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
     <div style="text-align:center;margin-top:10px"><a href="#" id="forgotLink" onclick="openForgotPin();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">ลืม PIN? ตั้ง PIN ใหม่เอง</a></div>
+    <div style="text-align:center;margin-top:6px"><a href="#" id="regEmailLink" onclick="openRegEmail();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">📧 ยังไม่มี PIN? ลงทะเบียนอีเมลให้ HR ส่ง PIN</a></div>
     <div style="text-align:center;margin-top:6px"><a href="#" id="activateLink" onclick="openActivate();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">🎟️ เข้าใช้ครั้งแรก? เปิดใช้งานด้วยรหัสจาก HR</a></div>
+  </div>
+</div>
+
+<div class="login-gate" id="regEmailGate" style="display:none">
+  <div class="login-box">
+    <h2>📧 ลงทะเบียนอีเมล</h2>
+    <p class="login-note" id="regNote">กรอกรหัสพนักงานและอีเมลของคุณ ระบบจะบันทึกอีเมลนี้ไว้ แล้ว HR จะตรวจสอบและส่ง PIN เข้าสู่ระบบไปที่อีเมลนี้ให้ (ใช้ได้เฉพาะคนที่ยังไม่มี PIN และยังไม่มีอีเมลในระบบ)</p>
+    <div id="regErr" class="login-err" style="display:none"></div>
+    <div class="fg"><label>รหัสพนักงาน</label><input id="regCode" autocomplete="username"></div>
+    <div class="fg"><label>อีเมลของคุณ</label><input id="regEmail" type="email" autocomplete="email"></div>
+    <div class="fg"><label>ยืนยันอีเมลอีกครั้ง</label><input id="regEmail2" type="email" autocomplete="off" onkeydown="if(event.key==='Enter')registerEmailSubmit()"></div>
+    <button class="btn btn-p" id="regBtn" style="width:100%;margin-top:4px" onclick="registerEmailSubmit()">ลงทะเบียนอีเมล</button>
+    <div style="text-align:center;margin-top:10px"><a href="#" onclick="closeRegEmail();return false" style="font-size:13px">← กลับไปหน้าเข้าสู่ระบบ</a></div>
   </div>
 </div>
 
@@ -2625,6 +2639,7 @@ img,svg,canvas{max-width:100%}
     <div class="ph-act">
       <button class="btn" onclick="openM('mEmployeeTemplate')">📄 Template พนักงาน</button>
       <button class="btn" onclick="openM('mImportUsers')">⬆️ Import พนักงาน</button>
+      <button class="btn" id="sendPinRegBtn" onclick="sendPinToRegistered()" title="ส่ง PIN (สุ่ม) ทางอีเมลให้ทุกคนที่มีอีเมลในระบบแต่ยังไม่มี PIN — ตรวจรายชื่อก่อนยืนยัน">📧 ส่ง PIN ให้ผู้ลงทะเบียนอีเมล</button>
       <button class="btn" id="actBulkBtn" onclick="issueActivationCodes('')" title="สร้างรหัสเปิดใช้งานให้ทุกคนที่ยังไม่มี PIN แล้วดาวน์โหลดเป็นไฟล์">🎟️ รหัสเปิดใช้งาน (ทุกคนที่ยังไม่มี PIN)</button>
       <button class="btn btn-p" onclick="clearUserModalForm();openM('mAddUser')">＋ เพิ่มพนักงาน</button>
     </div></div>
@@ -5380,6 +5395,63 @@ async function forgotSubmit(){
 }
 
 /* #303: เปิดใช้งานครั้งแรก — รหัสจาก HR + OTP ยืนยันอีเมล + ตั้ง PIN เอง (ทำที่ Worker ทั้งหมด) */
+/* #304: พนักงานลงทะเบียนอีเมลเอง (หน้าล็อกอิน) — เขียนลง Excel เลย แล้วรอ HR กดส่ง PIN */
+function _regErr(m,ok){ const e=document.getElementById('regErr'); e.textContent=m||''; e.style.display=m?'block':'none'; e.style.background=ok?'#ecfdf5':''; e.style.color=ok?'#047857':''; }
+function openRegEmail(){
+  document.getElementById('loginGate').style.display='none';
+  document.getElementById('regEmailGate').style.display='flex';
+  document.getElementById('regCode').value=(document.getElementById('loginCode')?.value||'').trim();
+  ['regEmail','regEmail2'].forEach(i=>{document.getElementById(i).value='';});
+  const b=document.getElementById('regBtn'); b.disabled=false; b.textContent='ลงทะเบียนอีเมล';
+  _regErr(useServerAuth()?'':'ฟีเจอร์นี้ใช้ได้เมื่อระบบเชื่อมต่อเซิร์ฟเวอร์แล้วเท่านั้น — กรุณาติดต่อ HR');
+}
+function closeRegEmail(){
+  document.getElementById('regEmailGate').style.display='none';
+  document.getElementById('loginGate').style.display='flex';
+}
+async function registerEmailSubmit(){
+  const code=(document.getElementById('regCode').value||'').trim();
+  const email=(document.getElementById('regEmail').value||'').trim();
+  const email2=(document.getElementById('regEmail2').value||'').trim();
+  if(!code||!email){ _regErr('กรุณากรอกรหัสพนักงานและอีเมล'); return; }
+  if(email.toLowerCase()!==email2.toLowerCase()){ _regErr('อีเมลสองช่องไม่ตรงกัน — ตรวจสอบแล้วพิมพ์ใหม่'); return; }
+  if(!useServerAuth()){ _regErr('ฟีเจอร์นี้ใช้ได้เมื่อระบบเชื่อมต่อเซิร์ฟเวอร์แล้วเท่านั้น — กรุณาติดต่อ HR'); return; }
+  const btn=document.getElementById('regBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก...'; _regErr('');
+  try{
+    const r=await workerFetch(loadMs365Config(),'/auth/register-email',{method:'POST',body:JSON.stringify({code,email})});
+    btn.textContent='✓ ลงทะเบียนแล้ว';
+    _regErr('✅ บันทึกอีเมล '+(r.maskedEmail||'')+' แล้ว — รอ HR ตรวจสอบและส่ง PIN ไปที่อีเมลนี้ (ถ้าไม่ได้รับภายในไม่กี่วัน ติดต่อ HR)',true);
+  }catch(e){
+    btn.disabled=false; btn.textContent='ลงทะเบียนอีเมล';
+    _regErr((e&&e.status)?String(e.message):'⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+  }
+}
+/* HR: ส่ง PIN ให้ทุกคนที่มีอีเมลในระบบแต่ยังไม่มี PIN — ดึงข้อมูลล่าสุดจาก Excel, ให้ดูรายชื่อก่อนยืนยัน,
+   ส่งอีเมลสำเร็จเท่านั้นจึงตั้ง PIN (ส่งไม่ได้ = ไม่ตั้ง ไม่ทำให้พนักงานมี PIN ที่ไม่มีใครรู้) */
+async function sendPinToRegistered(){
+  if(!isAdminOrSysadmin()){ if(typeof smlToast==='function') smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  const cfg=loadMs365Config();
+  if(!isWorkerConfigured(cfg)){ if(typeof smlToast==='function') smlToast('ต้องตั้งค่า Proxy (MS365) ก่อนจึงส่ง PIN ทางอีเมลได้','warn'); return; }
+  try{ await ms365SyncEmployees(true); await ms365SyncEmployeeSettingsSilent(); }catch(e){}
+  const mailOk=e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e||'').trim());
+  const targets=MASTER_USERS.filter(u=>u[12]==='active'&&!u[17]&&mailOk(u[15]));
+  if(!targets.length){ if(typeof smlToast==='function') smlToast('ไม่มีพนักงานที่มีอีเมลแต่ยังไม่มี PIN','ok'); return; }
+  const lines=targets.slice(0,30).map(u=>'• '+u[0]+' '+u[1]+' → '+u[15]).join('\n')+(targets.length>30?'\n… และอีก '+(targets.length-30)+' คน':'');
+  if(!confirm('ส่ง PIN (สุ่ม 4 หลัก) ทางอีเมลให้ '+targets.length+' คน?\n\nตรวจสอบอีเมลให้ถูกต้องก่อน (ใครก็ลงทะเบียนอีเมลได้ — ผิดคนจะได้ PIN ของบัญชีนั้น):\n'+lines)) return;
+  let okN=0; const fails=[];
+  for(const emp of targets){
+    const pin=String(Math.floor(1000+Math.random()*9000));
+    const r=await tryEmailPin(emp,pin);
+    if(!r.sent){ fails.push(emp[0]+' '+emp[1]+' — '+r.reason); continue; }
+    emp[17]=await sha256Hex(pin);
+    if(typeof appendAuditLog==='function') appendAuditLog('employee','ส่ง PIN ทางอีเมล (ผู้ลงทะเบียนอีเมล)',emp[0],emp[15]);
+    await pushSingleEmployeeSettings(emp[0]);
+    okN++;
+  }
+  if(typeof smlToast==='function') smlToast('ส่ง PIN สำเร็จ '+okN+' คน'+(fails.length?' · ไม่สำเร็จ '+fails.length+' คน':''),fails.length?'warn':'ok');
+  if(fails.length) alert('ส่ง PIN ไม่สำเร็จ '+fails.length+' คน (ยังไม่ได้ตั้ง PIN ให้ — ลองใหม่หรือใช้ปุ่ม 🔑 ตั้ง/รีเซ็ต PIN รายคน):\n\n'+fails.join('\n'));
+  if(typeof filterUsers==='function') filterUsers();
+}
 let _actChallenge = '';
 function _actErr(m){ const e = document.getElementById('actErr'); e.textContent = m || ''; e.style.display = m ? 'block' : 'none'; }
 function openActivate(){

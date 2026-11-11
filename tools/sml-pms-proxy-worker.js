@@ -124,6 +124,12 @@ export default {
       catch (e) { return json({ error: String((e && e.message) || e) }, 500, cors); }
     }
 
+    /* #304: พนักงานลงทะเบียนอีเมลเอง (ไม่ส่ง PIN — HR ตรวจแล้วกดส่ง PIN เอง) */
+    if (url.pathname === '/auth/register-email' && request.method === 'POST') {
+      try { return await handleRegisterEmail(request, env, cors); }
+      catch (e) { return json({ error: String((e && e.message) || e) }, 500, cors); }
+    }
+
     /* #303: เปิดใช้งานครั้งแรก — รหัสเปิดใช้งานจาก HR + ยืนยันอีเมลด้วย OTP + ตั้ง PIN เอง */
     if ((url.pathname === '/auth/activate/start' || url.pathname === '/auth/activate/finish') && request.method === 'POST') {
       try { return await (url.pathname === '/auth/activate/start' ? handleActivateStart : handleActivateFinish)(request, env, cors); }
@@ -1557,6 +1563,8 @@ async function handleForgot(request, env, cors) {
   const { token, emp, setRow } = await lookupEmpForReset(env, code);
   const email = emp ? String(emp[9] || '').trim() : '';
   if (!emp || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return generic();
+  /* #304: บัญชีที่ยังไม่เคยมี PIN ห้ามตั้งเองผ่าน "ลืม PIN" — อีเมลอาจมาจากการลงทะเบียนเอง (ยังไม่ผ่าน HR) ต้องให้ HR ส่ง PIN */
+  if (!String((setRow && setRow[1]) || '').trim()) return generic();
   const otp = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
   const exp = Math.floor(Date.now() / 1000) + RESET_OTP_TTL_SEC;
   const pinHash = String((setRow && setRow[1]) || '').trim().toLowerCase();
@@ -1701,6 +1709,38 @@ async function handleActivateFinish(request, env, cors) {
   try { await appendRow(env, token, driveId, itemId, 'AuditLog', [new Date().toISOString(), idc, 'auth', 'พนักงานเปิดใช้งานบัญชีเอง (รหัสจาก HR + ยืนยันอีเมล' + (r.usedOnFile ? '' : ' + ลงทะเบียนอีเมลใหม่') + ')', idc, String(emp[1] || ''), '']); } catch (e) { console.error('activate audit failed', String((e && e.message) || e)); }
   loginFails.delete(r.kc);
   return json({ ok: true, emailRegistered: !r.usedOnFile }, 200, cors);
+}
+/* ===== #304: พนักงานลงทะเบียนอีเมลเอง → เขียนลง Excel (ตาราง Employees คอลัมน์ J) แล้วรอ HR กดส่ง PIN =====
+   ไม่ใช่การพิสูจน์ตัวตน (ใครรู้รหัสพนักงานก็ลงได้) จึงจำกัดแคบ: เฉพาะพนักงาน active ที่ "ยังไม่มี PIN และยังไม่มีอีเมล" เท่านั้น
+   (เขียนทับอีเมลเดิมไม่ได้) และไม่ส่งอะไรให้ใครเลย — ผู้ตัดสินคือ HR ที่ดูรายชื่อก่อนส่ง PIN. env ไม่บังคับ: REGISTER_EMAIL_DOMAINS (คั่น , เช่น siammotor.com) */
+const REGISTER_MAX_PER_CODE = 3;
+async function handleRegisterEmail(request, env, cors) {
+  let b = {}; try { b = await request.json(); } catch (e) { /* ว่าง */ }
+  const code = String(b.code || '').trim();
+  const email = String(b.email || '').trim();
+  if (!code || !email) return json({ error: 'กรุณากรอกรหัสพนักงานและอีเมล' }, 400, cors);
+  if (!EMAIL_RE.test(email) || email.length > 120) return json({ error: 'รูปแบบอีเมลไม่ถูกต้อง' }, 400, cors);
+  const doms = String(env.REGISTER_EMAIL_DOMAINS || '').split(',').map((x) => x.trim().toLowerCase().replace(/^@/, '')).filter(Boolean);
+  if (doms.length && !doms.includes(email.split('@')[1].toLowerCase())) return json({ error: 'กรุณาใช้อีเมลบริษัท (' + doms.map((d) => '@' + d).join(', ') + ')' }, 400, cors);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const kr = 'g:' + code.toLowerCase();
+  const ki = ip ? 'gi:' + ip : '';
+  const lk = Math.max(lockRemainingMin(kr), ki ? lockRemainingMin(ki) : 0);
+  if (lk) return json({ error: 'ลงทะเบียนบ่อยเกินไป — ลองใหม่ในอีก ' + lk + ' นาที' }, 429, cors);
+  registerFail(kr, REGISTER_MAX_PER_CODE);
+  if (ki) registerFail(ki, LOGIN_MAX_PER_IP);
+  const generic = () => json({ error: 'ลงทะเบียนอีเมลไม่ได้ (ไม่พบรหัสพนักงาน หรือมีอีเมล/PIN ในระบบแล้ว) — ติดต่อ HR' }, 400, cors);
+  const { token, driveId, itemId, emp, setRow } = await lookupEmpForReset(env, code);
+  if (!emp) return generic();
+  if (String((setRow && setRow[1]) || '').trim()) return generic();
+  const onFile = String(emp[9] || '').trim();
+  if (onFile) return generic();
+  const idc = String(emp[0]).trim();
+  const vals = new Array(10).fill(''); vals[9] = email;
+  await upsertRowPartial(token, driveId, itemId, 'Employees', 0, idc, vals, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+  scopeCache = { at: 0, emps: null };
+  try { await appendRow(env, token, driveId, itemId, 'AuditLog', [new Date().toISOString(), idc, 'employee', 'พนักงานลงทะเบียนอีเมลเอง (รอ HR ตรวจและส่ง PIN)', idc, String(emp[1] || ''), '']); } catch (e) { console.error('register-email audit failed', String((e && e.message) || e)); }
+  return json({ ok: true, maskedEmail: maskEmail(email) }, 200, cors);
 }
 /* LINE User ID ที่ลงทะเบียนไว้ (EmployeeSettings คอลัมน์ 5) */
 async function registeredLineIds(env) {
