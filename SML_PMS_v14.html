@@ -6405,8 +6405,15 @@ function printEvalForm() {
   const zResult = computeZScore(lv, empCode);
   const zDays   = zResult.zDaysIdx;
   const zScore  = zResult.score;
-  const yScore  = maxY>0?((rawY/maxY)*lcfg.Ypct):0;
-  const xScore  = yScore + zScore;
+  /* #301: คำนวณผ่านฟังก์ชันกลาง (สัดส่วนตามรอบ + KPI) ให้ตรงกับหน้าประเมินตนเอง */
+  const _xr     = computeEvalXWithKpi(lv, empCode, printCycle, rawY, maxY, zScore);
+  const yScore  = _xr.Y;
+  const kpiScorePF = _xr.KPI;
+  const wEffPF  = getScoreWeightsFor(lv, printCycle);
+  const hasKpiPF = _xr.kpi && _xr.kpi.hasKpi && (wEffPF.kpct||0)>0;
+  const yPctLblPF = hasKpiPF ? (wEffPF.ypct||0) : ((wEffPF.ypct||0)+(wEffPF.kpct||0));
+  const zPctLblPF = wEffPF.zpct||0;
+  const xScore  = _xr.X;
   const grade   = xScore>=90?'A':xScore>=80?'B':xScore>=70?'C':xScore>=60?'D':'E';
   const gradeDesc = {A:'ดีมาก',B:'ดี',C:'ปานกลาง',D:'พอใช้',E:'ต้องปรับปรุง'}[grade]||'';
 
@@ -6475,7 +6482,7 @@ function printEvalForm() {
   <!-- ===== ส่วนที่ 1: ตารางประเมิน Performance ===== -->
   <div class="F-sec s1">
     <span class="sec-num">1</span>
-    ส่วนที่ 1 &nbsp; ตารางประเมินผลการปฏิบัติงาน ( Performance ) &nbsp;·&nbsp; Y = ${lcfg.Ypct}%
+    ส่วนที่ 1 &nbsp; ตารางประเมินผลการปฏิบัติงาน ( Performance ) &nbsp;·&nbsp; Y = ${yPctLblPF}%
   </div>
   <table class="F-tbl">
     <colgroup>
@@ -6525,7 +6532,7 @@ function printEvalForm() {
   <!-- ===== ส่วนที่ 2: Z Score ===== -->
   <div class="F-sec s2">
     <span class="sec-num">2</span>
-    ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${lcfg.Zpct}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO · ช่วง 1 ธ.ค. 2568 – 30 พ.ย. 2569
+    ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${zPctLblPF}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO · ช่วง 1 ธ.ค. 2568 – 30 พ.ย. 2569
   </div>
   <div class="F-zbox">
     <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zResult.att.lateCount||0} ครั้ง</span></div>
@@ -6549,12 +6556,12 @@ function printEvalForm() {
       ${(allApproved&&!isGradeHiddenFor(empCode,printCycle))?grade:'?'}
     </div>
     <div>
-      <div class="F-score-main">X = ${yScore.toFixed(2)} + ${zScore.toFixed(2)} = <b>${xScore.toFixed(2)}</b> คะแนน</div>
+      <div class="F-score-main">X = ${yScore.toFixed(2)} + ${zScore.toFixed(2)}${hasKpiPF?' + KPI '+kpiScorePF.toFixed(2):''} = <b>${xScore.toFixed(2)}</b> คะแนน</div>
       <div class="F-score-sub">${allApproved?`เกรด <b>${grade} — ${gradeDesc}</b>`:'รอการอนุมัติครบทุกขั้นตอน'}</div>
     </div>
     <div class="F-breakdown">
-      <div class="bd-item"><span class="bd-lbl">Y (${lcfg.Ypct}%)</span><span class="bd-val">${yScore.toFixed(2)}</span></div>
-      <div class="bd-item"><span class="bd-lbl">Z (${lcfg.Zpct}%)</span><span class="bd-val">${zScore.toFixed(2)}</span></div>
+      <div class="bd-item"><span class="bd-lbl">Y (${yPctLblPF}%)</span><span class="bd-val">${yScore.toFixed(2)}</span></div>
+      <div class="bd-item"><span class="bd-lbl">Z (${zPctLblPF}%)</span><span class="bd-val">${zScore.toFixed(2)}</span></div>${hasKpiPF?`<div class="bd-item"><span class="bd-lbl">KPI (${wEffPF.kpct}%)</span><span class="bd-val">${kpiScorePF.toFixed(2)}</span></div>`:''}
       <div class="bd-item"><span class="bd-lbl">รวม X</span><span class="bd-val" style="color:#0f2f6a">${xScore.toFixed(2)}</span></div>
     </div>
   </div>
@@ -7832,9 +7839,9 @@ function setEvalLevel(lv) {
 
   // subtitle
   const sub = document.getElementById('evalSubtitle');
-  if(sub) sub.textContent = cfg.label + ' · Y=' + cfg.Ypct + '% + Z=' + cfg.Zpct + '%';
+  if(sub) sub.textContent = cfg.label + ' · Y=' + cfg.Ypct + '% + Z=' + cfg.Zpct + '%' + ((cfg.Kpct>0)?(' + KPI='+cfg.Kpct+'%'):'');
   const docLevel=document.getElementById('evalDocLevel'); if(docLevel) docLevel.textContent=levelName(lv);
-  const docWeight=document.getElementById('evalDocWeight'); if(docWeight) docWeight.textContent='Y '+cfg.Ypct+'% + Z '+cfg.Zpct+'%';
+  const docWeight=document.getElementById('evalDocWeight'); if(docWeight) docWeight.textContent='Y '+cfg.Ypct+'% + Z '+cfg.Zpct+'%'+((cfg.Kpct>0)?(' + KPI '+cfg.Kpct+'%'):'');
   /* ผู้ใช้ส่งภาพหน้าพิมพ์จริงมา ชี้ว่าหัวกระดาษไม่มีปี — เดิมป้าย "รอบ FY2026" บนหน้าจอ (ไม่ใช่หน้า
      พิมพ์) เป็นข้อความคงที่ ไม่เคยอัปเดตตามรอบจริงที่ Admin ตั้งไว้เลย (ดู CLAUDE.md #60's
      getCurrentEvalCycleYear()) — แก้ให้ดึงรอบจริงเช่นเดียวกับที่ printEvalForm()/buildEvalPrintPage()
@@ -12767,9 +12774,16 @@ function buildEvalPrintPage(d, printDate){
   const hrNote = (typeof getEvalHrNote==='function')?getEvalHrNote(code+'|'+cycle):'';
   const hrNoteBox = hrNote.trim() ? `<div class="F-zbox" style="background:#fef2f2;border-color:#fecaca"><div class="zc" style="grid-column:1/-1"><span class="zl">ใบเตือน/หมายเหตุวินัย (HR):</span><span class="zv">${hrNote}</span></div></div>` : '';
 
-  const yScore = maxY>0 ? (Y || (rawY/maxY)*lcfg.Ypct) : Y;
+  /* #301: ใช้สัดส่วนตามรอบ/ระดับของใบนี้ (getScoreWeightsFor) + แยกคะแนน KPI ที่อยู่ใน X — ไม่ใช้ lcfg.Ypct ตายตัว */
+  const wEff = getScoreWeightsFor(level, cycle);
+  const yScore = maxY>0 ? (Y || (rawY/maxY)*(wEff.ypct||lcfg.Ypct)) : Y;
   const zScore = Z;
   const xScore = X || (yScore+zScore);
+  const kpiScoreP = Math.max(0, xScore - yScore - zScore);
+  const hasKpiP = kpiScoreP > 0.005 && (wEff.kpct||0) > 0;
+  const yPctLbl = hasKpiP ? (wEff.ypct||0) : ((wEff.ypct||0)+(wEff.kpct||0));
+  const zPctLbl = wEff.zpct||0;
+  const xFormula = hasKpiP ? `X = ${yScore.toFixed(2)} + ${zScore.toFixed(2)} + KPI ${kpiScoreP.toFixed(2)} =` : `X = ${yScore.toFixed(2)} + ${zScore.toFixed(2)} =`;
 
   /* ลงนาม — ใช้ชื่อหัวหน้า/ผู้บริหารจริงเหมือน printEvalForm() แต่สถานะลงนามอิง evalStatusRank จริง
      ของ draft แทน EVAL_STS (ซึ่งเป็นชื่อ/วันที่จำลองคงที่ ไม่ใช่ของจริง) — พนักงานลงนามรับทราบได้จริง
@@ -12817,7 +12831,7 @@ function buildEvalPrintPage(d, printDate){
       <div class="F-info-row full"><span class="F-lbl">ตำแหน่ง</span><span class="F-val">${empPos}</span></div>
     </div>
 
-    <div class="F-sec s1"><span class="sec-num">1</span> ส่วนที่ 1 &nbsp; ตารางประเมินผลการปฏิบัติงาน ( Performance ) &nbsp;·&nbsp; Y = ${lcfg?.Ypct||0}%</div>
+    <div class="F-sec s1"><span class="sec-num">1</span> ส่วนที่ 1 &nbsp; ตารางประเมินผลการปฏิบัติงาน ( Performance ) &nbsp;·&nbsp; Y = ${yPctLbl}%</div>
     <table class="F-tbl">
       <colgroup><col style="width:20px"><col><col style="width:26px"><col style="width:28px"><col style="width:28px"><col style="width:28px"><col style="width:28px"><col style="width:28px"></colgroup>
       <thead>
@@ -12832,7 +12846,7 @@ function buildEvalPrintPage(d, printDate){
 
     ${(LEVEL_CONFIG[level]?.leaderShow||['ldr','mgr'].includes(level))?`<div class="F-sec s1b"><span class="sec-num">↳</span> ด้านความสามารถในการบังคับบัญชา ( Leadership Skill )</div>`:''}
 
-    <div class="F-sec s2"><span class="sec-num">2</span> ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${lcfg?.Zpct||0}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO</div>
+    <div class="F-sec s2"><span class="sec-num">2</span> ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${zPctLbl}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO</div>
     <div class="F-zbox">
       <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zr.att.lateCount||0} ครั้ง</span></div>
       <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">${zr.att.earlyCount||0} ครั้ง</span></div>
@@ -12850,12 +12864,12 @@ function buildEvalPrintPage(d, printDate){
     <div class="F-result">
       <div class="F-grade-circle" style="background:${(allApproved&&!isGradeHiddenFor(code,cycle))?_gc(grade):'#94a3b8'}">${(allApproved&&!isGradeHiddenFor(code,cycle))?grade:'?'}</div>
       <div>
-        <div class="F-score-main">X = ${yScore.toFixed(2)} + ${zScore.toFixed(2)} = <b>${xScore.toFixed(2)}</b> คะแนน</div>
+        <div class="F-score-main">${xFormula} <b>${xScore.toFixed(2)}</b> คะแนน</div>
         <div class="F-score-sub">${allApproved?`เกรด <b>${grade}</b>`:'รอการอนุมัติครบทุกขั้นตอน'}</div>
       </div>
       <div class="F-breakdown">
-        <div class="bd-item"><span class="bd-lbl">Y (${lcfg?.Ypct||0}%)</span><span class="bd-val">${yScore.toFixed(2)}</span></div>
-        <div class="bd-item"><span class="bd-lbl">Z (${lcfg?.Zpct||0}%)</span><span class="bd-val">${zScore.toFixed(2)}</span></div>
+        <div class="bd-item"><span class="bd-lbl">Y (${yPctLbl}%)</span><span class="bd-val">${yScore.toFixed(2)}</span></div>
+        <div class="bd-item"><span class="bd-lbl">Z (${zPctLbl}%)</span><span class="bd-val">${zScore.toFixed(2)}</span></div>${hasKpiP?`<div class="bd-item"><span class="bd-lbl">KPI (${wEff.kpct}%)</span><span class="bd-val">${kpiScoreP.toFixed(2)}</span></div>`:''}
         <div class="bd-item"><span class="bd-lbl">รวม X</span><span class="bd-val" style="color:#0f2f6a">${xScore.toFixed(2)}</span></div>
       </div>
     </div>
@@ -14110,7 +14124,7 @@ function openTplPreview(lv){
   const sub=document.getElementById('tplPreviewSub');
   const area=document.getElementById('tplPreviewArea');
   if(title)title.textContent='📋 แบบฟอร์มประเมิน — '+cfg.label;
-  if(sub)sub.textContent=`${cfg.factors.length} ปัจจัย · น้ำหนักรวม ${cfg.total} · Y ${cfg.ypct}% + Z ${cfg.zpct}%`;
+  if(sub)sub.textContent=`${cfg.factors.length} ปัจจัย · น้ำหนักรวม ${cfg.total} · Y ${cfg.ypct}% + Z ${cfg.zpct}%${cfg.kpct>0?` + KPI ${cfg.kpct}%`:''}`;
   const rows=cfg.factors.map((f,i)=>{
     const sc=smlScoreByWeight(f[2]);
     return `<tr><td style="min-width:380px"><b>${escH(f[0])}</b><br><small style="color:#94a3b8;font-weight:400">${escH(f[1]||'')}</small></td><td style="text-align:center">${escH(f[2])}</td><td>${sc.Aplus}</td><td>${sc.A}</td><td>${sc.B}</td><td>${sc.Cplus}</td><td>${sc.C}</td></tr>`;
@@ -14118,7 +14132,7 @@ function openTplPreview(lv){
   if(area)area.innerHTML=`
     <div class="tpl-preview-banner" style="--form-color:${cfg.color}">
       <div><b>${cfg.label}</b><span>แบบฟอร์มระดับ ${cfg.short}</span></div>
-      <div><span class="tpl-pill">Y ${cfg.ypct}%</span><span class="tpl-pill">Z ${cfg.zpct}%</span><span class="tpl-pill">Raw ${cfg.minRaw}–${cfg.maxRaw}</span></div>
+      <div><span class="tpl-pill">Y ${cfg.ypct}%</span><span class="tpl-pill">Z ${cfg.zpct}%</span>${cfg.kpct>0?`<span class="tpl-pill">KPI ${cfg.kpct}%</span>`:''}<span class="tpl-pill">Raw ${cfg.minRaw}–${cfg.maxRaw}</span></div>
     </div>
     <div class="tw tpl-preview-table"><table><thead><tr><th>ปัจจัยในการพิจารณาประเมิน</th><th>น้ำหนัก</th><th>A+</th><th>A</th><th>B</th><th>C+</th><th>C</th></tr></thead><tbody>${rows}
       <tr class="sum"><td>รวมคะแนน / น้ำหนักรวม</td><td>${cfg.total}</td><td colspan="5">คะแนนดิบสูงสุด ${cfg.maxRaw} · Y สูงสุด ${cfg.maxY}</td></tr>
@@ -14166,7 +14180,7 @@ function showTplDetail(lv){
   if(area)area.innerHTML=`
     <div class="form-detail-banner" style="--form-color:${cfg.color}">
       <div><b>${cfg.label}</b><span>${cfg.short} · ${cfg.factors.length} ปัจจัย · หน่วยการประเมินรวม ${cfg.total}</span></div>
-      <div class="form-detail-badges"><span>Y ${cfg.ypct}%</span><span>Z ${cfg.zpct}%</span><span>Raw ${cfg.minRaw}–${cfg.maxRaw}</span></div>
+      <div class="form-detail-badges"><span>Y ${cfg.ypct}%</span><span>Z ${cfg.zpct}%</span>${cfg.kpct>0?`<span>KPI ${cfg.kpct}%</span>`:''}<span>Raw ${cfg.minRaw}–${cfg.maxRaw}</span></div>
     </div>
     ${editable?`<div class="al al-i" style="margin:10px 0 0">
       <span>🛡️</span><div><b>โหมด Admin ระบบ:</b> แก้ไข/ลบข้อปัจจัยได้จากปุ่มในตาราง หรือกด "เพิ่มข้อปัจจัย" ด้านล่าง
@@ -14349,7 +14363,7 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
   const sub=document.getElementById('reviewerSubtitle');
   const area=document.getElementById('reviewerFormArea');
   if(title) title.textContent='📋 แบบประเมิน — ผู้ประเมิน · '+name+' ('+code+')';
-  if(sub) sub.textContent=cfg.label+' · แบบฟอร์ม '+cfg.factors.length+' ปัจจัย · Y '+cfg.ypct+'% + Z '+cfg.zpct+'%';
+  if(sub) sub.textContent=cfg.label+' · แบบฟอร์ม '+cfg.factors.length+' ปัจจัย · Y '+cfg.ypct+'% + Z '+cfg.zpct+'%'+((cfg.kpct>0)?(' + KPI '+cfg.kpct+'%'):'');
   const scoreRows=cfg.factors.map((f,i)=>{
     const w=f[2], sc=smlScoreByWeight(w);
     return `<tr><td style="line-height:1.3"><b style="font-size:13px">${escH(f[0])}</b><br><small style="color:#94a3b8;font-size:11px">${escH(f[1]||'')}</small></td><td style="text-align:center"><span class="bd b-b">${w}</span></td>
