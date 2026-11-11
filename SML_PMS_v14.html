@@ -1696,6 +1696,7 @@ img,svg,canvas{max-width:100%}
     <div class="fg"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 หลัก (เว้นว่างได้ถ้ายังไม่เคยตั้ง)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn btn-p" id="loginBtn" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
     <div style="text-align:center;margin-top:10px"><a href="#" id="forgotLink" onclick="openForgotPin();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">ลืม PIN? ตั้ง PIN ใหม่เอง</a></div>
+    <div style="text-align:center;margin-top:6px"><a href="#" id="lineRegLink" onclick="openLineReg();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">💬 ลงทะเบียนรับแจ้งเตือนทาง LINE (เพิ่มเพื่อน)</a></div>
     <div style="text-align:center;margin-top:6px"><a href="#" id="regEmailLink" onclick="openRegEmail();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">📧 ยังไม่มี PIN? ลงทะเบียนอีเมลให้ HR ส่ง PIN</a></div>
     <div style="text-align:center;margin-top:6px"><a href="#" id="activateLink" onclick="openActivate();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">🎟️ เข้าใช้ครั้งแรก? เปิดใช้งานด้วยรหัสจาก HR</a></div>
   </div>
@@ -1711,6 +1712,16 @@ img,svg,canvas{max-width:100%}
     <div class="fg"><label>ยืนยันอีเมลอีกครั้ง</label><input id="regEmail2" type="email" autocomplete="off" onkeydown="if(event.key==='Enter')registerEmailSubmit()"></div>
     <button class="btn btn-p" id="regBtn" style="width:100%;margin-top:4px" onclick="registerEmailSubmit()">ลงทะเบียนอีเมล</button>
     <div style="text-align:center;margin-top:10px"><a href="#" onclick="closeRegEmail();return false" style="font-size:13px">← กลับไปหน้าเข้าสู่ระบบ</a></div>
+  </div>
+</div>
+
+<div class="login-gate" id="lineRegGate" style="display:none">
+  <div class="login-box">
+    <h2>💬 ลงทะเบียน LINE</h2>
+    <p class="login-note">1) กดปุ่มด้านล่างเพื่อเพิ่มเพื่อน LINE ของ SML PMS<br>2) พิมพ์ <b>รหัสพนักงานของคุณ</b> ส่งในแชท (เช่น SML-001)<br>3) ระบบจะตอบกลับว่าลงทะเบียนสำเร็จ — จากนั้นจะได้รับแจ้งผลประเมินทาง LINE</p>
+    <div id="lineRegMsg" class="login-err" style="display:none"></div>
+    <a id="lineRegBtn" class="btn btn-p" href="#" target="_blank" rel="noopener" style="display:block;text-align:center;width:100%;margin-top:4px;text-decoration:none">➕ เพิ่มเพื่อน LINE</a>
+    <div style="text-align:center;margin-top:10px"><a href="#" onclick="closeLineReg();return false" style="font-size:13px">← กลับไปหน้าเข้าสู่ระบบ</a></div>
   </div>
 </div>
 
@@ -2893,6 +2904,7 @@ img,svg,canvas{max-width:100%}
             <div class="fg"><label>การยืนยันตัวตนกับ Proxy</label><div style="font-size:12px;color:#64748b;padding:8px 0">ไม่ต้องกรอกกุญแจอีกต่อไป — ระบบล็อกอินด้วยรหัสพนักงาน + PIN ที่ Worker แล้วใช้บัตรผ่านชั่วคราวอายุ 8 ชม. (ตั้ง <code>SESSION_SECRET</code> ใน Cloudflare เท่านั้น)</div></div>
           </div>
           <div style="font-size:11px;color:#94a3b8;margin:4px 0 10px">เว้นว่างทั้งสองช่องนี้ = กลับไปใช้โหมด login MS365 รายคนตามปกติ (ค่าเริ่มต้น) กรอกทั้งคู่แล้วบันทึก = ทุกการอ่าน/เขียน Excel ในเว็บนี้ (พนักงาน, เวลา/วันลา, PIN/แบบฟอร์มประเมิน, ผลประเมิน) จะวิ่งผ่าน Proxy อัตโนมัติ ไม่ต้อง login MS365 อีกต่อไป</div>
+          <div class="fg"><label>ลิงก์เพิ่มเพื่อน LINE OA (ให้พนักงานลงทะเบียน LINE จากหน้าล็อกอิน)</label><input id="ms365LineAddUrl" placeholder="เช่น https://line.me/R/ti/p/@123abcde"></div>
           <div class="fg"><label>ลิงก์เว็บแอป SML PMS (สำหรับใส่ในข้อความ LINE แจ้งผลประเมิน)</label><input id="ms365AppUrl" placeholder="เช่น https://hunnysri91021-sml.github.io/SML_PMS_Professional/SML_PMS_v14.html"></div>
           <div style="font-size:11px;color:#94a3b8;margin:4px 0 10px">ใส่ URL จริงที่พนักงานเปิดเว็บนี้ตามปกติ (ที่อยู่บน GitHub Pages หรือโดเมนที่บริษัทใช้จริง) — ถ้าเว้นว่าง ข้อความ LINE แจ้งผลจะมีแค่ปุ่มกดรับทราบในแชท ไม่มีปุ่มลิงก์ไปดูผลเต็มที่หน้าเว็บ (เพราะระบบไม่รู้ URL จริงเอง ต้องให้ Admin กรอกเองครั้งเดียว)</div>
           <button class="btn btn-p" onclick="saveMs365Config()">💾 บันทึก Config</button>
@@ -5451,6 +5463,21 @@ async function sendPinToRegistered(){
   if(typeof smlToast==='function') smlToast('ส่ง PIN สำเร็จ '+okN+' คน'+(fails.length?' · ไม่สำเร็จ '+fails.length+' คน':''),fails.length?'warn':'ok');
   if(fails.length) alert('ส่ง PIN ไม่สำเร็จ '+fails.length+' คน (ยังไม่ได้ตั้ง PIN ให้ — ลองใหม่หรือใช้ปุ่ม 🔑 ตั้ง/รีเซ็ต PIN รายคน):\n\n'+fails.join('\n'));
   if(typeof filterUsers==='function') filterUsers();
+}
+/* #305: ลงทะเบียน LINE จากหน้าล็อกอิน — ลิงก์เพิ่มเพื่อนตั้งโดย Admin; การผูก LINE User ID ทำที่ Worker เมื่อพนักงานพิมพ์รหัส (#148) */
+function openLineReg(){
+  document.getElementById('loginGate').style.display='none';
+  document.getElementById('lineRegGate').style.display='flex';
+  const url=(loadMs365Config().lineAddUrl||'').trim();
+  const b=document.getElementById('lineRegBtn'), m=document.getElementById('lineRegMsg');
+  const okUrl=/^https:\/\/(line\.me|lin\.ee)\//i.test(url);
+  b.style.display=okUrl?'block':'none'; if(okUrl) b.href=url;
+  m.style.display=okUrl?'none':'block';
+  m.textContent=okUrl?'':'ยังไม่ได้ตั้งลิงก์เพิ่มเพื่อน LINE — กรุณาติดต่อ HR';
+}
+function closeLineReg(){
+  document.getElementById('lineRegGate').style.display='none';
+  document.getElementById('loginGate').style.display='flex';
 }
 let _actChallenge = '';
 function _actErr(m){ const e = document.getElementById('actErr'); e.textContent = m || ''; e.style.display = m ? 'block' : 'none'; }
@@ -8409,7 +8436,9 @@ const DEFAULT_MS365_CONFIG = {
   /* ฝังค่าเริ่มต้นไว้ในโค้ด (เหมือน workerUrl/tenantId #31) — เดิมว่างเปล่า ต้องกรอกที่หน้านี้เองทุกเครื่อง
      และค่าเก็บแค่ใน localStorage ของเบราว์เซอร์นั้น จึงหายทุกครั้งที่เปลี่ยนเครื่อง/ล้างข้อมูล/เปิด Incognito
      (loadMs365Config() ใช้ค่าที่บันทึกไว้ก่อน ถ้าว่างจึงตกมาใช้ค่านี้) ถ้า URL จริงเปลี่ยน แก้ที่นี่ */
-  appUrl: 'https://hunnysri91021-sml.github.io/SML_PMS_Professional/SML_PMS_v14.html'
+  appUrl: 'https://hunnysri91021-sml.github.io/SML_PMS_Professional/SML_PMS_v14.html',
+  /* #305: ลิงก์เพิ่มเพื่อน LINE OA ของบริษัท (เช่น https://line.me/R/ti/p/@xxxxxxx) — ไม่เดา ต้อง Admin กรอกในหน้า MS365 */
+  lineAddUrl: ''
 };
 
 let msalInstance = null;
@@ -8424,7 +8453,8 @@ function getMs365ConfigFromForm(){
     employeeTable: (document.getElementById('ms365EmployeeTable')?.value || 'Employees').trim(),
     evaluationTable: (document.getElementById('ms365EvaluationTable')?.value || 'Appraisals').trim(),
     workerUrl: (document.getElementById('ms365WorkerUrl')?.value || '').trim().replace(/\/+$/,''),
-    appUrl: (document.getElementById('ms365AppUrl')?.value || '').trim().replace(/\/+$/,'')
+    appUrl: (document.getElementById('ms365AppUrl')?.value || '').trim().replace(/\/+$/,''),
+    lineAddUrl: (document.getElementById('ms365LineAddUrl')?.value || '').trim()
   };
 }
 
@@ -8438,6 +8468,7 @@ function applyMs365ConfigToForm(cfg){
   set('ms365EvaluationTable', cfg.evaluationTable || 'Appraisals');
   set('ms365WorkerUrl', cfg.workerUrl);
   set('ms365AppUrl', cfg.appUrl);
+  set('ms365LineAddUrl', cfg.lineAddUrl);
   const configured = !!(cfg.tenantId && cfg.clientId && cfg.siteUrl);
   const workerOn = isWorkerConfigured(cfg);
   updateMs365Status(configured ? 'warn' : '', configured ? 'ตั้งค่าแล้ว' : 'ยังไม่ตั้งค่า');

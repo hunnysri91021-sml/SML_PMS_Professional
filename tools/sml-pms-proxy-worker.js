@@ -782,9 +782,13 @@ async function handleLineEvent(ev, env, token, driveId, itemId) {
      ไม่สำเร็จเท่านั้น — ทั้งสองความล้มเหลวต้อง console.error ค่าจริงแยกกันให้เห็นใน Cloudflare Logs
      เสมอ ไม่เงียบแบบเดิม ตรงตาม CLAUDE.md #10/#14/#66 ของเว็บ */
   let saveOk = false;
+  let blocked = false;
   try {
     const settingsRows = await listRows(token, driveId, itemId, 'EmployeeSettings');
     const existing = settingsRows.find((r) => String(r[0] || '').trim() === empCode);
+    /* #305: รหัสนี้ผูก LINE คนอื่นไว้แล้ว ห้ามทับ (รหัสพนักงานไม่ใช่ความลับ — ไม่งั้นใครส่งรหัสคนอื่นมาก็ชิงการแจ้งเตือนของเขาได้) */
+    const oldLine = existing ? String(existing[5] || '').trim() : '';
+    if (oldLine && oldLine !== userId) { blocked = true; throw new Error('__line_already_registered__'); }
     const pinHash = existing ? existing[1] || '' : '';
     const evalLevel = existing ? existing[2] || '' : '';
     const evalExempt = existing ? existing[4] || '0' : '0';
@@ -799,11 +803,13 @@ async function handleLineEvent(ev, env, token, driveId, itemId) {
     ]);
     saveOk = true;
   } catch (e) {
-    console.error('handleLineEvent: EmployeeSettings save failed for', empCode, ':', (e && e.message) || e);
+    if (!blocked) console.error('handleLineEvent: EmployeeSettings save failed for', empCode, ':', (e && e.message) || e);
   }
 
   try {
-    if (saveOk) {
+    if (blocked) {
+      await replyLine(env.LINE_CHANNEL_ACCESS_TOKEN, replyToken, `รหัส ${empCode} ลงทะเบียน LINE ไว้แล้วด้วยบัญชีอื่น — หากเปลี่ยนบัญชี LINE กรุณาติดต่อ HR`);
+    } else if (saveOk) {
       await replyLine(
         env.LINE_CHANNEL_ACCESS_TOKEN,
         replyToken,
