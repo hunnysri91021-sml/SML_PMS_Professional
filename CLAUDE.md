@@ -8983,6 +8983,8 @@ touches employee/attendance/evaluation data.
 
 296. **Cascade KPI ใช้งานจริง (เดิมเก็บแค่ในหน้าเว็บ รีโหลดหาย และไม่มีฟังก์ชันคิดคะแนนอ่านเลย — ปุ่มดูเหมือนทำงานแต่ไม่มีผล, #10).** `cascadeData` เก็บถาวร (`CASCADE_LOCAL_KEY`) และ sync Excel ตาราง `FormWeights` แถว `__cascade__` (JSON, ใหม่กว่าชนะด้วย `at`, hook ใน `ms365SyncFormWeights`); `kpiListForEmp(code,cycle)` = KPI รายบุคคลที่ผูกรหัส + KPI org/dept ที่ Cascade ลงมาถึง (`cascadeAppliesTo`: ระดับ role + ฝ่าย u[6] ตรง; ระดับ `emp` = ทั้งแบบฟอร์ม op ปฏิบัติการและ of สำนักงาน) ใช้ใน `computeKpiScoreForEmp` และกล่อง KPI ในใบพิมพ์. KPI org/dept ใช้ผลจริง/เป้าหมายตัวเลข (`actualVal/targetVal`) ค่าเดียวทั้งกลุ่ม; น้ำหนักใช้ค่าจาก Cascade (ว่าง = น้ำหนัก KPI); KPI เดียวกันหลาย Cascade ที่ตรงกันนับครั้งเดียว; ห้าม Cascade KPI รายบุคคล/ซ้ำระดับ+ฝ่ายเดิม; Admin/sysadmin เท่านั้น. ข้อจำกัด: ผลจริงเป็นค่าเดียวทั้งกลุ่ม (ถ้าต้องการรายคนใช้ KPI รายบุคคล/Import CSV). ทดสอบ: `tests/kpi-cascade.test.js`.
 
+297. **Cascade KPI กรอกผลจริงแยกรายคนได้ (ต่อจาก #296 ที่ผลจริงเป็นค่าเดียวทั้งกลุ่ม).** แต่ละ Cascade มี `c.actuals={รหัสพนักงาน:ตัวเลข}` (เก็บใน JSON แถว `__cascade__` เดิม จึง sync Excel ไปด้วย ไม่ต้องเพิ่มคอลัมน์/ไม่ต้อง redeploy Worker); ปุ่ม "👤 ผลรายคน" ในตาราง Cascade เปิด modal `mCascadeActuals` (`openCascadeActuals`/`saveCascadeActuals`, Admin/HR เท่านั้น) ลิสต์พนักงาน active ที่ตรงระดับ+ฝ่าย (`cascadeTargetEmps`). `kpiListForEmp` ใช้ผลรายคนก่อน ไม่มี/เว้นว่าง = ใช้ผลจริงกลุ่ม (`k.actualVal`) ไม่มีทั้งสอง = KPI นั้นไม่นับให้คนนั้น (#14). เป้าหมายยังเป็นค่าเดียวของ KPI. ทดสอบ: `tests/kpi-cascade-actuals.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

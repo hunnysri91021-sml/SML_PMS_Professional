@@ -4721,7 +4721,44 @@ function renderCascadeRows(){
     <td style="text-align:center">${c.kpiYear ? 'FY'+c.kpiYear : '—'}</td>
     <td style="text-align:center">${c.weight}%</td>
     <td style="text-align:center"><span class="bd b-ok" style="background:#dcfce7;color:#15803d">✅ ใช้งาน</span></td>
-    <td><button class="btn btn-sm btn-dg" onclick="deleteCascade(${i})">🗑️</button></td></tr>`).join('');
+    <td style="white-space:nowrap"><button class="btn btn-sm" onclick="openCascadeActuals(${i})" title="กรอกผลจริงแยกรายคน">👤 ผลรายคน${Object.keys(c.actuals||{}).length?' ('+Object.keys(c.actuals).length+')':''}</button>
+    <button class="btn btn-sm btn-dg" onclick="deleteCascade(${i})">🗑️</button></td></tr>`).join('');
+}
+/* #297: ผลจริงแยกรายคนภายใต้ Cascade เดียว — c.actuals = {รหัสพนักงาน: ตัวเลข}; คนที่ไม่ได้กรอกใช้ผลจริงกลุ่ม (k.actualVal) */
+let cascadeActualsIdx = -1;
+function cascadeTargetEmps(c){
+  return MASTER_USERS.filter(u=>u[12]==='active' && cascadeAppliesTo(c,u)).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+}
+function openCascadeActuals(i){
+  const c = cascadeData[i]; if(!c) return;
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR กรอกผลรายคนได้','warn'); return; }
+  cascadeActualsIdx = i;
+  const k = goalKpiData.find(x=>x.id===c.kpiId);
+  const h = document.getElementById('cascadeActualsTitle');
+  if(h) h.textContent = '👤 ผลจริงรายคน — '+c.kpiName;
+  const info = document.getElementById('cascadeActualsInfo');
+  if(info) info.textContent = 'เป้าหมาย (ตัวเลข): '+((k&&k.targetVal!==''&&k.targetVal!=null)?k.targetVal:'—')+' · ผลจริงกลุ่ม (ใช้เมื่อไม่กรองรายคน): '+((k&&k.actualVal!==''&&k.actualVal!=null)?k.actualVal:'—')+' · ทิศทาง: '+((k&&k.direction==='down')?'ยิ่งต่ำยิ่งดี':'ยิ่งสูงยิ่งดี');
+  const emps = cascadeTargetEmps(c);
+  const tb = document.getElementById('cascadeActualsRows');
+  if(tb) tb.innerHTML = emps.map(u=>`<tr><td>${escH(u[0])}</td><td>${escH(u[1])}</td><td>${escH(u[6]||'')}</td>
+    <td><input type="number" step="any" class="cas-act" data-code="${escH(u[0])}" value="${escH((c.actuals||{})[u[0]]??'')}" style="width:110px" placeholder="ใช้ค่ากลุ่ม"></td></tr>`).join('')
+    || '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px">ไม่มีพนักงานที่ตรงระดับ/ฝ่ายนี้</td></tr>';
+  openM('mCascadeActuals');
+}
+function saveCascadeActuals(){
+  const c = cascadeData[cascadeActualsIdx]; if(!c) return;
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR','warn'); return; }
+  const acts = {}; let bad = 0;
+  document.querySelectorAll('#cascadeActualsRows .cas-act').forEach(inp=>{
+    const v = inp.value.trim(); if(v==='') return;
+    if(!isFinite(Number(v))){ bad++; return; }
+    acts[inp.dataset.code] = Number(v);
+  });
+  if(bad){ smlToast('มี '+bad+' ช่องที่ไม่ใช่ตัวเลข — แก้ก่อนบันทึก','warn'); return; }
+  c.actuals = acts;
+  saveCascadeData(); renderCascadeRows(); closeM();
+  if(typeof appendAuditLog==='function') appendAuditLog('kpi','กรอกผลจริงรายคน (Cascade)', c.kpiName, Object.keys(acts).length+' คน');
+  smlToast('บันทึกผลจริงรายคน '+Object.keys(acts).length+' คน (คนที่เว้นว่างใช้ค่ากลุ่ม)','ok');
 }
 function saveCascadeKpi(){
   const kpiId = document.getElementById('mCascadeKpiId')?.value;
@@ -13868,7 +13905,9 @@ function kpiListForEmp(empCode, cycle){
       const k = goalKpiData.find(x=>x.id===c.kpiId);
       if(!k || k.scope==='person' || k.status!=='active' || String(k.year||'')!==yr || seen.has(k.id) || !cascadeAppliesTo(c, emp)) return;
       seen.add(k.id);
-      out.push({k, w:(Number(c.weight)>0 ? Number(c.weight) : (Number(k.pct)||0)), cascade:true});
+      const own = c.actuals && c.actuals[empCode];
+      const kk = (own!==undefined && own!==null && own!=='') ? Object.assign({}, k, {actualVal:own}) : k; /* #297 ผลจริงรายคน */
+      out.push({k:kk, w:(Number(c.weight)>0 ? Number(c.weight) : (Number(k.pct)||0)), cascade:true});
     });
   }
   return out;
@@ -16331,6 +16370,17 @@ async function confirmImportEmployees(){
     <button class="btn" onclick="closeM()">ยกเลิก</button>
     <button class="btn btn-ok" onclick="confirmKpiActivate()">🔓 ยืนยันเปิดใช้งาน</button>
   </div>
+</div></div>
+
+<!-- ===== Modal: Cascade ผลจริงรายคน (#297) ===== -->
+<div class="ov" id="mCascadeActuals"><div class="md" style="max-width:640px">
+  <div class="md-h"><h3 id="cascadeActualsTitle">👤 ผลจริงรายคน</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-b">
+    <div id="cascadeActualsInfo" style="font-size:12px;color:#64748b;margin-bottom:8px"></div>
+    <div style="max-height:50vh;overflow:auto"><table class="tbl"><thead><tr><th>รหัส</th><th>ชื่อ</th><th>ฝ่าย</th><th>ผลจริง</th></tr></thead><tbody id="cascadeActualsRows"></tbody></table></div>
+    <div style="font-size:11px;color:#94a3b8;margin-top:6px">เว้นว่าง = ใช้ผลจริงของกลุ่ม (ที่ตั้งไว้ใน KPI) · ไม่มีผลจริงทั้งสองแบบ = KPI นี้ไม่นับให้คนนั้น</div>
+  </div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-ok" onclick="saveCascadeActuals()">💾 บันทึก</button></div>
 </div></div>
 
 <!-- ===== Modal: Cascade KPI ===== -->
