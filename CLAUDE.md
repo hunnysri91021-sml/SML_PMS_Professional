@@ -8985,6 +8985,8 @@ touches employee/attendance/evaluation data.
 
 297. **Cascade KPI กรอกผลจริงแยกรายคนได้ (ต่อจาก #296 ที่ผลจริงเป็นค่าเดียวทั้งกลุ่ม).** แต่ละ Cascade มี `c.actuals={รหัสพนักงาน:ตัวเลข}` (เก็บใน JSON แถว `__cascade__` เดิม จึง sync Excel ไปด้วย ไม่ต้องเพิ่มคอลัมน์/ไม่ต้อง redeploy Worker); ปุ่ม "👤 ผลรายคน" ในตาราง Cascade เปิด modal `mCascadeActuals` (`openCascadeActuals`/`saveCascadeActuals`, Admin/HR เท่านั้น) ลิสต์พนักงาน active ที่ตรงระดับ+ฝ่าย (`cascadeTargetEmps`). `kpiListForEmp` ใช้ผลรายคนก่อน ไม่มี/เว้นว่าง = ใช้ผลจริงกลุ่ม (`k.actualVal`) ไม่มีทั้งสอง = KPI นั้นไม่นับให้คนนั้น (#14). เป้าหมายยังเป็นค่าเดียวของ KPI. ทดสอบ: `tests/kpi-cascade-actuals.test.js`.
 
+298. **การ์ด "สัดส่วนคะแนน Y / Z / KPI" (หน้า "ตั้งค่าแบบประเมิน") จัดหน้าใหม่ให้อ่านง่าย.** เดิมเป็น banner ที่ยัดข้อความยาว + ช่องกรอกเล็กโปร่งใสในแถบสี → ตอนนี้เป็นการ์ด `.wgt-card` (ป้ายชัด "Y · ผลงาน / Z · เวลาทำงาน / KPI", ช่องกรอกใหญ่, แถบสัดส่วนสี 3 ส่วน, ข้อความรวม % สด `updateWeightSum(lv)` — ✅ รวม 100% / ⚠️ เกิน-ขาดกี่ %). id ช่องกรอก (`wY_/wZ_/wK_<lv>`) และฟังก์ชันบันทึก/รีเซ็ตเดิมไม่เปลี่ยน; `showTplDetail` เรียก `updateWeightSum` หลัง render. ทดสอบ: `tests/weight-card.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

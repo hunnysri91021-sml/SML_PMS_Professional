@@ -699,6 +699,23 @@ input[type="checkbox"]{accent-color:#0b63ce}
 .ms365-panel{animation:fadeIn .2s ease;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 
+
+/* ===== #298 การ์ดสัดส่วนคะแนน Y/Z/KPI (ตั้งค่าแบบประเมิน) อ่านง่าย ===== */
+.wgt-card{text-align:left;margin-top:12px;background:#fff;border:1px solid #e2e8f0;border-left:5px solid #9333ea;border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.wgt-title{font-size:16px;font-weight:800;color:#1e293b}
+.wgt-sub{font-size:12.5px;color:#64748b;margin-top:3px}
+.wgt-grid{display:grid;grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.wgt-f{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#475569}
+.wgt-f select,.wgt-f input{width:100%;box-sizing:border-box;font-size:18px;font-weight:800;color:#0f172a;border:1.5px solid #cbd5e1;border-radius:10px;padding:8px 10px;background:#f8fafc}
+.wgt-f select{font-size:14px;font-weight:700;padding:11px 10px}
+.wgt-f div{position:relative}.wgt-f div input{padding-right:30px;text-align:center}
+.wgt-f div i{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-style:normal;font-weight:700;color:#64748b}
+.wgt-f input:focus,.wgt-f select:focus{outline:none;border-color:#9333ea;background:#fff;box-shadow:0 0 0 3px rgba(147,51,234,.15)}
+.wgt-bar{display:flex;height:12px;border-radius:99px;overflow:hidden;background:#e2e8f0;margin-top:14px}
+.wgt-bar b{display:block;height:100%;transition:width .2s}.wgt-bar .y{background:#2563eb}.wgt-bar .z{background:#16a34a}.wgt-bar .k{background:#f59e0b}
+.wgt-sum{margin-top:8px;font-size:13px;font-weight:700}.wgt-sum.ok{color:#15803d}.wgt-sum.bad{color:#b91c1c}
+.wgt-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+@media(max-width:700px){.wgt-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.wgt-year{grid-column:1/-1}}
 </style>
 
 <style>
@@ -13802,6 +13819,13 @@ function saveScoreWeightsForYearSilent(year, lv, ypct, zpct, kpct){
   saveScoreWeightsByYear(all);
   loadScoreWeightsOverride();
 }
+function updateWeightSum(lv){
+  const v=id=>Math.max(0,Number(document.getElementById(id+'_'+lv)?.value)||0);
+  const y=v('wY'),z=v('wZ'),k=v('wK'),t=y+z+k;
+  const bar=document.getElementById('wBar_'+lv), sum=document.getElementById('wSum_'+lv);
+  if(bar){ const w=t>0?t:100; bar.children[0].style.width=(y/w*100)+'%'; bar.children[1].style.width=(z/w*100)+'%'; bar.children[2].style.width=(k/w*100)+'%'; }
+  if(sum){ const ok=Math.abs(t-100)<1e-9; sum.className='wgt-sum '+(ok?'ok':'bad'); sum.textContent=ok?'✅ รวม 100% — บันทึกได้':'⚠️ รวม '+t+'% — ต้องเท่ากับ 100% ('+(t<100?'ขาดอีก '+(100-t):'เกิน '+(t-100))+'%)'; }
+}
 function saveScoreWeightsFromForm(lv){
   if(!isSysadmin()){ smlToast('เฉพาะ Admin ระบบ (sysadmin) เท่านั้นที่ปรับสัดส่วนคะแนนได้','warn'); return; }
   const ypct = Number(document.getElementById('wY_'+lv)?.value);
@@ -14126,18 +14150,25 @@ function showTplDetail(lv){
       <span>🛡️</span><div><b>โหมด Admin ระบบ:</b> แก้ไข/ลบข้อปัจจัยได้จากปุ่มในตาราง หรือกด "เพิ่มข้อปัจจัย" ด้านล่าง
       (รองรับสูงสุด ${SML_FORM_MAIN_SLOTS} ข้อหลัก${cfg.leaderShow?` + ${SML_FORM_LEADER_SLOTS} ข้อหัวหน้า`:''} — ตามจำนวนคอลัมน์ m01–m${SML_FORM_MAIN_SLOTS}${cfg.leaderShow?`/l01–l${String(SML_FORM_LEADER_SLOTS).padStart(2,'0')}`:''} บนชีต Appraisals)</div>
     </div>
-    <div class="form-detail-banner" style="margin-top:10px;--form-color:#9333ea">
-      <div><b>⚖️ สัดส่วนคะแนน Y / Z / KPI — ตั้งแยกตามรอบ/ปีได้</b><span>ผลรวมทั้ง 3 ช่องต้อง = 100% เสมอ · เลือก "ใช้กับรอบ" ก่อน แล้วกรอก/บันทึก — รอบที่ไม่ได้ตั้งเฉพาะจะใช้ "ทุกรอบ (ค่าตั้งต้น)" · รอบปัจจุบันของระบบ: ${(()=>{try{return getCurrentEvalCycleYear();}catch(e){return '—';}})()}</span></div>
-      <div class="form-detail-badges" style="gap:8px">
-        <span>ใช้กับรอบ <select onchange="onWeightYearChange('${lv}', this.value)" style="border:none;background:transparent;font-weight:700;color:inherit"><option value="">ทุกรอบ (ค่าตั้งต้น)</option>${getWeightYearOptions().map(y=>`<option value="${y}" ${y===tplWeightYear?'selected':''}>${y}${loadScoreWeightsByYear()[y]?.[lv]?' ✓ ตั้งแล้ว':''}</option>`).join('')}<option value="__new__">＋ เพิ่มรอบ/ปีอื่น…</option></select></span>
-        <span>Y <input type="number" id="wY_${lv}" value="${wEd.ypct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
-        <span>Z <input type="number" id="wZ_${lv}" value="${wEd.zpct}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
-        <span>KPI <input type="number" id="wK_${lv}" value="${wEd.kpct||0}" min="0" max="100" style="width:52px;border:none;background:transparent;font-weight:700;color:inherit;text-align:center">%</span>
+    <div class="wgt-card">
+      <div class="wgt-head">
+        <div class="wgt-title">⚖️ สัดส่วนคะแนน Y / Z / KPI</div>
+        <div class="wgt-sub">รอบปัจจุบันของระบบ: <b>${(()=>{try{return getCurrentEvalCycleYear();}catch(e){return '—';}})()}</b> · รอบที่ไม่ได้ตั้งเฉพาะจะใช้ "ทุกรอบ (ค่าตั้งต้น)"</div>
       </div>
-    </div>
-    <div style="margin:8px 0 0;display:flex;gap:8px">
-      <button class="btn btn-sm btn-p" onclick="saveScoreWeightsFromForm('${lv}')">💾 บันทึกสัดส่วน</button>
-      <button class="btn btn-sm" onclick="resetScoreWeightsForLevel('${lv}');showTplDetail('${lv}');smlToast('รีเซ็ตสัดส่วนเป็นค่าเริ่มต้นแล้ว','ok')">↩️ รีเซ็ตเป็นค่าเริ่มต้น</button>
+      <div class="wgt-grid">
+        <label class="wgt-f wgt-year"><span>ใช้กับรอบ</span>
+          <select onchange="onWeightYearChange('${lv}', this.value)"><option value="">ทุกรอบ (ค่าตั้งต้น)</option>${getWeightYearOptions().map(y=>`<option value="${y}" ${y===tplWeightYear?'selected':''}>${y}${loadScoreWeightsByYear()[y]?.[lv]?' ✓ ตั้งแล้ว':''}</option>`).join('')}<option value="__new__">＋ เพิ่มรอบ/ปีอื่น…</option></select>
+        </label>
+        <label class="wgt-f"><span>Y · ผลงาน</span><div><input type="number" id="wY_${lv}" value="${wEd.ypct}" min="0" max="100" oninput="updateWeightSum('${lv}')"><i>%</i></div></label>
+        <label class="wgt-f"><span>Z · เวลาทำงาน</span><div><input type="number" id="wZ_${lv}" value="${wEd.zpct}" min="0" max="100" oninput="updateWeightSum('${lv}')"><i>%</i></div></label>
+        <label class="wgt-f"><span>KPI</span><div><input type="number" id="wK_${lv}" value="${wEd.kpct||0}" min="0" max="100" oninput="updateWeightSum('${lv}')"><i>%</i></div></label>
+      </div>
+      <div class="wgt-bar" id="wBar_${lv}"><b class="y"></b><b class="z"></b><b class="k"></b></div>
+      <div class="wgt-sum" id="wSum_${lv}"></div>
+      <div class="wgt-act">
+        <button class="btn btn-sm btn-p" onclick="saveScoreWeightsFromForm('${lv}')">💾 บันทึกสัดส่วน</button>
+        <button class="btn btn-sm" onclick="resetScoreWeightsForLevel('${lv}');showTplDetail('${lv}');smlToast('รีเซ็ตสัดส่วนเป็นค่าเริ่มต้นแล้ว','ok')">↩️ รีเซ็ตเป็นค่าเริ่มต้น</button>
+      </div>
     </div>`:''}
     <div class="tw" style="margin-top:14px">
       <table class="form-detail-table">
@@ -14169,6 +14200,7 @@ function showTplDetail(lv){
       <span>Training & Development</span>
       <span>ผู้ถูกประเมิน → ผู้ประเมิน → ผู้บังคับบัญชาระดับสูง → ผู้จัดการทั่วไป → MD-SML</span>
     </div>`;
+  if(typeof updateWeightSum==='function') updateWeightSum(lv);
 }
 
 /* ====== SYSADMIN: แก้ไข/เพิ่ม/ลบ ปัจจัยแบบฟอร์มประเมิน ====== */
