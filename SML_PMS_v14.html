@@ -1696,6 +1696,26 @@ img,svg,canvas{max-width:100%}
     <div class="fg"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 หลัก (เว้นว่างได้ถ้ายังไม่เคยตั้ง)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn btn-p" id="loginBtn" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
     <div style="text-align:center;margin-top:10px"><a href="#" id="forgotLink" onclick="openForgotPin();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">ลืม PIN? ตั้ง PIN ใหม่เอง</a></div>
+    <div style="text-align:center;margin-top:6px"><a href="#" id="activateLink" onclick="openActivate();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">🎟️ เข้าใช้ครั้งแรก? เปิดใช้งานด้วยรหัสจาก HR</a></div>
+  </div>
+</div>
+
+<div class="login-gate" id="activateGate" style="display:none">
+  <div class="login-box">
+    <h2>🎟️ เปิดใช้งานบัญชีครั้งแรก</h2>
+    <p class="login-note" id="actNote">กรอกรหัสพนักงานและ "รหัสเปิดใช้งาน" ที่ HR ให้ แล้วลงทะเบียนอีเมล ระบบจะส่งรหัสยืนยัน 6 หลักไปที่อีเมลนั้น จากนั้นตั้ง PIN ของคุณเอง</p>
+    <div id="actErr" class="login-err" style="display:none"></div>
+    <div class="fg"><label>รหัสพนักงาน</label><input id="actCode" autocomplete="username"></div>
+    <div class="fg"><label>รหัสเปิดใช้งาน (จาก HR)</label><input id="actCodeAct" placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" autocomplete="off"></div>
+    <div class="fg"><label>อีเมลของคุณ <small id="actEmailHint" style="font-weight:400;color:#64748b">(ถ้า HR ลงอีเมลไว้แล้ว ระบบจะใช้อีเมลนั้น)</small></label><input id="actEmail" type="email" autocomplete="email"></div>
+    <div id="actStep2" style="display:none">
+      <div class="fg"><label>รหัสยืนยัน 6 หลัก (จากอีเมล)</label><input id="actOtp" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></div>
+      <div class="fg"><label>PIN ใหม่ (ตัวเลข 4-6 หลัก)</label><input id="actPin1" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>
+      <div class="fg"><label>ยืนยัน PIN อีกครั้ง</label><input id="actPin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" onkeydown="if(event.key==='Enter')activateFinish()"></div>
+    </div>
+    <button class="btn btn-p" id="actBtn" style="width:100%;margin-top:4px" onclick="activateStart()">ส่งรหัสยืนยันไปอีเมล</button>
+    <button class="btn btn-p" id="actFinishBtn" style="width:100%;margin-top:4px;display:none" onclick="activateFinish()">เปิดใช้งานและตั้ง PIN</button>
+    <div style="text-align:center;margin-top:10px"><a href="#" onclick="closeActivate();return false" style="font-size:13px">← กลับไปหน้าเข้าสู่ระบบ</a></div>
   </div>
 </div>
 
@@ -2605,6 +2625,7 @@ img,svg,canvas{max-width:100%}
     <div class="ph-act">
       <button class="btn" onclick="openM('mEmployeeTemplate')">📄 Template พนักงาน</button>
       <button class="btn" onclick="openM('mImportUsers')">⬆️ Import พนักงาน</button>
+      <button class="btn" id="actBulkBtn" onclick="issueActivationCodes('')" title="สร้างรหัสเปิดใช้งานให้ทุกคนที่ยังไม่มี PIN แล้วดาวน์โหลดเป็นไฟล์">🎟️ รหัสเปิดใช้งาน (ทุกคนที่ยังไม่มี PIN)</button>
       <button class="btn btn-p" onclick="clearUserModalForm();openM('mAddUser')">＋ เพิ่มพนักงาน</button>
     </div></div>
 
@@ -5355,6 +5376,91 @@ async function forgotSubmit(){
   }catch(e){
     btn.disabled = false;
     _forgotErr((e && e.status) ? String(e.message) : '⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+  }
+}
+
+/* #303: เปิดใช้งานครั้งแรก — รหัสจาก HR + OTP ยืนยันอีเมล + ตั้ง PIN เอง (ทำที่ Worker ทั้งหมด) */
+let _actChallenge = '';
+function _actErr(m){ const e = document.getElementById('actErr'); e.textContent = m || ''; e.style.display = m ? 'block' : 'none'; }
+function openActivate(){
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('activateGate').style.display = 'flex';
+  _actChallenge = '';
+  ['actCode','actCodeAct','actEmail'].forEach(i=>{ const e=document.getElementById(i); e.disabled=false; });
+  document.getElementById('actCode').value = (document.getElementById('loginCode')?.value || '').trim();
+  document.getElementById('actStep2').style.display = 'none';
+  document.getElementById('actFinishBtn').style.display = 'none';
+  const b = document.getElementById('actBtn'); b.style.display = ''; b.disabled = false; b.textContent = 'ส่งรหัสยืนยันไปอีเมล';
+  _actErr(useServerAuth() ? '' : 'ฟีเจอร์นี้ใช้ได้เมื่อระบบเชื่อมต่อเซิร์ฟเวอร์แล้วเท่านั้น — กรุณาติดต่อ HR');
+}
+function closeActivate(){
+  document.getElementById('activateGate').style.display = 'none';
+  document.getElementById('loginGate').style.display = 'flex';
+  _actChallenge = '';
+}
+async function activateStart(){
+  const code = (document.getElementById('actCode').value || '').trim();
+  const activation = (document.getElementById('actCodeAct').value || '').trim();
+  const email = (document.getElementById('actEmail').value || '').trim();
+  if(!code || !activation){ _actErr('กรุณากรอกรหัสพนักงานและรหัสเปิดใช้งาน'); return; }
+  if(!useServerAuth()){ _actErr('ฟีเจอร์นี้ใช้ได้เมื่อระบบเชื่อมต่อเซิร์ฟเวอร์แล้วเท่านั้น — กรุณาติดต่อ HR'); return; }
+  const btn = document.getElementById('actBtn'); btn.disabled = true; btn.textContent = 'กำลังส่ง...'; _actErr('');
+  try{
+    const r = await workerFetch(loadMs365Config(), '/auth/activate/start', { method:'POST', body: JSON.stringify({ code, activation, email }) });
+    _actChallenge = r.challenge;
+    ['actCode','actCodeAct','actEmail'].forEach(i=>{ document.getElementById(i).disabled = true; });
+    document.getElementById('actStep2').style.display = 'block';
+    btn.style.display = 'none';
+    document.getElementById('actFinishBtn').style.display = '';
+    document.getElementById('actNote').textContent = 'ส่งรหัสยืนยันไปที่ ' + r.maskedEmail + (r.usedOnFile ? ' (อีเมลที่ HR ลงไว้)' : '') + ' แล้ว (ใช้ได้ ' + (r.ttlMin||10) + ' นาที) — กรอกรหัสและตั้ง PIN ด้านล่าง';
+    document.getElementById('actOtp').focus();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'ส่งรหัสยืนยันไปอีเมล';
+    _actErr((e && e.status) ? String(e.message) : '⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+  }
+}
+async function activateFinish(){
+  const g = id => (document.getElementById(id).value || '').trim();
+  const code = g('actCode'), activation = g('actCodeAct'), email = g('actEmail'), otp = g('actOtp'), p1 = g('actPin1'), p2 = g('actPin2');
+  if(!/^\d{6}$/.test(otp)){ _actErr('กรุณากรอกรหัสยืนยัน 6 หลักจากอีเมล'); return; }
+  if(!/^\d{4,6}$/.test(p1)){ _actErr('PIN ต้องเป็นตัวเลข 4-6 หลัก'); return; }
+  if(p1 !== p2){ _actErr('PIN สองช่องไม่ตรงกัน — พิมพ์ใหม่อีกครั้ง'); return; }
+  if(!_actChallenge){ _actErr('กรุณาขอรหัสยืนยันใหม่'); return; }
+  const btn = document.getElementById('actFinishBtn'); btn.disabled = true; _actErr('');
+  try{
+    await workerFetch(loadMs365Config(), '/auth/activate/finish', { method:'POST', body: JSON.stringify({ code, activation, email, otp, challenge:_actChallenge, newPin:p1 }) });
+    btn.disabled = false;
+    ['actPin1','actPin2','actOtp','actCodeAct'].forEach(i=>{ document.getElementById(i).value = ''; });
+    const lc = document.getElementById('loginCode'); if(lc) lc.value = code;
+    const lp = document.getElementById('loginPin'); if(lp) lp.value = '';
+    closeActivate();
+    if(typeof smlToast === 'function') smlToast('✅ เปิดใช้งานบัญชีเรียบร้อย — เข้าสู่ระบบด้วย PIN ใหม่ได้เลย', 'ok');
+  }catch(e){
+    btn.disabled = false;
+    _actErr((e && e.status) ? String(e.message) : '⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+  }
+}
+/* Admin: ออกรหัสเปิดใช้งาน — code ว่าง = ทุกคนที่ยังไม่มี PIN (ดาวน์โหลดไฟล์), ระบุรหัส = คนเดียว (แสดงให้ HR) */
+async function issueActivationCodes(code){
+  if(!isAdminOrSysadmin()){ if(typeof smlToast==='function') smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  if(!useServerAuth()){ if(typeof smlToast==='function') smlToast('ต้องเชื่อมต่อเซิร์ฟเวอร์ (Proxy) ก่อนจึงออกรหัสเปิดใช้งานได้','warn'); return; }
+  code = String(code||'').trim();
+  if(!code && !confirm('สร้างรหัสเปิดใช้งานให้ "ทุกคนที่ยังไม่มี PIN" และดาวน์โหลดเป็นไฟล์?\n(รหัสหมดอายุใน 14 วัน ใช้ได้ครั้งเดียวต่อคน — เก็บไฟล์เป็นความลับ ส่งให้พนักงานเฉพาะรายของตน)')) return;
+  try{
+    const r = await workerFetch(loadMs365Config(), '/admin/activation-codes', { method:'POST', body: JSON.stringify(code ? { empCode:code } : {}) });
+    const list = r.codes || [];
+    if(typeof appendAuditLog==='function') appendAuditLog('employee','ออกรหัสเปิดใช้งาน', code || 'ทุกคนที่ยังไม่มี PIN', list.length+' รหัส');
+    if(code){
+      const c = list[0];
+      alert('รหัสเปิดใช้งานของ '+c.name+' ('+c.code+')\n\n'+c.activation+'\n\nหมดอายุใน '+c.days+' วัน · ใช้ได้ครั้งเดียว\nแจ้งพนักงานเป็นการส่วนตัว — ระบบจะไม่แสดงรหัสนี้ซ้ำ (ออกใหม่ได้)'+(c.email?'\n\nมีอีเมลในระบบแล้ว: ระบบจะส่งรหัสยืนยันไปที่ '+c.email:'\n\nยังไม่มีอีเมลในระบบ: พนักงานจะกรอกอีเมลเองตอนเปิดใช้งาน'));
+    } else if(!list.length){
+      if(typeof smlToast==='function') smlToast('ไม่มีพนักงานที่ยังไม่มี PIN','ok');
+    } else {
+      downloadCsv('รหัสเปิดใช้งาน_'+new Date().toISOString().slice(0,10)+'.csv', ['รหัสพนักงาน','ชื่อ-สกุล','รหัสเปิดใช้งาน','หมดอายุใน(วัน)','อีเมลที่มีในระบบ'], list.map(c=>[c.code,c.name,c.activation,c.days,c.email]));
+      if(typeof smlToast==='function') smlToast('สร้างรหัสเปิดใช้งาน '+list.length+' คน — ดาวน์โหลดไฟล์แล้ว (เก็บเป็นความลับ)','ok');
+    }
+  }catch(e){
+    if(typeof smlToast==='function') smlToast('ออกรหัสไม่สำเร็จ: '+((e&&e.message)||e),'warn');
   }
 }
 
@@ -8446,7 +8552,7 @@ let _workerReauthPending = false;
 async function workerFetch(cfg, path, options={}){
   /* #265: ทุกเส้นทางยกเว้น /auth/login ต้องแนบบัตรผ่าน (Bearer token) ที่ได้จากการล็อกอินที่ Worker */
   const token = getWorkerToken();
-  if(path !== '/auth/login' && path !== '/auth/forgot' && path !== '/auth/reset' && !token){
+  if(!path.startsWith('/auth/') && !token){
     const e = new Error('ยังไม่ได้เข้าสู่ระบบ (ไม่มีบัตรผ่านสำหรับเรียก Proxy)'); e.status = 401; throw e;
   }
   const headers = Object.assign({ 'Content-Type':'application/json' }, token ? { 'Authorization':'Bearer '+token } : {}, options.headers||{});
@@ -8456,7 +8562,7 @@ async function workerFetch(cfg, path, options={}){
   try{ data = text ? JSON.parse(text) : {}; }catch(e){ data = { raw:text }; }
   if(!res.ok){
     /* บัตรผ่านหมดอายุ/ไม่ถูกต้อง (401 บนเส้นทางอื่นที่ไม่ใช่ล็อกอิน) → กลับไปหน้าล็อกอิน ครั้งเดียว */
-    if(res.status === 401 && path !== '/auth/login' && path !== '/auth/forgot' && path !== '/auth/reset' && !_workerReauthPending){
+    if(res.status === 401 && !path.startsWith('/auth/') && !_workerReauthPending){
       _workerReauthPending = true;
       clearWorkerToken();
       try{ sessionStorage.removeItem(SML_SESSION_KEY); }catch(e){}
@@ -15609,6 +15715,7 @@ document.addEventListener('input',e=>{
         <div style="display:flex;align-items:center;gap:10px">
           <span id="mu_pinStatus" style="font-size:12.5px">⚠️ ยังไม่ได้ตั้ง PIN</span>
           <button type="button" class="btn btn-sm" onclick="resetUserPin(document.getElementById('mu_id')?.value)">🔑 ตั้ง/รีเซ็ต PIN</button>
+          <button type="button" class="btn btn-sm" onclick="issueActivationCodes(document.getElementById('mu_id')?.value)">🎟️ รหัสเปิดใช้งาน</button>
         </div>
         <div style="font-size:10.5px;color:#64748b;margin-top:2px">PIN ใช้ยืนยันตัวตนเบื้องต้นเวลาเข้าระบบ (4 หลัก) — ระบบแสดง PIN ให้ครั้งเดียวตอนตั้ง กรุณาแจ้งพนักงานเป็นการส่วนตัว</div>
       </div>

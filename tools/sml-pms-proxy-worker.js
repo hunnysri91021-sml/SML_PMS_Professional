@@ -89,6 +89,7 @@
  * Admin) แล้วออกบัตรผ่านที่เซ็นด้วย SESSION_SECRET ทุก endpoint อื่นต้องแนบ "Authorization: Bearer <token>"
  * และตรวจสิทธิ์ตามบทบาท (เขียนตารางสำคัญ/ลบ/dedupe = Admin เท่านั้น) — ไม่มีกุญแจร่วมฝังในหน้าเว็บอีกต่อไป
  * ลืม PIN (#302): /auth/forgot ส่ง OTP 6 หลักไปอีเมลของพนักงาน แล้ว /auth/reset ให้พนักงานตั้ง PIN ใหม่เอง (ต้องมี SEND_AS_EMAIL)
+ * เปิดใช้งานครั้งแรก (#303): HR ออกรหัสเปิดใช้งาน (/admin/activation-codes) → พนักงาน /auth/activate/start (ยืนยันรหัส + ส่ง OTP ไปอีเมล) → /auth/activate/finish (ตั้ง PIN + ลงทะเบียนอีเมลในตาราง Employees คอลัมน์ J)
  * ข้อจำกัดที่เหลือ (รอบ 1): ยังไม่กรอง "รายแถว" ตามสังกัด (ผู้ล็อกอินอ่านตารางที่ไม่ใช่ EmployeeSettings ได้ทั้งตาราง)
  * และตัวนับ PIN ผิดอยู่ในหน่วยความจำของ Worker (รีเซ็ตเมื่อ isolate ถูกรีไซเคิล) — Application Access Policy
  * ที่จำกัดให้แอปเข้าถึงได้แค่ site เดียวยังจำเป็นเสมอ
@@ -120,6 +121,12 @@ export default {
     /* #302: ลืม PIN — พนักงานขอรหัสยืนยัน (OTP) ทางอีเมลที่ลงทะเบียนไว้แล้วตั้ง PIN ใหม่เอง (ยังไม่ล็อกอินจึงไม่มีบัตรผ่าน) */
     if ((url.pathname === '/auth/forgot' || url.pathname === '/auth/reset') && request.method === 'POST') {
       try { return await (url.pathname === '/auth/forgot' ? handleForgot : handleReset)(request, env, cors); }
+      catch (e) { return json({ error: String((e && e.message) || e) }, 500, cors); }
+    }
+
+    /* #303: เปิดใช้งานครั้งแรก — รหัสเปิดใช้งานจาก HR + ยืนยันอีเมลด้วย OTP + ตั้ง PIN เอง */
+    if ((url.pathname === '/auth/activate/start' || url.pathname === '/auth/activate/finish') && request.method === 'POST') {
+      try { return await (url.pathname === '/auth/activate/start' ? handleActivateStart : handleActivateFinish)(request, env, cors); }
       catch (e) { return json({ error: String((e && e.message) || e) }, 500, cors); }
     }
 
@@ -212,6 +219,32 @@ export default {
       const { driveId, itemId, siteId } = await resolveSite(env, token);
 
       /* #264: ตั้งค่า/ย้าย list (Admin เท่านั้น) — ไม่ขึ้นกับ LIST_TABLES เพื่อให้ย้ายข้อมูลได้ก่อนสลับใช้งาน */
+      /* #303: HR ออกรหัสเปิดใช้งาน (Admin เท่านั้น) — body {empCode?, days?}; ไม่ระบุ empCode = ทุกคนที่ยังไม่มี PIN */
+      if (url.pathname === '/admin/activation-codes' && request.method === 'POST') {
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
+        if (!env.SESSION_SECRET) return json({ error: 'ยังไม่ได้ตั้งค่า SESSION_SECRET ใน Worker' }, 500, cors);
+        const bi = await request.json().catch(() => ({}));
+        const days = Math.min(60, Math.max(1, parseInt(bi.days, 10) || ACT_DEFAULT_DAYS));
+        const [emps, sets] = await Promise.all([
+          listRows(token, driveId, itemId, 'Employees'),
+          listRows(token, driveId, itemId, 'EmployeeSettings'),
+        ]);
+        const want = bi.empCode ? String(bi.empCode).trim().toLowerCase() : '';
+        const out = [];
+        for (const e of emps) {
+          const code = String(e[0] || '').trim();
+          if (!code || String(e[15] || '').toLowerCase().includes('resign')) continue;
+          if (want && code.toLowerCase() !== want) continue;
+          const sr = sets.find((r) => String(r[0] || '').trim() === code);
+          const pinHash = String((sr && sr[1]) || '').trim().toLowerCase();
+          if (pinHash) { if (want) return json({ error: 'พนักงานคนนี้มี PIN แล้ว — ใช้ปุ่มตั้ง/รีเซ็ต PIN หรือให้ลืม PIN ตั้งเอง' }, 400, cors); continue; }
+          const exp = actExpDay(days);
+          out.push({ code, name: String(e[1] || '').trim(), activation: await makeActivation(env, code, exp, pinHash), email: String(e[9] || '').trim(), days });
+        }
+        if (want && !out.length) return json({ error: 'ไม่พบรหัสพนักงานนี้ (หรือลาออกแล้ว)' }, 404, cors);
+        return json({ ok: true, codes: out }, 200, cors);
+      }
+
       if (url.pathname === '/admin/list-setup' && request.method === 'POST') {
         const { table } = await request.json();
         if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
@@ -1561,6 +1594,113 @@ async function handleReset(request, env, cors) {
   try { await appendRow(env, token, driveId, itemId, 'AuditLog', [new Date().toISOString(), String(emp[0]).trim(), 'auth', 'พนักงานตั้ง PIN ใหม่เอง (ลืม PIN — ยืนยันด้วย OTP อีเมล)', String(emp[0]).trim(), String(emp[1] || ''), '']); } catch (e) { console.error('forgot-pin audit failed', String((e && e.message) || e)); }
   loginFails.delete(kc); loginFails.delete('c:' + code.toLowerCase()); loginFails.delete('f:' + code.toLowerCase());
   return json({ ok: true }, 200, cors);
+}
+/* ===== #303: เปิดใช้งานครั้งแรกด้วยรหัสจาก HR =====
+   รหัสเปิดใช้งาน = [วันหมดอายุ 4 ตัว][ลายเซ็น 8 ตัว] (base32, แสดงเป็น XXXX-XXXX-XXXX) ไม่เก็บสถานะที่เซิร์ฟเวอร์:
+   ลายเซ็น = HMAC(SESSION_SECRET) ของ รหัสพนักงาน|วันหมดอายุ|PinHash ปัจจุบัน(ว่าง) — ตั้ง PIN แล้วรหัสใช้ซ้ำไม่ได้ (ใช้ครั้งเดียวโดยปริยาย)
+   ข้อจำกัด: ออกรหัสใหม่ไม่ยกเลิกรหัสเก่า (ไม่มีสถานะ) — รหัสเก่าใช้ได้จนกว่าจะหมดอายุหรือบัญชีมี PIN */
+const ACT_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ACT_DEFAULT_DAYS = 14;
+const ACT_EPOCH_DAY = 18262; /* 2020-01-01 เป็นวันที่ (วันตั้งแต่ 1970) */
+function actB32(n, len) { let o = ''; for (let i = 0; i < len; i++) { o = ACT_ALPHABET[n % 32] + o; n = Math.floor(n / 32); } return o; }
+function actExpDay(days) { return Math.floor(Date.now() / 86400000) - ACT_EPOCH_DAY + days; }
+async function hmacBytes(env, str) {
+  const key = await hmacKey(env.SESSION_SECRET);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(str)));
+}
+async function actSig(env, code, expDay, pinHash) {
+  const b = await hmacBytes(env, ['act', code.toLowerCase(), expDay, pinHash].join('|'));
+  let n = 0; for (let i = 0; i < 5; i++) n = n * 256 + b[i];
+  return actB32(n, 8);
+}
+async function makeActivation(env, code, expDay, pinHash) {
+  const raw = actB32(expDay, 4) + (await actSig(env, code, expDay, pinHash));
+  return raw.slice(0, 4) + '-' + raw.slice(4, 8) + '-' + raw.slice(8);
+}
+async function verifyActivation(env, code, act, pinHash) {
+  const raw = String(act || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (raw.length !== 12) return 'bad';
+  let expDay = 0; for (const ch of raw.slice(0, 4)) { const v = ACT_ALPHABET.indexOf(ch); if (v < 0) return 'bad'; expDay = expDay * 32 + v; }
+  const want = await actSig(env, code, expDay, pinHash);
+  if (!timingSafeEqualStr(want, raw.slice(4))) return 'bad';
+  if (Math.floor(Date.now() / 86400000) - ACT_EPOCH_DAY > expDay) return 'expired';
+  return 'ok';
+}
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/* ตรวจรหัสเปิดใช้งาน + สถานะบัญชี (ต้องยังไม่มี PIN) — ใช้ร่วมกันทั้ง start/finish */
+async function checkActivation(env, request, cors, b, bucket) {
+  const code = String(b.code || '').trim();
+  const act = String(b.activation || '').trim();
+  if (!code || !act) return { err: json({ error: 'กรุณากรอกรหัสพนักงานและรหัสเปิดใช้งาน' }, 400, cors) };
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const kc = bucket + ':' + code.toLowerCase();
+  const ki = ip ? bucket + 'i:' + ip : '';
+  const lk = Math.max(lockRemainingMin(kc), ki ? lockRemainingMin(ki) : 0);
+  if (lk) return { err: json({ error: 'ลองผิดหลายครั้ง — ลองใหม่ในอีก ' + lk + ' นาที หรือติดต่อ HR' }, 429, cors) };
+  const bad = (msg) => { registerFail(kc, LOGIN_MAX_PER_CODE); if (ki) registerFail(ki, LOGIN_MAX_PER_IP); return { err: json({ error: msg }, 401, cors) }; };
+  const ctx = await lookupEmpForReset(env, code);
+  const generic = 'รหัสพนักงานหรือรหัสเปิดใช้งานไม่ถูกต้อง';
+  if (!ctx.emp) return bad(generic);
+  const pinHash = String((ctx.setRow && ctx.setRow[1]) || '').trim().toLowerCase();
+  if (pinHash) return { err: json({ error: 'บัญชีนี้ตั้ง PIN แล้ว — เข้าสู่ระบบได้เลย (ลืม PIN ใช้ "ลืม PIN?")' }, 400, cors) };
+  const v = await verifyActivation(env, code, act, pinHash);
+  if (v === 'expired') return { err: json({ error: 'รหัสเปิดใช้งานหมดอายุ — ขอรหัสใหม่จาก HR' }, 401, cors) };
+  if (v !== 'ok') return bad(generic);
+  const onFile = String(ctx.emp[9] || '').trim();
+  const typed = String(b.email || '').trim();
+  const email = EMAIL_RE.test(onFile) ? onFile : typed;
+  if (!EMAIL_RE.test(email)) return { err: json({ error: 'กรุณากรอกอีเมลที่ใช้งานได้จริง' }, 400, cors) };
+  return { ctx, code, pinHash, email, usedOnFile: EMAIL_RE.test(onFile), kc, ki };
+}
+async function handleActivateStart(request, env, cors) {
+  if (!env.SESSION_SECRET) return json({ error: 'ยังไม่ได้ตั้งค่า SESSION_SECRET ใน Worker' }, 500, cors);
+  if (!env.SEND_AS_EMAIL) return json({ error: 'ระบบยังไม่ได้ตั้งค่าอีเมลส่งออก — ติดต่อ HR' }, 500, cors);
+  let b = {}; try { b = await request.json(); } catch (e) { /* ว่าง */ }
+  const r = await checkActivation(env, request, cors, b, 'a');
+  if (r.err) return r.err;
+  /* จำกัดการส่ง OTP ต่อรหัส (กันถล่มอีเมล) */
+  const ks = 'as:' + r.code.toLowerCase();
+  if (lockRemainingMin(ks)) return json({ error: 'ขอรหัสยืนยันบ่อยเกินไป — ลองใหม่ภายหลัง' }, 429, cors);
+  registerFail(ks, FORGOT_MAX_PER_CODE);
+  const otp = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+  const exp = Math.floor(Date.now() / 1000) + RESET_OTP_TTL_SEC;
+  const sig = b64urlEncode(await hmacBytes(env, ['actotp', r.code.toLowerCase(), exp, otp, r.email.toLowerCase()].join('|')));
+  const emp = r.ctx.emp;
+  await sendMail(r.ctx.token, env.SEND_AS_EMAIL, r.email, String(emp[1] || ''), 'รหัสยืนยันอีเมลเพื่อเปิดใช้งาน SML PMS',
+    `เรียนคุณ ${String(emp[1] || '').trim()} (${r.code})\n\nรหัสยืนยันอีเมลสำหรับเปิดใช้งานบัญชี SML PMS ของคุณคือ: ${otp}\n(ใช้ได้ภายใน ${RESET_OTP_TTL_SEC / 60} นาที)\n\nหากคุณไม่ได้เป็นผู้ขอ กรุณาเพิกเฉยอีเมลนี้\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับ)`);
+  return json({ ok: true, challenge: exp + '.' + sig, maskedEmail: maskEmail(r.email), usedOnFile: r.usedOnFile, ttlMin: RESET_OTP_TTL_SEC / 60 }, 200, cors);
+}
+async function handleActivateFinish(request, env, cors) {
+  if (!env.SESSION_SECRET) return json({ error: 'ยังไม่ได้ตั้งค่า SESSION_SECRET ใน Worker' }, 500, cors);
+  let b = {}; try { b = await request.json(); } catch (e) { /* ว่าง */ }
+  const otp = String(b.otp || '').trim();
+  const newPin = String(b.newPin || '').trim();
+  const [expStr, sig] = String(b.challenge || '').split('.');
+  const exp = parseInt(expStr, 10);
+  if (!otp || !sig || !exp) return json({ error: 'ข้อมูลไม่ครบ — กรุณาขอรหัสยืนยันใหม่' }, 400, cors);
+  if (!/^\d{4,6}$/.test(newPin)) return json({ error: 'PIN ต้องเป็นตัวเลข 4-6 หลัก' }, 400, cors);
+  if (exp < Math.floor(Date.now() / 1000)) return json({ error: 'รหัสยืนยันหมดอายุ — กรุณาขอรหัสใหม่' }, 401, cors);
+  const r = await checkActivation(env, request, cors, b, 'a');
+  if (r.err) return r.err;
+  const want = b64urlEncode(await hmacBytes(env, ['actotp', r.code.toLowerCase(), exp, otp, r.email.toLowerCase()].join('|')));
+  if (!timingSafeEqualStr(want, sig)) {
+    registerFail(r.kc, LOGIN_MAX_PER_CODE); if (r.ki) registerFail(r.ki, LOGIN_MAX_PER_IP);
+    return json({ error: 'รหัสยืนยันอีเมลไม่ถูกต้อง' }, 401, cors);
+  }
+  const { token, driveId, itemId, emp, setRow } = r.ctx;
+  const idc = String(emp[0]).trim();
+  /* อีเมล: เขียนเฉพาะคอลัมน์ J ของตาราง Employees (ไม่แตะคอลัมน์อื่น/สูตร) และเฉพาะเมื่อ HR ยังไม่เคยลงไว้ */
+  if (!r.usedOnFile) {
+    const vals = new Array(10).fill(''); vals[9] = r.email;
+    await upsertRowPartial(token, driveId, itemId, 'Employees', 0, idc, vals, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    scopeCache = { at: 0, emps: null };
+  }
+  const old = setRow || [];
+  const row = [idc, await sha256Hex(newPin), old[2] || '', new Date().toISOString(), old[4] == null || old[4] === '' ? '0' : old[4], old[5] || ''];
+  await upsertRow(token, driveId, itemId, 'EmployeeSettings', 0, idc, row);
+  try { await appendRow(env, token, driveId, itemId, 'AuditLog', [new Date().toISOString(), idc, 'auth', 'พนักงานเปิดใช้งานบัญชีเอง (รหัสจาก HR + ยืนยันอีเมล' + (r.usedOnFile ? '' : ' + ลงทะเบียนอีเมลใหม่') + ')', idc, String(emp[1] || ''), '']); } catch (e) { console.error('activate audit failed', String((e && e.message) || e)); }
+  loginFails.delete(r.kc);
+  return json({ ok: true, emailRegistered: !r.usedOnFile }, 200, cors);
 }
 /* LINE User ID ที่ลงทะเบียนไว้ (EmployeeSettings คอลัมน์ 5) */
 async function registeredLineIds(env) {
