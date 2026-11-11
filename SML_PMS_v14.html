@@ -1695,6 +1695,24 @@ img,svg,canvas{max-width:100%}
     <div class="fg"><label>รหัสพนักงาน</label><input id="loginCode" list="empCodeListLogin" placeholder="เช่น SML-001" autocomplete="username" oninput="onLoginCodeInput()" onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()"><datalist id="empCodeListLogin"></datalist></div>
     <div class="fg"><label>PIN</label><input id="loginPin" type="password" inputmode="numeric" maxlength="6" placeholder="4-6 หลัก (เว้นว่างได้ถ้ายังไม่เคยตั้ง)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn btn-p" id="loginBtn" style="width:100%;margin-top:4px" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div style="text-align:center;margin-top:10px"><a href="#" id="forgotLink" onclick="openForgotPin();return false" style="font-size:13px;color:var(--sml-primary,#1d4ed8)">ลืม PIN? ตั้ง PIN ใหม่เอง</a></div>
+  </div>
+</div>
+
+<div class="login-gate" id="forgotGate" style="display:none">
+  <div class="login-box">
+    <h2>🔑 ตั้ง PIN ใหม่</h2>
+    <p class="login-note" id="forgotNote">กรอกรหัสพนักงาน ระบบจะส่งรหัสยืนยัน 6 หลักไปที่อีเมลที่ลงทะเบียนไว้กับ HR</p>
+    <div id="forgotErr" class="login-err" style="display:none"></div>
+    <div class="fg"><label>รหัสพนักงาน</label><input id="forgotCode" autocomplete="username" onkeydown="if(event.key==='Enter')forgotSendOtp()"></div>
+    <div id="forgotStep2" style="display:none">
+      <div class="fg"><label>รหัสยืนยัน 6 หลัก (จากอีเมล)</label><input id="forgotOtp" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></div>
+      <div class="fg"><label>PIN ใหม่ (ตัวเลข 4-6 หลัก)</label><input id="forgotPin1" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>
+      <div class="fg"><label>ยืนยัน PIN ใหม่อีกครั้ง</label><input id="forgotPin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" onkeydown="if(event.key==='Enter')forgotSubmit()"></div>
+    </div>
+    <button class="btn btn-p" id="forgotBtn" style="width:100%;margin-top:4px" onclick="forgotSendOtp()">ส่งรหัสยืนยันไปอีเมล</button>
+    <button class="btn btn-p" id="forgotSubmitBtn" style="width:100%;margin-top:4px;display:none" onclick="forgotSubmit()">ตั้ง PIN ใหม่</button>
+    <div style="text-align:center;margin-top:10px"><a href="#" onclick="closeForgotPin();return false" style="font-size:13px">← กลับไปหน้าเข้าสู่ระบบ</a></div>
   </div>
 </div>
 
@@ -5274,6 +5292,72 @@ async function doLogin(){
   runLoginSyncsBackground();
 }
 
+/* #302: ลืม PIN → ขอรหัสยืนยัน (OTP) ทางอีเมลที่ลงทะเบียนไว้ → พนักงานตั้ง PIN ใหม่เอง
+   ทำที่ Worker ทั้งหมด (OTP ไม่เคยส่งกลับมาที่หน้าเว็บ) — ต้องตั้ง MS365 + Proxy แล้วเท่านั้น
+   ถ้าไม่ได้ตั้งไว้/ไม่มีอีเมลในระบบ ให้ติดต่อ HR (ปุ่ม 🔑 ตั้ง/รีเซ็ต PIN ของ Admin ยังใช้ได้ตามเดิม) */
+let _forgotChallenge = '';
+function _forgotErr(msg){ const e = document.getElementById('forgotErr'); e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none'; }
+function openForgotPin(){
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('forgotGate').style.display = 'flex';
+  _forgotChallenge = '';
+  document.getElementById('forgotStep2').style.display = 'none';
+  document.getElementById('forgotSubmitBtn').style.display = 'none';
+  const b = document.getElementById('forgotBtn'); b.style.display = ''; b.disabled = false; b.textContent = 'ส่งรหัสยืนยันไปอีเมล';
+  document.getElementById('forgotCode').disabled = false;
+  document.getElementById('forgotCode').value = (document.getElementById('loginCode')?.value || '').trim();
+  document.getElementById('forgotNote').textContent = 'กรอกรหัสพนักงาน ระบบจะส่งรหัสยืนยัน 6 หลักไปที่อีเมลที่ลงทะเบียนไว้กับ HR';
+  _forgotErr(useServerAuth() ? '' : 'ฟีเจอร์นี้ใช้ได้เมื่อระบบเชื่อมต่อเซิร์ฟเวอร์แล้วเท่านั้น — กรุณาติดต่อ HR เพื่อรีเซ็ต PIN');
+}
+function closeForgotPin(){
+  document.getElementById('forgotGate').style.display = 'none';
+  document.getElementById('loginGate').style.display = 'flex';
+  _forgotChallenge = '';
+}
+async function forgotSendOtp(){
+  const code = (document.getElementById('forgotCode').value || '').trim();
+  if(!code){ _forgotErr('กรุณากรอกรหัสพนักงาน'); return; }
+  if(!useServerAuth()){ _forgotErr('ฟีเจอร์นี้ใช้ได้เมื่อระบบเชื่อมต่อเซิร์ฟเวอร์แล้วเท่านั้น — กรุณาติดต่อ HR เพื่อรีเซ็ต PIN'); return; }
+  const btn = document.getElementById('forgotBtn'); btn.disabled = true; btn.textContent = 'กำลังส่ง...'; _forgotErr('');
+  try{
+    const r = await workerFetch(loadMs365Config(), '/auth/forgot', { method:'POST', body: JSON.stringify({ code }) });
+    _forgotChallenge = r.challenge;
+    document.getElementById('forgotCode').disabled = true;
+    document.getElementById('forgotStep2').style.display = 'block';
+    btn.style.display = 'none';
+    document.getElementById('forgotSubmitBtn').style.display = '';
+    document.getElementById('forgotNote').textContent = 'ส่งรหัสยืนยันไปที่ ' + r.maskedEmail + ' แล้ว (ใช้ได้ ' + (r.ttlMin||10) + ' นาที) — กรอกรหัสและตั้ง PIN ใหม่ด้านล่าง';
+    document.getElementById('forgotOtp').focus();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'ส่งรหัสยืนยันไปอีเมล';
+    _forgotErr((e && e.status) ? String(e.message) : '⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+  }
+}
+async function forgotSubmit(){
+  const code = (document.getElementById('forgotCode').value || '').trim();
+  const otp = (document.getElementById('forgotOtp').value || '').trim();
+  const p1 = (document.getElementById('forgotPin1').value || '').trim();
+  const p2 = (document.getElementById('forgotPin2').value || '').trim();
+  if(!/^\d{6}$/.test(otp)){ _forgotErr('กรุณากรอกรหัสยืนยัน 6 หลักจากอีเมล'); return; }
+  if(!/^\d{4,6}$/.test(p1)){ _forgotErr('PIN ต้องเป็นตัวเลข 4-6 หลัก'); return; }
+  if(p1 !== p2){ _forgotErr('PIN สองช่องไม่ตรงกัน — พิมพ์ใหม่อีกครั้ง'); return; }
+  if(!_forgotChallenge){ _forgotErr('กรุณาขอรหัสยืนยันใหม่'); return; }
+  const btn = document.getElementById('forgotSubmitBtn'); btn.disabled = true; _forgotErr('');
+  try{
+    await workerFetch(loadMs365Config(), '/auth/reset', { method:'POST', body: JSON.stringify({ code, otp, challenge:_forgotChallenge, newPin:p1 }) });
+    btn.disabled = false;
+    document.getElementById('forgotPin1').value = ''; document.getElementById('forgotPin2').value = ''; document.getElementById('forgotOtp').value = '';
+    const lc = document.getElementById('loginCode'); if(lc) lc.value = code;
+    const lp = document.getElementById('loginPin'); if(lp) lp.value = '';
+    closeForgotPin();
+    if(typeof clearLoginFails === 'function') clearLoginFails(code);
+    if(typeof smlToast === 'function') smlToast('✅ ตั้ง PIN ใหม่เรียบร้อย — เข้าสู่ระบบด้วย PIN ใหม่ได้เลย', 'ok');
+  }catch(e){
+    btn.disabled = false;
+    _forgotErr((e && e.status) ? String(e.message) : '⚠️ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+  }
+}
+
 function doLogout(){
   if(CURRENT_SESSION_USER && typeof appendAuditLog === 'function'){
     appendAuditLog('auth', 'ออกจากระบบ', CURRENT_SESSION_USER[0], CURRENT_SESSION_USER[1]);
@@ -8362,7 +8446,7 @@ let _workerReauthPending = false;
 async function workerFetch(cfg, path, options={}){
   /* #265: ทุกเส้นทางยกเว้น /auth/login ต้องแนบบัตรผ่าน (Bearer token) ที่ได้จากการล็อกอินที่ Worker */
   const token = getWorkerToken();
-  if(path !== '/auth/login' && !token){
+  if(path !== '/auth/login' && path !== '/auth/forgot' && path !== '/auth/reset' && !token){
     const e = new Error('ยังไม่ได้เข้าสู่ระบบ (ไม่มีบัตรผ่านสำหรับเรียก Proxy)'); e.status = 401; throw e;
   }
   const headers = Object.assign({ 'Content-Type':'application/json' }, token ? { 'Authorization':'Bearer '+token } : {}, options.headers||{});
@@ -8372,7 +8456,7 @@ async function workerFetch(cfg, path, options={}){
   try{ data = text ? JSON.parse(text) : {}; }catch(e){ data = { raw:text }; }
   if(!res.ok){
     /* บัตรผ่านหมดอายุ/ไม่ถูกต้อง (401 บนเส้นทางอื่นที่ไม่ใช่ล็อกอิน) → กลับไปหน้าล็อกอิน ครั้งเดียว */
-    if(res.status === 401 && path !== '/auth/login' && !_workerReauthPending){
+    if(res.status === 401 && path !== '/auth/login' && path !== '/auth/forgot' && path !== '/auth/reset' && !_workerReauthPending){
       _workerReauthPending = true;
       clearWorkerToken();
       try{ sessionStorage.removeItem(SML_SESSION_KEY); }catch(e){}

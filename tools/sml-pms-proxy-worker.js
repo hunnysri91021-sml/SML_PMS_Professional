@@ -88,6 +88,7 @@
  * เองฝั่งเซิร์ฟเวอร์ (เทียบ SHA-256 กับ PinHash ในตาราง EmployeeSettings ซึ่งไม่ส่งออกไปให้ไคลเอนต์ที่ไม่ใช่
  * Admin) แล้วออกบัตรผ่านที่เซ็นด้วย SESSION_SECRET ทุก endpoint อื่นต้องแนบ "Authorization: Bearer <token>"
  * และตรวจสิทธิ์ตามบทบาท (เขียนตารางสำคัญ/ลบ/dedupe = Admin เท่านั้น) — ไม่มีกุญแจร่วมฝังในหน้าเว็บอีกต่อไป
+ * ลืม PIN (#302): /auth/forgot ส่ง OTP 6 หลักไปอีเมลของพนักงาน แล้ว /auth/reset ให้พนักงานตั้ง PIN ใหม่เอง (ต้องมี SEND_AS_EMAIL)
  * ข้อจำกัดที่เหลือ (รอบ 1): ยังไม่กรอง "รายแถว" ตามสังกัด (ผู้ล็อกอินอ่านตารางที่ไม่ใช่ EmployeeSettings ได้ทั้งตาราง)
  * และตัวนับ PIN ผิดอยู่ในหน่วยความจำของ Worker (รีเซ็ตเมื่อ isolate ถูกรีไซเคิล) — Application Access Policy
  * ที่จำกัดให้แอปเข้าถึงได้แค่ site เดียวยังจำเป็นเสมอ
@@ -113,6 +114,12 @@ export default {
     /* #260: ล็อกอินที่ Worker — เป็น route เดียวที่เปิดโดยไม่ต้องมีบัตรผ่าน (ตรวจ PIN เองแล้วออกบัตรให้) */
     if (url.pathname === '/auth/login' && request.method === 'POST') {
       try { return await handleLogin(request, env, cors); }
+      catch (e) { return json({ error: String((e && e.message) || e) }, 500, cors); }
+    }
+
+    /* #302: ลืม PIN — พนักงานขอรหัสยืนยัน (OTP) ทางอีเมลที่ลงทะเบียนไว้แล้วตั้ง PIN ใหม่เอง (ยังไม่ล็อกอินจึงไม่มีบัตรผ่าน) */
+    if ((url.pathname === '/auth/forgot' || url.pathname === '/auth/reset') && request.method === 'POST') {
+      try { return await (url.pathname === '/auth/forgot' ? handleForgot : handleReset)(request, env, cors); }
       catch (e) { return json({ error: String((e && e.message) || e) }, 500, cors); }
     }
 
@@ -1470,6 +1477,90 @@ async function handleLogin(request, env, cors) {
   const role = normalizeRole(emp[2]);
   const payload = { sub: String(emp[0]).trim(), name: String(emp[1] || '').trim(), role, iat: now, exp: now + SESSION_TTL_SEC };
   return json({ token: await issueToken(env, payload), exp: payload.exp, user: { code: payload.sub, name: payload.name, role } }, 200, cors);
+}
+/* ===== #302: ลืม PIN → OTP ทางอีเมล → พนักงานตั้ง PIN ใหม่เอง =====
+   ไม่เก็บสถานะที่ฝั่งเซิร์ฟเวอร์: challenge = เซ็น HMAC(SESSION_SECRET) ของ รหัส|หมดอายุ|OTP|PinHash ปัจจุบัน
+   - OTP 6 หลักไม่อยู่ในคำตอบที่ส่งกลับเว็บ (ส่งทางอีเมลเท่านั้น) จึงเดาจากเว็บไม่ได้
+   - ผูกกับ PinHash ปัจจุบัน → ตั้ง PIN สำเร็จแล้ว challenge/OTP เดิมใช้ซ้ำไม่ได้ (ใช้ครั้งเดียวโดยปริยาย)
+   - อายุ 10 นาที, ใส่ OTP ผิดครบ 5 ครั้ง/รหัส (หรือ 40/IP) ล็อก 15 นาที, ขอ OTP ได้ไม่เกิน 3 ครั้ง/15 นาที/รหัส */
+const RESET_OTP_TTL_SEC = 600;
+const FORGOT_MAX_PER_CODE = 3;
+async function otpSig(env, code, exp, otp, pinHash) {
+  const key = await hmacKey(env.SESSION_SECRET);
+  const data = new TextEncoder().encode([code.toLowerCase(), exp, otp, pinHash].join('|'));
+  return b64urlEncode(new Uint8Array(await crypto.subtle.sign('HMAC', key, data)));
+}
+function maskEmail(e) {
+  const [u, d] = String(e).split('@');
+  if (!d) return '***';
+  return (u.length <= 2 ? u[0] + '*' : u.slice(0, 2) + '***') + '@' + d;
+}
+async function lookupEmpForReset(env, code) {
+  const token = await getAppToken(env);
+  const { driveId, itemId } = await resolveSite(env, token);
+  const [emps, sets] = await Promise.all([
+    listRows(token, driveId, itemId, 'Employees'),
+    listRows(token, driveId, itemId, 'EmployeeSettings'),
+  ]);
+  const emp = emps.find((r) => String(r[0] || '').trim().toLowerCase() === code.toLowerCase());
+  const resigned = emp && String(emp[15] || '').toLowerCase().includes('resign');
+  const setRow = emp ? sets.find((r) => String(r[0] || '').trim() === String(emp[0]).trim()) : null;
+  return { token, driveId, itemId, emp: resigned ? null : emp, setRow };
+}
+async function handleForgot(request, env, cors) {
+  if (!env.SESSION_SECRET) return json({ error: 'ยังไม่ได้ตั้งค่า SESSION_SECRET ใน Worker' }, 500, cors);
+  if (!env.SEND_AS_EMAIL) return json({ error: 'ระบบยังไม่ได้ตั้งค่าอีเมลส่งออก — ติดต่อ HR เพื่อรีเซ็ต PIN' }, 500, cors);
+  let b = {}; try { b = await request.json(); } catch (e) { /* ว่าง */ }
+  const code = String(b.code || '').trim();
+  if (!code) return json({ error: 'กรุณากรอกรหัสพนักงาน' }, 400, cors);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const kr = 'f:' + code.toLowerCase();
+  const ki = ip ? 'fi:' + ip : '';
+  const lk = Math.max(lockRemainingMin(kr), ki ? lockRemainingMin(ki) : 0);
+  if (lk) return json({ error: 'ขอรหัสยืนยันบ่อยเกินไป — ลองใหม่ในอีก ' + lk + ' นาที' }, 429, cors);
+  registerFail(kr, FORGOT_MAX_PER_CODE);
+  if (ki) registerFail(ki, LOGIN_MAX_PER_IP);
+  const generic = () => json({ error: 'ไม่พบรหัสพนักงานนี้ หรือยังไม่มีอีเมลในระบบ — ติดต่อ HR เพื่อรีเซ็ต PIN' }, 400, cors);
+  const { token, emp, setRow } = await lookupEmpForReset(env, code);
+  const email = emp ? String(emp[9] || '').trim() : '';
+  if (!emp || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return generic();
+  const otp = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+  const exp = Math.floor(Date.now() / 1000) + RESET_OTP_TTL_SEC;
+  const pinHash = String((setRow && setRow[1]) || '').trim().toLowerCase();
+  const sig = await otpSig(env, String(emp[0]).trim(), exp, otp, pinHash);
+  await sendMail(token, env.SEND_AS_EMAIL, email, String(emp[1] || ''), 'รหัสยืนยันเพื่อตั้ง PIN ใหม่ SML PMS',
+    `เรียนคุณ ${String(emp[1] || '').trim()} (${String(emp[0]).trim()})\n\nรหัสยืนยันสำหรับตั้ง PIN ใหม่ของคุณคือ: ${otp}\n(ใช้ได้ภายใน ${RESET_OTP_TTL_SEC / 60} นาที และใช้ได้ครั้งเดียว)\n\nหากคุณไม่ได้เป็นผู้ขอ กรุณาเพิกเฉยอีเมลนี้ PIN เดิมจะไม่ถูกเปลี่ยน — หากสงสัยว่ามีผู้อื่นพยายามเข้าบัญชี แจ้ง HR\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับ)`);
+  return json({ ok: true, challenge: exp + '.' + sig, maskedEmail: maskEmail(email), ttlMin: RESET_OTP_TTL_SEC / 60 }, 200, cors);
+}
+async function handleReset(request, env, cors) {
+  if (!env.SESSION_SECRET) return json({ error: 'ยังไม่ได้ตั้งค่า SESSION_SECRET ใน Worker' }, 500, cors);
+  let b = {}; try { b = await request.json(); } catch (e) { /* ว่าง */ }
+  const code = String(b.code || '').trim();
+  const otp = String(b.otp || '').trim();
+  const newPin = String(b.newPin || '').trim();
+  const [expStr, sig] = String(b.challenge || '').split('.');
+  const exp = parseInt(expStr, 10);
+  if (!code || !otp || !sig || !exp) return json({ error: 'ข้อมูลไม่ครบ — กรุณาขอรหัสยืนยันใหม่' }, 400, cors);
+  if (!/^\d{4,6}$/.test(newPin)) return json({ error: 'PIN ต้องเป็นตัวเลข 4-6 หลัก' }, 400, cors);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const kc = 'r:' + code.toLowerCase();
+  const ki = ip ? 'ri:' + ip : '';
+  const lk = Math.max(lockRemainingMin(kc), ki ? lockRemainingMin(ki) : 0);
+  if (lk) return json({ error: 'ใส่รหัสยืนยันผิดหลายครั้ง — ลองใหม่ในอีก ' + lk + ' นาที' }, 429, cors);
+  const bad = (msg) => { registerFail(kc, LOGIN_MAX_PER_CODE); if (ki) registerFail(ki, LOGIN_MAX_PER_IP); return json({ error: msg }, 401, cors); };
+  if (exp < Math.floor(Date.now() / 1000)) return json({ error: 'รหัสยืนยันหมดอายุ — กรุณาขอรหัสใหม่' }, 401, cors);
+  const { token, driveId, itemId, emp, setRow } = await lookupEmpForReset(env, code);
+  if (!emp) return bad('รหัสยืนยันไม่ถูกต้อง');
+  const pinHash = String((setRow && setRow[1]) || '').trim().toLowerCase();
+  const want = await otpSig(env, String(emp[0]).trim(), exp, otp, pinHash);
+  if (!timingSafeEqualStr(want, sig)) return bad('รหัสยืนยันไม่ถูกต้อง หรือถูกใช้ไปแล้ว');
+  /* เก็บคอลัมน์อื่นของ EmployeeSettings เดิมไว้ (ระดับแบบฟอร์ม/ยกเว้นประเมิน/LINE ID) เปลี่ยนเฉพาะ PinHash+เวลา */
+  const old = setRow || [];
+  const row = [String(emp[0]).trim(), await sha256Hex(newPin), old[2] || '', new Date().toISOString(), old[4] == null || old[4] === '' ? '0' : old[4], old[5] || ''];
+  await upsertRow(token, driveId, itemId, 'EmployeeSettings', 0, String(emp[0]).trim(), row);
+  try { await appendRow(env, token, driveId, itemId, 'AuditLog', [new Date().toISOString(), String(emp[0]).trim(), 'auth', 'พนักงานตั้ง PIN ใหม่เอง (ลืม PIN — ยืนยันด้วย OTP อีเมล)', String(emp[0]).trim(), String(emp[1] || ''), '']); } catch (e) { console.error('forgot-pin audit failed', String((e && e.message) || e)); }
+  loginFails.delete(kc); loginFails.delete('c:' + code.toLowerCase()); loginFails.delete('f:' + code.toLowerCase());
+  return json({ ok: true }, 200, cors);
 }
 /* LINE User ID ที่ลงทะเบียนไว้ (EmployeeSettings คอลัมน์ 5) */
 async function registeredLineIds(env) {
