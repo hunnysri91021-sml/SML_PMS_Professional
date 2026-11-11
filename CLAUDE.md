@@ -8981,6 +8981,8 @@ touches employee/attendance/evaluation data.
 
 295. **หน้า "8. ผลประเมิน" (`renderMyResult`) มีช่องคะแนน KPI.** แสดงแถว "🎯 คะแนน KPI" (ค่า / สัดส่วน) + รายการ KPI รายบุคคลแต่ละตัว (% ที่ทำได้ น้ำหนัก) และเปลี่ยนสูตรที่ป้ายเป็น Y + Z + KPI เฉพาะเมื่อรอบ/ระดับนั้นตั้งสัดส่วน KPI > 0 **และ** พนักงานมี KPI รายบุคคลจริง (ไม่งั้นสัดส่วนคืนให้ Y แล้ว ไม่มีอะไรให้แสดง, #14). ค่า KPI = X − Y − Z ของใบที่บันทึกไว้ (ไม่คำนวณสดจาก KPI ปัจจุบัน เพื่อให้ตรงกับ X ที่พนักงานเห็น). ทดสอบ: `tests/myresult-kpi.test.js`.
 
+296. **Cascade KPI ใช้งานจริง (เดิมเก็บแค่ในหน้าเว็บ รีโหลดหาย และไม่มีฟังก์ชันคิดคะแนนอ่านเลย — ปุ่มดูเหมือนทำงานแต่ไม่มีผล, #10).** `cascadeData` เก็บถาวร (`CASCADE_LOCAL_KEY`) และ sync Excel ตาราง `FormWeights` แถว `__cascade__` (JSON, ใหม่กว่าชนะด้วย `at`, hook ใน `ms365SyncFormWeights`); `kpiListForEmp(code,cycle)` = KPI รายบุคคลที่ผูกรหัส + KPI org/dept ที่ Cascade ลงมาถึง (`cascadeAppliesTo`: ระดับ role + ฝ่าย u[6] ตรง; ระดับ `emp` = ทั้งแบบฟอร์ม op ปฏิบัติการและ of สำนักงาน) ใช้ใน `computeKpiScoreForEmp` และกล่อง KPI ในใบพิมพ์. KPI org/dept ใช้ผลจริง/เป้าหมายตัวเลข (`actualVal/targetVal`) ค่าเดียวทั้งกลุ่ม; น้ำหนักใช้ค่าจาก Cascade (ว่าง = น้ำหนัก KPI); KPI เดียวกันหลาย Cascade ที่ตรงกันนับครั้งเดียว; ห้าม Cascade KPI รายบุคคล/ซ้ำระดับ+ฝ่ายเดิม; Admin/sysadmin เท่านั้น. ข้อจำกัด: ผลจริงเป็นค่าเดียวทั้งกลุ่ม (ถ้าต้องการรายคนใช้ KPI รายบุคคล/Import CSV). ทดสอบ: `tests/kpi-cascade.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

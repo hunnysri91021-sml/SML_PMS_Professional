@@ -3098,7 +3098,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <div class="card-b">
         <div class="al al-i" style="margin-bottom:14px">
           <span>ℹ️</span>
-          <div>KPI ระดับ "องค์กร" จะถูก Cascade ลงให้ทุกคนในรอบที่เปิดใช้ · KPI ระดับ "ฝ่าย/บุคคล" ต้องกำหนดเพิ่มที่นี่</div>
+          <div>KPI ระดับ "องค์กร/ฝ่าย" จะเข้าคะแนนของพนักงานก็ต่อเมื่อกำหนด Cascade ที่นี่ (เลือกระดับ + ฝ่าย) และมีผลจริง/เป้าหมายตัวเลขของ KPI นั้น — ใช้ค่าเดียวทั้งกลุ่ม · KPI "รายบุคคล" ผูกรหัสพนักงานเอง ไม่ต้อง Cascade</div>
         </div>
         <div class="tw">
           <table>
@@ -4317,7 +4317,7 @@ function editGoalKpi(id) {
   openM('mAddKpi');
 }
 /* แสดงช่อง "รหัสพนักงาน" เฉพาะขอบเขต "รายบุคคล" — KPI ขอบเขตองค์กร/แผนกไม่มีคนใดคนหนึ่งให้ระบุ
-   (ดูหมายเหตุใน computeKpiScoreForEmp(): เฉพาะ scope==='person' เท่านั้นที่เข้าคะแนนประเมินรายคนได้) */
+   (ดู kpiListForEmp(): รายบุคคลผูกรหัสเอง ส่วน org/dept เข้าคะแนนผ่าน Cascade #296) */
 function onKpiScopeChange(){
   const scope = document.getElementById('mKpiScope')?.value;
   const grp = document.getElementById('kpiEmpFieldGroup');
@@ -4531,7 +4531,7 @@ async function deleteGoalKpi(id){
   if(!confirm('ลบ KPI "'+k.name+'" ?\n\nจะลบทั้งในเว็บและในตาราง KPI_Goals ของ Excel — ย้อนกลับไม่ได้')) return;
   goalKpiData = goalKpiData.filter(x=>x.id!==id);
   saveKpiData();
-  if(typeof cascadeData!=='undefined') cascadeData = cascadeData.filter(c=>c.kpiId!==id);
+  if(typeof cascadeData!=='undefined'){ cascadeData = cascadeData.filter(c=>c.kpiId!==id); try{ saveCascadeData(); }catch(e){} }
   filterGoalKpi();
   goalStatUpdate();
   if(typeof renderCascadeRows==='function') renderCascadeRows();
@@ -4664,8 +4664,40 @@ async function confirmKpiImport(){
 }
 
 /* ====== Cascade KPI — กำหนด KPI เฉพาะกลุ่ม/บุคคล ====== */
+/* #296: Cascade ใช้งานจริง — เดิมเก็บแค่ในหน้าเว็บ (รีโหลดหาย) และไม่มีฟังก์ชันคิดคะแนนอ่านเลย. ตอนนี้เก็บถาวร (localStorage + sync Excel ตาราง FormWeights แถว `__cascade__`
+   รูปแบบเดียวกับ __steps__/__tie__) และ computeKpiScoreForEmp() นับ KPI ขอบเขต org/dept ที่ Cascade ลงมาถึงพนักงานคนนั้น (ระดับ + ฝ่ายตรง) ด้วยผลจริง/เป้าหมายตัวเลขของ KPI นั้น (ค่าเดียวทั้งกลุ่ม).
+   ระดับ 'emp' = บทบาทพนักงาน ซึ่งรวมทั้งแบบฟอร์ม op (ปฏิบัติการ) และ of (สำนักงาน) */
+const CASCADE_LOCAL_KEY = 'smlPmsKpiCascade';
 let cascadeData = [];
-const CASCADE_LEVEL_LABEL = {'':'ทุกคน (ตาม scope KPI)', emp:'เฉพาะพนักงานปฏิบัติการ', l1:'เฉพาะหัวหน้าแผนก', l2:'เฉพาะผู้จัดการส่วน'};
+let cascadeAt = '';
+function loadCascadeData(){
+  try{ const o=JSON.parse(localStorage.getItem(CASCADE_LOCAL_KEY)||'null'); if(o&&Array.isArray(o.list)){ cascadeData=o.list; cascadeAt=o.at||''; } }catch(e){}
+}
+function saveCascadeData(){
+  cascadeAt = new Date().toISOString();
+  try{ localStorage.setItem(CASCADE_LOCAL_KEY, JSON.stringify({list:cascadeData, at:cascadeAt})); }catch(e){}
+  pushCascadeToExcel();
+}
+loadCascadeData();
+function pushCascadeToExcel(){
+  const cfg=loadMs365Config();
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushCascadeToExcel: ยังไม่ได้ตั้งค่า MS365',false); return Promise.resolve(false); }
+  return graphUpsertTableRow('FormWeights',0,'__cascade__',['__cascade__',JSON.stringify({list:cascadeData,at:cascadeAt}),cascadeAt])
+    .then(()=>{ if(typeof appendSyncLog==='function') appendSyncLog('Push Cascade KPI ('+cascadeData.length+' รายการ) เข้า Excel',true); return true; })
+    .catch(e=>{ if(typeof appendSyncLog==='function') appendSyncLog('Push Cascade KPI ไม่สำเร็จ: '+(e&&e.message||e),false); return false; });
+}
+function applyCascadeRows(rows){
+  rows.forEach(r=>{ if(String(r[0]??'').trim()!=='__cascade__') return;
+    try{ const rem=JSON.parse(r[1]); if(rem&&Array.isArray(rem.list)&&(!cascadeAt||(rem.at&&rem.at>cascadeAt))){ cascadeData=rem.list; cascadeAt=rem.at||''; try{localStorage.setItem(CASCADE_LOCAL_KEY,JSON.stringify({list:cascadeData,at:cascadeAt}));}catch(e){} renderCascadeRows(); } }catch(e){} });
+}
+/* Cascade ข้อนี้ลงมาถึงพนักงานคนนี้ไหม: ระดับ ('' = ทุกบทบาท) + ฝ่าย ('' = ทุกฝ่าย, เทียบ u[6] ตัดช่องว่าง) */
+function cascadeAppliesTo(c, emp){
+  if(!c||!emp) return false;
+  if(c.level && emp[2]!==c.level) return false;
+  if(c.dept && String(emp[6]||'').trim()!==String(c.dept).trim()) return false;
+  return true;
+}
+const CASCADE_LEVEL_LABEL = {'':'ทุกคน (ตาม scope KPI)', emp:'พนักงานทั่วไป (ปฏิบัติการ + สำนักงาน)', l1:'เฉพาะหัวหน้าแผนก', l2:'เฉพาะผู้จัดการส่วน'};
 function populateCascadeModal(){
   const kpiSel = document.getElementById('mCascadeKpiId');
   if(kpiSel) kpiSel.innerHTML = goalKpiData.map(k=>`<option value="${escH(k.id)}">${escH(k.name)}</option>`).join('') || '<option value="">— ยังไม่มี KPI ในระบบ —</option>';
@@ -4683,8 +4715,8 @@ function renderCascadeRows(){
     return;
   }
   tbody.innerHTML = cascadeData.map((c,i)=>`
-    <tr><td><b>${c.kpiName}</b></td>
-    <td style="font-size:12px">${CASCADE_LEVEL_LABEL[c.level]||'ทุกคน'}${c.dept?' · '+c.dept:''}</td>
+    <tr><td><b>${escH(c.kpiName)}</b></td>
+    <td style="font-size:12px">${CASCADE_LEVEL_LABEL[c.level]||'ทุกคน'}${c.dept?' · '+escH(c.dept):''}</td>
     <td style="font-size:12px">${escH(c.target || 'ใช้เป้าหมายเดิม')}</td>
     <td style="text-align:center">${c.kpiYear ? 'FY'+c.kpiYear : '—'}</td>
     <td style="text-align:center">${c.weight}%</td>
@@ -4699,7 +4731,11 @@ function saveCascadeKpi(){
   const dept = document.getElementById('mCascadeDept')?.value || '';
   const target = (document.getElementById('mCascadeTarget')?.value || '').trim();
   const weight = Number(document.getElementById('mCascadeWeight')?.value) || 0;
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR กำหนด Cascade ได้','warn'); return; }
+  if(kpi.scope==='person'){ smlToast('KPI รายบุคคลผูกรหัสพนักงานอยู่แล้ว — Cascade ใช้กับ KPI ระดับองค์กร/ฝ่ายเท่านั้น','warn'); return; }
+  if(cascadeData.some(c=>c.kpiId===kpiId && c.level===level && c.dept===dept)){ smlToast('มี Cascade ของ KPI นี้กับระดับ/ฝ่ายนี้อยู่แล้ว','warn'); return; }
   cascadeData.push({ kpiId, kpiName:kpi.name, kpiYear:kpi.year, level, dept, target, weight });
+  saveCascadeData();
   renderCascadeRows();
   closeM();
   if(typeof appendAuditLog==='function') appendAuditLog('kpi','กำหนด Cascade KPI', kpi.name, (dept||'ทุกฝ่าย')+' · น้ำหนัก '+weight+'%');
@@ -4707,7 +4743,9 @@ function saveCascadeKpi(){
 }
 function deleteCascade(i){
   if(!confirm('ลบการ Cascade นี้?')) return;
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR','warn'); return; }
   cascadeData.splice(i,1);
+  saveCascadeData();
   renderCascadeRows();
   smlToast('ลบเรียบร้อย','ok');
 }
@@ -12611,7 +12649,7 @@ let _batchPrinting = false;
 function buildKpiPrintBoxHtml(code, cycle, level){
   if(typeof computeKpiScoreForEmp!=='function' || typeof goalKpiData==='undefined') return '';
   const w = getScoreWeightsFor(level, cycle), kpct = w.kpct||0;
-  const mine = goalKpiData.filter(k=>k.scope==='person' && k.empCode===code && k.status==='active' && String(k.year||'')===String(cycle||''));
+  const mine = kpiListForEmp(code, cycle).map(x=>x.k);
   if(!mine.length && !(kpct>0)) return '';
   const esc = t=>String(t==null?'':t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   const rows = mine.map(k=>{
@@ -13818,15 +13856,30 @@ function computeKpiAchievementPct(k){
    เฉพาะ KPI ขอบเขต "รายบุคคล" (scope==='person') ที่ผูกรหัสพนักงานคนนี้ไว้จริง, สถานะ active,
    และปีตรงกับรอบที่กำลังประเมินเท่านั้น — ขอบเขตองค์กร/แผนก (org/dept) ยังไม่มีช่องกรอกผลจริงแยกรายคน
    จึงยังไม่เข้าคะแนนประเมินรายคนในขณะนี้ (ข้อจำกัดที่ทราบแล้ว ระบุไว้ตรงๆ ไม่ปล่อยให้ดูเหมือนรองรับ) */
+/* KPI ที่นับให้พนักงานคนนี้ในรอบนี้: (1) KPI รายบุคคลที่ผูกรหัส (2) #296 KPI องค์กร/ฝ่ายที่ Cascade ลงมาถึง (ระดับ+ฝ่ายตรง) — น้ำหนักจาก Cascade (ถ้าไม่ระบุใช้น้ำหนัก KPI) ไม่นับซ้ำถ้าหลาย Cascade ตรงกัน */
+function kpiListForEmp(empCode, cycle){
+  if(!empCode || typeof goalKpiData==='undefined') return [];
+  const yr = String(cycle||'');
+  const out = goalKpiData.filter(k=>k.scope==='person' && k.empCode===empCode && k.status==='active' && String(k.year||'')===yr).map(k=>({k, w:Number(k.pct)||0}));
+  const emp = MASTER_USERS.find(u=>u[0]===empCode);
+  if(emp && typeof cascadeData!=='undefined'){
+    const seen = new Set();
+    cascadeData.forEach(c=>{
+      const k = goalKpiData.find(x=>x.id===c.kpiId);
+      if(!k || k.scope==='person' || k.status!=='active' || String(k.year||'')!==yr || seen.has(k.id) || !cascadeAppliesTo(c, emp)) return;
+      seen.add(k.id);
+      out.push({k, w:(Number(c.weight)>0 ? Number(c.weight) : (Number(k.pct)||0)), cascade:true});
+    });
+  }
+  return out;
+}
 function computeKpiScoreForEmp(empCode, cycle){
-  if(!empCode || typeof goalKpiData==='undefined') return {hasKpi:false, pct:0, detail:[]};
-  const list = goalKpiData.filter(k=>k.scope==='person' && k.empCode===empCode && k.status==='active' && String(k.year||'')===String(cycle||''));
+  const list = kpiListForEmp(empCode, cycle);
   if(!list.length) return {hasKpi:false, pct:0, detail:[]};
   let wsum=0, scoreSum=0; const detail=[];
-  list.forEach(k=>{
+  list.forEach(({k, w})=>{
     const pct = computeKpiAchievementPct(k);
     if(pct===null) return;
-    const w = Number(k.pct)||0;
     wsum += w; scoreSum += pct*w;
     detail.push({name:k.name, pct, weight:w});
   });
@@ -13903,6 +13956,7 @@ async function ms365SyncFormWeights(silent=false){
       }catch(e){}
     });
     applyCycleStepsRows(rows);
+    applyCascadeRows(rows);
     rows.forEach(r=>{
       if(String(r[0]??'').trim()!=='__tie__') return;
       try{
@@ -16242,7 +16296,7 @@ async function confirmImportEmployees(){
     </div>
     <div class="al al-i">
       <span>ℹ️</span>
-      <div>KPI ที่ "ยังไม่ผูกรอบ" จะถูกเก็บเป็น Draft ไม่มีผลต่อการประเมิน จนกว่า Admin จะเปิดใช้งาน — "ผลงานจริง/เป้าหมาย (ตัวเลข)" และ "ทิศทาง" ใช้คำนวณสัดส่วนคะแนน KPI ในแบบประเมิน เฉพาะ KPI ขอบเขต "รายบุคคล" เท่านั้น (ขอบเขตองค์กร/แผนกยังเป็นการติดตามเป้าหมายอย่างเดียว ไม่เข้าคะแนนประเมินรายคนในขณะนี้)</div>
+      <div>KPI ที่ "ยังไม่ผูกรอบ" จะถูกเก็บเป็น Draft ไม่มีผลต่อการประเมิน จนกว่า Admin จะเปิดใช้งาน — "ผลงานจริง/เป้าหมาย (ตัวเลข)" และ "ทิศทาง" ใช้คำนวณสัดส่วนคะแนน KPI ในแบบประเมิน เฉพาะ KPI ขอบเขต "รายบุคคล" หรือ KPI องค์กร/ฝ่ายที่ Admin กำหนด Cascade ลงมาถึงพนักงานคนนั้น (ใช้ค่าผลจริงเดียวทั้งกลุ่ม)</div>
     </div>
   </div>
   <div class="md-f">
@@ -16290,7 +16344,7 @@ async function confirmImportEmployees(){
       <div class="fg"><label>กำหนดให้ระดับ</label>
         <select id="mCascadeLevel">
           <option value="">ทุกคน (ตาม scope KPI)</option>
-          <option value="emp">เฉพาะพนักงานปฏิบัติการ</option>
+          <option value="emp">พนักงานทั่วไป (ปฏิบัติการ + สำนักงาน)</option>
           <option value="l1">เฉพาะหัวหน้าแผนก (Section Head)</option>
           <option value="l2">เฉพาะผู้จัดการส่วน (Division Manager)</option>
         </select>
