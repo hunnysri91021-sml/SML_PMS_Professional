@@ -4168,7 +4168,7 @@ function showTpl(lv){
   }).join('');
   panel.innerHTML='<div style="background:'+cfg.color+'14;border-left:4px solid '+cfg.color+';padding:10px 14px;border-radius:8px;margin-bottom:10px">'
     +'<b style="color:'+cfg.color+'">'+cfg.label+'</b>'
-    +' <span style="font-size:11px;color:#64748b">· '+totalU+' หน่วยรวม · Y='+cfg.Ypct+'% · Z='+cfg.Zpct+'%</span></div>'
+    +' <span style="font-size:11px;color:#64748b">· '+totalU+' หน่วยรวม · Y='+cfg.Ypct+'% · Z='+cfg.Zpct+'%'+((cfg.Kpct>0)?(' · KPI='+cfg.Kpct+'%'):'')+'</span></div>'
     +'<div class="tw"><table>'
     +'<thead><tr><th style="width:36px">ข้อ</th><th>ปัจจัยการพิจารณาประเมิน</th><th style="text-align:center;width:60px">น้ำหนัก</th>'
     +'<th style="text-align:center;width:55px;background:#f0fdf4">A+</th>'
@@ -4181,7 +4181,7 @@ function showTpl(lv){
     +'<td colspan="2" style="padding:10px">รวม</td>'
     +'<td style="text-align:center;color:#2563eb">'+totalU+' หน่วย</td>'
     +'<td colspan="2" style="text-align:center;color:#2563eb">สูงสุด '+totalMax+' คะแนน</td>'
-    +'<td colspan="3" style="font-size:11px;color:#64748b">Y='+cfg.Ypct+'% + Z='+cfg.Zpct+'% = 100%</td>'
+    +'<td colspan="3" style="font-size:11px;color:#64748b">Y='+cfg.Ypct+'% + Z='+cfg.Zpct+'%'+((cfg.Kpct>0)?(' + KPI='+cfg.Kpct+'%'):'')+' = 100%</td>'
     +'</tr></tfoot></table></div>';
   panel.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
