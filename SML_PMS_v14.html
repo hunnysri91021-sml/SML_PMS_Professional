@@ -13819,6 +13819,13 @@ function saveScoreWeightsForYearSilent(year, lv, ypct, zpct, kpct){
   saveScoreWeightsByYear(all);
   loadScoreWeightsOverride();
 }
+/* #299: พิมพ์ Z หรือ KPI แล้วเติม Y = 100 − Z − KPI ให้อัตโนมัติ (Y ยังแก้เองได้ — แต่ยังต้องรวม 100%) */
+function autoBalanceY(lv){
+  const g=id=>Math.max(0,Number(document.getElementById(id+'_'+lv)?.value)||0);
+  const yEl=document.getElementById('wY_'+lv);
+  if(yEl){ const y=100-g('wZ')-g('wK'); yEl.value = y>=0 ? String(Math.round(y*100)/100) : '0'; }
+  updateWeightSum(lv);
+}
 function updateWeightSum(lv){
   const v=id=>Math.max(0,Number(document.getElementById(id+'_'+lv)?.value)||0);
   const y=v('wY'),z=v('wZ'),k=v('wK'),t=y+z+k;
@@ -13835,11 +13842,12 @@ function saveScoreWeightsFromForm(lv){
   const total = ypct+zpct+kpct;
   if(Math.abs(total-100) > 0.001){ smlToast(`ผลรวม Y+Z+KPI ต้อง = 100% (ตอนนี้รวม ${total}%) — กรุณาแก้ให้ครบ 100 ก่อนบันทึก`,'warn'); return; }
   const year = tplWeightYear;
+  const prev = getScoreWeightsFor(lv, year||'');
   if(year){ saveScoreWeightsForYearSilent(year, lv, ypct, zpct, kpct); if(typeof pushFormWeightsToExcel==='function') pushFormWeightsToExcel(); }
   else saveScoreWeightsForLevel(lv, ypct, zpct, kpct);
   showTplDetail(lv);
   const scopeTxt = year ? `เฉพาะรอบ ${year}` : 'ทุกรอบ (ค่าตั้งต้น)';
-  if(typeof appendAuditLog==='function') appendAuditLog('settings','ปรับสัดส่วนคะแนน Y/Z/KPI', (LEVEL_CONFIG[lv]?.label||lv)+' · '+scopeTxt, `Y=${ypct}% Z=${zpct}% KPI=${kpct}%`);
+  if(typeof appendAuditLog==='function') appendAuditLog('settings','ปรับสัดส่วนคะแนน Y/Z/KPI', (LEVEL_CONFIG[lv]?.label||lv)+' · '+scopeTxt, `เดิม Y=${prev.ypct}% Z=${prev.zpct}% KPI=${prev.kpct}% → ใหม่ Y=${ypct}% Z=${zpct}% KPI=${kpct}%`);
   smlToast(`บันทึกสัดส่วนคะแนนของระดับ "${SML_FORMS[lv]?.short||lv}" (${scopeTxt}) แล้ว — Y=${ypct}% Z=${zpct}% KPI=${kpct}%`,'ok');
 }
 function resetScoreWeightsForLevel(lv){
@@ -14160,8 +14168,8 @@ function showTplDetail(lv){
           <select onchange="onWeightYearChange('${lv}', this.value)"><option value="">ทุกรอบ (ค่าตั้งต้น)</option>${getWeightYearOptions().map(y=>`<option value="${y}" ${y===tplWeightYear?'selected':''}>${y}${loadScoreWeightsByYear()[y]?.[lv]?' ✓ ตั้งแล้ว':''}</option>`).join('')}<option value="__new__">＋ เพิ่มรอบ/ปีอื่น…</option></select>
         </label>
         <label class="wgt-f"><span>Y · ผลงาน</span><div><input type="number" id="wY_${lv}" value="${wEd.ypct}" min="0" max="100" oninput="updateWeightSum('${lv}')"><i>%</i></div></label>
-        <label class="wgt-f"><span>Z · เวลาทำงาน</span><div><input type="number" id="wZ_${lv}" value="${wEd.zpct}" min="0" max="100" oninput="updateWeightSum('${lv}')"><i>%</i></div></label>
-        <label class="wgt-f"><span>KPI</span><div><input type="number" id="wK_${lv}" value="${wEd.kpct||0}" min="0" max="100" oninput="updateWeightSum('${lv}')"><i>%</i></div></label>
+        <label class="wgt-f"><span>Z · เวลาทำงาน</span><div><input type="number" id="wZ_${lv}" value="${wEd.zpct}" min="0" max="100" oninput="autoBalanceY('${lv}')"><i>%</i></div></label>
+        <label class="wgt-f"><span>KPI</span><div><input type="number" id="wK_${lv}" value="${wEd.kpct||0}" min="0" max="100" oninput="autoBalanceY('${lv}')"><i>%</i></div></label>
       </div>
       <div class="wgt-bar" id="wBar_${lv}"><b class="y"></b><b class="z"></b><b class="k"></b></div>
       <div class="wgt-sum" id="wSum_${lv}"></div>

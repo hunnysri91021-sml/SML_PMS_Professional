@@ -8987,6 +8987,8 @@ touches employee/attendance/evaluation data.
 
 298. **การ์ด "สัดส่วนคะแนน Y / Z / KPI" (หน้า "ตั้งค่าแบบประเมิน") จัดหน้าใหม่ให้อ่านง่าย.** เดิมเป็น banner ที่ยัดข้อความยาว + ช่องกรอกเล็กโปร่งใสในแถบสี → ตอนนี้เป็นการ์ด `.wgt-card` (ป้ายชัด "Y · ผลงาน / Z · เวลาทำงาน / KPI", ช่องกรอกใหญ่, แถบสัดส่วนสี 3 ส่วน, ข้อความรวม % สด `updateWeightSum(lv)` — ✅ รวม 100% / ⚠️ เกิน-ขาดกี่ %). id ช่องกรอก (`wY_/wZ_/wK_<lv>`) และฟังก์ชันบันทึก/รีเซ็ตเดิมไม่เปลี่ยน; `showTplDetail` เรียก `updateWeightSum` หลัง render. ทดสอบ: `tests/weight-card.test.js`.
 
+299. **ช่องสัดส่วน Y/Z/KPI เติม Y อัตโนมัติ + log เดิม→ใหม่.** พิมพ์ Z หรือ KPI แล้ว `autoBalanceY(lv)` ตั้ง Y = 100 − Z − KPI (ไม่ติดลบ) — Y ยังแก้เองได้ แต่ `saveScoreWeightsFromForm` ยังบังคับรวม = 100% เหมือนเดิม. Audit Log "ปรับสัดส่วนคะแนน Y/Z/KPI" ตอนนี้บันทึก "เดิม Y/Z/KPI → ใหม่ Y/Z/KPI" (อ่านค่าเดิมจาก `getScoreWeightsFor` ก่อนเขียน) พร้อมรอบที่ใช้. ไม่ต้อง redeploy Worker. ทดสอบ: `tests/weight-autobalance.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
