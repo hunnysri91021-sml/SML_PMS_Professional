@@ -6516,7 +6516,7 @@ function printEvalForm() {
         <td class="tc" colspan="2" style="font-size:8pt">รวมคะแนนประเมินผลการปฏิบัติงาน</td>
         <td class="tc num">${cfg.total}</td>
         <td colspan="5" style="text-align:right;font-size:8pt">
-          คะแนนผลงาน (Y) = ${rawY||'—'} × ${lcfg.Ypct} ÷ ${maxY} = <b>${yScore.toFixed(2)}</b>
+          คะแนนผลงาน (Y) = ${rawY||'—'} × ${yPctLblPF} ÷ ${maxY} = <b>${yScore.toFixed(2)}</b>
         </td>
       </tr>
     </tbody>
@@ -8047,7 +8047,7 @@ function recalc() {
   el('rawLabel', 'รวมคะแนนดิบ');
   el('yScore', Y.toFixed(2));
   el('sumY', Y.toFixed(2));
-  el('sumYpct', 'น้ำหนัก Y ' + cfg.Ypct + '%');
+  el('sumYpct', 'น้ำหนัก Y ' + (((cfg.Kpct>0) && r.kpi && !r.kpi.hasKpi) ? (cfg.Ypct+cfg.Kpct) : cfg.Ypct) + '%');
   el('sumZ', Z.toFixed(2));
   el('sumZpct', 'น้ำหนัก Z ' + cfg.Zpct + '%');
   /* #184: การ์ด KPI แสดงเฉพาะเมื่อระดับนี้มีสัดส่วน KPI จริง (Admin ตั้งไว้ > 0%) — ถ้าไม่ได้ใช้ KPI
