@@ -30,9 +30,11 @@ function mock(){ global.fetch=async(url,opt={})=>{ const u=String(url),m=opt.met
   ok(writes.length===1,'เจ้าของ LINE เดิมส่งซ้ำ → อัปเดตได้');
 
   const {b,p,errs}=await open();
-  await p.evaluate(()=>{ localStorage.setItem('x','1'); });
-  const r1=await p.evaluate(()=>{ openLineReg(); return {btn:getComputedStyle(document.getElementById('lineRegBtn')).display,msg:document.getElementById('lineRegMsg').textContent}; });
-  ok(r1.btn==='none'&&/ติดต่อ HR/.test(r1.msg),'ยังไม่ตั้งลิงก์ → ซ่อนปุ่มและบอกให้ติดต่อ HR');
+  await p.evaluate(()=>{ localStorage.setItem('smlPmsMs365GraphConfig',JSON.stringify({lineAddUrl:'x'})); });
+  const d0=await p.evaluate(()=>{ localStorage.removeItem('smlPmsMs365GraphConfig'); openLineReg(); const a=document.getElementById('lineRegBtn'); const r={d:getComputedStyle(a).display,h:a.href}; closeLineReg(); return r; });
+  ok(d0.d==='block'&&d0.h==='https://lin.ee/wbG39xc','ค่าเริ่มต้น = ลิงก์ LINE OA จริงของบริษัท');
+  const r1=await p.evaluate(()=>{ localStorage.setItem('smlPmsMs365GraphConfig',JSON.stringify({lineAddUrl:'https://evil.example/'})); openLineReg(); return {btn:getComputedStyle(document.getElementById('lineRegBtn')).display,msg:document.getElementById('lineRegMsg').textContent}; });
+  ok(r1.btn==='none'&&/ติดต่อ HR/.test(r1.msg),'ลิงก์ผิดรูปแบบ → ซ่อนปุ่มและบอกให้ติดต่อ HR');
   const r2=await p.evaluate(()=>{ closeLineReg(); const k='smlPmsMs365GraphConfig'; const cfg=JSON.parse(localStorage.getItem(k)||'{}'); cfg.lineAddUrl='https://line.me/R/ti/p/@abc'; localStorage.setItem(k,JSON.stringify(cfg)); openLineReg(); const a=document.getElementById('lineRegBtn'); return {d:getComputedStyle(a).display,h:a.href,k}; });
   ok(r2.d==='block'&&r2.h==='https://line.me/R/ti/p/@abc','ตั้งลิงก์แล้ว → ปุ่มเพิ่มเพื่อนชี้ลิงก์ที่ตั้ง ('+r2.k+')');
   const r3=await p.evaluate(()=>{ closeLineReg(); const k='smlPmsMs365GraphConfig'; const cfg=JSON.parse(localStorage.getItem(k)); cfg.lineAddUrl='https://evil.example/x'; localStorage.setItem(k,JSON.stringify(cfg)); openLineReg(); return getComputedStyle(document.getElementById('lineRegBtn')).display; });
