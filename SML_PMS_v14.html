@@ -6202,10 +6202,21 @@ function renderMyResult(){
     approverCard.style.display='none';
   }
 
+  /* #295: ช่อง KPI — โชว์เฉพาะเมื่อรอบ/ระดับนี้ตั้งสัดส่วน KPI > 0 และพนักงานมี KPI รายบุคคลจริง (ไม่งั้น
+     สัดส่วนถูกคืนให้ Y แล้ว ไม่มีคะแนน KPI ให้แสดง, #14) ค่า KPI = X − Y − Z เพื่อให้ตรงกับ X ที่บันทึกไว้ตอนนั้น
+     (ไม่คำนวณสดจาก KPI ปัจจุบันที่อาจแก้ภายหลังจนไม่ตรงกับ X) รายการ KPI แต่ละตัวมาจาก computeKpiScoreForEmp */
+  const kpiW = getScoreWeightsFor(latest[3], latest[2]);
+  const kpiInfo = computeKpiScoreForEmp(me[0], latest[2]);
+  const showKpi = !!(kpiW && kpiW.kpct>0 && kpiInfo.hasKpi);
+  const KPIv = showKpi ? Math.max(0, Math.round((X-Y-Z)*100)/100) : 0;
+  set('myResultXSub', document.getElementById('myResultXSub').textContent.replace('(Y+Z)', showKpi?'(Y+Z+KPI)':'(Y+Z)'));
+  const kpiRow = showKpi ? `
+    <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>🎯 คะแนน KPI</b><span>${KPIv.toFixed(2)} / ${Number(kpiW.kpct).toFixed(0)}</span></div><div class="pg"><i class="ok" style="width:${Math.min(100,kpiW.kpct>0?KPIv/kpiW.kpct*100:0)}%"></i></div>
+      <div style="font-size:11.5px;color:#64748b;margin-top:6px">${kpiInfo.detail.map(d=>escH(d.name)+' · ทำได้ '+d.pct.toFixed(0)+'% (น้ำหนัก '+d.weight+'%)').join('<br>')}</div></div>` : '';
   document.getElementById('myResultBreakdownArea').innerHTML = `
     <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>ผลการปฏิบัติงาน Y</b><span>${Y.toFixed(2)}</span></div><div class="pg"><i class="ok" style="width:${Math.min(100,Y)}%"></i></div></div>
-    <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>เวลาทำงาน Z</b><span>${Z.toFixed(2)}</span></div><div class="pg"><i class="ok" style="width:${Math.min(100,Z)}%"></i></div></div>
-    <div class="kv" style="border-top:2px solid #0f172a;margin-top:14px;padding-top:12px"><span style="font-weight:700;color:#0f172a">คะแนนรวม X = Y + Z</span><b style="font-size:19px;color:#2563eb">${X.toFixed(2)}</b></div>`;
+    <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><b>เวลาทำงาน Z</b><span>${Z.toFixed(2)}</span></div><div class="pg"><i class="ok" style="width:${Math.min(100,Z)}%"></i></div></div>${kpiRow}
+    <div class="kv" style="border-top:2px solid #0f172a;margin-top:14px;padding-top:12px"><span style="font-weight:700;color:#0f172a">คะแนนรวม X = Y + Z${showKpi?' + KPI':''}</span><b style="font-size:19px;color:#2563eb">${X.toFixed(2)}</b></div>`;
 
   document.getElementById('myResultHistoryRows').innerHTML = myDrafts.length
     ? myDrafts.slice().sort((a,b)=>Number(b[2])-Number(a[2])).map(d=>{

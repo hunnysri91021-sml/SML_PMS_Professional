@@ -8979,6 +8979,8 @@ touches employee/attendance/evaluation data.
 
 294. **ตัวเลือก "รอบ/ใช้ในรอบปี" ในหน้า "เป้าหมาย & KPI" ดึงจากรอบจริง ไม่พิมพ์ปีตายตัว (เดิมมีแค่ FY2568 "ปัจจุบัน"/FY2569 "ถัดไป" และแบนเนอร์เขียน FY2568 ตายตัว ทั้งที่รอบปัจจุบันจริงคือ 2569).** `kpiYearOptions()` รวมรหัสรอบจาก `cyclesList` (หน้า "รอบประเมิน") + `getCurrentEvalCycleYear()` + ปีที่ KPI เดิมใช้อยู่ (กัน KPI เก่าถูกเปลี่ยนปีเงียบๆ ตอนกดแก้ไข) แล้ว `populateKpiYearSelects()` เติม `mKpiYear`/`mKpiActivateYear`/`goalFilterYear` และแบนเนอร์ `#goalCycleBanner` (เรียกจาก `openM`, `editGoalKpi`, `filterGoalKpi`); ฟอร์มเปิดใช้ค่าเริ่มต้น = รอบปัจจุบัน. KPI จะเข้าสูตรคะแนนก็ต่อเมื่อปีของ KPI ตรงกับรหัสรอบใน "ตั้งค่ารอบประเมิน". ทดสอบ: `tests/kpi-year-select.test.js`.
 
+295. **หน้า "8. ผลประเมิน" (`renderMyResult`) มีช่องคะแนน KPI.** แสดงแถว "🎯 คะแนน KPI" (ค่า / สัดส่วน) + รายการ KPI รายบุคคลแต่ละตัว (% ที่ทำได้ น้ำหนัก) และเปลี่ยนสูตรที่ป้ายเป็น Y + Z + KPI เฉพาะเมื่อรอบ/ระดับนั้นตั้งสัดส่วน KPI > 0 **และ** พนักงานมี KPI รายบุคคลจริง (ไม่งั้นสัดส่วนคืนให้ Y แล้ว ไม่มีอะไรให้แสดง, #14). ค่า KPI = X − Y − Z ของใบที่บันทึกไว้ (ไม่คำนวณสดจาก KPI ปัจจุบัน เพื่อให้ตรงกับ X ที่พนักงานเห็น). ทดสอบ: `tests/myresult-kpi.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
