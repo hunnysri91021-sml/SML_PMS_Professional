@@ -3023,7 +3023,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     <div class="al al-w" style="margin-bottom:18px">
       <span>📋</span>
       <div>
-        <b>KPI ยังไม่ได้เปิดใช้งานในรอบปัจจุบัน (FY2568)</b>
+        <b id="goalCycleBanner">KPI ยังไม่ได้เปิดใช้งานในรอบปัจจุบัน</b>
         Admin สามารถกำหนด KPI ไว้ล่วงหน้า แล้วเลือกว่าจะ "เปิดใช้งาน" ในรอบปีไหน
         และจะ Cascade ให้พนักงานคนใดหรือกลุ่มใด — ก่อนเปิดใช้จะไม่มีผลต่อการประเมิน
       </div>
@@ -3044,8 +3044,6 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         <div class="r">
           <select id="goalFilterYear" onchange="filterGoalKpi()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
             <option value="">ทุกรอบ</option>
-            <option value="2568">รอบ FY2568</option>
-            <option value="2569">รอบ FY2569</option>
             <option value="draft">ยังไม่ผูกรอบ</option>
           </select>
           <select id="goalFilterScope" onchange="filterGoalKpi()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:7px;font-size:12px;font-family:inherit">
@@ -4239,8 +4237,36 @@ function renderGoalKpi(data) {
   if(t){t.textContent = total+'%'; t.style.color = total===100?'#16a34a':'#dc2626';}
 }
 
+/* #293: รายการรอบในหน้า KPI (ตัวกรอง/ฟอร์มเพิ่ม-แก้/ฟอร์มเปิดใช้) ดึงจากรอบจริง ไม่พิมพ์ปีตายตัว —
+   รวมรหัสรอบจาก cyclesList (หน้า "รอบประเมิน"), รหัสรอบปัจจุบัน (ตั้งค่ารอบประเมิน) และปีที่ KPI เดิมใช้อยู่
+   (กัน KPI เก่าที่ผูกปีที่ไม่อยู่ในรายการแล้วถูกเปลี่ยนค่าเงียบๆ ตอนกดแก้ไข, CLAUDE.md #3/#50) */
+function kpiYearOptions(){
+  const cur = String(getCurrentEvalCycleYear());
+  const names = {};
+  (typeof cyclesList!=='undefined' ? cyclesList : []).forEach(c=>{ if(c && c.year) names[String(c.year)] = c.name||''; });
+  const years = new Set(Object.keys(names));
+  years.add(cur);
+  goalKpiData.forEach(k=>{ if(k.year) years.add(String(k.year)); });
+  return [...years].sort().map(y=>({year:y, label:'FY'+y+(names[y]?' — '+names[y]:'')+(y===cur?' (รอบปัจจุบัน)':''), cur:y===cur}));
+}
+function populateKpiYearSelects(){
+  const opts = kpiYearOptions();
+  const cur = String(getCurrentEvalCycleYear());
+  const fill = (id, head, keepVal, pick)=>{
+    const el = document.getElementById(id); if(!el) return;
+    const prev = el.value;
+    el.innerHTML = head + opts.map(o=>`<option value="${escH(o.year)}">${escH(o.label)}</option>`).join('');
+    el.value = [...el.options].some(x=>x.value===prev) && keepVal ? prev : pick;
+  };
+  fill('mKpiYear', '<option value="">ยังไม่ผูกรอบ (Draft)</option>', true, '');
+  fill('mKpiActivateYear', '', true, cur);
+  fill('goalFilterYear', '<option value="">ทุกรอบ</option><option value="draft">ยังไม่ผูกรอบ</option>', true, '');
+  const b = document.getElementById('goalCycleBanner');
+  if(b) b.textContent = 'KPI ยังไม่ได้เปิดใช้งานในรอบปัจจุบัน (FY'+cur+')';
+}
 function filterGoalKpi() {
-  const yr = document.getElementById('goalFilterYear')?.value||'';
+  populateKpiYearSelects();
+  const yr =document.getElementById('goalFilterYear')?.value||'';
   const sc = document.getElementById('goalFilterScope')?.value||'';
   const filtered = goalKpiData.filter(k =>
     (!yr || (yr==='draft' ? !k.year : k.year===yr)) &&
@@ -4270,6 +4296,7 @@ function editGoalKpi(id) {
   const k = goalKpiData.find(x=>x.id===id);
   if(!k){ smlToast('ไม่พบ KPI นี้ในระบบ','warn'); return; }
   editingKpiId = id;
+  populateKpiYearSelects();
   const set=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value = val ?? ''; };
   set('mKpiName', k.name);
   set('mKpiUnit', k.unit);
@@ -6985,6 +7012,7 @@ function openM(id){
     const n = getDrafts().filter(d=>d[d.length-1]==='CalibChecked').length;
     const el = document.getElementById('mApproveCount'); if(el) el.textContent = n+' ใบ';
   }
+  if((id==='mAddKpi'||id==='mKpiActivate') && typeof populateKpiYearSelects==='function') populateKpiYearSelects();
   if(id==='mCascadeKpi' && typeof populateCascadeModal==='function') populateCascadeModal();
   if(id==='mAddIdp' && typeof populateIdpModal==='function') populateIdpModal();
 }
@@ -16176,8 +16204,6 @@ async function confirmImportEmployees(){
       <div class="fg"><label>ใช้ในรอบปี</label>
         <select id="mKpiYear">
           <option value="">ยังไม่ผูกรอบ (Draft)</option>
-          <option value="2568">FY2568 — ปัจจุบัน</option>
-          <option value="2569">FY2569 — ปีถัดไป</option>
         </select>
       </div>
     </div>
@@ -16224,10 +16250,7 @@ async function confirmImportEmployees(){
       พนักงานในขอบเขตที่กำหนดจะเห็น KPI นี้ใน Self-Assessment</div>
     </div>
     <div class="fg"><label>ผูกกับรอบประเมิน <i>*</i></label>
-      <select id="mKpiActivateYear">
-        <option value="2568">FY2568 — ประจำปี 2568</option>
-        <option value="2569" selected>FY2569 — ประจำปี 2569 (รอบปัจจุบัน)</option>
-      </select>
+      <select id="mKpiActivateYear"></select>
     </div>
     <div class="fg"><label>ขอบเขตที่ใช้</label>
       <select>

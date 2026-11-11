@@ -8977,6 +8977,8 @@ touches employee/attendance/evaluation data.
 
 293. **ตรวจหน้าอื่นต่อจาก #288–#290: Calibration, ตรวจสอบหลัง Calibration, อนุมัติ MD/AMD แสดงคอลัมน์ Y · Z · X ครบ และเรียงคะแนนรวมสูง→ต่ำเป็นค่าเริ่มต้น (Calibration เปลี่ยนตัวเลือก "ค่าเริ่มต้น" ของ `calibSort` เป็น `scoreDesc`).** คอลัมน์ใหม่ที่ Calibration ทำให้ colspan 9→10 (pending 7→8); การ์ดตรวจหลัง Calibration 7→8; MD approve 5→7 (ใช้ `yzCells`). หน้าสรุปรายฝ่ายเป็นค่าเฉลี่ย ไม่ใช่รายคน จึงไม่เพิ่ม. ทดสอบ: `tests/other-pages-yzx.test.js`.
 
+294. **ตัวเลือก "รอบ/ใช้ในรอบปี" ในหน้า "เป้าหมาย & KPI" ดึงจากรอบจริง ไม่พิมพ์ปีตายตัว (เดิมมีแค่ FY2568 "ปัจจุบัน"/FY2569 "ถัดไป" และแบนเนอร์เขียน FY2568 ตายตัว ทั้งที่รอบปัจจุบันจริงคือ 2569).** `kpiYearOptions()` รวมรหัสรอบจาก `cyclesList` (หน้า "รอบประเมิน") + `getCurrentEvalCycleYear()` + ปีที่ KPI เดิมใช้อยู่ (กัน KPI เก่าถูกเปลี่ยนปีเงียบๆ ตอนกดแก้ไข) แล้ว `populateKpiYearSelects()` เติม `mKpiYear`/`mKpiActivateYear`/`goalFilterYear` และแบนเนอร์ `#goalCycleBanner` (เรียกจาก `openM`, `editGoalKpi`, `filterGoalKpi`); ฟอร์มเปิดใช้ค่าเริ่มต้น = รอบปัจจุบัน. KPI จะเข้าสูตรคะแนนก็ต่อเมื่อปีของ KPI ตรงกับรหัสรอบใน "ตั้งค่ารอบประเมิน". ทดสอบ: `tests/kpi-year-select.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
