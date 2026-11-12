@@ -2125,7 +2125,7 @@ img,svg,canvas{max-width:100%}
         <div class="card-h"><h3>ส่วนที่ 2 — คะแนนเวลาทำงาน (Z) 🔒</h3>
           <div class="r"><span class="bd b-s" id="zBadgeLabel"></span></div>
         </div>
-        <div class="al al-i" style="margin:12px 16px"><span>🔒</span><div>คำนวณอัตโนมัติจากข้อมูล HRGO ที่ HR&GA นำเข้า · ช่วง 1 ธ.ค. ปีก่อน – 30 พ.ย. ปีปัจจุบัน</div></div>
+        <div class="al al-i" style="margin:12px 16px"><span>🔒</span><div>คำนวณอัตโนมัติจากข้อมูล HRGO ที่ HR&GA นำเข้า · <b class="attPeriodTxt">ช่วงข้อมูล: ยังไม่ระบุ</b></div></div>
         <div class="card-b">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
             <div>
@@ -2566,7 +2566,19 @@ img,svg,canvas{max-width:100%}
 
   <!-- ========== IMPORT ========== -->
   <section class="page" id="pg-import">
-    <div class="ph"><div><h2>Import ข้อมูลเวลาทำงาน (Z)</h2><p>นำเข้าข้อมูลขาด-ลา-มาสาย จาก HRGO เพื่อคำนวณคะแนน Z อัตโนมัติ · ช่วง 1 ธ.ค. – 30 พ.ย.</p></div></div>
+    <div class="ph"><div><h2>Import ข้อมูลเวลาทำงาน (Z)</h2><p>นำเข้าข้อมูลขาด-ลา-มาสาย จาก HRGO เพื่อคำนวณคะแนน Z อัตโนมัติ · <b id="attPeriodHead">ช่วงข้อมูล: ยังไม่ระบุ</b></p></div></div>
+
+    <div class="card" id="attPeriodCard" style="margin-bottom:14px">
+      <div class="card-h"><div><h3>📅 ช่วงวันที่ของข้อมูลสถิติเวลาทำงาน</h3><small style="color:#7b8796">ระบุว่าไฟล์ HRGO ที่นำเข้าครอบคลุมข้อมูลตั้งแต่วันไหนถึงวันไหน — จะแสดงในแบบประเมินและใบพิมพ์ทุกใบ</small></div></div>
+      <div class="card-b">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+          <div class="fg" style="margin:0"><label>ตั้งแต่วันที่</label><input type="date" id="attPeriodFrom"></div>
+          <div class="fg" style="margin:0"><label>ถึงวันที่</label><input type="date" id="attPeriodTo"></div>
+          <button class="btn btn-p" id="attPeriodSaveBtn" onclick="saveAttPeriod()">💾 บันทึกช่วงข้อมูล</button>
+        </div>
+        <div id="attPeriodMeta" style="font-size:11px;color:var(--text3);margin-top:8px"></div>
+      </div>
+    </div>
 
     <div class="card hrgo-template-card">
       <div class="card-h">
@@ -3984,6 +3996,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='audit' && typeof renderAuditLog==='function') renderAuditLog();
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cyclesetup' && typeof renderCycleSetupTimeline==='function') renderCycleSetupTimeline();
+  if((p==='import'||p==='myeval') && typeof renderAttPeriod==='function') renderAttPeriod();
   if(p==='cycle' && typeof renderCyclesTable==='function'){ renderCyclesTable(); populateCycleStepsCycleSel(); renderCycleSteps(); }
   if(p==='cycle' && typeof syncGradeVisSettingUi==='function') syncGradeVisSettingUi();
   if(p==='myresult' && typeof renderMyResult==='function') renderMyResult();
@@ -6917,7 +6930,7 @@ function printEvalForm() {
   <!-- ===== ส่วนที่ 2: Z Score ===== -->
   <div class="F-sec s2">
     <span class="sec-num">2</span>
-    ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${zPctLblPF}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO · ช่วง 1 ธ.ค. 2568 – 30 พ.ย. 2569
+    ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${zPctLblPF}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO · ${attPeriodLabel()}
   </div>
   <div class="F-zbox">
     <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zResult.att.lateCount||0} ครั้ง</span></div>
@@ -10161,6 +10174,38 @@ async function ms365SyncDisputes(silent=true){
 /* #257: เปิด/ปิดระบบ (Admin/sysadmin) — ปิด = ผู้ใช้ที่ไม่ใช่ admin/sysadmin เข้า/ใช้ระบบไม่ได้
    เก็บใน localStorage + sync ข้ามเครื่องผ่าน FormWeights แถว '__sysopen__' (ใหม่กว่าชนะด้วย at)
    ค่าเริ่มต้น = เปิด (ไม่เปลี่ยนพฤติกรรมเดิม). เป็นการกั้นฝั่งหน้าเว็บ ไม่ใช่ความปลอดภัยจริง (#17) */
+/* ช่วงวันที่ของข้อมูลสถิติเวลาทำงาน (HRGO) — Admin ตั้งเอง, เก็บ localStorage + sync ผ่าน FormWeights '__attperiod__'
+   (ใหม่กว่าชนะด้วย at). ไม่ตั้ง = แสดง "ยังไม่ระบุช่วงข้อมูล" ไม่เดาวันที่ (#14) */
+const ATT_PERIOD_KEY='smlPmsAttPeriod';
+function getAttPeriod(){ try{ const o=JSON.parse(localStorage.getItem(ATT_PERIOD_KEY)||'null'); if(o&&(o.from||o.to)) return o; }catch(e){} return {from:'',to:'',at:'',by:''}; }
+function attFmtIso(iso){ if(!iso) return ''; const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return ''; const mo=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return (+m[3])+' '+mo[+m[2]-1]+' '+(+m[1]+543); }
+function attPeriodLabel(){ const p=getAttPeriod(); if(!p.from||!p.to) return 'ยังไม่ระบุช่วงข้อมูล'; return 'ข้อมูลระหว่างวันที่ '+attFmtIso(p.from)+' – '+attFmtIso(p.to); }
+function renderAttPeriod(){
+  const p=getAttPeriod(); const t=attPeriodLabel();
+  const h=document.getElementById('attPeriodHead'); if(h) h.textContent=(p.from&&p.to)?t:'ช่วงข้อมูล: ยังไม่ระบุ';
+  document.querySelectorAll('.attPeriodTxt').forEach(e=>{ e.textContent=(p.from&&p.to)?t:'ช่วงข้อมูล: ยังไม่ระบุ'; });
+  const f=document.getElementById('attPeriodFrom'), to=document.getElementById('attPeriodTo');
+  const adm=(typeof isAdminOrSysadmin==='function')&&isAdminOrSysadmin();
+  if(f&&document.activeElement!==f) f.value=p.from||''; if(to&&document.activeElement!==to) to.value=p.to||'';
+  [f,to,document.getElementById('attPeriodSaveBtn')].forEach(e=>{ if(e) e.disabled=!adm; });
+  const m=document.getElementById('attPeriodMeta'); if(m) m.textContent=p.at?('บันทึกล่าสุด '+new Date(p.at).toLocaleString('th-TH')+(p.by?' โดย '+p.by:'')):'';
+}
+async function saveAttPeriod(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR ตั้งช่วงข้อมูลได้','warn'); return; }
+  const from=document.getElementById('attPeriodFrom')?.value||'', to=document.getElementById('attPeriodTo')?.value||'';
+  if(!from||!to){ smlToast('กรุณาระบุทั้งวันเริ่มต้นและวันสิ้นสุด','warn'); return; }
+  if(to<from){ smlToast('วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น','warn'); return; }
+  const me=CURRENT_SESSION_USER; const st={from,to,at:new Date().toISOString(),by:(me&&me[1])||''};
+  localStorage.setItem(ATT_PERIOD_KEY,JSON.stringify(st));
+  appendAuditLog('setting','ตั้งช่วงข้อมูลเวลาทำงาน','HRGO',attFmtIso(from)+' – '+attFmtIso(to));
+  renderAttPeriod();
+  const cfg=loadMs365Config(); let pushed=false;
+  if(isMs365Configured(cfg)){
+    try{ await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__attperiod__',['__attperiod__',JSON.stringify(st),st.at]); appendSyncLog('Push ช่วงข้อมูลเวลาทำงานเข้า Excel',true); pushed=true; }
+    catch(e){ appendSyncLog('Push ช่วงข้อมูลเวลาทำงานเข้า Excel ไม่สำเร็จ: '+(e&&e.message||e),false); }
+  } else appendSyncLog('saveAttPeriod: ยังไม่ได้ตั้งค่า MS365 — บันทึกเฉพาะเครื่องนี้',false);
+  smlToast('บันทึกช่วงข้อมูลแล้ว'+(pushed?'':' (เฉพาะเครื่องนี้ — ยังไม่ขึ้น Excel)'),pushed?'ok':'warn');
+}
 const SYSTEM_OPEN_KEY='smlPmsSystemOpen';
 function getSystemState(){ try{ const s=JSON.parse(localStorage.getItem(SYSTEM_OPEN_KEY)||'null'); if(s&&typeof s.open==='boolean') return s; }catch(e){} return {open:true,msg:'',at:'',by:''}; }
 function isSystemClosedFor(u){ const s=getSystemState(); return !s.open && !(u && ['admin','sysadmin'].includes(u[2])); }
@@ -13240,7 +13285,7 @@ function buildEvalPrintPage(d, printDate){
 
     ${(LEVEL_CONFIG[level]?.leaderShow||['ldr','mgr'].includes(level))?`<div class="F-sec s1b"><span class="sec-num">↳</span> ด้านความสามารถในการบังคับบัญชา ( Leadership Skill )</div>`:''}
 
-    <div class="F-sec s2"><span class="sec-num">2</span> ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${zPctLbl}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO</div>
+    <div class="F-sec s2"><span class="sec-num">2</span> ส่วนที่ 2 &nbsp; คะแนนเวลาทำงาน ( Z = ${zPctLbl}% ) &nbsp;·&nbsp; ข้อมูลจาก HRGO · ${attPeriodLabel()}</div>
     <div class="F-zbox">
       <div class="zc"><span class="zl">มาสาย:</span><span class="zv">${zr.att.lateCount||0} ครั้ง</span></div>
       <div class="zc"><span class="zl">กลับก่อน:</span><span class="zv">${zr.att.earlyCount||0} ครั้ง</span></div>
@@ -14448,6 +14493,12 @@ async function ms365SyncFormWeights(silent=false){
         if(remote && typeof remote.open==='boolean' && (!local.at || (remote.at && remote.at>local.at))){ localStorage.setItem(SYSTEM_OPEN_KEY,JSON.stringify(remote)); applySystemGate(); }
       }catch(e){}
     });
+    rows.forEach(r=>{
+      if(String(r[0]??'').trim()!=='__attperiod__') return;
+      try{ const remote=JSON.parse(r[1]); const local=getAttPeriod();
+        if(remote && remote.from && remote.to && (!local.at || (remote.at && remote.at>local.at))){ localStorage.setItem(ATT_PERIOD_KEY,JSON.stringify(remote)); renderAttPeriod(); }
+      }catch(e){}
+    });
     applyCycleStepsRows(rows);
     applyCascadeRows(rows);
     rows.forEach(r=>{
@@ -14770,7 +14821,7 @@ function openReviewerForm(lv,name,code,position,cycle,viewOnly){
     <div class="review-employee-grid">
       <div><label>ชื่อ-สกุล</label><b>${name}</b></div><div><label>รหัสพนักงาน</label><b>${code}</b></div><div><label>ตำแหน่ง</label><b>${position}</b></div><div><label>รอบประเมิน</label><b>${currentReviewerCycle}</b></div>
     </div>
-    <div class="review-section-title">⏱️ รายละเอียดเวลาทำงาน (Z) — จาก Attendance จริงของพนักงานคนนี้</div>
+    <div class="review-section-title">⏱️ รายละเอียดเวลาทำงาน (Z) — จาก Attendance จริงของพนักงานคนนี้ · ${attPeriodLabel()}</div>
     <div class="review-z-grid">
       <div><span>มาสาย</span><b>${att.lateCount||0} ครั้ง</b></div>
       <div><span>กลับก่อนเวลา</span><b>${att.earlyCount||0} ครั้ง</b></div>
