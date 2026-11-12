@@ -15583,18 +15583,22 @@ async function reopenCycle(id){
    เก็บแยกตามรหัสรอบใน localStorage แล้ว sync ผ่านตาราง FormWeights แถว '__steps__<id>' (JSON) */
 const CYCLE_STEPS_KEY='smlPmsCycleSteps';
 const CYCLE_STEP_DEFAULTS=[
-  ['พนักงานประเมินตนเอง','พนักงานทุกคน',false,'7,3,1','self'],
-  ['หัวหน้าแผนก / Leader ประเมิน','หัวหน้าทางตรง',true,'7,3,1','l1'],
-  ['ผู้จัดการส่วน สอบทาน','ผู้จัดการส่วน',true,'5,2','l2'],
-  ['GM อนุมัติ','GM',true,'5,2','gm'],
-  ['Calibration','HR + ผู้จัดการส่วน',false,'3','calib'],
-  ['MD-SML อนุมัติ','AMD/MD',true,'3,1','md'],
-  ['พนักงานรับทราบผล','พนักงานทุกคน',false,'7,3','ack']
+  ['พนักงานประเมินตนเอง / หัวหน้าหน่วยประเมินรอบแรก','พนักงานทุกคน + หัวหน้าหน่วย (L1)',false,'7,3,1','self'],
+  ['หัวหน้าแผนก สอบทาน (L2)','หัวหน้าแผนก',true,'7,3,1','l1'],
+  ['ผู้จัดการส่วน สอบทาน (L3)','ผู้จัดการส่วน',true,'5,2','l2'],
+  ['GM อนุมัติ (L4)','GM',true,'5,2','gm'],
+  ['GM ยืนยันส่งผลให้พนักงาน','GM / ผู้ทำแทน GM',false,'3','sent'],
+  ['พนักงานรับทราบผล','พนักงานทุกคน',false,'7,3','ack'],
+  ['Calibration (Bell Curve)','HR',false,'3','calib'],
+  ['ตรวจสอบหลัง Calibration','HR',true,'3','calibchk'],
+  ['MD-SML อนุมัติ','AMD/MD',true,'3,1','md']
 ];
+/* #308: ลำดับขั้นมาตรฐานเดิม (ก่อนปรับให้ตรง pipeline ล่าสุด) — ใช้ย้ายข้อมูลเฉพาะรอบที่ยังไม่เคยแก้/ใส่วันที่ */
+const CYCLE_STEP_OLD_DEFAULT_NAMES=['พนักงานประเมินตนเอง','หัวหน้าแผนก / Leader ประเมิน','ผู้จัดการส่วน สอบทาน','GM อนุมัติ','Calibration','MD-SML อนุมัติ','พนักงานรับทราบผล'];
 /* #282: สถานะขั้นตอนคำนวณจากใบประเมินจริง — ขั้นที่ผูก stage จะ "เสร็จ" เมื่อทุกคนที่ต้องประเมินถึงสถานะนั้นหรือเลยไปแล้ว
    (ขั้นที่ไม่ผูก = ใช้สถานะที่ Admin ตั้งเอง) ลำดับใน EVAL_STATUS_ORDER เป็นตัวตัดสิน ขั้นที่ถูกข้ามอัตโนมัติก็นับว่าผ่าน */
-const CYCLE_STAGE_OPTS=[['','— ตั้งสถานะเอง —'],['self','พนักงานส่งแบบประเมิน (Submitted)'],['l1','หัวหน้าแผนกสอบทานแล้ว (L1Reviewed)'],['l2','ผู้จัดการส่วนสอบทานแล้ว (L2Reviewed)'],['gm','GM อนุมัติแล้ว (GMApproved)'],['ack','พนักงานรับทราบผล (Acknowledged)'],['calib','Calibration แล้ว (Calibrated)'],['md','MD/AMD อนุมัติ (Approved)']];
-const CYCLE_STAGE_STATUS={self:'Submitted',l1:'L1Reviewed',l2:'L2Reviewed',gm:'GMApproved',ack:'Acknowledged',calib:'Calibrated',md:'Approved'};
+const CYCLE_STAGE_OPTS=[['','— ตั้งสถานะเอง —'],['self','พนักงานส่งแบบประเมิน (Submitted)'],['l1','หัวหน้าแผนกสอบทานแล้ว (L1Reviewed)'],['l2','ผู้จัดการส่วนสอบทานแล้ว (L2Reviewed)'],['gm','GM อนุมัติแล้ว (GMApproved)'],['sent','GM ส่งผลให้พนักงานแล้ว (ResultSent)'],['ack','พนักงานรับทราบผล (Acknowledged)'],['calib','Calibration แล้ว (Calibrated)'],['calibchk','ตรวจสอบหลัง Calibration แล้ว (CalibChecked)'],['md','MD/AMD อนุมัติ (Approved)']];
+const CYCLE_STAGE_STATUS={self:'Submitted',l1:'L1Reviewed',l2:'L2Reviewed',gm:'GMApproved',sent:'ResultSent',ack:'Acknowledged',calib:'Calibrated',calibchk:'CalibChecked',md:'Approved'};
 function cycleStepStage(st){
   if(st.stage!==undefined&&st.stage!==null) return st.stage;
   const d=CYCLE_STEP_DEFAULTS.find(x=>x[0]===st.name); return d?d[4]:'';
@@ -15623,7 +15627,16 @@ let cycleStepEditing=null;
 function loadCycleStepsStore(){ try{ return JSON.parse(localStorage.getItem(CYCLE_STEPS_KEY)||'{}')||{}; }catch(e){ return {}; } }
 function saveCycleStepsStore(o){ localStorage.setItem(CYCLE_STEPS_KEY, JSON.stringify(o)); }
 function defaultCycleSteps(){ return CYCLE_STEP_DEFAULTS.map((d,i)=>({id:'s'+Date.now().toString(36)+i, order:i+1, name:d[0], owner:d[1], start:'', end:'', canReject:!!d[2], remind:d[3], status:'wait'})); }
-function getCycleSteps(cid){ const o=loadCycleStepsStore(); return (o[cid]&&Array.isArray(o[cid].steps))?o[cid].steps.slice().sort((a,b)=>(a.order||0)-(b.order||0)):null; }
+function getCycleSteps(cid){
+  const o=loadCycleStepsStore(); if(!(o[cid]&&Array.isArray(o[cid].steps))) return null;
+  let steps=o[cid].steps.slice().sort((a,b)=>(a.order||0)-(b.order||0));
+  /* #308: ย้ายชุดมาตรฐานเดิมเป็นลำดับใหม่ (เฉพาะที่ชื่อตรงชุดเดิมทุกขั้นและยังไม่ได้ใส่วันที่ = ไม่เคยถูกแก้) */
+  if(steps.length===CYCLE_STEP_OLD_DEFAULT_NAMES.length && steps.every((st,i)=>st.name===CYCLE_STEP_OLD_DEFAULT_NAMES[i] && !st.start && !st.end)){
+    steps=defaultCycleSteps(); o[cid]={steps,at:new Date().toISOString()}; saveCycleStepsStore(o);
+    try{ pushCycleStepsToExcel(cid); }catch(e){}
+  }
+  return steps;
+}
 function putCycleSteps(cid,steps){ const o=loadCycleStepsStore(); o[cid]={steps, at:new Date().toISOString()}; saveCycleStepsStore(o); pushCycleStepsToExcel(cid); try{ renderCycleSetupTimeline(); }catch(e){} }
 /* ไทม์ไลน์ในหน้า "ตั้งค่ารอบประเมิน" ดึงจากกำหนดการจริงของรอบปัจจุบัน (ชุดเดียวกับตารางในหน้า "รอบประเมิน") — เดิมเป็น HTML ตายตัว 6 ขั้นตอน */
 function renderCycleSetupTimeline(){
