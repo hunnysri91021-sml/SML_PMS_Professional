@@ -9003,6 +9003,8 @@ touches employee/attendance/evaluation data.
 
 306. **หน้าเข้าสู่ระบบ (`#loginGate`) ออกแบบใหม่แบบ split-screen สากล.** ซ้าย = แบรนด์ (โลโก้จริงจาก `SML_LOGO_DATA_URI` ใส่ผ่าน `#loginLogo`, headline สองภาษา, จุดเด่น 3 ข้อ), ขวา = ฟอร์ม (ไอคอน SVG ในช่อง, ปุ่มแสดง/ซ่อน PIN `#loginEye`, ลิงก์ลืม PIN ใต้ช่อง PIN, ลิงก์ผู้ใช้ใหม่ 3 อันเป็นปุ่มการ์ด); ≤820px เรียงเป็นคอลัมน์เดียว. CSS ทั้งหมดขอบเขต `#loginGate` เพื่อไม่กระทบหน้าอื่นที่ใช้ `.login-gate/.login-box` (ลืม PIN/เปิดใช้งาน/ลงทะเบียนอีเมล/LINE ยังหน้าตาเดิม). id/handler เดิมครบ (`loginCode/loginPin/loginBtn/forgotLink/lineRegLink/regEmailLink/activateLink`) เทสต์เดิมจึงผ่านทั้งหมด. บทเรียน: grid item ที่มี `overflow:hidden` ย่อต่ำกว่าเนื้อหาได้ — บนมือถือใช้ flex column + `flex:0 0 auto` กันหัวข้อถูกตัด.
 
+307. **หน้าย่อยของการเข้าสู่ระบบ (ลืม PIN / เปิดใช้งานครั้งแรก / ลงทะเบียนอีเมล / ลงทะเบียน LINE) ปรับสไตล์ให้เหมือน #306.** เพิ่ม class `lg-sec` ที่ gate ทั้งสี่ (พื้นหลังไล่สีเดียวกัน, การ์ดมนมีโลโก้+ชื่อ `lg-mini`, หัวข้อมีชิปไอคอน SVG `lg-ico` แทนอีโมจิ, ช่อง/ปุ่มสไตล์เดียวกับหน้าหลัก, ลิงก์กลับเป็นปุ่ม `lg-back`); ≤520px เต็มจอ. id/handler เดิมไม่เปลี่ยน (เทสต์ activation/forgot-pin/register-email/line-register ผ่าน). กฎ `.login-gate .login-box{width:calc(100vw - 28px)}` เดิมที่มือถือต้องชนะด้วย `width:100% !important`. หน้าใหม่ที่ใช้ `.login-gate` ให้ใส่ `lg-sec` และ `<div class="lg-mini">` ด้วยเพื่อความสม่ำเสมอ.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
