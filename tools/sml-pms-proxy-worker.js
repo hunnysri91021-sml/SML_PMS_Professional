@@ -124,6 +124,13 @@ export default {
       return handleLineWebhook(request, env, ctx);
     }
 
+    /* #312: สถานะเปิด/ปิดระบบ (สาธารณะ ไม่ต้องมีบัตรผ่าน — คืนเฉพาะสถานะ/ข้อความ/เวลาที่ตั้งไว้ ไม่มีข้อมูลส่วนตัว)
+       หน้าล็อกอิน/หน้าจอล็อกใช้ถามเพื่อรู้ว่าเปิดแล้วหรือยัง ทั้งที่ยังเรียก /rows ไม่ได้ตอนปิด */
+    if (url.pathname === '/system-status' && request.method === 'GET') {
+      const st = await getSystemState(env);
+      return json({ closed: sysClosedNow(st), state: st ? { open: st.open, msg: st.msg || '', at: st.at || '', by: st.by || '', closeAt: st.closeAt || '', openAt: st.openAt || '' } : null }, 200, cors);
+    }
+
     /* #260: ล็อกอินที่ Worker — เป็น route เดียวที่เปิดโดยไม่ต้องมีบัตรผ่าน (ตรวจ PIN เองแล้วออกบัตรให้) */
     if (url.pathname === '/auth/login' && request.method === 'POST') {
       try { return await handleLogin(request, env, cors); }
@@ -150,6 +157,8 @@ export default {
 
     const auth = await authenticate(request, env);
     if (!auth) return json({ error: 'unauthorized' }, 401, cors);
+    { const blk = await systemBlockFor(env, auth);
+      if (blk) return json({ error: 'system_closed', message: blk.message, openAt: blk.openAt }, 503, cors); }
 
     try {
       /* /send-line ไม่เกี่ยวกับ Microsoft/Azure เลยแม้แต่น้อย — ไม่ต้องขอ getAppToken() (ซึ่งเป็น
@@ -1350,6 +1359,37 @@ async function upsertRowPartial(token, driveId, itemId, table, keyColIndex, keyV
   return 'added';
 }
 
+/* ===== #312: เปิด/ปิดระบบที่ฝั่ง Worker (บล็อกจริง ไม่ใช่แค่หน้าเว็บ) =====
+   สถานะอยู่ในตาราง FormWeights แถว '__sysopen__' (JSON {open,msg,at,closeAt,openAt}) ที่ Admin ตั้งในเว็บ
+   ปิดอยู่ (ด้วยมือ หรือถึงเวลา closeAt) → ผู้ใช้ที่ไม่ใช่ Admin/sysadmin: ล็อกอินไม่ได้ (403) และทุกคำขอที่ใช้บัตรผ่านได้ 503
+   ตรรกะ sysClosedNow ต้องเหมือนฝั่งเว็บ (systemClosedNow ใน SML_PMS_v14.html) ทุกประการ (#41)
+   อ่านสถานะไม่ได้ (Graph ล้ม) = ถือว่าเปิด (ไม่ให้ระบบล่มทั้งบริษัทเพราะอ่านสถานะไม่ได้) และแคช 20 วินาที */
+function sysClosedNow(s, nowMs) {
+  if (!s || typeof s.open !== 'boolean') return false;
+  const c = s.closeAt ? Date.parse(s.closeAt) : NaN;
+  const o = s.openAt ? Date.parse(s.openAt) : NaN;
+  const now = nowMs == null ? Date.now() : nowMs;
+  if (!s.open) return !(!isNaN(o) && now >= o);
+  return !isNaN(c) && now >= c && !(!isNaN(o) && now >= o);
+}
+let _sysCache = { at: 0, state: null };
+async function getSystemState(env) {
+  if (Date.now() - _sysCache.at < 20000) return _sysCache.state;
+  let state = null;
+  try {
+    const token = await getAppToken(env);
+    const { driveId, itemId } = await resolveSite(env, token);
+    state = jsonRow(await listRows(token, driveId, itemId, 'FormWeights'), '__sysopen__');
+  } catch (e) { console.error('read system state failed', String((e && e.message) || e)); state = null; }
+  _sysCache = { at: Date.now(), state };
+  return state;
+}
+async function systemBlockFor(env, auth) {
+  if (auth && isAdminAuth(auth)) return null;
+  const st = await getSystemState(env);
+  if (!sysClosedNow(st)) return null;
+  return { message: String(st.msg || 'ขณะนี้ระบบยังไม่เปิดให้บริการ กรุณากลับมาใช้งานใหม่เมื่อระบบเปิด'), openAt: st.openAt || '' };
+}
 /* ===== #260: ล็อกอิน/บัตรผ่าน/สิทธิ์ตามบทบาท ===== */
 const ADMIN_ROLES = ['admin', 'sysadmin'];
 const SESSION_TTL_SEC = 8 * 3600;
@@ -1541,6 +1581,8 @@ async function handleLogin(request, env, cors) {
   loginFails.delete(kc);
   const now = Math.floor(Date.now() / 1000);
   const role = normalizeRole(emp[2]);
+  { const blk = await systemBlockFor(env, { role });
+    if (blk) return json({ error: 'system_closed', message: '🔒 ระบบปิดให้บริการชั่วคราว — ' + blk.message, openAt: blk.openAt }, 403, cors); }
   const payload = { sub: String(emp[0]).trim(), name: String(emp[1] || '').trim(), role, iat: now, exp: now + SESSION_TTL_SEC };
   return json({ token: await issueToken(env, payload), exp: payload.exp, user: { code: payload.sub, name: payload.name, role } }, 200, cors);
 }

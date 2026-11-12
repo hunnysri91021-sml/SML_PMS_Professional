@@ -1735,6 +1735,7 @@ img,svg,canvas{max-width:100%}
 /* #257: เปิด/ปิดระบบ */
 #sysClosedOverlay{display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.96);color:#fff;align-items:center;justify-content:center;text-align:center;padding:24px}
 #sysClosedOverlay .box{max-width:460px}
+#sysClosedOverlay #sysClosedMsg{white-space:pre-line}
 #sysClosedOverlay h2{font-size:26px;margin:10px 0}
 #sysClosedOverlay p{font-size:16px;line-height:1.6;white-space:pre-wrap}
 #sysClosedAdminBar{display:none;margin:0 0 14px;padding:10px 16px;border-radius:12px;background:#fff7ed;border:2px solid #f59e0b;color:#92400e;font-weight:600}
@@ -3567,6 +3568,12 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     </div>
     <div style="font-size:13px;color:#64748b;margin-bottom:10px">ใช้ปิดระบบช่วงที่ยังไม่ถึงรอบประเมิน — พนักงานทุกคนยกเว้น Admin/HR จะเข้าระบบไม่ได้และเห็นข้อความด้านล่าง เปิดใหม่เมื่อถึงรอบ (ค่าเริ่มต้น = เปิด)</div>
     <div class="fg"><label>ข้อความแจ้งผู้ใช้ตอนปิดระบบ</label><textarea id="sysOpenMsg" rows="2" placeholder="เช่น ระบบจะเปิดให้ประเมินวันที่ 1 ธ.ค. 2569"></textarea></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+      <div class="fg" style="margin:0"><label>ปิดอัตโนมัติเมื่อ (ไม่บังคับ)</label><input type="datetime-local" id="sysCloseAt"></div>
+      <div class="fg" style="margin:0"><label>เปิดอัตโนมัติเมื่อ (ไม่บังคับ)</label><input type="datetime-local" id="sysOpenAt"></div>
+      <button class="btn btn-p" id="sysSchedBtn" onclick="saveSystemSchedule()">⏰ บันทึกกำหนดเวลา</button>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:10px">ตัวอย่าง: ปิดคืนวันศุกร์ 22:00 เพื่ออัปเดตระบบ เปิดอัตโนมัติเช้าวันจันทร์ 07:00 · ถ้าปิดด้วยมือแล้วกรอก "เปิดอัตโนมัติ" ไว้ ระบบจะเปิดเองตามเวลานั้น · พนักงานที่ถูกกั้นจะถูกบล็อกที่ Worker ด้วย (ไม่ใช่แค่หน้าเว็บ)</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-ok" id="sysOpenBtn" onclick="setSystemOpen(true)">🔓 เปิดระบบ</button>
       <button class="btn btn-dg" id="sysCloseBtn" onclick="setSystemOpen(false)">🔒 ปิดระบบ</button>
@@ -8786,6 +8793,11 @@ async function workerFetch(cfg, path, options={}){
       try{ if(typeof smlToast === 'function') smlToast('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่', 'warn'); }catch(e){}
       setTimeout(()=>location.reload(), 1500);
     }
+    /* #312: Worker บล็อกเพราะปิดระบบ (ผู้ใช้ที่ไม่ใช่ Admin) → ขึ้นหน้าจอล็อกพร้อมข้อความ ไม่ใช่ error ทั่วไป */
+    if(res.status === 503 && data.error === 'system_closed'){
+      _serverClosed = { msg:data.message||'', openAt:data.openAt||'' };
+      try{ applySystemGate(); }catch(e){}
+    }
     const err = new Error(data.error || ('Proxy HTTP '+res.status)); err.status = res.status; throw err;
   }
   return data;
@@ -10207,41 +10219,115 @@ async function saveAttPeriod(){
   smlToast('บันทึกช่วงข้อมูลแล้ว'+(pushed?'':' (เฉพาะเครื่องนี้ — ยังไม่ขึ้น Excel)'),pushed?'ok':'warn');
 }
 const SYSTEM_OPEN_KEY='smlPmsSystemOpen';
-function getSystemState(){ try{ const s=JSON.parse(localStorage.getItem(SYSTEM_OPEN_KEY)||'null'); if(s&&typeof s.open==='boolean') return s; }catch(e){} return {open:true,msg:'',at:'',by:''}; }
-function isSystemClosedFor(u){ const s=getSystemState(); return !s.open && !(u && ['admin','sysadmin'].includes(u[2])); }
-function systemClosedMessage(){ const s=getSystemState(); return s.msg ? s.msg : 'ขณะนี้ยังไม่ถึงรอบประเมิน กรุณากลับมาใช้งานใหม่เมื่อระบบเปิด'; }
+/* #312: ตั้งเวลาปิด/เปิดล่วงหน้าได้ (closeAt/openAt เป็น ISO) — ปิดอยู่เมื่อ: ปิดด้วยมือ (open=false) ยกเว้นถึงเวลา openAt แล้วเปิดเอง,
+   หรือเปิดอยู่แต่ถึง closeAt แล้วและยังไม่ถึง openAt. ตรรกะต้องเหมือน sysClosedNow ใน tools/sml-pms-proxy-worker.js ทุกประการ (#41) */
+function systemClosedNow(s, nowMs){
+  if(!s || typeof s.open!=='boolean') return false;
+  const c = s.closeAt ? Date.parse(s.closeAt) : NaN, o = s.openAt ? Date.parse(s.openAt) : NaN;
+  const now = nowMs==null ? Date.now() : nowMs;
+  if(!s.open) return !(!isNaN(o) && now>=o);
+  return !isNaN(c) && now>=c && !(!isNaN(o) && now>=o);
+}
+let _serverClosed = null; /* Worker ตอบ system_closed (503/403) หรือ /system-status บอกว่าปิด — {msg,openAt} */
+function getSystemState(){ try{ const s=JSON.parse(localStorage.getItem(SYSTEM_OPEN_KEY)||'null'); if(s&&typeof s.open==='boolean') return s; }catch(e){} return {open:true,msg:'',at:'',by:'',closeAt:'',openAt:''}; }
+function isSystemClosedFor(u){ const adm = !!(u && ['admin','sysadmin'].includes(u[2])); if(adm) return false; return systemClosedNow(getSystemState()) || !!_serverClosed; }
+function fmtSysTime(iso){ try{ return new Date(iso).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}); }catch(e){ return ''; } }
+function systemClosedMessage(){
+  const s=getSystemState();
+  let m = s.msg || (_serverClosed&&_serverClosed.msg) || 'ขณะนี้ยังไม่เปิดให้บริการ กรุณากลับมาใช้งานใหม่เมื่อระบบเปิด';
+  const o = (s.openAt && Date.parse(s.openAt)>Date.now()) ? s.openAt : (_serverClosed&&_serverClosed.openAt&&Date.parse(_serverClosed.openAt)>Date.now() ? _serverClosed.openAt : '');
+  if(o) m += '\n⏰ คาดว่าจะเปิดใช้งานอีกครั้ง: ' + fmtSysTime(o);
+  return m;
+}
+/* รับสถานะจาก Excel/Worker — ใหม่กว่าชนะ (เทียบ at) */
+function applyRemoteSystemState(remote){
+  try{ const local=getSystemState();
+    if(remote && typeof remote.open==='boolean' && (!local.at || (remote.at && remote.at>local.at))){ localStorage.setItem(SYSTEM_OPEN_KEY,JSON.stringify(remote)); return true; }
+  }catch(e){}
+  return false;
+}
+/* ถาม Worker ว่าตอนนี้ปิดอยู่ไหม (สาธารณะ ไม่ต้องใช้บัตรผ่าน) — ใช้ปลดล็อกเมื่อเปิดแล้ว/ล็อกเมื่อถูกปิดโดยไม่ต้อง reload */
+async function pollSystemStatus(){
+  const cfg = loadMs365Config();
+  if(!isWorkerConfigured(cfg)) return;
+  try{
+    const res = await fetch(cfg.workerUrl + '/system-status');
+    if(!res.ok) return;
+    const d = await res.json();
+    if(d && d.state) applyRemoteSystemState(d.state);
+    _serverClosed = d && d.closed ? { msg:(d.state&&d.state.msg)||'', openAt:(d.state&&d.state.openAt)||'' } : null;
+    applySystemGate();
+  }catch(e){ /* เครือข่ายล้ม = ใช้ค่าที่จำไว้ ไม่ล็อก/ปลดล็อกเอง */ }
+}
+setInterval(()=>{ try{ applySystemGate(); }catch(e){} }, 30000);
+setInterval(()=>{ if(CURRENT_SESSION_USER) pollSystemStatus(); }, 60000);
 function applySystemGate(){
   const s=getSystemState(); const u=CURRENT_SESSION_USER;
   const ov=document.getElementById('sysClosedOverlay'), bar=document.getElementById('sysClosedAdminBar');
   if(ov){ const lock = !!u && isSystemClosedFor(u); ov.style.display = lock ? 'flex' : 'none'; if(lock) document.getElementById('sysClosedMsg').textContent = systemClosedMessage(); }
-  if(bar){ const adm=!!u && ['admin','sysadmin'].includes(u[2]); bar.style.display = (!s.open && adm) ? 'block' : 'none'; if(!s.open&&adm) bar.innerHTML='🔒 ระบบปิดอยู่ — พนักงานทั่วไปเข้าใช้ไม่ได้ (เฉพาะ Admin/HR ใช้ได้) <button class="btn btn-sm" style="margin-left:10px" onclick="setSystemOpen(true)">🔓 เปิดระบบ</button>'; }
+  const closedNow = systemClosedNow(s);
+  if(bar){ const adm=!!u && ['admin','sysadmin'].includes(u[2]); bar.style.display = (closedNow && adm) ? 'block' : 'none'; if(closedNow&&adm) bar.innerHTML='🔒 ระบบปิดอยู่ — พนักงานทั่วไปเข้าใช้ไม่ได้ (เฉพาะ Admin/HR ใช้ได้) <button class="btn btn-sm" style="margin-left:10px" onclick="setSystemOpen(true)">🔓 เปิดระบบ</button>'; }
   renderSystemOpenCard();
 }
+function isoToLocalInput(iso){ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) return ''; const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+function localInputToIso(v){ if(!v) return ''; const d=new Date(v); return isNaN(d)?'':d.toISOString(); }
 function renderSystemOpenCard(){
   const s=getSystemState(); const card=document.getElementById('sysOpenCard'); if(!card) return;
-  card.classList.toggle('closed',!s.open);
-  const b=document.getElementById('sysOpenBadge'); b.textContent=s.open?'เปิดอยู่':'ปิดอยู่'; b.className='so-st '+(s.open?'on':'off');
+  const closedNow = systemClosedNow(s);
+  card.classList.toggle('closed',closedNow);
+  const sched = s.open && s.closeAt && Date.parse(s.closeAt)>Date.now();
+  const b=document.getElementById('sysOpenBadge'); b.textContent = closedNow ? 'ปิดอยู่' : (sched ? 'เปิดอยู่ (มีกำหนดปิด)' : 'เปิดอยู่'); b.className='so-st '+(closedNow?'off':'on');
   const m=document.getElementById('sysOpenMsg'); if(m && document.activeElement!==m) m.value=s.msg||'';
-  document.getElementById('sysOpenMeta').textContent = s.at ? ('เปลี่ยนล่าสุด '+new Date(s.at).toLocaleString('th-TH')+(s.by?' โดย '+s.by:'')) : '';
+  const ci=document.getElementById('sysCloseAt'), oi=document.getElementById('sysOpenAt');
+  if(ci && document.activeElement!==ci) ci.value=isoToLocalInput(s.closeAt);
+  if(oi && document.activeElement!==oi) oi.value=isoToLocalInput(s.openAt);
+  let meta = s.at ? ('เปลี่ยนล่าสุด '+new Date(s.at).toLocaleString('th-TH')+(s.by?' โดย '+s.by:'')) : '';
+  const parts=[];
+  if(s.closeAt && Date.parse(s.closeAt)>Date.now() && s.open) parts.push('จะปิดอัตโนมัติ '+fmtSysTime(s.closeAt));
+  if(s.openAt && Date.parse(s.openAt)>Date.now()) parts.push('จะเปิดอัตโนมัติ '+fmtSysTime(s.openAt));
+  document.getElementById('sysOpenMeta').textContent = [meta].concat(parts).filter(Boolean).join(' · ');
   const adm=isAdminOrSysadmin();
-  ['sysOpenBtn','sysCloseBtn','sysOpenMsg'].forEach(id=>{ const e=document.getElementById(id); if(e) e.disabled=!adm; });
+  ['sysOpenBtn','sysCloseBtn','sysOpenMsg','sysCloseAt','sysOpenAt','sysSchedBtn'].forEach(id=>{ const e=document.getElementById(id); if(e) e.disabled=!adm; });
+}
+async function pushSystemState(st, what){
+  const cfg=loadMs365Config(); let pushed=false;
+  if(isMs365Configured(cfg)){
+    try{ await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__sysopen__',['__sysopen__',JSON.stringify(st),st.at]); appendSyncLog('Push สถานะเปิด/ปิดระบบเข้า Excel ('+what+')',true); pushed=true; }
+    catch(e){ appendSyncLog('Push สถานะเปิด/ปิดระบบเข้า Excel ไม่สำเร็จ: '+(e&&e.message||e),false); }
+  } else appendSyncLog('setSystemOpen: ยังไม่ได้ตั้งค่า MS365 — บันทึกเฉพาะเครื่องนี้',false);
+  return pushed;
 }
 async function setSystemOpen(open){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เปิด-ปิดระบบได้','warn'); return; }
   const cur=getSystemState();
-  if(cur.open===open){ smlToast(open?'ระบบเปิดอยู่แล้ว':'ระบบปิดอยู่แล้ว','info'); return; }
-  if(!confirm(open?'เปิดระบบให้พนักงานทุกคนใช้งานได้?':'ปิดระบบ? พนักงานทุกคนยกเว้น Admin/HR จะเข้าใช้งานไม่ได้จนกว่าจะเปิดใหม่')) return;
+  if(systemClosedNow(cur)===!open && !(open && (cur.closeAt||cur.openAt))){ smlToast(open?'ระบบเปิดอยู่แล้ว':'ระบบปิดอยู่แล้ว','info'); return; }
+  /* ปิดด้วยมือ: ถ้ากรอก "เปิดอัตโนมัติ" ไว้ในอนาคต จะเปิดเองตามเวลานั้น ไม่งั้นต้องกดเปิดเอง; เปิดด้วยมือ: ล้างกำหนดเวลาเดิมทั้งหมด */
+  const oIso = open ? '' : localInputToIso(document.getElementById('sysOpenAt')?.value||'');
+  const openAt = (oIso && Date.parse(oIso)>Date.now()) ? oIso : '';
+  if(!confirm(open?'เปิดระบบให้พนักงานทุกคนใช้งานได้? (กำหนดเวลาปิด/เปิดอัตโนมัติเดิมจะถูกล้าง)':'ปิดระบบ? พนักงานทุกคนยกเว้น Admin/HR จะเข้าใช้งานไม่ได้'+(openAt?' จนถึง '+fmtSysTime(openAt)+' (เปิดอัตโนมัติ)':' จนกว่าจะเปิดใหม่'))) return;
   const me=CURRENT_SESSION_USER;
-  const st={open, msg:(document.getElementById('sysOpenMsg')?.value||'').trim(), at:new Date().toISOString(), by:(me&&me[1])||''};
+  const st={open, msg:(document.getElementById('sysOpenMsg')?.value||'').trim(), at:new Date().toISOString(), by:(me&&me[1])||'', closeAt:'', openAt};
   localStorage.setItem(SYSTEM_OPEN_KEY,JSON.stringify(st));
-  appendAuditLog('system', open?'เปิดระบบ':'ปิดระบบ', 'ระบบ', st.msg||'');
+  appendAuditLog('system', open?'เปิดระบบ':'ปิดระบบ', 'ระบบ', (st.msg||'')+(openAt?' | เปิดอัตโนมัติ '+openAt:''));
   applySystemGate();
-  const cfg=loadMs365Config(); let pushed=false;
-  if(isMs365Configured(cfg)){
-    try{ await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__sysopen__',['__sysopen__',JSON.stringify(st),st.at]); appendSyncLog('Push สถานะเปิด/ปิดระบบเข้า Excel',true); pushed=true; }
-    catch(e){ appendSyncLog('Push สถานะเปิด/ปิดระบบเข้า Excel ไม่สำเร็จ: '+(e&&e.message||e),false); }
-  } else appendSyncLog('setSystemOpen: ยังไม่ได้ตั้งค่า MS365 — บันทึกเฉพาะเครื่องนี้',false);
+  const pushed = await pushSystemState(st, open?'เปิด':'ปิด');
   smlToast((open?'เปิดระบบแล้ว':'ปิดระบบแล้ว')+(pushed?'':' (บันทึกเฉพาะเครื่องนี้ — ส่งขึ้น Excel ไม่สำเร็จ เครื่องอื่นจะยังไม่ถูกปิด/เปิด)'),pushed?'ok':'warn');
+}
+/* ตั้งช่วงปิดล่วงหน้า (เช่น ปิดคืนวันศุกร์เพื่ออัปเดต เปิดเช้าวันจันทร์) — ระบบยังเปิดอยู่จนถึงเวลาปิด */
+async function saveSystemSchedule(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR ตั้งเวลาได้','warn'); return; }
+  const cIso=localInputToIso(document.getElementById('sysCloseAt')?.value||''), oIso=localInputToIso(document.getElementById('sysOpenAt')?.value||'');
+  if(!cIso){ smlToast('กรุณาระบุเวลาปิดระบบ','warn'); return; }
+  if(Date.parse(cIso)<=Date.now()){ smlToast('เวลาปิดต้องเป็นอนาคต (ถ้าจะปิดเดี๋ยวนี้ให้กดปุ่ม "ปิดระบบ")','warn'); return; }
+  if(oIso && Date.parse(oIso)<=Date.parse(cIso)){ smlToast('เวลาเปิดต้องหลังเวลาปิด','warn'); return; }
+  if(!confirm('ตั้งเวลา: ปิดระบบ '+fmtSysTime(cIso)+(oIso?' และเปิดอัตโนมัติ '+fmtSysTime(oIso):' (ไม่ได้ตั้งเวลาเปิด ต้องกดเปิดเอง)')+' ?')) return;
+  const me=CURRENT_SESSION_USER;
+  const st={open:true, msg:(document.getElementById('sysOpenMsg')?.value||'').trim(), at:new Date().toISOString(), by:(me&&me[1])||'', closeAt:cIso, openAt:oIso};
+  localStorage.setItem(SYSTEM_OPEN_KEY,JSON.stringify(st));
+  appendAuditLog('system','ตั้งเวลาปิด/เปิดระบบ','ระบบ','ปิด '+cIso+(oIso?' เปิด '+oIso:''));
+  applySystemGate();
+  const pushed = await pushSystemState(st,'ตั้งเวลา');
+  smlToast('บันทึกกำหนดเวลาแล้ว'+(pushed?'':' (เฉพาะเครื่องนี้ — ส่งขึ้น Excel ไม่สำเร็จ)'),pushed?'ok':'warn');
 }
 async function acknowledgeMyResult(empCode, cycle, objection){
   if(cycleLockedBlock(cycle,'รับทราบผลไม่ได้')) return;
@@ -14490,7 +14576,7 @@ async function ms365SyncFormWeights(silent=false){
     rows.forEach(r=>{
       if(String(r[0]??'').trim()!=='__sysopen__') return;
       try{ const remote=JSON.parse(r[1]); const local=getSystemState();
-        if(remote && typeof remote.open==='boolean' && (!local.at || (remote.at && remote.at>local.at))){ localStorage.setItem(SYSTEM_OPEN_KEY,JSON.stringify(remote)); applySystemGate(); }
+        if(applyRemoteSystemState(remote)) applySystemGate();
       }catch(e){}
     });
     rows.forEach(r=>{
