@@ -3595,9 +3595,21 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       </div>
 
       <div class="cycle-card">
-        <div class="cycle-card-head"><h3>การแจ้งเตือน</h3><span class="bd b-s">ส่งด้วยมือ</span></div>
+        <div class="cycle-card-head"><h3>การแจ้งเตือน</h3><span class="bd b-s">อัตโนมัติ / ส่งเอง</span></div>
         <div class="cycle-card-body">
-          <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>ระบบไม่มีเซิร์ฟเวอร์ตั้งเวลาส่งอัตโนมัติ — Admin/HR กดส่งเองได้จากปุ่ม "📢 ส่ง Reminder" (เตือนคนที่ยังไม่ส่งแบบประเมิน) และ "📬 แจ้งผลประเมิน" บนหน้า Dashboard ผ่านอีเมล/LINE</div></div>
+          <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>เตือนอัตโนมัติทำงานที่ Cloudflare Worker (Cron) ตาม "กำหนดการขั้นตอน" ของรอบ — ใช้ช่อง "แจ้งเตือนล่วงหน้า (วัน)" ของแต่ละขั้น เช่น 7,3,1 และวันครบกำหนดของขั้นนั้น (ขั้นต้องผูกกับสถานะใบประเมิน) ขั้นประเมินตนเอง/รับทราบผล → เตือนตัวพนักงานที่ยังไม่ทำ, ทุกขั้น → สรุปให้ Admin/HR; ผู้ประเมินสายบังคับบัญชายังใช้ปุ่ม "📢 ส่ง Reminder" บน Dashboard</div></div>
+          <div id="autoRemindBox" style="display:none">
+            <div class="cycle-field-grid">
+              <div class="cycle-field"><label>เตือนอัตโนมัติ</label><select id="arOn"><option value="0">ปิด (ค่าเริ่มต้น)</option><option value="1">เปิด</option></select></div>
+              <div class="cycle-field"><label>ช่องทาง</label><div style="display:flex;gap:14px;padding-top:6px"><label style="font-weight:600"><input type="checkbox" id="arEmail" checked> อีเมล</label><label style="font-weight:600"><input type="checkbox" id="arLine" checked> LINE</label></div></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px">
+              <button class="btn btn-sm btn-p" onclick="saveAutoRemind()">💾 บันทึกการเตือนอัตโนมัติ</button>
+              <button class="btn btn-sm" onclick="previewAutoRemind()">🔍 ดูว่าวันนี้จะส่งถึงใคร (ไม่ส่งจริง)</button>
+            </div>
+            <div id="arResult" style="font-size:12px;color:#475569;margin-top:6px"></div>
+            <div style="font-size:11.5px;color:#94a3b8;margin-top:6px">ต้องตั้ง Cron Trigger ใน Cloudflare Worker ด้วย (ดู CLAUDE.md #310) — ถ้ายังไม่ตั้ง สวิตช์นี้เปิดไว้ก็ไม่ส่ง</div>
+          </div>
           <div class="cycle-actionbar">
             <button class="btn" onclick="resetCycleSetup()">↺ รีเซ็ต</button>
             <button class="btn btn-p" onclick="saveCycleSetup()">💾 บันทึกการตั้งค่า</button>
@@ -15632,6 +15644,42 @@ function getCycleSteps(cid){
 }
 function putCycleSteps(cid,steps){ const o=loadCycleStepsStore(); o[cid]={steps, at:new Date().toISOString()}; saveCycleStepsStore(o); pushCycleStepsToExcel(cid); try{ renderCycleSetupTimeline(); }catch(e){} }
 /* ไทม์ไลน์ในหน้า "ตั้งค่ารอบประเมิน" ดึงจากกำหนดการจริงของรอบปัจจุบัน (ชุดเดียวกับตารางในหน้า "รอบประเมิน") — เดิมเป็น HTML ตายตัว 6 ขั้นตอน */
+
+/* #310: ตั้งค่าเตือนอัตโนมัติ (Admin) — เก็บที่ FormWeights แถว __autoremind__ ให้ Worker อ่าน */
+async function loadAutoRemindUi(){
+  const box=document.getElementById('autoRemindBox'); if(!box) return;
+  if(!isAdminOrSysadmin()){ box.style.display='none'; return; }
+  box.style.display='';
+  const cfg=loadMs365Config(); if(!isMs365Configured(cfg)) return;
+  try{
+    const rows=await graphListTableRows(FORM_WEIGHTS_TABLE);
+    const r=rows.find(x=>String(x[0]??'').trim()==='__autoremind__'); const st=r?JSON.parse(r[1]):{};
+    document.getElementById('arOn').value=st.on?'1':'0';
+    document.getElementById('arEmail').checked=st.email!==false;
+    document.getElementById('arLine').checked=st.line!==false;
+  }catch(e){ appendSyncLog('โหลดการตั้งค่าเตือนอัตโนมัติไม่สำเร็จ: '+(e&&e.message||e),false); }
+}
+async function saveAutoRemind(){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR','warn'); return; }
+  const on=document.getElementById('arOn').value==='1', email=document.getElementById('arEmail').checked, line=document.getElementById('arLine').checked;
+  if(on && !email && !line){ smlToast('เลือกช่องทางอย่างน้อย 1 ช่องทาง','warn'); return; }
+  const cfg=loadMs365Config(); if(!isMs365Configured(cfg)||!isWorkerConfigured(cfg)){ smlToast('ต้องตั้งค่า MS365 + Proxy (Worker) ก่อน — เตือนอัตโนมัติทำงานที่ Worker','warn'); return; }
+  const by=(CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||'';
+  try{
+    await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__autoremind__',['__autoremind__',JSON.stringify({on,email,line,by,at:new Date().toISOString()}),new Date().toISOString()]);
+    appendAuditLog('setting','ตั้งค่าเตือนอัตโนมัติ',on?'เปิด':'ปิด',(email?'อีเมล ':'')+(line?'LINE':''));
+    appendSyncLog('บันทึกการตั้งค่าเตือนอัตโนมัติ ('+(on?'เปิด':'ปิด')+')',true);
+    smlToast(on?'เปิดเตือนอัตโนมัติแล้ว (ส่งเมื่อ Worker รัน Cron ตามกำหนด)':'ปิดเตือนอัตโนมัติแล้ว','ok');
+  }catch(e){ appendSyncLog('บันทึกการเตือนอัตโนมัติไม่สำเร็จ: '+(e&&e.message||e),false); smlToast('บันทึกไม่สำเร็จ: '+(e&&e.message||e),'err'); }
+}
+async function previewAutoRemind(){
+  const out=document.getElementById('arResult'); out.textContent='กำลังตรวจ…';
+  try{
+    const d=await workerFetch(loadMs365Config(),'/admin/run-reminders',{method:'POST',body:JSON.stringify({dryRun:true})});
+    if(!d.items.length){ out.innerHTML='วันที่ '+escH(d.date)+': ไม่มีขั้นตอนที่ตรงวันเตือนล่วงหน้า (หรือไม่มีคนค้าง) — ไม่มีอะไรจะส่ง'; return; }
+    out.innerHTML='วันที่ '+escH(d.date)+' จะส่ง:<br>'+d.items.map(i=>'• <b>'+escH(i.step)+'</b> (อีก '+i.days+' วัน, '+escH(i.end)+') — ค้าง '+i.pending+' คน → เตือนพนักงานเอง '+i.selfRecipients+' คน + สรุปให้ Admin/HR '+i.adminRecipients+' คน').join('<br>')+'<br>ช่องทางที่ Worker ใช้ได้: อีเมล '+(d.channels.email?'✓':'✗')+' · LINE '+(d.channels.line?'✓':'✗');
+  }catch(e){ out.textContent='ตรวจไม่สำเร็จ: '+(e&&e.message||e); }
+}
 function renderCycleSetupTimeline(){
   const box=document.getElementById('cycleSetupTimeline'); if(!box) return;
   const yr=(typeof getCurrentEvalCycleYear==='function')?getCurrentEvalCycleYear():'';
@@ -15645,6 +15693,7 @@ function renderCycleSetupTimeline(){
   const cst=computeCycleStepStatuses(steps,cyc.year);
   box.innerHTML=steps.length?steps.map((st,i)=>{ const s2=cst[i].status; const cls=s2==='done'?'done':(s2==='active'?'current':''); return '<div class="cycle-step '+cls+'"><div class="cycle-dot">'+(cls==='done'?'✓':st.order)+'</div><b>'+escapeAttrCs(st.name)+'</b><span>'+escapeAttrCs(range(st))+'</span></div>'; }).join(''):'<div style="color:#94a3b8;font-size:12px;padding:8px">ยังไม่มีขั้นตอน — เพิ่มที่หน้า "รอบประเมิน"</div>';
   if(badge) badge.textContent=steps.length+' ขั้นตอน'; if(cnt) cnt.textContent=steps.length+' ขั้นตอน';
+  try{ loadAutoRemindUi(); }catch(e){}
   const cn=(cyc.name||cyc.id||yr); ['csCycleName','csCycleName2'].forEach(id=>{const e=document.getElementById(id); if(e) e.textContent=cn;});
   const he=document.getElementById('csHeroCycle'); if(he) he.textContent=cn+' • '+(cyc.status==='Closed'?'ปิดรอบแล้ว':'กำลังดำเนินการ');
 }

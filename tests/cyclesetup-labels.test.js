@@ -7,7 +7,7 @@ const {open,ok,done}=require('./helpers');
   const t=await p.evaluate(()=>({h:document.getElementById('csHeroCycle').textContent,a:document.getElementById('csCycleName').textContent,b:document.getElementById('csCycleName2').textContent,sec:document.getElementById('pg-cyclesetup').innerText}));
   ok(t.h!=='—'&&t.a!=='—'&&t.b!==('—'),'ชื่อรอบแสดงจากข้อมูลจริง '+t.a);
   ok(!/PMS Standard SML v3|PMS v3|LINE OA \+ Email/.test(t.sec),'ไม่มีตัวเลือกปลอมค้างอยู่');
-  ok(/ส่งด้วยมือ/.test(t.sec),'ระบุว่าแจ้งเตือนส่งด้วยมือ');
+  ok(/Cron/.test(t.sec)&&/ส่ง Reminder/.test(t.sec),'อธิบายเตือนอัตโนมัติ (Cron) และปุ่มส่งเอง');
   ok(errs.length===0,'no page errors '+errs.join('|'));
   await b.close(); done();
 })();

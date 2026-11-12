@@ -88,6 +88,9 @@
  * เองฝั่งเซิร์ฟเวอร์ (เทียบ SHA-256 กับ PinHash ในตาราง EmployeeSettings ซึ่งไม่ส่งออกไปให้ไคลเอนต์ที่ไม่ใช่
  * Admin) แล้วออกบัตรผ่านที่เซ็นด้วย SESSION_SECRET ทุก endpoint อื่นต้องแนบ "Authorization: Bearer <token>"
  * และตรวจสิทธิ์ตามบทบาท (เขียนตารางสำคัญ/ลบ/dedupe = Admin เท่านั้น) — ไม่มีกุญแจร่วมฝังในหน้าเว็บอีกต่อไป
+ * เตือนอัตโนมัติ (#310): ตั้ง Cron Trigger → Worker → Settings → Triggers → Cron Triggers → Add → `0 2 * * *`
+ *        (= 09:00 เวลาไทย ทุกวัน) แล้ว Admin เปิดสวิตช์ที่เว็บ "ตั้งค่ารอบประเมิน → การแจ้งเตือน" (ค่าเริ่มต้นปิด)
+ *        ต้องมี SEND_AS_EMAIL (อีเมล) และ/หรือ LINE_CHANNEL_ACCESS_TOKEN (LINE); APP_URL (ไม่บังคับ) = ลิงก์เว็บแอปที่แนบท้ายข้อความ
  * ลืม PIN (#302): /auth/forgot ส่ง OTP 6 หลักไปอีเมลของพนักงาน แล้ว /auth/reset ให้พนักงานตั้ง PIN ใหม่เอง (ต้องมี SEND_AS_EMAIL)
  * เปิดใช้งานครั้งแรก (#303): HR ออกรหัสเปิดใช้งาน (/admin/activation-codes) → พนักงาน /auth/activate/start (ยืนยันรหัส + ส่ง OTP ไปอีเมล) → /auth/activate/finish (ตั้ง PIN + ลงทะเบียนอีเมลในตาราง Employees คอลัมน์ J)
  * ข้อจำกัดที่เหลือ (รอบ 1): ยังไม่กรอง "รายแถว" ตามสังกัด (ผู้ล็อกอินอ่านตารางที่ไม่ใช่ EmployeeSettings ได้ทั้งตาราง)
@@ -96,6 +99,15 @@
  */
 
 export default {
+  /* #310: Cron Trigger (ตั้งใน Cloudflare → Triggers → Cron เช่น "0 2 * * *" = 09:00 เวลาไทย ทุกวัน) —
+     เตือนอัตโนมัติก่อนครบกำหนดขั้นตอนตาม "กำหนดการขั้นตอน" ของรอบประเมิน (ช่องแจ้งเตือนล่วงหน้า เช่น 7,3,1 วัน)
+     ทำงานเฉพาะเมื่อ Admin เปิดสวิตช์ในหน้า "ตั้งค่ารอบประเมิน" (ค่าเริ่มต้นปิด) */
+  async scheduled(event, env, ctx) {
+    _listEnv = env;
+    ctx.waitUntil(runReminderCron(env, {}).then(
+      (r) => console.log('reminder cron', JSON.stringify(r)),
+      (e) => console.error('reminder cron failed', String((e && e.message) || e))));
+  },
   async fetch(request, env, ctx) {
     _listEnv = env;
     const url = new URL(request.url);
@@ -225,6 +237,15 @@ export default {
       const { driveId, itemId, siteId } = await resolveSite(env, token);
 
       /* #264: ตั้งค่า/ย้าย list (Admin เท่านั้น) — ไม่ขึ้นกับ LIST_TABLES เพื่อให้ย้ายข้อมูลได้ก่อนสลับใช้งาน */
+      /* #310: ทดลอง/สั่งรันเตือนอัตโนมัติเอง (Admin เท่านั้น) — body {dryRun?} dryRun=true คือดูว่า "ถ้ารันตอนนี้จะส่งถึงใคร"
+         โดยไม่ส่งจริงและไม่บันทึกว่าส่งแล้ว */
+      if (url.pathname === '/admin/run-reminders' && request.method === 'POST') {
+        if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
+        const bi = await request.json().catch(() => ({}));
+        const r = await runReminderCron(env, { dryRun: bi.dryRun !== false });
+        return json(r, 200, cors);
+      }
+
       /* #303: HR ออกรหัสเปิดใช้งาน (Admin เท่านั้น) — body {empCode?, days?}; ไม่ระบุ empCode = ทุกคนที่ยังไม่มี PIN */
       if (url.pathname === '/admin/activation-codes' && request.method === 'POST') {
         if (!isAdminAuth(auth)) return json({ error: 'forbidden: เฉพาะ Admin' }, 403, cors);
@@ -1761,6 +1782,112 @@ async function lineIdMatchesEmp(env, userId, empCode) {
   const sets = await listRows(token, driveId, itemId, 'EmployeeSettings');
   const row = sets.find((r) => String(r[0] || '').trim() === empCode.trim());
   return !!row && String(row[5] || '').trim() === userId.trim();
+}
+
+
+/* ===== #310: เตือนอัตโนมัติ (Cron) ===================================================
+   อ่านจาก Excel: FormWeights แถว __autoremind__ (สวิตช์/ช่องทาง ที่ Admin ตั้งในเว็บ), __steps__<รอบ> (กำหนดการ
+   ขั้นตอน: end = วันครบกำหนด, remind = "7,3,1" วันล่วงหน้า, stage = ผูกสถานะใบประเมิน), __cyclesetup__ (รหัสรอบ)
+   วันนี้นับตามเวลาไทย (UTC+7). แต่ละ (รอบ,ขั้น,จำนวนวัน) ส่งวันละครั้งเดียว (จำใน __remindlog__)
+   ส่งถึงใคร: ขั้น "ประเมินตนเอง"/"รับทราบผล" → ตัวพนักงานที่ยังไม่ทำ + สรุปให้ Admin/HR; ขั้นอื่น → สรุปให้ Admin/HR
+   (Worker ไม่ได้ไล่สายผู้ประเมินรายคน — ผู้ประเมินยังใช้ปุ่ม Reminder บนเว็บ)
+   ต้องตรงกับเว็บ: EVAL_STATUS_ORDER (ด้านบน), STAGE_STATUS = CYCLE_STAGE_STATUS ใน SML_PMS_v14.html */
+const STAGE_STATUS = { self: 'Submitted', l1: 'L1Reviewed', l2: 'L2Reviewed', gm: 'GMApproved', sent: 'ResultSent', ack: 'Acknowledged', calib: 'Calibrated', calibchk: 'CalibChecked', md: 'Approved' };
+const STAGE_BY_NAME = {
+  'พนักงานประเมินตนเอง / หัวหน้าหน่วยประเมินรอบแรก': 'self', 'หัวหน้าแผนก สอบทาน (L2)': 'l1', 'ผู้จัดการส่วน สอบทาน (L3)': 'l2',
+  'GM อนุมัติ (L4)': 'gm', 'GM ยืนยันส่งผลให้พนักงาน': 'sent', 'พนักงานรับทราบผล': 'ack', 'Calibration (Bell Curve)': 'calib',
+  'ตรวจสอบหลัง Calibration': 'calibchk', 'MD-SML อนุมัติ': 'md',
+};
+function thaiToday(nowMs) { return new Date((nowMs || Date.now()) + 7 * 3600 * 1000).toISOString().slice(0, 10); }
+function jsonRow(rows, key) {
+  const r = rows.find((x) => String(x[0] == null ? '' : x[0]).trim() === key);
+  if (!r) return null;
+  try { return JSON.parse(String(r[1])); } catch (e) { return null; }
+}
+async function runReminderCron(env, opts) {
+  const dryRun = !!(opts && opts.dryRun);
+  const token = await getAppToken(env);
+  const { driveId, itemId, siteId } = await resolveSite(env, token);
+  const read = async (t) => (isListBacked(env, t) ? listItemRows(token, siteId, t) : listRows(token, driveId, itemId, t));
+  const fw = await listRows(token, driveId, itemId, 'FormWeights');
+  const st = jsonRow(fw, '__autoremind__') || {};
+  if (!dryRun && !st.on) return { skipped: 'ปิดการเตือนอัตโนมัติอยู่ (เปิดได้ที่หน้า ตั้งค่ารอบประเมิน)' };
+  const useEmail = st.email !== false, useLine = st.line !== false;
+  const today = thaiToday();
+  const [emps, sets, appr, cycles] = await Promise.all([
+    listRows(token, driveId, itemId, 'Employees'),
+    listRows(token, driveId, itemId, 'EmployeeSettings').catch(() => []),
+    read('Appraisals').catch(() => []),
+    listRows(token, driveId, itemId, 'Cycles').catch(() => []),
+  ]);
+  const cs = jsonRow(fw, '__cyclesetup__') || {};
+  const log = jsonRow(fw, '__remindlog__') || {};
+  const setByCode = new Map(sets.map((r) => [String(r[0] || '').trim(), r]));
+  const active = emps.filter((e) => String(e[0] || '').trim() && !String(e[15] || '').toLowerCase().includes('resign'));
+  const people = active.filter((e) => String((setByCode.get(String(e[0]).trim()) || [])[4] || '') !== '1'); // ยกเว้นประเมิน (EvalExempt)
+  const admins = active.filter((e) => ADMIN_ROLES.includes(normalizeRole(e[2])));
+  const lineOf = (e) => String((setByCode.get(String(e[0]).trim()) || [])[5] || '').trim();
+  const appUrl = env.APP_URL ? '\nเข้าระบบ: ' + env.APP_URL : '';
+  const items = [];
+  for (const row of fw) {
+    const key = String(row[0] || '').trim();
+    if (!key.startsWith('__steps__')) continue;
+    const cid = key.slice(9);
+    let rec; try { rec = JSON.parse(String(row[1])); } catch (e) { continue; }
+    const cyc = cycles.find((c) => String(c[0] || '').trim() === cid);
+    if (cyc && String(cyc[7] || '').trim() === 'Closed') continue;
+    const year = String((cyc && cyc[1]) || cs.year || '').trim();
+    if (!year || !rec || !Array.isArray(rec.steps)) continue;
+    const bestRank = (code) => appr.filter((r) => String(r[0] || '').trim() === code && String(r[2] || '').trim() === year)
+      .reduce((m, r) => Math.max(m, evalStatusRank(String(r[r.length >= 23 ? 22 : r.length - 1] || '').trim())), 0);
+    for (const step of rec.steps) {
+      const end = String(step.end || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) continue;
+      const days = Math.round((Date.parse(end) - Date.parse(today)) / 86400000);
+      const remind = String(step.remind || '').split(',').map((x) => parseInt(x, 10)).filter((n) => n >= 0);
+      if (!remind.includes(days)) continue;
+      const stage = step.stage || STAGE_BY_NAME[step.name] || '';
+      const target = STAGE_STATUS[stage];
+      if (!target) continue; // ขั้นที่ตั้งสถานะเอง (ไม่ผูกใบประเมิน) วัดความคืบหน้าไม่ได้ — ไม่ส่ง
+      const lk = cid + '|' + (step.id || step.order) + '|' + days;
+      if (!dryRun && log[lk] === today) continue; // วันนี้ส่งไปแล้ว
+      const need = evalStatusRank(target);
+      const pending = people.filter((e) => bestRank(String(e[0]).trim()) < need);
+      if (!pending.length) continue;
+      const toSelf = (stage === 'self' ? pending : stage === 'ack' ? pending.filter((e) => bestRank(String(e[0]).trim()) === evalStatusRank('ResultSent')) : []);
+      const when = days === 0 ? 'ครบกำหนดวันนี้' : 'อีก ' + days + ' วันครบกำหนด';
+      const selfMsg = `[SML PMS] เตือน: "${step.name}" ${when} (${end}) — คุณยัง${stage === 'ack' ? 'ไม่ได้รับทราบผลการประเมิน' : 'ไม่ได้ส่งแบบประเมิน'} กรุณาดำเนินการภายในกำหนด${appUrl}`;
+      const names = pending.slice(0, 20).map((e) => String(e[1] || e[0]).trim()).join(', ') + (pending.length > 20 ? ` …และอีก ${pending.length - 20} คน` : '');
+      const adminMsg = `[SML PMS] สรุปความคืบหน้า: "${step.name}" รอบ ${year} ${when} (${end}) — ยังไม่เสร็จ ${pending.length} จาก ${people.length} คน\n${names}${appUrl}`;
+      const sends = [...toSelf.map((e) => ({ e, text: selfMsg })), ...admins.map((e) => ({ e, text: adminMsg }))];
+      const item = { cycle: cid, year, step: step.name, days, end, pending: pending.length, selfRecipients: toSelf.length, adminRecipients: admins.length, emailSent: 0, lineSent: 0, errors: [] };
+      if (!dryRun) {
+        const lineTo = new Map(); // userId → รวมข้อความ (ผู้ดูแลรับสรุป + ข้อความตัวเอง ถ้าซ้ำ ส่งทั้งคู่)
+        for (const { e, text } of sends) {
+          const em = String(e[9] || '').trim();
+          if (useEmail && em && env.SEND_AS_EMAIL) {
+            try { await sendMail(token, env.SEND_AS_EMAIL, em, String(e[1] || ''), '[SML PMS] แจ้งเตือนกำหนดการ: ' + step.name, text); item.emailSent++; }
+            catch (err) { item.errors.push('อีเมล ' + String(e[0]) + ': ' + String((err && err.message) || err).slice(0, 80)); }
+          }
+          const lid = lineOf(e);
+          if (useLine && lid && env.LINE_CHANNEL_ACCESS_TOKEN) { if (!lineTo.has(text)) lineTo.set(text, []); lineTo.get(text).push(lid); }
+        }
+        for (const [text, ids] of lineTo) {
+          try { await sendLineMulticast(env.LINE_CHANNEL_ACCESS_TOKEN, [...new Set(ids)], text.slice(0, 4900)); item.lineSent += new Set(ids).size; }
+          catch (err) { item.errors.push('LINE: ' + String((err && err.message) || err).slice(0, 80)); }
+        }
+        if (item.emailSent + item.lineSent > 0) log[lk] = today; // ไม่มีใครได้รับเลย = ไม่จำ เผื่อรอบ cron ถัดไปลองใหม่
+        try { await appendRow(env, token, driveId, itemId, 'AuditLog', [new Date().toISOString(), 'ระบบ (Cron)', 'notify', `เตือนอัตโนมัติ "${step.name}" (${when}) อีเมล ${item.emailSent} / LINE ${item.lineSent}`, cid, `ค้าง ${pending.length} คน`, '']); } catch (err) { console.error('remind audit failed', String((err && err.message) || err)); }
+      }
+      items.push(item);
+    }
+  }
+  if (!dryRun && items.some((i) => i.emailSent + i.lineSent > 0)) {
+    const cutoff = thaiToday(Date.now() - 60 * 86400000);
+    for (const k of Object.keys(log)) if (String(log[k]) < cutoff) delete log[k];
+    await upsertRow(token, driveId, itemId, 'FormWeights', 0, '__remindlog__', ['__remindlog__', JSON.stringify(log), new Date().toISOString()]);
+  }
+  return { date: today, dryRun, on: !!st.on, channels: { email: useEmail && !!env.SEND_AS_EMAIL, line: useLine && !!env.LINE_CHANNEL_ACCESS_TOKEN }, items };
 }
 
 function json(obj, status, headers) {
