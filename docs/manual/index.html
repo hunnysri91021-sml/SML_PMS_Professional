@@ -1,0 +1,137 @@
+<!doctype html><html lang="th"><head><meta charset="utf-8"><title>คู่มือการใช้งาน SML PMS สำหรับพนักงานและหัวหน้า</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--b:#1d4ed8;--d:#0b2a6b;--ok:#15803d;--w:#b45309;--bg:#f4f7fb}
+@page{size:A4;margin:14mm 13mm}
+*{box-sizing:border-box}body{font-family:Inter,Loma,"Noto Sans Thai",sans-serif;color:#1e293b;line-height:1.7;font-size:14px;margin:0;background:#fff}
+.wrap{max-width:860px;margin:0 auto;padding:24px}
+.cover{min-height:260mm;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,#0b2a6b,#1d4ed8);color:#fff;padding:60px 48px;border-radius:18px;page-break-after:always}
+.cover h1{font-size:44px;line-height:1.25;margin:10px 0}.cover .sub{font-size:20px;color:#bfdbfe}.cover .note{margin-top:60px;font-size:13px;color:#dbeafe;border-top:1px solid #ffffff55;padding-top:14px}
+h2{font-size:25px;color:var(--d);border-left:7px solid var(--b);padding:4px 0 4px 12px;margin:30px 0 12px;background:var(--bg);page-break-after:avoid}
+h3{font-size:18px;color:var(--b);margin:22px 0 6px;page-break-after:avoid}
+p{margin:6px 0}ul,ol{margin:6px 0 6px 22px;padding:0}li{margin:3px 0}
+figure{margin:12px 0 18px;page-break-inside:avoid}figure:has(img[src*='a2-']),figure:has(img[src*='a3-']),figure:has(img[src*='a4-']),figure:has(img[src*='a5-']) img{width:46%!important;display:block;margin:0 auto}figure img{width:100%;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 3px 14px rgba(15,23,42,.12)}
+figcaption{font-size:12.5px;color:#64748b;text-align:center;margin-top:5px}
+ol.legend{list-style:none;margin:8px 0 0;padding:10px 14px;background:var(--bg);border-radius:8px;columns:2;column-gap:24px;font-size:13px}
+ol.legend li{counter-increment:none;break-inside:avoid;padding-left:30px;position:relative;margin:4px 0}
+ol.legend li::before{content:attr(value);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:50%;background:#ef4444;color:#fff;font-weight:800;font-size:12px;line-height:22px;text-align:center}
+.small img{width:52%;display:block;margin:0 auto}.tip,.warn{border-radius:8px;padding:9px 14px;margin:10px 0;font-size:13.5px;page-break-inside:avoid}.tip{background:#ecfdf5;border:1px solid #86efac;color:#14532d}.warn{background:#fffbeb;border:1px solid #fcd34d;color:#78350f}
+.steps{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.steps div{flex:1 1 105px;background:var(--bg);border:1px solid #bfdbfe;border-radius:10px;padding:8px 6px;text-align:center;font-size:12.5px;position:relative}.steps b{display:block;color:var(--b);font-size:20px}
+.steps .me{background:#dbeafe;border-color:var(--b)}
+table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px;page-break-inside:avoid}th,td{border:1px solid #cbd5e1;padding:6px 9px;text-align:left;vertical-align:top}th{background:#dbeafe}
+.toc li{margin:2px 0}.pb{page-break-before:always}
+.stepno{display:inline-block;background:var(--b);color:#fff;border-radius:6px;padding:0 9px;margin-right:6px;font-weight:700}
+</style></head><body><div class="wrap">
+
+<div class="cover"><div class="sub">SML PMS · ระบบประเมินผลการปฏิบัติงาน</div><h1>คู่มือการใช้งาน<br>สำหรับพนักงานและหัวหน้า</h1><div class="sub">เข้าใจง่าย · มีภาพประกอบทุกขั้นตอน</div>
+<div class="note">ภาพหน้าจอในคู่มือใช้ข้อมูลสมมติทั้งหมด (ณัฐพล ศรีสุข · สมศรี ใจดี · วิชัย กล้าหาญ · อรุณ ศิริ · เชิดชัย มั่งมี) ไม่ใช่ข้อมูลพนักงานจริง<br>วิดีโอสอนใช้งานประกอบคู่มือนี้อยู่ในโฟลเดอร์ docs/video</div></div>
+
+<h2>สารบัญ</h2>
+<ol class="toc"><li>ภาพรวมกระบวนการประเมิน (ใครทำอะไร เมื่อไร)</li><li>เริ่มต้นใช้งาน: เข้าสู่ระบบ / ลืม PIN / เปิดใช้งานครั้งแรก / LINE</li><li>สำหรับพนักงาน: ประเมินตนเอง → ดูผล → รับทราบ</li><li>สำหรับหัวหน้า: ประเมินทีมงาน → สอบทาน → อนุมัติ (L1–L4)</li><li>คำถามที่พบบ่อย และวิธีแก้ปัญหา</li><li>ตารางสรุป: ใครเห็นเมนูอะไร</li></ol>
+
+<h2>1. ภาพรวมกระบวนการประเมิน</h2>
+<p>การประเมินหนึ่งรอบมีขั้นตอนเรียงตามลำดับ ใบประเมินของคุณจะเดินทางผ่านแต่ละขั้นจนจบ แต่ละคนเห็นและทำได้เฉพาะขั้นของตัวเอง</p>
+<div class="steps"><div class="me"><b>1</b>พนักงาน<br>ประเมินตนเอง</div><div class="me"><b>2</b>หัวหน้าหน่วย (L1)<br>ประเมินรอบแรก</div><div class="me"><b>3</b>หัวหน้าแผนก (L2)<br>สอบทาน</div><div class="me"><b>4</b>ผู้จัดการส่วน (L3)<br>สอบทาน</div><div class="me"><b>5</b>GM (L4)<br>อนุมัติ + ส่งผล</div><div class="me"><b>6</b>พนักงาน<br>ดูผล + รับทราบ</div><div><b>7</b>HR<br>Calibration</div><div><b>8</b>MD/AMD<br>อนุมัติขั้นสุดท้าย</div></div>
+<p>กรอบสีเข้ม = ขั้นที่คู่มือนี้อธิบาย ส่วนขั้น 7–8 เป็นงานของ HR และผู้บริหาร ซึ่งมีคู่มือแยกต่างหาก</p>
+<table><tr><th>คะแนนที่เห็น</th><th>ความหมาย</th></tr>
+<tr><td><b>Y</b> คะแนนผลงาน</td><td>มาจากการให้เกรด A+ ถึง C ในปัจจัยประเมิน 10 ข้อ (ผู้ประเมินแต่ละระดับช่วยตรวจ)</td></tr>
+<tr><td><b>Z</b> คะแนนเวลาทำงาน</td><td>ระบบคำนวณเองจากข้อมูลสาย กลับก่อน ลา ขาดงาน (จาก HRGO) ไม่ต้องกรอก</td></tr>
+<tr><td><b>KPI</b></td><td>มีเฉพาะรอบที่บริษัทกำหนดสัดส่วน KPI และคุณมี KPI รายบุคคล</td></tr>
+<tr><td><b>X</b> คะแนนรวม</td><td>X = Y + Z (+ KPI) ใช้จัดอันดับเพื่อตัดเกรด</td></tr>
+<tr><td><b>เกรด A–E</b></td><td>ตัดโดย HR ตามอันดับในกลุ่มเดียวกัน ระบบ<b>ซ่อนเกรด</b>จนกว่าผู้บริหารอนุมัติขั้นสุดท้าย</td></tr></table>
+
+<h2 class="pb">2. เริ่มต้นใช้งาน (ทุกคน)</h2>
+<h3>2.1 เข้าสู่ระบบ</h3>
+<figure><img src="img/a1-login.png" alt="หน้าเข้าสู่ระบบ"><figcaption>หน้าเข้าสู่ระบบ</figcaption><ol class="legend"><li value="1">กรอกรหัสพนักงาน (เช่น SML-009)</li><li value="2">กรอก PIN 4–6 หลักที่ได้รับ</li><li value="3">กดเข้าสู่ระบบ</li><li value="4">ลืม PIN: ตั้งใหม่เองทางอีเมล</li><li value="5">เข้าใช้ครั้งแรก: เปิดใช้งานด้วยรหัสจาก HR</li><li value="6">ยังไม่มี PIN: ลงทะเบียนอีเมลให้ HR ส่ง PIN</li><li value="7">ลงทะเบียนรับแจ้งเตือนทาง LINE</li></ol></figure>
+<div class="tip">💡 PIN เป็นการยืนยันตัวตนเบื้องต้นของคุณ อย่าบอกใครและอย่าให้คนอื่นล็อกอินแทน ถ้าพิมพ์ PIN ผิดครบ 5 ครั้ง ระบบจะล็อกรหัสของคุณชั่วคราว 15 นาที</div>
+<h3>2.2 เข้าใช้ครั้งแรก — เปิดใช้งานด้วยรหัสจาก HR</h3>
+<p>ถ้า HR แจกรหัสเปิดใช้งาน (รูปแบบ XXXX-XXXX-XXXX) ให้กด "เข้าใช้ครั้งแรก" แล้วทำตามนี้</p>
+<ol><li>กรอกรหัสพนักงาน และรหัสเปิดใช้งานจาก HR</li><li>ตรวจอีเมลที่ระบบแสดง (หรือกรอกอีเมลของคุณถ้า HR ยังไม่ได้ลงไว้) แล้วกด "ส่งรหัสยืนยันไปอีเมล"</li><li>เปิดอีเมล นำรหัสยืนยัน 6 หลัก (OTP) มากรอก แล้วตั้ง PIN ใหม่ 4–6 หลัก (พิมพ์ 2 ครั้ง)</li></ol>
+<figure><img src="img/a2-activate.png" alt="หน้าเปิดใช้งานบัญชีครั้งแรก"><figcaption>หน้าเปิดใช้งานบัญชีครั้งแรก</figcaption></figure>
+<h3>2.3 ลืม PIN</h3>
+<p>กด "ลืม PIN? ตั้ง PIN ใหม่เอง" กรอกรหัสพนักงาน ระบบส่งรหัส OTP ไปที่อีเมลที่ HR ลงทะเบียนไว้ แล้วตั้ง PIN ใหม่ได้เลย ถ้าไม่มีอีเมลในระบบหรืออีเมลผิด ให้แจ้ง HR</p>
+<figure><img src="img/a3-forgot.png" alt="หน้าตั้ง PIN ใหม่ (ลืม PIN)"><figcaption>หน้าตั้ง PIN ใหม่ (ลืม PIN)</figcaption></figure>
+<h3>2.4 ยังไม่มี PIN และลงทะเบียน LINE</h3>
+<ul><li><b>ยังไม่มี PIN:</b> กด "ลงทะเบียนอีเมล" กรอกรหัสพนักงานและอีเมลบริษัท HR จะตรวจแล้วส่ง PIN ให้ทางอีเมล</li><li><b>รับแจ้งเตือนทาง LINE:</b> เพิ่มเพื่อน LINE OA ของบริษัท แล้วพิมพ์ "รหัสพนักงาน" ส่งในแชท 1 ครั้ง ระบบจะผูกบัญชีให้ และแจ้งผลประเมินพร้อมปุ่มรับทราบทาง LINE ได้</li></ul>
+<figure><img src="img/a4-regemail.png" alt="ลงทะเบียนอีเมล"><figcaption>ลงทะเบียนอีเมล</figcaption></figure><figure><img src="img/a5-linereg.png" alt="ลงทะเบียนรับแจ้งเตือนทาง LINE"><figcaption>ลงทะเบียนรับแจ้งเตือนทาง LINE</figcaption></figure>
+
+<h3>2.5 หน้าแรกหลังเข้าสู่ระบบ</h3>
+<figure><img src="img/b0-home.png" alt="เมนูของพนักงาน (เห็นเพียง 2 เมนู)"><figcaption>เมนูของพนักงาน (เห็นเพียง 2 เมนู)</figcaption><ol class="legend"><li value="1">1. ประเมินตนเอง — กรอกแบบประเมินของคุณ</li><li value="2">8. ผลประเมิน — ดูผลและรับทราบ</li><li value="3">กระดิ่ง — การแจ้งเตือนที่ต้องทำ</li><li value="4">ออกจากระบบ (กดทุกครั้งที่ใช้เครื่องที่ใช้ร่วมกัน)</li></ol></figure>
+
+<h2 class="pb">3. สำหรับพนักงาน</h2>
+<h3>3.1 ประเมินตนเอง (เมนู 1)</h3>
+<p><span class="stepno">1</span> กด "1. ประเมินตนเอง" แล้วกรอก<b>รหัสพนักงาน</b> ระบบจะเลือกแบบฟอร์มที่ HR กำหนดให้คุณโดยอัตโนมัติ (ไม่ต้องเลือกเอง)</p>
+<figure><img src="img/b1-selfeval.png" alt="หน้าประเมินตนเอง"><figcaption>หน้าประเมินตนเอง</figcaption><ol class="legend"><li value="1">กรอกรหัสพนักงาน</li><li value="2">บันทึกร่าง — เก็บงานไว้ก่อน ยังไม่ส่ง</li><li value="3">พิมพ์ร่าง — พิมพ์ดูก่อนส่ง</li><li value="4">ส่งแบบประเมิน — ส่งจริง</li></ol></figure>
+<div class="warn">⚠️ ถ้าขึ้นข้อความว่า "ไม่อยู่ในรายชื่อ/แผนกที่กำหนด" และปุ่มเป็นสีเทา แปลว่า HR ยังไม่เปิดสิทธิ์ประเมินตนเองให้คุณ ให้ติดต่อ HR</div>
+<p><span class="stepno">2</span> <b>เลือกเกรดทีละข้อ</b> ในปัจจัยประเมิน 10 ข้อ ตั้งแต่ A+ (ดีเยี่ยม) ถึง C (ต้องปรับปรุง) ตัวเลขด้านขวาคือคะแนนที่ได้ และคะแนนรวมด้านบนจะอัปเดตทันที</p>
+<figure><img src="img/b2-scoring.png" alt="เลือกเกรดในแต่ละข้อ (ปุ่มที่ถูกเลือกจะมีกรอบเข้ม)"><figcaption>เลือกเกรดในแต่ละข้อ (ปุ่มที่ถูกเลือกจะมีกรอบเข้ม)</figcaption><ol class="legend"><li value="1">ปุ่มเกรด A+ / A / B / C+ / C ของข้อนั้น</li></ol></figure>
+<p><span class="stepno">3</span> ดูสรุปคะแนนด้านบน และส่วน "รายละเอียดเวลาทำงาน (Z)" ซึ่งแสดงที่มาของคะแนนเวลา เช่น จำนวนครั้งที่สาย วันลา วันขาด (ระบบดึงจากข้อมูล HRGO ของ HR ถ้าข้อมูลไม่ตรงให้แจ้ง HR)</p>
+<figure><img src="img/b3-summary.png" alt="สรุป Y / Z / X และรายละเอียดเวลาทำงาน"><figcaption>สรุป Y / Z / X และรายละเอียดเวลาทำงาน</figcaption></figure>
+<p><span class="stepno">4</span> เขียน<b>จุดเด่น</b>และ<b>สิ่งที่อยากพัฒนา</b> (ช่วยให้หัวหน้าเข้าใจคุณมากขึ้น) แล้วกด "บันทึกร่าง" ได้ตลอด จะกลับมาแก้ภายหลังก็ได้</p>
+<figure><img src="img/b4-comments.png" alt="ช่องความเห็นและแผนพัฒนา"><figcaption>ช่องความเห็นและแผนพัฒนา</figcaption><ol class="legend"><li value="1">จุดเด่น / ความสำเร็จในรอบนี้</li><li value="2">ควรปรับปรุง / ต้องการพัฒนา</li></ol></figure>
+<p><span class="stepno">5</span> เมื่อพร้อมกด "ส่งแบบประเมิน" ตรวจคะแนนรวม ชื่อหัวหน้าที่ระบบจะส่งถึง แล้วกด "ยืนยันส่ง"</p>
+<figure><img src="img/b5-confirm.png" alt="หน้าต่างยืนยันก่อนส่ง"><figcaption>หน้าต่างยืนยันก่อนส่ง</figcaption></figure>
+<div class="warn">⚠️ ส่งแล้ว<b>แก้ไขเองไม่ได้</b> เว้นแต่หัวหน้าตีกลับ — ตรวจให้ดีก่อนกดยืนยัน</div>
+<h3>3.2 ถ้าใบประเมินถูกตีกลับ</h3>
+<p>หัวหน้าอาจตีกลับให้คุณแก้ไข (ถอยกลับหนึ่งขั้นเท่านั้น) คุณจะเห็นกรอบสีเหลืองพร้อม<b>เหตุผลที่ถูกตีกลับ</b> คะแนนเดิมยังอยู่ ปุ่มส่งจะถูกล็อกไว้ ต้อง<u>แก้คะแนนอย่างน้อย 1 ข้อ</u> หรือกด "ยืนยันว่าตรวจสอบแล้ว" (ต้องพิมพ์เหตุผลที่ยืนยันตามเดิม) จึงส่งใหม่ได้ และผู้ประเมินเดิมจะได้รับแจ้ง</p>
+<figure><img src="img/b9-rejected.png" alt="แบบประเมินที่ถูกตีกลับ แสดงเหตุผลและปุ่มยืนยัน"><figcaption>แบบประเมินที่ถูกตีกลับ แสดงเหตุผลและปุ่มยืนยัน</figcaption></figure>
+<h3 class="pb">3.3 ดูผลและรับทราบ (เมนู 8)</h3>
+<p>เมื่อ GM อนุมัติและกดส่งผล คุณจะได้รับอีเมล/LINE แจ้ง ให้เข้าเมนู "8. ผลประเมิน" เพื่อดูคะแนนผลงาน (Y) เวลาทำงาน (Z) และคะแนนรวม (X) ส่วน<b>เกรดจะแสดงเป็น 🔒 จนกว่าผู้บริหารอนุมัติขั้นสุดท้าย</b></p>
+<figure><img src="img/b6-result.png" alt="หน้าผลประเมินของฉัน"><figcaption>หน้าผลประเมินของฉัน</figcaption><ol class="legend"><li value="1">รับทราบผลการประเมิน (กดเมื่อได้ดูผลแล้ว)</li></ol></figure>
+<ul><li><b>รับทราบผลการประเมิน</b> — กดเมื่อเห็นผลแล้ว เป็นอันเสร็จสิ้นขั้นของคุณ (ถ้าลงทะเบียน LINE แล้ว กดปุ่มรับทราบในแชท LINE ได้เลย)</li><li><b>รับทราบพร้อมความเห็นต่าง</b> — รับทราบ แต่บันทึกความเห็นของคุณไว้ให้ผู้ประเมิน/HR ทราบ</li><li><b>ไม่ยอมรับผล / ขอหารือ</b> — ระบุเหตุผล (อย่างน้อย 10 ตัวอักษร) และเสนอวันที่ขอพูดคุย 1–3 วัน หัวหน้าและ HR จะได้รับแจ้ง ระหว่างนี้ขั้นตอนจะหยุดรอจนกว่าจะหารือเสร็จ</li><li><b>ดาวน์โหลดใบประเมิน PDF</b> — เก็บใบประเมินของคุณไว้</li></ul>
+<figure><img src="img/b7-dispute.png" alt="หน้าต่างขอหารือผลการประเมิน"><figcaption>หน้าต่างขอหารือผลการประเมิน</figcaption></figure>
+<div class="tip">💡 เมนู "8. ผลประเมิน" จะไม่แสดงอันดับของเพื่อนร่วมงานหรือคะแนนของคนอื่น เห็นเฉพาะข้อมูลของคุณ</div>
+
+<h2 class="pb">4. สำหรับหัวหน้า</h2>
+<p>ตำแหน่งหัวหน้าในระบบมี 4 ระดับ ซึ่ง HR กำหนดไว้ในข้อมูลของพนักงานแต่ละคน: <b>L1 หัวหน้าหน่วย → L2 หัวหน้าแผนก → L3 ผู้จัดการส่วน → L4 GM</b> คุณจะเห็นเฉพาะพนักงานในสายของคุณเท่านั้น ถ้าสายไหนไม่มีผู้ประเมิน ระบบจะข้ามขั้นนั้นให้อัตโนมัติ</p>
+<table><tr><th>ระดับ</th><th>เมนูที่ใช้</th><th>หน้าที่</th></tr>
+<tr><td>L1 หัวหน้าหน่วย</td><td>2. ประเมินทีมงาน</td><td>ให้คะแนนรอบแรกแก่ลูกทีม</td></tr>
+<tr><td>L2 หัวหน้าแผนก</td><td>3. สอบทานหัวหน้าแผนก</td><td>ตรวจคะแนนที่ L1 ส่งมา อนุมัติหรือตีกลับ</td></tr>
+<tr><td>L3 ผู้จัดการส่วน</td><td>4. สอบทานผู้จัดการส่วน</td><td>ตรวจคะแนนที่ L2 อนุมัติแล้ว</td></tr>
+<tr><td>L4 GM</td><td>5. อนุมัติ GM</td><td>อนุมัติ แล้วกด "ยืนยันส่งผลให้พนักงาน"</td></tr></table>
+<h3>4.1 ประเมินทีมงานรอบแรก (เมนู 2)</h3>
+<p>หน้านี้แสดงรายชื่อลูกทีมตรง ๆ พร้อมสถานะ ปุ่ม "ประเมิน" เปิดฟอร์มให้คะแนน ส่วน "ดูแบบฟอร์ม" ใช้ดูใบที่ส่งไปแล้ว (แก้ไม่ได้)</p>
+<figure><img src="img/c1-team.png" alt="หน้าประเมินทีมงาน"><figcaption>หน้าประเมินทีมงาน</figcaption><ol class="legend"><li value="1">ประเมิน / ดูแบบฟอร์ม ของพนักงานแต่ละคน</li><li value="2">ยืนยันและส่งที่เลือก — ส่งหลายคนพร้อมกัน (ใช้กับใบที่ "บันทึกไว้ก่อน")</li><li value="3">Export Excel — ส่งออกรายชื่อพร้อมคะแนนและข้อมูลเวลา</li></ol></figure>
+<p>ในฟอร์ม ให้ดูข้อมูลเวลาทำงานของพนักงานด้านบนก่อน แล้วเลือกเกรดทีละข้อ (ถ้าพนักงานประเมินตนเองไว้แล้ว คะแนนของเขาจะแสดงให้เห็น คุณปรับตามความเห็นของคุณได้) พร้อมเขียนความเห็น</p>
+<figure><img src="img/c2-reviewform.png" alt="ฟอร์มประเมิน/สอบทาน: ข้อมูลพนักงานและสถิติเวลาทำงาน (Z)"><figcaption>ฟอร์มประเมิน/สอบทาน: ข้อมูลพนักงานและสถิติเวลาทำงาน (Z)</figcaption></figure>
+<h3>4.2 ปุ่มท้ายฟอร์ม</h3>
+<figure><img src="img/c6-reviewform-end.png" alt="ปุ่มด้านล่างของฟอร์ม"><figcaption>ปุ่มด้านล่างของฟอร์ม</figcaption><ol class="legend"><li value="1">ล้างคะแนน — เริ่มให้คะแนนใหม่</li><li value="2">ตีกลับ — ส่งกลับให้ขั้นก่อนหน้าแก้ไข (ต้องพิมพ์เหตุผล)</li><li value="3">บันทึกไว้ก่อน — เก็บคะแนนไว้ ยังไม่ส่ง และไม่แจ้งใคร (รวบรวมหลายคนแล้วค่อยส่งทีเดียวได้)</li><li value="4">ยืนยันและส่งให้ผู้ประเมินคนถัดไป — ส่งจริง</li></ol></figure>
+<div class="warn">⚠️ เมื่อกด "ยืนยันและส่ง" แล้ว ใบจะออกจากคิวของคุณและ<b>แก้ไขไม่ได้</b> ระบบจะแจ้งผู้ประเมินคนถัดไปทางอีเมล/LINE ให้อัตโนมัติ</div>
+<h3 class="pb">4.3 สอบทาน L2 / L3 (เมนู 3 และ 4)</h3>
+<p>ตัวเลขสีแดงข้างเมนูคือจำนวนใบที่รอคุณ หน้านี้แสดงรายชื่อพนักงานในสายของคุณ พร้อมคะแนน Y, Z, X เรียงจากคะแนนรวมสูงไปต่ำ สามารถกรองตามฝ่าย ส่วน แผนก กลุ่มงาน และเลือกมุมมอง "แยกตามฝ่าย" หรือ "รวมทั้งบริษัท" ได้</p>
+<figure><img src="img/c4-queue-l2.png" alt="คิวสอบทาน (ตัวอย่าง: เมนู 3 หัวหน้าแผนก)"><figcaption>คิวสอบทาน (ตัวอย่าง: เมนู 3 หัวหน้าแผนก)</figcaption><ol class="legend"><li value="1">ติ๊กเลือกคนที่ต้องการ</li><li value="2">สอบทานแบบฟอร์ม — เปิดดูคะแนน ความเห็น และเวลาทำงาน</li><li value="3">ยืนยันและส่งให้ผู้ประเมินคนถัดไป — อนุมัติทุกคนที่ติ๊ก</li><li value="4">ตีกลับที่เลือก — ต้องพิมพ์เหตุผล ใบกลับไปขั้นก่อนหน้า</li><li value="5">Export Excel — ส่งออกรายชื่อในคิว</li></ol></figure>
+<p>ถ้าใบเคยถูกตีกลับมาก่อน ระบบจะให้คุณ<b>แก้คะแนนหรือพิมพ์เหตุผลที่ยืนยันตามเดิม</b>ก่อนส่งต่อ แต่ละระดับจะเห็นเฉพาะใบที่ถึงขั้นของตัวเอง ใบของคนที่ยังมาไม่ถึงจะขึ้น "⏳ รอผลประเมิน"</p>
+<figure><img src="img/c7-queue-l3.png" alt="คิวสอบทานผู้จัดการส่วน (เมนู 4)"><figcaption>คิวสอบทานผู้จัดการส่วน (เมนู 4)</figcaption></figure>
+<h3>4.4 การแจ้งเตือน (กระดิ่ง)</h3>
+<p>กระดิ่งมุมขวาบนบอกงานที่รอคุณ เช่น จำนวนใบรอสอบทาน กดที่รายการเพื่อไปหน้านั้นได้เลย</p>
+<figure><img src="img/c5-bell.png" alt="การแจ้งเตือน"><figcaption>การแจ้งเตือน</figcaption></figure>
+<h3 class="pb">4.5 GM: อนุมัติและส่งผลให้พนักงาน (เมนู 5)</h3>
+<p>GM ติ๊กใบที่ผ่านการสอบทานแล้ว กด "อนุมัติที่เลือก" จากนั้นใบจะไปอยู่ในตาราง "ผล GM อนุมัติแล้ว — ยืนยันส่งผลให้พนักงาน" ด้านล่าง ให้กด "<b>ยืนยันส่งผลให้พนักงาน</b>" ระบบจึงจะแจ้งพนักงานทางอีเมล/LINE พร้อมคะแนน (เกรดยังล็อกอยู่) และพนักงานจึงเข้าดูผลและรับทราบได้</p>
+<figure><img src="img/c8-queue-gm.png" alt="คิวอนุมัติ GM"><figcaption>คิวอนุมัติ GM</figcaption></figure>
+<figure><img src="img/c9-gm-send.png" alt="ตารางยืนยันส่งผลให้พนักงาน"><figcaption>ตารางยืนยันส่งผลให้พนักงาน</figcaption></figure>
+<h3>4.6 แดชบอร์ดภาพรวมของทีม (หัวหน้า)</h3>
+<p>แดชบอร์ดแสดงความคืบหน้าของคนในสายคุณ แต่ละขั้นมีกี่คน เสร็จสมบูรณ์เท่าไร ค้างกี่คน ช่วยให้ตามงานได้ง่าย</p>
+<figure><img src="img/c10-dash.png" alt="แดชบอร์ดของหัวหน้า"><figcaption>แดชบอร์ดของหัวหน้า</figcaption></figure>
+
+<h2 class="pb">5. คำถามที่พบบ่อย</h2>
+<table><tr><th>ปัญหา</th><th>วิธีแก้</th></tr>
+<tr><td>เข้าสู่ระบบไม่ได้ / PIN ผิด</td><td>ลอง "ลืม PIN" ตั้งใหม่เอง ถ้าผิดครบ 5 ครั้งจะถูกล็อก 15 นาที รอแล้วลองใหม่ หรือแจ้ง HR</td></tr>
+<tr><td>ขึ้นว่าระบบยังไม่เปิดให้บริการ</td><td>HR ปิดระบบชั่วคราว (เช่น อัปเดตระบบ หรือยังไม่ถึงรอบประเมิน) รอเวลาที่แจ้งไว้ในหน้าจอ</td></tr>
+<tr><td>ประเมินตนเองไม่ได้ ปุ่มเป็นสีเทา</td><td>ยังไม่ได้รับสิทธิ์ประเมินตนเอง ติดต่อ HR</td></tr>
+<tr><td>ไม่พบใบประเมิน/หน้าว่างทั้งที่ส่งไปแล้ว</td><td>กดปุ่ม "Sync จาก Excel แล้วลองใหม่" ในกรอบเตือน หรือรีโหลดหน้าและรอสักครู่</td></tr>
+<tr><td>คะแนนเวลาทำงาน (Z) ไม่ตรงกับที่ควรเป็น</td><td>แจ้ง HR ให้ตรวจข้อมูลสาย/ลา/ขาดของคุณ ระบบคิดสาย 8 ครั้ง = 1 วัน (เศษตัดทิ้ง) ลากิจ+ลาป่วย เศษน้อยกว่า 4 ชม. ไม่นับ 4 ชม. ขึ้นไปนับครึ่งวัน ขาดงานนับ 3 เท่า</td></tr>
+<tr><td>ทำไมไม่เห็นเกรด</td><td>เกรดเป็นความลับจนกว่าผู้บริหารอนุมัติขั้นสุดท้าย ดูได้เมื่อ HR เปิดให้พนักงานเห็นเกรด</td></tr>
+<tr><td>กดส่งผิดคน/ใบผิด</td><td>ส่งแล้วแก้เองไม่ได้ ให้แจ้งผู้ประเมินขั้นถัดไปให้ตีกลับ หรือแจ้ง HR</td></tr>
+<tr><td>ไม่เห็นลูกทีม / รายชื่อไม่ครบ (หัวหน้า)</td><td>ชื่อหัวหน้าในข้อมูลพนักงานอาจยังไม่ถูกต้อง แจ้ง HR ให้ตรวจสายบังคับบัญชา L1–L4</td></tr>
+<tr><td>ใช้เครื่องที่ใช้ร่วมกัน</td><td>กด "ออกจากระบบ" ทุกครั้งที่ใช้เสร็จ</td></tr></table>
+
+<h2>6. ตารางสรุป: ใครเห็นเมนูอะไร</h2>
+<table><tr><th>เมนู</th><th>พนักงาน</th><th>L1 หน่วย</th><th>L2 แผนก</th><th>L3 ส่วน</th><th>L4 GM</th></tr>
+<tr><td>แดชบอร์ด</td><td>–</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+<tr><td>1. ประเมินตนเอง</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+<tr><td>2. ประเมินทีมงาน</td><td>–</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+<tr><td>3. สอบทานหัวหน้าแผนก</td><td>–</td><td>–</td><td>✔</td><td>–</td><td>–</td></tr>
+<tr><td>4. สอบทานผู้จัดการส่วน</td><td>–</td><td>–</td><td>–</td><td>✔</td><td>–</td></tr>
+<tr><td>5. อนุมัติ GM</td><td>–</td><td>–</td><td>–</td><td>–</td><td>✔</td></tr>
+<tr><td>8. ผลประเมิน</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr></table>
+<p style="font-size:12.5px;color:#64748b">หมายเหตุ: เมนูที่เห็นอาจต่างจากตารางนี้เล็กน้อยตามที่ HR กำหนดสิทธิ์ และคนที่ถูกระบุชื่อเป็นผู้ประเมินในสายของพนักงานจะเห็นเมนูของขั้นนั้นด้วย แม้ตำแหน่งในระบบจะต่างกัน ปัญหาการใช้งาน ติดต่อ HR</p>
+</div></body></html>
