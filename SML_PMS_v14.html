@@ -3546,7 +3546,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <h3>ตั้งค่ารอบประเมิน</h3>
       <p>กำหนดปีประเมิน ช่วงเวลา ขั้นตอน ผู้รับผิดชอบ และกำหนดส่งในรอบเดียว</p>
     </div>
-    <div class="hero-status"><i></i> FY2026 • กำลังดำเนินการ</div>
+    <div class="hero-status"><i></i> <span id="csHeroCycle">—</span></div>
   </div>
 
   <div class="sysopen-card" id="sysOpenCard">
@@ -3563,7 +3563,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
   </div>
 
   <div class="cycle-summary">
-    <div class="cycle-stat"><span>รอบปัจจุบัน</span><b>FY2026</b></div>
+    <div class="cycle-stat"><span>รอบปัจจุบัน</span><b id="csCycleName">—</b></div>
     <div class="cycle-stat"><span>พนักงานในรอบ</span><b id="csTotalCount">0 คน</b></div>
     <div class="cycle-stat"><span>ขั้นตอน</span><b id="csStepCount">—</b></div>
     <div class="cycle-stat"><span>ความคืบหน้า</span><b style="color:#138a4b" id="csProgressPct">0%</b></div>
@@ -3581,8 +3581,6 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
             <div class="cycle-field"><label>สถานะรอบ</label><select id="cycleStatusSetup"><option>กำลังดำเนินการ</option><option>แบบร่าง</option><option>ปิดรอบ</option></select></div>
             <div class="cycle-field"><label>วันที่เริ่มรอบ <b style="color:#c73535">*</b></label><input id="cycleStartSetup" type="date" value="2026-11-01"></div>
             <div class="cycle-field"><label>วันที่สิ้นสุดรอบ <b style="color:#c73535">*</b></label><input id="cycleEndSetup" type="date" value="2026-12-31"></div>
-            <div class="cycle-field"><label>ช่วงข้อมูลเวลา (HRGO)</label><select><option>1 ธ.ค. 2568 – 30 พ.ย. 2569</option></select></div>
-            <div class="cycle-field"><label>แบบประเมิน</label><select><option>PMS Standard SML v3</option></select></div>
             <div class="cycle-field full"><label>คำอธิบาย / หมายเหตุ</label><input value="รอบประเมินผลการปฏิบัติงานประจำปีของ SML"></div>
           </div>
         </div>
@@ -3597,12 +3595,9 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       </div>
 
       <div class="cycle-card">
-        <div class="cycle-card-head"><h3>การแจ้งเตือนอัตโนมัติ</h3><span class="bd b-b">เปิดใช้งาน</span></div>
+        <div class="cycle-card-head"><h3>การแจ้งเตือน</h3><span class="bd b-s">ส่งด้วยมือ</span></div>
         <div class="cycle-card-body">
-          <div class="cycle-field-grid">
-            <div class="cycle-field"><label>Reminder ก่อนกำหนดส่ง</label><select><option>3 วัน และ 1 วัน</option><option>1 วัน</option><option>7 วัน และ 3 วัน</option></select></div>
-            <div class="cycle-field"><label>ช่องทางแจ้งเตือน</label><select><option>LINE OA + Email</option><option>LINE OA</option><option>Email</option></select></div>
-          </div>
+          <div class="al al-i" style="margin-bottom:12px"><span>ℹ️</span><div>ระบบไม่มีเซิร์ฟเวอร์ตั้งเวลาส่งอัตโนมัติ — Admin/HR กดส่งเองได้จากปุ่ม "📢 ส่ง Reminder" (เตือนคนที่ยังไม่ส่งแบบประเมิน) และ "📬 แจ้งผลประเมิน" บนหน้า Dashboard ผ่านอีเมล/LINE</div></div>
           <div class="cycle-actionbar">
             <button class="btn" onclick="resetCycleSetup()">↺ รีเซ็ต</button>
             <button class="btn btn-p" onclick="saveCycleSetup()">💾 บันทึกการตั้งค่า</button>
@@ -3619,7 +3614,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
             </div>
             <div>
               <h4>ลำดับการพิจารณา</h4>
-              <p>ผู้บังคับบัญชาชั้นต้น → ผู้บังคับบัญชาระดับสูงขึ้น → ผู้จัดการทั่วไปฝ่าย → MD-SML อนุมัติ</p>
+              <p>พนักงาน/หัวหน้าหน่วยประเมินรอบแรก → หัวหน้าแผนก (L2) → ผู้จัดการส่วน (L3) → GM (L4) → GM ส่งผลให้พนักงานรับทราบ → HR Calibration และตรวจสอบ → MD-SML อนุมัติ</p>
             </div>
           </div>
         </div>
@@ -3644,13 +3639,11 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
         <div class="cycle-card-head"><h3>สรุปการตั้งค่า</h3></div>
         <div class="cycle-card-body">
           <div class="mini-list">
-            <div class="mini-row"><span>รอบ</span><b>FY2026</b></div>
-            <div class="mini-row"><span>แบบประเมิน</span><b>PMS v3</b></div>
+            <div class="mini-row"><span>รอบ</span><b id="csCycleName2">—</b></div>
             <div class="mini-row"><span>ผู้เข้ารอบ</span><b id="csTotalCount2">0 คน</b></div>
             <div class="mini-row"><span>ผู้ประเมิน L1</span><b id="csL1Count">0 คน</b></div>
             <div class="mini-row"><span>ผู้ยืนยัน L2</span><b id="csL2Count">0 คน</b></div>
             <div class="mini-row"><span>ผู้อนุมัติ</span><b>AGM / MD</b></div>
-            <div class="mini-row"><span>แจ้งเตือน</span><b style="color:#138a4b">เปิด</b></div>
           </div>
         </div>
       </div>
@@ -15652,6 +15645,8 @@ function renderCycleSetupTimeline(){
   const cst=computeCycleStepStatuses(steps,cyc.year);
   box.innerHTML=steps.length?steps.map((st,i)=>{ const s2=cst[i].status; const cls=s2==='done'?'done':(s2==='active'?'current':''); return '<div class="cycle-step '+cls+'"><div class="cycle-dot">'+(cls==='done'?'✓':st.order)+'</div><b>'+escapeAttrCs(st.name)+'</b><span>'+escapeAttrCs(range(st))+'</span></div>'; }).join(''):'<div style="color:#94a3b8;font-size:12px;padding:8px">ยังไม่มีขั้นตอน — เพิ่มที่หน้า "รอบประเมิน"</div>';
   if(badge) badge.textContent=steps.length+' ขั้นตอน'; if(cnt) cnt.textContent=steps.length+' ขั้นตอน';
+  const cn=(cyc.name||cyc.id||yr); ['csCycleName','csCycleName2'].forEach(id=>{const e=document.getElementById(id); if(e) e.textContent=cn;});
+  const he=document.getElementById('csHeroCycle'); if(he) he.textContent=cn+' • '+(cyc.status==='Closed'?'ปิดรอบแล้ว':'กำลังดำเนินการ');
 }
 
 function selectedStepCycleId(){ return document.getElementById('cycleStepsCycleSel')?.value||''; }
