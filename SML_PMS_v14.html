@@ -3903,7 +3903,7 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
       <label style="font-weight:400;margin-left:14px"><input type="checkbox" id="rm_ch_line" checked style="width:auto;margin-right:5px">LINE <small style="color:#64748b">(เฉพาะคนที่มี LINE User ID บันทึกไว้แล้ว)</small></label>
       <label style="font-weight:400;margin-left:14px;color:#94a3b8"><input type="checkbox" disabled style="width:auto;margin-right:5px">แจ้งเตือนในระบบ <small>(ยังไม่รองรับ — ต้องมีระบบ Login รายบุคคล)</small></label>
     </div>
-    <div class="fg"><label>ข้อความ</label><textarea id="rm_message" rows="4">เรียนท่านหัวหน้างาน กรุณาดำเนินการประเมินผลพนักงานในสังกัดให้แล้วเสร็จภายในวันที่ 20 ก.ย. 2569</textarea></div>
+    <div class="fg"><label>ข้อความ</label><textarea id="rm_message" rows="4">เรียนท่านหัวหน้างาน กรุณาดำเนินการประเมินผลพนักงานในสังกัดให้แล้วเสร็จภายในวันที่ 20 ก.ย. 2569</textarea><div style="font-size:11px;color:var(--text3);margin-top:4px">ระบบจะต่อลิงก์เข้าระบบท้ายข้อความให้อัตโนมัติ (ตามที่ตั้งไว้ใน MS365 Proxy)</div></div>
     <div class="fg"><label>รายชื่อผู้รับ (ดึงจากข้อมูลพนักงานจริง)</label>
       <div id="rm_preview" style="max-height:160px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:12px"></div>
     </div>
@@ -7701,7 +7701,12 @@ async function sendEmailToList(recipients, subject, body){
 
 async function sendReminder(){
   const targets = getReminderTargets(document.getElementById('rm_target')?.value || 'pending');
-  const message = document.getElementById('rm_message')?.value || '';
+  /* ต่อลิงก์เข้าระบบท้ายข้อความ (ทั้งอีเมลและ LINE) — ลิงก์หน้าแรกเดียวกัน ทุกคนล็อกอินด้วยรหัส/PIN ตัวเอง;
+     ไม่มี appUrl ตั้งไว้ = ไม่ใส่ (ไม่เดา URL, #14); ไม่ใส่ซ้ำถ้าผู้ใช้พิมพ์ลิงก์ไว้ในข้อความเองแล้ว */
+  const _rmCfg = loadMs365Config();
+  const _rmRaw = document.getElementById('rm_message')?.value || '';
+  const message = (_rmCfg.appUrl && !_rmRaw.includes(_rmCfg.appUrl))
+    ? _rmRaw + `\n\nเข้าระบบ: ${_rmCfg.appUrl}` : _rmRaw;
   const wantEmail = document.getElementById('rm_ch_email')?.checked;
   const wantLine = document.getElementById('rm_ch_line')?.checked;
   if(!targets.length){ smlToast('ไม่มีผู้รับในกลุ่มเป้าหมายนี้','warn'); return; }
