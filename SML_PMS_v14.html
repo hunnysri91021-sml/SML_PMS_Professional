@@ -13637,9 +13637,9 @@ function renderDashGradeBars(drafts){
   }).join('');
 }
 
-/* แถบ "สถานะความคืบหน้าตามขั้นตอน" บนแดชบอร์ด — สะท้อนขั้นตอนจริง 4 ขั้นที่ระบบติดตามได้จริง
-   (Submitted → L2Reviewed → Calibrated → Approved) แทนสมมติฐาน 6 ขั้นเดิมที่ไม่มีข้อมูลจริงรองรับ
-   (เช่น "หัวหน้าแผนกประเมิน" หรือ "พนักงานรับทราบผล" ที่ระบบยังไม่มีสถานะเก็บไว้จริง) */
+/* แถบ "สถานะความคืบหน้าตามขั้นตอน" บนแดชบอร์ด — นับจากสถานะใบประเมินจริงตาม EVAL_STATUS_ORDER
+   (Submitted → L1Reviewed → L2Reviewed → GMApproved → ResultSent → Acknowledged → Calibrated → CalibChecked → Approved)
+   ลำดับเดียวกับตาราง "กำหนดการขั้นตอน" (CYCLE_STEP_DEFAULTS) และสถานะในรายชื่อผู้เข้าร่วมรอบ */
 function renderDashboardWorkflowSteps(participants, drafts){
   const box = document.getElementById('dashWorkflowSteps');
   if(!box) return;
