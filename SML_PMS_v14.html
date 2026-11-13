@@ -16877,15 +16877,31 @@ function saveAttendanceRowInline(code){
   renderAttendanceList();
   smlToast('อัปเดตข้อมูลวันลาของ '+result.emp[1]+' ('+code+') เรียบร้อย','ok');
 }
-function deleteAttendanceRow(code){
-  if(!confirm('ลบข้อมูลวันลาของ '+code+' ?')) return;
+async function deleteAttendanceRow(code){
+  /* #321: ลบทั้งในเว็บและใน Excel (ตาราง Attendance + AttendanceDetail) — เดิมลบเฉพาะในเครื่อง แล้ว sync ดึงแถวเดิมกลับมา */
+  const cfg = loadMs365Config();
+  const remote = isMs365Configured(cfg);
+  if(!confirm('ลบข้อมูลวันลาของ '+code+' ?'+(remote?'\n\nจะลบแถวของรหัสนี้ใน Excel (ตาราง Attendance/AttendanceDetail) ด้วย — กู้คืนไม่ได้':'\n\n(ยังไม่ได้ตั้ง MS365 — ลบเฉพาะในเครื่องนี้)'))) return;
+  if(remote){
+    try{
+      const n = await graphDeleteTableRows('Attendance', 0, code);
+      let m = 0;
+      try{ m = await graphDeleteTableRows('AttendanceDetail', 0, code); }catch(e){ /* ไม่มีตาราง AttendanceDetail — ข้ามได้ */ }
+      appendSyncLog(`ลบข้อมูลเวลา ${code} ใน Excel: Attendance ${n} แถว, AttendanceDetail ${m} แถว`, true);
+    }catch(err){
+      appendSyncLog(`ลบข้อมูลเวลา ${code} ใน Excel ไม่สำเร็จ: `+(err?.message||err), false);
+      smlToast('⚠️ ลบใน Excel ไม่สำเร็จ ('+(err?.message||err)+') — ยังไม่ลบในเว็บ เพื่อไม่ให้ข้อมูลกลับมาตอน sync','err');
+      return;
+    }
+  }
   delete ATTENDANCE[code];
   saveAttendance();
   if(editingAttendanceCode===code) editingAttendanceCode=null;
   renderAttendanceList();
   if(typeof recalc==='function') recalc();
   if(typeof renderCycleStats==='function') renderCycleStats();
-  smlToast('ลบข้อมูลเรียบร้อย','ok');
+  if(typeof appendAuditLog==='function') appendAuditLog('data','ลบข้อมูลเวลาทำงาน',code,remote?'ลบทั้งเว็บและ Excel':'ลบเฉพาะในเครื่อง');
+  smlToast(remote?'ลบข้อมูลเรียบร้อย (เว็บ + Excel)':'ลบข้อมูลเรียบร้อย (เฉพาะในเครื่องนี้)','ok');
 }
 function renderAttendanceList(){
   const el=document.getElementById('attRows'); if(!el) return;
