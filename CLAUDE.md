@@ -9019,6 +9019,8 @@ touches employee/attendance/evaluation data.
 
 314. **คู่มือ PowerPoint ฉบับสมบูรณ์ `docs/SML_PMS_UserGuide.pptx` (30 สไลด์, ภาพจากโปรแกรมจริงใน `docs/manual/img`).** สร้างด้วย `node docs/build/pptx.js` (pptxgenjs; ต้องแก้ path require ให้ตรงเครื่อง). ครอบคลุมพนักงาน+หัวหน้า L1–L4 เท่านั้น ยังไม่มีส่วน Admin/HR (ต้องถ่ายภาพหน้า Admin เพิ่ม). UI/ลำดับขั้นเปลี่ยน → ถ่ายภาพใหม่ด้วย shots*.js แล้วรันซ้ำ.
 
+315. **นโยบาย PDPA ในระบบ: ติ๊กรับทราบก่อนเข้าใช้ครั้งแรก + ข้อความเตือนที่หน้า login (ห้ามให้ PIN/ส่งต่อผลประเมิน).** `doLogin()` เรียก `ensurePdpaAck(u)` หลัง PIN ถูกก่อนสร้างเซสชัน — ถ้ายังไม่เคยรับทราบเวอร์ชันปัจจุบัน (`PDPA_VERSION`) แสดง `#pdpaGate` ต้องติ๊กจึงกด "ยอมรับ" ได้; ไม่ยอมรับ = ไม่เข้าระบบ; ยอมรับแล้วบันทึก `smlPmsPdpaAck` (ต่อรหัสพนักงาน) + Audit Log "รับทราบนโยบาย PDPA" (push ขึ้น Excel เป็นหลักฐาน). **ข้อจำกัด:** ค่า "เคยรับทราบ" จำในเครื่อง/เบราว์เซอร์นั้น เครื่องใหม่หรือล้างเบราว์เซอร์จะถามอีก (ไม่ sync ข้ามเครื่อง); การเตือนไม่ได้กัน "ให้ PIN เพื่อน" ทางเทคนิค. เปลี่ยนเนื้อหานโยบายแล้วต้องเพิ่ม `PDPA_VERSION` เพื่อให้ถามซ้ำ. เอกสารนโยบายฉบับเต็ม: `docs/announce/SML_PMS_PDPA_Policy.pdf` (ฉบับร่าง ให้ DPO/กฎหมายตรวจ). ทดสอบ: `tests/pdpa-ack.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

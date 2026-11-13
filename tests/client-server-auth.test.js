@@ -2,6 +2,7 @@
 const {open,ok,done,INJECT}=require('./helpers');
 (async()=>{
   const {b,p,errs}=await open();
+  await p.evaluate(()=>{ window.ensurePdpaAck=async()=>true; }); // ข้ามหน้าต่าง PDPA (ทดสอบแยกใน pdpa-ack.test.js)
   await p.evaluate(INJECT);
   const r=await p.evaluate(async()=>{
     window.__pushes=[];

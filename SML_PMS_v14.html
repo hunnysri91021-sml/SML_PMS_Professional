@@ -1784,8 +1784,31 @@ img,svg,canvas{max-width:100%}
         <a href="#" id="regEmailLink" onclick="openRegEmail();return false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg><span>ยังไม่มี PIN? ลงทะเบียนอีเมลให้ HR ส่ง PIN</span></a>
         <a href="#" id="lineRegLink" onclick="openLineReg();return false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>ลงทะเบียนรับแจ้งเตือนทาง LINE (เพิ่มเพื่อน)</span></a>
       </div>
+      <p class="lg-note" id="pdpaLoginNote">🔒 PDPA: PIN เป็นของท่านคนเดียว ห้ามบอกหรือให้ผู้อื่นใช้ — ผลประเมินเป็นข้อมูลส่วนบุคคล</p>
       <p class="lg-note">ใช้ยืนยันตัวตนเบื้องต้นเท่านั้น · สิทธิ์เข้าถึงข้อมูลจริงควบคุมที่เซิร์ฟเวอร์และ SharePoint</p>
     </div>
+  </div>
+</div>
+
+<div class="login-gate lg-sec" id="pdpaGate" style="display:none;z-index:100000">
+  <div class="login-box">
+    <div class="lg-mini"><img class="lg-mini-logo" alt="SML"><span>SML PMS</span></div>
+    <h2>🔒 นโยบายความปลอดภัยและข้อมูลส่วนบุคคล (PDPA)</h2>
+    <div style="text-align:left;font-size:14px;line-height:1.6;max-height:46vh;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin:8px 0">
+      <p style="margin:0 0 6px"><b>ก่อนใช้งานครั้งแรก กรุณาอ่านและรับทราบ:</b></p>
+      <ul style="margin:0 0 6px 18px;padding:0">
+        <li><b>ห้ามบอก PIN</b> หรือให้ยืมบัญชีแก่ผู้อื่น (รวมถึงหัวหน้าและ HR — HR ไม่เคยขอ PIN)</li>
+        <li>ผลประเมินและข้อมูลในระบบเป็น<b>ข้อมูลส่วนบุคคล</b> ห้ามถ่ายภาพ คัดลอก หรือส่งต่อให้ผู้อื่นโดยไม่ได้รับมอบหมาย</li>
+        <li>ผู้ประเมินใช้ข้อมูลลูกทีมเพื่อการประเมินเท่านั้น และต้องเก็บเป็นความลับ</li>
+        <li>ออกจากระบบทุกครั้งเมื่อใช้เครื่องสาธารณะ/เครื่องร่วม</li>
+        <li>สงสัยว่า PIN รั่ว ให้เปลี่ยนทันที ("ลืม PIN?") และแจ้ง HR ภายใน 24 ชั่วโมง</li>
+        <li>ระบบบันทึกการเข้าใช้งาน (Audit Log) เพื่อตรวจสอบย้อนหลัง การให้ผู้อื่นใช้บัญชีถือเป็นความรับผิดของเจ้าของบัญชี และอาจเข้าข่ายผิดวินัย/ผิดกฎหมาย</li>
+      </ul>
+      <p style="margin:0;color:#6b7280">สิทธิของเจ้าของข้อมูล (เข้าถึง/แก้ไข/คัดค้าน) ติดต่อ HR/DPO — ดูนโยบายฉบับเต็มจาก HR</p>
+    </div>
+    <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;text-align:left;margin:10px 0;cursor:pointer"><input type="checkbox" id="pdpaChk" onchange="document.getElementById('pdpaOkBtn').disabled=!this.checked" style="margin-top:3px;width:18px;height:18px"><span>ข้าพเจ้าได้อ่านและเข้าใจนโยบายข้างต้น และจะปฏิบัติตามอย่างเคร่งครัด</span></label>
+    <button class="btn btn-p" id="pdpaOkBtn" disabled onclick="pdpaAccept()">ยอมรับและเข้าสู่ระบบ</button>
+    <a href="#" class="lg-back" onclick="pdpaDecline();return false">ไม่ยอมรับ (ยกเลิกการเข้าสู่ระบบ)</a>
   </div>
 </div>
 
@@ -5382,6 +5405,40 @@ function runLoginSyncsBackground(){
   });
 }
 
+/* #315: นโยบาย PDPA — ต้องติ๊กรับทราบก่อนเข้าใช้ครั้งแรก (ต่อรหัสพนักงาน ต่อเครื่อง/เบราว์เซอร์ + เวอร์ชันนโยบาย)
+   บันทึกลง Audit Log (ซึ่ง push ขึ้น Excel) เป็นหลักฐาน; ไม่ยอมรับ = ไม่เข้าระบบ
+   ข้อจำกัด: ค่า "เคยรับทราบแล้ว" จำไว้ในเครื่องนั้น เครื่องใหม่/ล้างเบราว์เซอร์จะถามอีกครั้ง */
+const PDPA_VERSION = '1';
+const PDPA_ACK_KEY = 'smlPmsPdpaAck';
+let _pdpaResolve = null;
+function pdpaGetAck(){ try{ return JSON.parse(localStorage.getItem(PDPA_ACK_KEY)||'{}')||{}; }catch(e){ return {}; } }
+function pdpaIsAcked(code){ const a = pdpaGetAck()[code]; return !!(a && a.v === PDPA_VERSION); }
+function ensurePdpaAck(u){
+  if(pdpaIsAcked(u[0])) return Promise.resolve(true);
+  return new Promise(res=>{
+    _pdpaResolve = ok=>{ _pdpaResolve = null; res(ok); };
+    window._pdpaUser = u;
+    const chk = document.getElementById('pdpaChk'); chk.checked = false;
+    document.getElementById('pdpaOkBtn').disabled = true;
+    document.getElementById('pdpaGate').style.display = 'flex';
+  });
+}
+function pdpaAccept(){
+  if(!document.getElementById('pdpaChk').checked) return;
+  const u = window._pdpaUser;
+  if(u){
+    const a = pdpaGetAck(); a[u[0]] = {v: PDPA_VERSION, at: new Date().toISOString()};
+    try{ localStorage.setItem(PDPA_ACK_KEY, JSON.stringify(a)); }catch(e){}
+    if(typeof appendAuditLog === 'function') appendAuditLog('auth', 'รับทราบนโยบาย PDPA (v'+PDPA_VERSION+')', u[0], u[1]);
+  }
+  document.getElementById('pdpaGate').style.display = 'none';
+  if(_pdpaResolve) _pdpaResolve(true);
+}
+function pdpaDecline(){
+  document.getElementById('pdpaGate').style.display = 'none';
+  if(_pdpaResolve) _pdpaResolve(false);
+}
+
 async function doLogin(){
   const codeEl = document.getElementById('loginCode');
   const pinEl = document.getElementById('loginPin');
@@ -5449,6 +5506,9 @@ async function doLogin(){
   } else {
     if(typeof smlToast === 'function') smlToast('บัญชีนี้ยังไม่ได้ตั้ง PIN กับ HR — เข้าใช้งานแบบยืนยันตัวตนเบื้องต้นเท่านั้น ติดต่อ HR เพื่อตั้ง PIN', 'warn');
   }
+  setLoginLoading(false);
+  if(!(await ensurePdpaAck(u))){ errEl.textContent = 'ต้องรับทราบนโยบาย PDPA ก่อนเข้าใช้งาน'; errEl.style.display = 'block'; try{ sessionStorage.removeItem(SML_SESSION_KEY); }catch(e){} return; }
+  setLoginLoading(true);
   sessionStorage.setItem(SML_SESSION_KEY, JSON.stringify({code: u[0]}));
   applySession(u);
   setLoginLoading(false);
