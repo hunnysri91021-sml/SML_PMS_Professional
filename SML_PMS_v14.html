@@ -4063,6 +4063,16 @@ const avMap={sysadmin:['SYS','#dc2626'],admin:['HR','#3b82f6'],exec:['MD','#8b5c
    (บันทึกใน localStorage ของเครื่องนี้ — เป็นการควบคุม UI เท่านั้น สิทธิ์เข้าถึงข้อมูลจริงยังคุมที่ SharePoint) */
 const NAV_ROLES = ['admin','exec','gm','l2','l1','unit','emp'];
 const NAV_ROLE_LABEL = {admin:'👑 Admin',exec:'💼 AGM/MD',gm:'🏢 GM',l2:'🎯 ผจก.ส่วน',l1:'👔 หัวหน้าแผนก',unit:'🧭 หัวหน้าหน่วย',emp:'🙋 พนักงาน'};
+/* #316: ค่าตั้งของ Admin ที่เคยเก็บแค่ localStorage (สิทธิ์เมนู/สิทธิ์บทบาท) sync ผ่าน FormWeights แถว '__navperms__'/'__roleperms__'
+   (JSON {perms,at}, ใหม่กว่าชนะด้วย at; perms ว่าง = ค่าเริ่มต้นของระบบ). เวลาแก้ล่าสุดเก็บคีย์แยก <KEY>At เพื่อไม่ปนกับข้อมูลสิทธิ์ */
+function settingAtGet(key){ try{ return localStorage.getItem(key+'At')||''; }catch(e){ return ''; } }
+function settingAtSet(key){ const at=new Date().toISOString(); try{ localStorage.setItem(key+'At',at); }catch(e){} return at; }
+async function pushSettingRow(rowKey, perms, at, label){
+  const cfg=loadMs365Config();
+  if(!isMs365Configured(cfg)){ appendSyncLog('push '+label+': ยังไม่ได้ตั้งค่า MS365 — บันทึกเฉพาะเครื่องนี้',false); return false; }
+  try{ await graphUpsertTableRow('FormWeights',0,rowKey,[rowKey,JSON.stringify({perms,at}),at]); appendSyncLog('Push '+label+'เข้า Excel',true); return true; }
+  catch(e){ appendSyncLog('Push '+label+'เข้า Excel ไม่สำเร็จ: '+(e&&e.message||e),false); if(typeof smlToast==='function') smlToast('บันทึก'+label+'เฉพาะเครื่องนี้ — ขึ้น Excel ไม่สำเร็จ','warn'); return false; }
+}
 const NAV_PERMS_KEY = 'smlPmsNavPerms';
 const DEFAULT_NAV_PERMS = {};
 document.querySelectorAll('.nav-item[data-pg][data-role]').forEach(el=>{
@@ -4081,12 +4091,14 @@ function saveNavPermsFromForm(){
   });
   NAV_PERMS = out;
   localStorage.setItem(NAV_PERMS_KEY, JSON.stringify(out));
+  pushSettingRow('__navperms__', out, settingAtSet(NAV_PERMS_KEY), 'สิทธิ์เมนู');
   setRole(document.getElementById('roleSel')?.value || 'admin');
   smlToast('บันทึกสิทธิ์เข้าถึงเมนูเรียบร้อย','ok');
 }
 function resetNavPerms(){
   if(!confirm('รีเซ็ตสิทธิ์เมนูทั้งหมดกลับเป็นค่าเริ่มต้นของระบบ?')) return;
   localStorage.removeItem(NAV_PERMS_KEY);
+  pushSettingRow('__navperms__', {}, settingAtSet(NAV_PERMS_KEY), 'สิทธิ์เมนู');
   loadNavPerms();
   renderNavPermEditor();
   setRole(document.getElementById('roleSel')?.value || 'admin');
@@ -4173,10 +4185,11 @@ function loadRolePerms(){
     ROLE_PERMS[r.key] = { name: s.name || r.name, desc: s.desc || r.desc, perms: { ...r.perms, ...(s.perms||{}) } };
   });
 }
-function saveRolePerms(){ localStorage.setItem(ROLE_PERMS_KEY, JSON.stringify(ROLE_PERMS)); }
+function saveRolePerms(){ localStorage.setItem(ROLE_PERMS_KEY, JSON.stringify(ROLE_PERMS)); pushSettingRow('__roleperms__', ROLE_PERMS, settingAtSet(ROLE_PERMS_KEY), 'สิทธิ์บทบาท'); }
 function resetRolePermsToDefault(){
   if(!confirm('รีเซ็ตชื่อ/คำอธิบาย/สิทธิ์ของทุกบทบาทกลับเป็นค่าเริ่มต้นของระบบ?')) return;
   localStorage.removeItem(ROLE_PERMS_KEY);
+  pushSettingRow('__roleperms__', {}, settingAtSet(ROLE_PERMS_KEY), 'สิทธิ์บทบาท');
   loadRolePerms();
   renderRoleCards();
   smlToast('รีเซ็ตบทบาทเป็นค่าเริ่มต้นแล้ว','ok');
@@ -7223,7 +7236,7 @@ function loadEvalEligibility(){
   try{
     const stored = JSON.parse(localStorage.getItem(EVAL_ELIGIBILITY_KEY)||'null');
     EVAL_ELIGIBILITY = stored && typeof stored==='object'
-      ? { mode: stored.mode==='all'?'all':'restricted', depts: Array.isArray(stored.depts)?stored.depts:[], emps: Array.isArray(stored.emps)?stored.emps:[] }
+      ? { mode: stored.mode==='all'?'all':'restricted', depts: Array.isArray(stored.depts)?stored.depts:[], emps: Array.isArray(stored.emps)?stored.emps:[], at: stored.at||'', by: stored.by||'' }
       : { mode:'restricted', depts:[], emps:[] };
   }catch(e){ EVAL_ELIGIBILITY = { mode:'restricted', depts:[], emps:[] }; }
   return EVAL_ELIGIBILITY;
@@ -7240,6 +7253,49 @@ function isEligibleForSelfEval(emp){
   if((cfg.emps||[]).includes(emp[0])) return true;
   const dept = emp[4] || ''; // แผนก (Section) — ตรงกับ ORG_MASTER_FIELDS 'sections' (empIdx:4)
   return dept !== '' && (cfg.depts||[]).includes(dept);
+}
+/* #316: สิทธิ์ประเมินตนเอง (EVAL_ELIGIBILITY) sync ผ่านตาราง FormWeights แถว '__evalelig__' (JSON, ใหม่กว่าชนะด้วย at)
+   เหตุที่เคยหาย: เก็บแค่ localStorage ต่อเครื่อง — เปิดจากเครื่อง/เบราว์เซอร์อื่นหรือล้างข้อมูลแล้วกลับเป็นค่าเริ่มต้น (restricted + ว่าง) */
+async function pushEvalEligibilityToExcel(){
+  const cfg=loadMs365Config();
+  if(!isMs365Configured(cfg)){ appendSyncLog('pushEvalEligibilityToExcel: ยังไม่ได้ตั้งค่า MS365 — บันทึกเฉพาะเครื่องนี้',false); return false; }
+  try{ await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__evalelig__',['__evalelig__',JSON.stringify(EVAL_ELIGIBILITY),EVAL_ELIGIBILITY.at||'']); appendSyncLog('Push สิทธิ์ประเมินตนเองเข้า Excel',true); smlToast('ซิงก์สิทธิ์ประเมินตนเองขึ้น Excel แล้ว','ok'); return true; }
+  catch(e){ appendSyncLog('Push สิทธิ์ประเมินตนเองเข้า Excel ไม่สำเร็จ: '+(e&&e.message||e),false); smlToast('บันทึกเฉพาะเครื่องนี้ — ขึ้น Excel ไม่สำเร็จ: '+(e&&e.message||e),'warn'); return false; }
+}
+function applyPermSettingRows(rows){
+  let nav=false, role=false;
+  (rows||[]).forEach(r=>{
+    const k=String(r[0]??'').trim();
+    if(k!=='__navperms__' && k!=='__roleperms__') return;
+    try{
+      const remote=JSON.parse(r[1]); if(!remote||!remote.at||typeof remote.perms!=='object') return;
+      const key = k==='__navperms__' ? NAV_PERMS_KEY : ROLE_PERMS_KEY;
+      const localAt = settingAtGet(key);
+      if(localAt && remote.at<=localAt) return;
+      if(Object.keys(remote.perms).length) localStorage.setItem(key, JSON.stringify(remote.perms)); else localStorage.removeItem(key);
+      localStorage.setItem(key+'At', remote.at);
+      if(k==='__navperms__') nav=true; else role=true;
+    }catch(e){}
+  });
+  if(nav){ loadNavPerms(); try{ renderNavPermEditor(); }catch(e){} }
+  if(role){ loadRolePerms(); try{ renderRoleCards(); }catch(e){} }
+  if(nav||role){ try{ setRole(document.getElementById('roleSel')?.value || 'admin'); }catch(e){} }
+  return nav||role;
+}
+function applyEvalEligibilityRows(rows){
+  let changed=false;
+  (rows||[]).forEach(r=>{
+    if(String(r[0]??'').trim()!=='__evalelig__') return;
+    try{
+      const remote=JSON.parse(r[1]); const local=loadEvalEligibility();
+      if(remote && typeof remote==='object' && remote.at && (!local.at || remote.at>local.at)){
+        localStorage.setItem(EVAL_ELIGIBILITY_KEY, JSON.stringify({mode:remote.mode==='all'?'all':'restricted', depts:Array.isArray(remote.depts)?remote.depts:[], emps:Array.isArray(remote.emps)?remote.emps:[], at:remote.at, by:remote.by||''}));
+        loadEvalEligibility(); changed=true;
+      }
+    }catch(e){}
+  });
+  if(changed && document.getElementById('evalElig_mode') && typeof renderEvalEligibilityPage==='function') renderEvalEligibilityPage();
+  return changed;
 }
 function onEvalEligibilityModeChange(){
   const mode = document.getElementById('evalElig_mode')?.value || 'all';
@@ -7291,8 +7347,10 @@ function removeEvalEligibilityEmp(code){
 function saveEvalEligibilitySettings(){
   const mode = document.getElementById('evalElig_mode')?.value || 'all';
   const depts = [...document.querySelectorAll('.evalelig-dept-chk:checked')].map(el=>el.value);
-  EVAL_ELIGIBILITY = { mode, depts, emps: (EVAL_ELIGIBILITY.emps||[]) };
+  const meE = CURRENT_SESSION_USER;
+  EVAL_ELIGIBILITY = { mode, depts, emps: (EVAL_ELIGIBILITY.emps||[]), at: new Date().toISOString(), by: (meE&&meE[1])||'' };
   saveEvalEligibilityStore();
+  pushEvalEligibilityToExcel(); /* #316: sync ข้ามเครื่อง (เดิมเก็บแค่ localStorage จึง "หาย" เมื่อเปิดเครื่อง/เบราว์เซอร์ใหม่) */
   if(typeof appendAuditLog==='function') appendAuditLog('settings','บันทึกสิทธิ์ประเมินตนเอง', mode, mode==='restricted' ? `แผนก: ${depts.join(', ')||'ไม่มี'} · รายบุคคล: ${EVAL_ELIGIBILITY.emps.length} คน` : 'ทุกคนประเมินได้');
   smlToast('บันทึกการตั้งค่าสิทธิ์ประเมินตนเองแล้ว','ok');
 }
@@ -14639,6 +14697,8 @@ async function ms365SyncFormWeights(silent=false){
         if(applyRemoteSystemState(remote)) applySystemGate();
       }catch(e){}
     });
+    applyEvalEligibilityRows(rows);
+    applyPermSettingRows(rows);
     rows.forEach(r=>{
       if(String(r[0]??'').trim()!=='__attperiod__') return;
       try{ const remote=JSON.parse(r[1]); const local=getAttPeriod();
