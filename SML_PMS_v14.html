@@ -7920,6 +7920,7 @@ function markResultNotified(key, source){
   const m = loadResultNotified();
   m[key] = { at: new Date().toISOString(), source: source || 'manual' };
   saveResultNotified(m);
+  pushFlagRow('__notified__'+key, m[key]);
 }
 function getResultNotifyTargets(){
   const notified = loadResultNotified();
@@ -14698,6 +14699,7 @@ async function ms365SyncFormWeights(silent=false){
       }catch(e){}
     });
     applyEvalEligibilityRows(rows);
+    try{ if(applyFlagRows(rows) && typeof renderWorkflowPages==='function') renderWorkflowPages(); }catch(e){}
     applyPermSettingRows(rows);
     rows.forEach(r=>{
       if(String(r[0]??'').trim()!=='__attperiod__') return;
@@ -15298,7 +15300,32 @@ function clearReviewerForm(){
 const EVAL_HELD_KEY='smlPmsEvalHeld';
 function loadHeld(){ try{return JSON.parse(localStorage.getItem(EVAL_HELD_KEY)||'{}')||{};}catch(e){return {};} }
 function isHeld(k){ return !!loadHeld()[k]; }
-function setHeld(k,on){ const h=loadHeld(); if(on) h[k]={at:new Date().toISOString(),by:(CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||''}; else delete h[k]; try{localStorage.setItem(EVAL_HELD_KEY,JSON.stringify(h));}catch(e){} }
+function setHeld(k,on){ const h=loadHeld(); const was=!!h[k]; if(on) h[k]={at:new Date().toISOString(),by:(CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||''}; else delete h[k]; try{localStorage.setItem(EVAL_HELD_KEY,JSON.stringify(h));}catch(e){}
+  if(on||was) pushFlagRow('__held__'+k, {on:!!on, at:new Date().toISOString(), by:(CURRENT_SESSION_USER&&CURRENT_SESSION_USER[1])||''}); }
+/* #317: ธง "แจ้งผลแล้ว" (RESULT_NOTIFIED_KEY) และ "พักไว้" (EVAL_HELD_KEY) เดิมอยู่เฉพาะเครื่อง → sync ผ่าน FormWeights
+   แถวละรายการ '__notified__<draftKey>' / '__held__<draftKey>' (upsert ต่อคีย์ ไม่มีแถวรวมก้อนเดียว กันชนกันและกันเกินขนาดเซลล์ Excel).
+   การปลดพักส่ง {on:false} ใหม่กว่า (ไม่ลบแถว). ดึงกลับ: ใหม่กว่าชนะ และข้ามรายการที่เก่ากว่าเวลา "ล้างข้อมูลทดสอบ" ล่าสุด. */
+async function pushFlagRow(rowKey, obj){
+  const cfg=loadMs365Config();
+  if(!isMs365Configured(cfg)){ appendSyncLog('push ธง '+rowKey.split('|')[0]+': ยังไม่ได้ตั้งค่า MS365 — เก็บเฉพาะเครื่องนี้',false); return false; }
+  try{ await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,rowKey,[rowKey,JSON.stringify(obj),obj.at||new Date().toISOString()]); return true; }
+  catch(e){ appendSyncLog('Push ธง '+rowKey.split('|')[0]+' เข้า Excel ไม่สำเร็จ: '+(e&&e.message||e),false); return false; }
+}
+function applyFlagRows(rows){
+  let resetAt=''; try{ resetAt=localStorage.getItem(RESET_APPLIED_KEY)||''; }catch(e){}
+  const notified=loadResultNotified(); const held=loadHeld(); let nChg=0, hChg=0;
+  rows.forEach(r=>{
+    const rk=String(r[0]??'').trim(); let rec; try{ rec=JSON.parse(r[1]); }catch(e){ return; }
+    if(!rec||!rec.at||(resetAt&&rec.at<=resetAt)) return;
+    if(rk.startsWith('__notified__')){ const k=rk.slice(12); const cur=notified[k]; if(!cur||!cur.at||rec.at>cur.at){ notified[k]={at:rec.at,source:rec.source||'manual'}; nChg++; } }
+    else if(rk.startsWith('__held__')){ const k=rk.slice(8); const cur=held[k];
+      if(rec.on){ if(!cur||!cur.at||rec.at>cur.at){ held[k]={at:rec.at,by:rec.by||''}; hChg++; } }
+      else if(cur && cur.at && rec.at>cur.at){ delete held[k]; hChg++; } }
+  });
+  if(nChg) saveResultNotified(notified);
+  if(hChg){ try{ localStorage.setItem(EVAL_HELD_KEY,JSON.stringify(held)); }catch(e){} }
+  return nChg+hChg;
+}
 function heldBadge(k){ return isHeld(k)?'<br><span class="bd b-y" title="บันทึกไว้แล้ว ยังไม่ได้ส่งต่อ">💾 พักไว้</span>':''; }
 function saveHrNoteFromReviewer(){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้นที่บันทึกใบเตือนได้','warn'); return; }

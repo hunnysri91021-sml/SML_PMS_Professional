@@ -1,0 +1,30 @@
+const {open,ok,done}=require('./helpers');
+(async()=>{
+  const {b,p,errs}=await open();
+  const r=await p.evaluate(async()=>{
+    window.isMs365Configured=()=>true;
+    const pushed=[]; window.graphUpsertTableRow=async(t,i,k,row)=>{pushed.push({k,row});};
+    markResultNotified('90526|2569|of','auto');
+    setHeld('90526|2569|of',true);
+    setHeld('x|2569|of',false);
+    await new Promise(r=>setTimeout(r,50));
+    const keys=pushed.map(p=>p.k);
+    localStorage.removeItem(RESULT_NOTIFIED_KEY); localStorage.removeItem(EVAL_HELD_KEY);
+    const rows=pushed.map(p=>p.row);
+    const n=applyFlagRows(rows);
+    const a=loadResultNotified()['90526|2569|of']?.source, h=isHeld('90526|2569|of');
+    const later=new Date(Date.now()+5000).toISOString();
+    applyFlagRows([['__held__90526|2569|of',JSON.stringify({on:false,at:later}),later]]);
+    const h2=isHeld('90526|2569|of');
+    localStorage.setItem(RESET_APPLIED_KEY,new Date(Date.now()+10000).toISOString());
+    localStorage.removeItem(RESULT_NOTIFIED_KEY);
+    applyFlagRows(rows);
+    const afterReset=!!loadResultNotified()['90526|2569|of'];
+    return {keys,n,a,h,h2,afterReset};
+  });
+  ok(r.keys.length===2 && r.keys.includes('__notified__90526|2569|of') && r.keys.includes('__held__90526|2569|of'),'push ธงแจ้งผล+พัก (ไม่ push ตัวที่ไม่เคยพัก)');
+  ok(r.n===2 && r.a==='auto' && r.h===true,'ดึงกลับข้ามเครื่อง');
+  ok(r.h2===false,'ปลดพักข้ามเครื่อง');
+  ok(r.afterReset===false,'ข้ามรายการเก่ากว่าการล้างข้อมูลทดสอบ');
+  await b.close(); done();
+})();
