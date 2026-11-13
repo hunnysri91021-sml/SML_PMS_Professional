@@ -7616,13 +7616,13 @@ async function saveUserFromModal() {
                    position, grade, l1||'—', l2||'—', approver||'—', status,
                    new Date().toLocaleDateString('th-TH'),
                    startRaw ? startDate : (existingRow?.[14] || '—'),
-                   email || existingRow?.[15] || '',
+                   email, /* #322: ช่องว่าง = ล้างค่า (เดิม `email || เดิม` ทำให้ล้างอีเมลไม่ได้) — ฟอร์มแก้ไขเติมค่าเดิมให้อยู่แล้ว */
                    potential || existingRow?.[16] || '',
                    existingRow?.[17] || '',
                    evalLevel,
                    gm||'—',
                    evalExempt,
-                   lineUserId || existingRow?.[21] || ''];
+                   lineUserId]; /* #322: ช่องว่าง = ล้าง LINE User ID */
 
   const existing = MASTER_USERS.findIndex(u => u[0] === id);
   if (existing >= 0) {
@@ -9434,7 +9434,8 @@ function applyEmployeeSettingsRows(rows){
     if(pinHash) emp[17] = pinHash;
     if(evalLevel) emp[18] = evalLevel;
     if(evalExempt==='1' || evalExempt==='0') emp[20] = evalExempt==='1' ? '1' : '';
-    if(lineUserId) emp[21] = lineUserId;
+    /* #322: มีแถวของพนักงานแล้วและคอลัมน์ LineUserId มีอยู่จริง (ไม่ใช่ undefined) = ค่าใน Excel คือความจริง รวมถึงค่าว่าง (ล้าง LINE ID จากเครื่องอื่นต้องมีผล) */
+    if(r[5]!==undefined && r[5]!==null) emp[21] = lineUserId;
     applied++;
   });
   return applied;
