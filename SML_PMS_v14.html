@@ -5873,8 +5873,17 @@ async function pushSingleEmployeeToExcel(code){
         ไม่งั้น push จากเว็บจะเขียนทับคอลัมน์ GM จริงใน Excel เป็นค่าว่างทุกครั้งที่ HR แก้ไขพนักงานคนนั้น */
     };
     const row = EXCEL_EMPLOYEE_COLS.map(k => byKey[k]);
+    window._lastUpsertInfo = null;
     await graphUpsertTableRow(cfg.employeeTable, EXCEL_EMPLOYEE_COLS.indexOf('id'), code, row);
-    if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
+    const inf = window._lastUpsertInfo;
+    if(inf && inf.result==='added'){
+      /* #319: หาแถวเดิมของรหัสนี้ไม่เจอ → ระบบเพิ่ม "แถวใหม่" ต่อท้ายตาราง ไม่ได้แก้แถวเดิม (Excel แถวเดิมจึงไม่เปลี่ยน และดึงกลับมาจะได้ค่าเก่า) */
+      const why = (inf.scanned!=null ? `ค้นหา ${inf.scanned} แถว ไม่พบรหัส '${code}' ในคอลัมน์ EmpID (ตัวอย่างค่าในคอลัมน์นั้น: ${(inf.sampleKeys||[]).map(x=>"'"+x+"'").join(', ')||'—'})` : 'ไม่พบรหัสนี้ในตาราง');
+      appendSyncLog(`⚠️ Push ข้อมูลพนักงาน ${emp[1]} (${code}): เพิ่มแถวใหม่ ไม่ได้แก้แถวเดิม — ${why}`, false);
+      window._lastEmpPushReason = 'เพิ่มเป็นแถวใหม่ต่อท้ายตาราง ไม่ได้แก้แถวเดิม — '+why;
+      return false;
+    }
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) เข้า Excel อัตโนมัติ — อัปเดตแถวเดิม${inf&&inf.matched?` (${inf.matched} แถว)`:''}`, true);
     window._lastEmpPushReason='';
     return true;
   }catch(e){
@@ -9005,6 +9014,8 @@ async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
   const cfg = loadMs365Config();
   if(isWorkerConfigured(cfg)){
     const data = await workerFetch(cfg, '/rows/upsert', { method:'POST', body: JSON.stringify({ table: tableName, keyColIndex, keyValue, values: rowValues }) });
+    /* #319: เก็บผลจริง (updated/added + ข้อมูลวินิจฉัยจาก Worker) ไว้ให้ผู้เรียกเลือกรายงาน */
+    window._lastUpsertInfo = { table:tableName, result:data.result||'updated', scanned:data.scanned, sampleKeys:data.sampleKeys, matched:data.matched, key:String(keyValue) };
     return data.result || 'updated';
   }
   const { driveId, itemId } = await resolveMs365Site();
@@ -9023,6 +9034,7 @@ async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
     return 'updated';
   }
   await graphFetch(base + '/add', { method:'POST', body: JSON.stringify({ values: [rowValues] }) });
+  window._lastUpsertInfo = { table:tableName, result:'added', scanned:rows.length, sampleKeys:rows.slice(0,3).map(r=>String(((r.values&&r.values[0])||[])[Array.isArray(keyColIndex)?keyColIndex[0]:keyColIndex]??'')), key:String(keyValue) };
   return 'added';
 }
 
@@ -10709,6 +10721,10 @@ async function loadEmployeesFromMs365(silent=false){
     if(!rows.length) throw new Error('ไม่พบแถวข้อมูลในตาราง ' + cfg.employeeTable);
     const normalized = rows.map(normalizeMs365Employee).filter(r=>r[0] && r[1]);
     if(!normalized.length) throw new Error('ไม่พบ EmpID / ชื่อ-สกุล ในข้อมูลที่อ่านได้');
+    /* #319: รหัสซ้ำในตาราง Employees (เช่นจาก push ที่หาแถวเดิมไม่เจอแล้วเพิ่มแถวใหม่) — เดิมเงียบ แล้ว MASTER_USERS.find หยิบแถวแรก (ค่าเก่า) */
+    { const seen=new Map(); normalized.forEach(r=>seen.set(r[0],(seen.get(r[0])||0)+1));
+      const dups=[...seen].filter(([,n])=>n>1).map(([c])=>c);
+      if(dups.length && typeof appendSyncLog==='function') appendSyncLog(`⚠️ ตาราง ${cfg.employeeTable} มีรหัสพนักงานซ้ำ ${dups.length} รหัส (${dups.slice(0,5).join(', ')}${dups.length>5?'…':''}) — ระบบใช้แถวแรกที่เจอ ให้ลบแถวซ้ำใน Excel`, false); }
     /* PIN login และแบบฟอร์มประเมินที่ Admin กำหนด ผูกกับระบบนี้เท่านั้น ไม่ได้อยู่ใน Excel Employee Master
        ต้องคงค่าเดิมไว้ ไม่ให้ sync ล้างทิ้ง (บั๊กแบบเดียวกับที่เคยเกิดกับ PIN — ดู CLAUDE.md #17/#6) */
     normalized.forEach(r => {

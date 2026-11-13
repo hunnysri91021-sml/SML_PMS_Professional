@@ -415,10 +415,11 @@ export default {
           const scope = computeScope(await loadEmpsCached(token, driveId, itemId), auth);
           if (!writeKeyOk(table, values[0], scope) || !writeKeyOk(table, keyValue, scope)) return json({ error: 'forbidden: เขียนได้เฉพาะข้อมูลของพนักงานในสังกัดตน' }, 403, cors);
         }
+        const info = {};
         const result = listBacked
           ? await upsertListItem(token, siteId, table, keyColIndex, keyValue, values)
-          : await upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values);
-        return json({ ok: true, result }, 200, cors);
+          : await upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values, info);
+        return json({ ok: true, result, ...info }, 200, cors);
       }
 
       /* /rows/upsert-partial — เหมือน /rows/upsert แต่ "ไม่แตะ" คอลัมน์ที่อยู่ใน protectedCols
@@ -1237,9 +1238,15 @@ async function fetchAllTableRowsRaw(token, base) {
   }
   return rows;
 }
-async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values) {
+async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values, info) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
   const rows = await fetchAllTableRowsRaw(token, base);
+  /* #319: ข้อมูลวินิจฉัยส่งกลับให้เว็บ — จำนวนแถวที่ค้นหา + ตัวอย่างค่าในคอลัมน์คีย์ (เพื่อดูว่าทำไมหาแถวเดิมไม่เจอ) */
+  if (info) {
+    info.scanned = rows.length;
+    const ki = Array.isArray(keyColIndex) ? keyColIndex[0] : keyColIndex;
+    info.sampleKeys = rows.slice(0, 3).map((r) => String(((r.values && r.values[0]) || [])[ki] ?? ''));
+  }
   // อัปเดต "ทุกแถว" ที่คีย์ตรงกัน ไม่ใช่แค่แถวแรก — ถ้ามีแถวซ้ำของคนเดิมค้างอยู่ (เช่นจากก่อน
   // ตารางนี้เป็น upsert, หรือจาก bug อ่านไม่ครบหน้าข้างบน) การอัปเดตแค่แถวแรกจะทิ้งแถวซ้ำที่เหลือ
   // ไว้เป็นค่าเก่าตลอดไป — ผู้ใช้ที่บังเอิญดูแถวซ้ำนั้นจะเห็นเหมือน "บันทึกไม่ขึ้น Excel"
@@ -1248,6 +1255,7 @@ async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, v
     for (const r of matches) {
       await graphSend(token, base + `/itemAt(index=${r.index})`, 'PATCH', { values: [values] });
     }
+    if (info) info.matched = matches.length;
     return 'updated';
   }
   await graphSend(token, base + '/add', 'POST', { values: [values] });
