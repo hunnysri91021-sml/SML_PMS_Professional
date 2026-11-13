@@ -9017,6 +9017,8 @@ touches employee/attendance/evaluation data.
 
 313. **คู่มือ + วิดีโอสอนใช้งานชุดใหม่ (พนักงาน/หัวหน้า; ไม่รวม Admin).** `docs/SML_PMS_Manual.pdf` (22 หน้า) + `docs/manual/index.html` (ภาพหน้าจอจริงพร้อมเลขกำกับ ใน `docs/manual/img`), วิดีโอ `docs/video/1-employee.mp4` และ `2-supervisor.mp4` (อัดใหม่ มีหน้าเข้าสู่ระบบใหม่/ลืม PIN/ขั้น L1–L4/ส่งผลโดย GM; คำบรรยายบนจอ ไม่มีเสียง สคริปต์พากย์ใน `narration-script.md`). สร้างซ้ำได้ด้วย `docs/build/` (`NODE_PATH=/opt/node-tools/node_modules node shots1.js shots2.js shots3.js manual.js videos.js`) — ใช้ข้อมูลสมมติ (`STORY` ใน `common.js`) ไม่เรียกเครือข่าย. **เมื่อ UI/ลำดับขั้นเปลี่ยนต้องอัดใหม่** (คลิป 3–5 เก่า ยังเป็นของ 3 พ.ย.). บทเรียน: แถบคำบรรยายล่างจอบังปุ่มท้ายโมดัล — ฉากที่มีโมดัลต้องใช้ `cap(...,true)` (คำบรรยายบน).
 
+314. **คู่มือ PowerPoint ฉบับสมบูรณ์ `docs/SML_PMS_UserGuide.pptx` (30 สไลด์, ภาพจากโปรแกรมจริงใน `docs/manual/img`).** สร้างด้วย `node docs/build/pptx.js` (pptxgenjs; ต้องแก้ path require ให้ตรงเครื่อง). ครอบคลุมพนักงาน+หัวหน้า L1–L4 เท่านั้น ยังไม่มีส่วน Admin/HR (ต้องถ่ายภาพหน้า Admin เพิ่ม). UI/ลำดับขั้นเปลี่ยน → ถ่ายภาพใหม่ด้วย shots*.js แล้วรันซ้ำ.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
