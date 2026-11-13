@@ -4235,12 +4235,14 @@ function saveRoleFromModal(){
   const perms = {};
   Object.keys(ROLE_PERM_LABELS).forEach(k=>{ perms[k] = !!document.getElementById('rp_'+k)?.checked; });
   ROLE_PERMS[editingRoleKey] = { name, desc, perms };
-  saveRolePerms();
+  localStorage.setItem(ROLE_PERMS_KEY, JSON.stringify(ROLE_PERMS));
+  const _pushRole = pushSettingRow('__roleperms__', ROLE_PERMS, settingAtSet(ROLE_PERMS_KEY), 'สิทธิ์บทบาท');
   renderRoleCards();
   if(typeof appendAuditLog==='function') appendAuditLog('role','แก้ไขบทบาท', editingRoleKey, name);
   editingRoleKey = null;
   closeM();
   smlToast('บันทึกบทบาทเรียบร้อย','ok');
+  _pushRole.then(okp=>{ if(okp) smlToast('✅ ขึ้น Excel แล้ว: สิทธิ์บทบาท','ok'); });
 }
 loadRolePerms();
 
@@ -5840,14 +5842,16 @@ async function resetUserPin(code){
    จำไปกดปุ่ม Push เองทุกครั้ง ยังมีปุ่ม Push แบบทั้งหมดไว้ที่หน้า MS365 Sync สำรองไว้ด้วย */
 async function pushSingleEmployeeSettings(code){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushSingleEmployeeSettings: ยังไม่ได้ตั้งค่า MS365', false); return; }
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushSingleEmployeeSettings: ยังไม่ได้ตั้งค่า MS365', false); return {ok:false,reason:'ยังไม่ได้ตั้งค่า MS365'}; }
   const emp = MASTER_USERS.find(u=>u[0]===code);
-  if(!emp) return;
+  if(!emp) return {ok:false,reason:'ไม่พบพนักงาน'};
   try{
     await graphUpsertTableRow(EMPLOYEE_SETTINGS_TABLE, 0, code, [code, emp[17]||'', emp[18]||'', new Date().toISOString(), emp[20]==='1'?'1':'0', emp[21]||'']);
     if(typeof appendSyncLog==='function') appendSyncLog(`Push การตั้งค่า ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
+    return {ok:true};
   }catch(e){
     if(typeof appendSyncLog==='function') appendSyncLog(`Push การตั้งค่า ${emp[1]} (${code}) ไม่สำเร็จ: ${e.message}`, false);
+    return {ok:false,reason:String(e&&e.message||e)};
   }
 }
 
@@ -5857,9 +5861,9 @@ async function pushSingleEmployeeSettings(code){
    normalizeMs365Employee() ทุกประการ (ไม่รวม pinHash/evalLevel ซึ่งไม่ใช่คอลัมน์ในตารางนี้) */
 async function pushSingleEmployeeToExcel(code){
   const cfg = loadMs365Config();
-  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushSingleEmployeeToExcel: ยังไม่ได้ตั้งค่า MS365', false); return; }
+  if(!isMs365Configured(cfg)){ if(typeof appendSyncLog==='function') appendSyncLog('pushSingleEmployeeToExcel: ยังไม่ได้ตั้งค่า MS365', false); window._lastEmpPushReason='ยังไม่ได้ตั้งค่า MS365'; return false; }
   const emp = MASTER_USERS.find(u=>u[0]===code);
-  if(!emp) return;
+  if(!emp) return false;
   try{
     const byKey = {
       id: emp[0], name: emp[1], role: emp[2], group: emp[3], section: emp[4], division: emp[5],
@@ -5871,9 +5875,11 @@ async function pushSingleEmployeeToExcel(code){
     const row = EXCEL_EMPLOYEE_COLS.map(k => byKey[k]);
     await graphUpsertTableRow(cfg.employeeTable, EXCEL_EMPLOYEE_COLS.indexOf('id'), code, row);
     if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) เข้า Excel อัตโนมัติ`, true);
+    window._lastEmpPushReason='';
     return true;
   }catch(e){
     if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) ไม่สำเร็จ: ${e.message}`, false);
+    window._lastEmpPushReason=String(e&&e.message||e);
     return false;
   }
 }
@@ -7629,9 +7635,14 @@ async function saveUserFromModal() {
      CLAUDE.md #32) จะดึงค่าเก่าจาก EmployeeSettings ใน Excel ที่ยังไม่ทันอัปเดตกลับมาทับค่าที่เพิ่งแก้
      ในเครื่องนี้แทน — ให้ผลคือ "แก้ไขพนักงาน" โชว์ค่าใหม่ถูกต้องตอนบันทึกเสร็จ แต่หน้าประเมินตนเอง
      (เปิดใหม่/รีโหลด) กลับไม่ตรง — await ให้ push ทั้งสองเสร็จจริงก่อนปิด modal เหมือนที่ #55 แก้ไว้ */
-  if(typeof pushSingleEmployeeSettings==='function') await pushSingleEmployeeSettings(id);
-  if(typeof pushSingleEmployeeToExcel==='function') await pushSingleEmployeeToExcel(id);
+  window._lastEmpPushReason='';
+  const rs = (typeof pushSingleEmployeeSettings==='function') ? await pushSingleEmployeeSettings(id) : {ok:true};
+  const re = (typeof pushSingleEmployeeToExcel==='function') ? await pushSingleEmployeeToExcel(id) : true;
   closeM();
+  /* #318: ผลการ push จริง — เดิม toast "เรียบร้อย" ขึ้นทันทีก่อน push และถ้าล้มเหลวมีแค่ใน Sync Log ผู้ใช้เลยเข้าใจว่าบันทึกขึ้น Excel แล้ว */
+  const rsOk = !rs || rs.ok!==false;
+  if(re!==false && rsOk) smlToast('✅ ขึ้น Excel แล้ว: '+name,'ok');
+  else smlToast('⚠️ บันทึกในเว็บแล้ว แต่ ขึ้น Excel ไม่สำเร็จ ('+(window._lastEmpPushReason||(rs&&rs.reason)||'ดู Sync Log')+') — เครื่องอื่นจะยังไม่เห็น และอาจถูกค่าเดิมจาก Excel ทับเมื่อโหลดใหม่','warn');
 }
 
 function openM(id){
