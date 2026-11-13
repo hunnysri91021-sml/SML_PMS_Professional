@@ -419,6 +419,8 @@ export default {
         const result = listBacked
           ? await upsertListItem(token, siteId, table, keyColIndex, keyValue, values)
           : await upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values, info);
+        info.filePath = env.FILE_PATH || ''; /* #320: ไฟล์ที่ Worker เขียนจริง */
+        info.backend = listBacked ? 'SharePoint List' : 'Excel';
         return json({ ok: true, result, ...info }, 200, cors);
       }
 
@@ -1255,7 +1257,18 @@ async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, v
     for (const r of matches) {
       await graphSend(token, base + `/itemAt(index=${r.index})`, 'PATCH', { values: [values] });
     }
-    if (info) info.matched = matches.length;
+    if (info) {
+      info.matched = matches.length;
+      /* #320: อ่านแถวแรกกลับมาเทียบหลังเขียน — ยืนยันว่าค่าติดจริงในไฟล์ที่ Worker เปิดอยู่ (ถ้าไม่ตรง = เขียนแล้วแต่ไม่ติด/คนละไฟล์) */
+      try {
+        const back = await graphGet(token, base + `/itemAt(index=${matches[0].index})`);
+        const got = (back && back.values && back.values[0]) || [];
+        const diffs = [];
+        values.forEach((v, i) => { if (String(v ?? '').trim() !== String(got[i] ?? '').trim()) diffs.push(i); });
+        info.verified = diffs.length === 0;
+        if (diffs.length) info.diffCols = diffs.slice(0, 5);
+      } catch (e) { info.verified = null; }
+    }
     return 'updated';
   }
   await graphSend(token, base + '/add', 'POST', { values: [values] });

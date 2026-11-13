@@ -5883,7 +5883,15 @@ async function pushSingleEmployeeToExcel(code){
       window._lastEmpPushReason = 'เพิ่มเป็นแถวใหม่ต่อท้ายตาราง ไม่ได้แก้แถวเดิม — '+why;
       return false;
     }
-    if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) เข้า Excel อัตโนมัติ — อัปเดตแถวเดิม${inf&&inf.matched?` (${inf.matched} แถว)`:''}`, true);
+    const where = inf && inf.filePath ? ` · ไฟล์ที่เขียน: ${inf.filePath}${inf.backend?` (${inf.backend})`:''}` : '';
+    if(inf && inf.verified===false){
+      /* #320: เขียนแล้วแต่อ่านกลับมาไม่ตรง — ค่าไม่ติดในไฟล์ที่ Worker เปิดอยู่ */
+      const msg = `อ่านกลับแล้วค่าไม่ตรงที่คอลัมน์ ${(inf.diffCols||[]).map(i=>(EXCEL_EMPLOYEE_COLS[i]||i)).join(', ')}${where}`;
+      appendSyncLog(`⚠️ Push ข้อมูลพนักงาน ${emp[1]} (${code}): ${msg}`, false);
+      window._lastEmpPushReason = msg;
+      return false;
+    }
+    if(typeof appendSyncLog==='function') appendSyncLog(`Push ข้อมูลพนักงาน ${emp[1]} (${code}) เข้า Excel อัตโนมัติ — อัปเดตแถวเดิม${inf&&inf.matched?` (${inf.matched} แถว)`:''}${inf&&inf.verified===true?' · อ่านกลับยืนยันแล้ว':''}${where}`, true);
     window._lastEmpPushReason='';
     return true;
   }catch(e){
@@ -9015,7 +9023,7 @@ async function graphUpsertTableRow(tableName, keyColIndex, keyValue, rowValues){
   if(isWorkerConfigured(cfg)){
     const data = await workerFetch(cfg, '/rows/upsert', { method:'POST', body: JSON.stringify({ table: tableName, keyColIndex, keyValue, values: rowValues }) });
     /* #319: เก็บผลจริง (updated/added + ข้อมูลวินิจฉัยจาก Worker) ไว้ให้ผู้เรียกเลือกรายงาน */
-    window._lastUpsertInfo = { table:tableName, result:data.result||'updated', scanned:data.scanned, sampleKeys:data.sampleKeys, matched:data.matched, key:String(keyValue) };
+    window._lastUpsertInfo = { table:tableName, result:data.result||'updated', scanned:data.scanned, sampleKeys:data.sampleKeys, matched:data.matched, key:String(keyValue), verified:data.verified, diffCols:data.diffCols, filePath:data.filePath, backend:data.backend };
     return data.result || 'updated';
   }
   const { driveId, itemId } = await resolveMs365Site();
