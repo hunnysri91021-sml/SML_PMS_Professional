@@ -1248,6 +1248,15 @@ async function fetchAllTableRowsRaw(token, base) {
   }
   return rows;
 }
+/* #332: เทียบค่าที่เขียนกับที่อ่านกลับ โดยยอมรับการแปลงชนิดของ Excel — คอลัมน์ชนิดวันที่/ตัวเลขจะเปลี่ยนข้อความ "16/07/2559"
+   เป็นเลข serial และ "00123" เป็น 123 ซึ่งไม่ใช่การเขียนไม่ติด (เดิมแจ้ง "ค่าไม่ตรงที่คอลัมน์ startDate" ทั้งที่ค่าถูกบันทึกแล้ว) */
+function sameCellValue(written, got) {
+  const a = String(written ?? '').trim(), b = String(got ?? '').trim();
+  if (a === b) return true;
+  if (a !== '' && b !== '' && !isNaN(Number(a)) && !isNaN(Number(b)) && Number(a) === Number(b)) return true;
+  if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(a) && b !== '' && !isNaN(Number(b))) return true;
+  return false;
+}
 async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, values, info) {
   const base = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
   const rows = await fetchAllTableRowsRaw(token, base);
@@ -1272,7 +1281,7 @@ async function upsertRow(token, driveId, itemId, table, keyColIndex, keyValue, v
         const back = await graphGet(token, base + `/itemAt(index=${matches[0].index})`);
         const got = (back && back.values && back.values[0]) || [];
         const diffs = [];
-        values.forEach((v, i) => { if (String(v ?? '').trim() !== String(got[i] ?? '').trim()) diffs.push(i); });
+        values.forEach((v, i) => { if (!sameCellValue(v, got[i])) diffs.push(i); });
         info.verified = diffs.length === 0;
         if (diffs.length) info.diffCols = diffs.slice(0, 5);
       } catch (e) { info.verified = null; }
