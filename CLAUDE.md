@@ -9035,6 +9035,8 @@ touches employee/attendance/evaluation data.
 
 332. **แจ้ง "อ่านกลับแล้วค่าไม่ตรงที่คอลัมน์ startDate" ทั้งที่บันทึกสำเร็จ (ต่อจาก #320/#78).** การตรวจอ่านกลับของ Worker เทียบสตริงตรงๆ แต่ Excel แปลงคอลัมน์ชนิดวันที่ ("16/07/2559" → เลข serial) และตัวเลข ("00123" → 123) จึงเตือนผิดและทำให้ push พนักงานถูกรายงานว่าล้มเหลว. เพิ่ม `sameCellValue()` ยอมรับ: ตัวเลขเท่ากัน, หรือค่าที่เขียนเป็นรูปแบบวันที่แต่อ่านกลับเป็นตัวเลข. การเขียนไม่ติดจริงยังถูกจับ. **Worker เปลี่ยน → ต้อง redeploy** (ก่อน redeploy ข้อความเตือนนี้ยังขึ้นต่อไป แต่ข้อมูลถูกบันทึกแล้ว ตรวจใน Excel ได้).
 
+333. **พนักงานส่งแบบประเมินตนเองแล้ว ผู้ประเมินไม่ได้รับ LINE/อีเมล.** `saveEvaluationToMs365('Submitted')` แจ้งเฉพาะ Admin ทางอีเมล (#40) ไม่เคยเรียก `notifyNextEvaluators` (#242 ทำเฉพาะขั้นสอบทาน/ส่งจากหน้าต่างสอบทาน). ตอนนี้เรียกหลัง skipEmptyReviewStages แล้วต่อผลใน toast (`nextNotifyToast`). ผู้ประเมินต้องมี LINE User ID (ลงทะเบียนผ่านบอท) และ Worker ตั้งค่าแล้ว ไม่งั้น toast บอกเหตุผลจริง. ทดสอบ: `tests/self-submit-notify.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

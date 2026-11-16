@@ -10760,7 +10760,10 @@ async function saveEvaluationToMs365(status='Draft'){
   }
   if(status==='Submitted'){
     const notif = await notifyAdminOfEvalSubmission(payload).catch(()=>({sent:0}));
-    const notifNote = notif.sent ? ` · แจ้งเตือน Admin ทางอีเมลแล้ว ${notif.sent} คน` : '';
+    /* #333: พนักงานส่งแบบประเมินตนเองแล้ว ต้องแจ้งผู้ประเมินคนถัดไป (อีเมล+LINE) เหมือนทุกขั้นสอบทาน (#242)
+       เดิมแจ้งเฉพาะ Admin ทางอีเมล ผู้ประเมินจึงไม่ได้รับ LINE เลย */
+    const nextRes = await notifyNextEvaluators([{empCode:payload[0],cycle:payload[2],level:payload[3]}]).catch(()=>({notified:0,total:0,reason:'เกิดข้อผิดพลาด'}));
+    const notifNote = (notif.sent ? ` · แจ้งเตือน Admin ทางอีเมลแล้ว ${notif.sent} คน` : '') + nextNotifyToast(nextRes);
     if(pushResult.ok) smlToast('ส่งแบบประเมินไป Excel แล้ว' + notifNote,'ok');
     else smlToast('บันทึกสำรองใน Browser แล้ว แต่ส่ง Excel ไม่สำเร็จ: ' + pushResult.error + notifNote,'warn');
     if(typeof appendAuditLog==='function' && notif.sent) appendAuditLog('evaluation','แจ้งเตือน Admin ทางอีเมล (ส่งแบบประเมิน)', payload[0], notif.sent+'/'+notif.total+' คน');
