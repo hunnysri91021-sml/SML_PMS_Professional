@@ -1657,18 +1657,20 @@ async function handleForgot(request, env, cors) {
   if (lk) return json({ error: 'ขอรหัสยืนยันบ่อยเกินไป — ลองใหม่ในอีก ' + lk + ' นาที' }, 429, cors);
   registerFail(kr, FORGOT_MAX_PER_CODE);
   if (ki) registerFail(ki, LOGIN_MAX_PER_IP);
-  const generic = () => json({ error: 'ไม่พบรหัสพนักงานนี้ หรือยังไม่มีอีเมลในระบบ — ติดต่อ HR เพื่อรีเซ็ต PIN' }, 400, cors);
+  /* #329: ข้อความเดียวกันทุกกรณี (กันเดารหัส) แต่บอกสาเหตุที่เป็นไปได้ครบ + log เหตุผลจริงใน Cloudflare Logs ให้ HR ตรวจได้ */
+  const generic = (why) => { console.error('forgot-pin refused for', code, ':', why); return json({ error: 'ส่งรหัสยืนยันไม่ได้ — อาจเพราะไม่พบรหัสพนักงาน, ยังไม่มีอีเมลในระบบ หรือบัญชียังไม่เคยตั้ง PIN (ต้องให้ HR ส่ง PIN/รหัสเปิดใช้งาน) — กรุณาติดต่อ HR' }, 400, cors); };
   const { token, emp, setRow } = await lookupEmpForReset(env, code);
   const email = emp ? String(emp[9] || '').trim() : '';
-  if (!emp || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return generic();
+  if (!emp) return generic('no such employee'); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return generic('no valid email on Employees col J');
   /* #304: บัญชีที่ยังไม่เคยมี PIN ห้ามตั้งเองผ่าน "ลืม PIN" — อีเมลอาจมาจากการลงทะเบียนเอง (ยังไม่ผ่าน HR) ต้องให้ HR ส่ง PIN */
-  if (!String((setRow && setRow[1]) || '').trim()) return generic();
+  if (!String((setRow && setRow[1]) || '').trim()) return generic('account has no PIN yet (#304)');
   const otp = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
   const exp = Math.floor(Date.now() / 1000) + RESET_OTP_TTL_SEC;
   const pinHash = String((setRow && setRow[1]) || '').trim().toLowerCase();
   const sig = await otpSig(env, String(emp[0]).trim(), exp, otp, pinHash);
-  await sendMail(token, env.SEND_AS_EMAIL, email, String(emp[1] || ''), 'รหัสยืนยันเพื่อตั้ง PIN ใหม่ SML PMS',
-    `เรียนคุณ ${String(emp[1] || '').trim()} (${String(emp[0]).trim()})\n\nรหัสยืนยันสำหรับตั้ง PIN ใหม่ของคุณคือ: ${otp}\n(ใช้ได้ภายใน ${RESET_OTP_TTL_SEC / 60} นาที และใช้ได้ครั้งเดียว)\n\nหากคุณไม่ได้เป็นผู้ขอ กรุณาเพิกเฉยอีเมลนี้ PIN เดิมจะไม่ถูกเปลี่ยน — หากสงสัยว่ามีผู้อื่นพยายามเข้าบัญชี แจ้ง HR\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับ)`);
+  try { await sendMail(token, env.SEND_AS_EMAIL, email, String(emp[1] || ''), 'รหัสยืนยันเพื่อตั้ง PIN ใหม่ SML PMS',
+    `เรียนคุณ ${String(emp[1] || '').trim()} (${String(emp[0]).trim()})\n\nรหัสยืนยันสำหรับตั้ง PIN ใหม่ของคุณคือ: ${otp}\n(ใช้ได้ภายใน ${RESET_OTP_TTL_SEC / 60} นาที และใช้ได้ครั้งเดียว)\n\nหากคุณไม่ได้เป็นผู้ขอ กรุณาเพิกเฉยอีเมลนี้ PIN เดิมจะไม่ถูกเปลี่ยน — หากสงสัยว่ามีผู้อื่นพยายามเข้าบัญชี แจ้ง HR\n\n(อีเมลนี้ส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับ)`); }
+  catch (e) { console.error('forgot-pin sendMail failed for', code, ':', String((e && e.message) || e)); return json({ error: 'ส่งอีเมลไม่สำเร็จ (ระบบส่งอีเมลของบริษัทขัดข้อง/ไม่มีสิทธิ์ Mail.Send) — ติดต่อ HR/IT' }, 502, cors); }
   return json({ ok: true, challenge: exp + '.' + sig, maskedEmail: maskEmail(email), ttlMin: RESET_OTP_TTL_SEC / 60 }, 200, cors);
 }
 async function handleReset(request, env, cors) {
