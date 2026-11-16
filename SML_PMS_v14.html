@@ -1764,6 +1764,10 @@ img,svg,canvas{max-width:100%}
 .att-mn-row input:focus{outline:2px solid #6366f1;outline-offset:1px;border-color:#6366f1}
 .att-mn-row span{font-size:11.5px;font-weight:700;color:#64748b;text-align:center}
 .att-mn-note{font-size:12px;color:#64748b;margin:-2px 0 10px}
+.att-search{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px 10px}
+.att-search input{flex:1 1 260px;max-width:380px;height:40px;box-sizing:border-box;padding:6px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:14px}
+.att-search input:focus{outline:2px solid #6366f1;outline-offset:1px;border-color:#6366f1}
+.att-search span{font-size:12px;color:#64748b}
 @media (max-width:700px){.att-mn-grid{grid-template-columns:minmax(0,1fr)}.att-mn-row.att-mn-row1{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
@@ -2728,6 +2732,7 @@ img,svg,canvas{max-width:100%}
     <div class="card">
       <div class="card-h"><h3>📋 รายชื่อที่มีข้อมูลเวลาแล้ว</h3><div class="r"><span class="bd b-b" id="attCount">0 คน</span><button class="btn btn-p btn-sm" onclick="pushAttendanceToEvaluation()">📤 ส่งข้อมูลเข้าแบบประเมินผล</button><button class="btn btn-ok btn-sm" title="Push จะไม่แตะคอลัมน์วันลารวม/Z Score ที่เป็นสูตร Excel" onclick="ms365PushAttendance()">📤 Push เข้า Excel 365</button><button class="btn btn-sm" title="รายละเอียด สาย/กลับก่อน/กิจ/ป่วย/ขาด ของพนักงานทุกคน (ระบุคนที่ยังไม่มีข้อมูล)" onclick="exportAttendanceList()">📥 Export ข้อมูลเวลา (CSV)</button><button class="btn btn-sm" title="รูปแบบเดียวกับใบสรุปสถิติการทำงานสะสม (ขาดงาน/สาย/กิจ/ป่วย/รวม วัน-ช.ม.-นาที/ใบรับรองแพทย์)" onclick="exportAttendanceStatsSheet()">📥 Export สถิติสะสม (รูปแบบใบสรุป)</button></div></div>
       <div id="attPushStatus" style="padding:0 16px 4px;font-size:11.5px;color:#64748b"></div>
+      <div class="att-search"><input type="search" id="attSearch" placeholder="🔍 ค้นหาด้วยรหัสพนักงาน (หรือชื่อ)" autocomplete="off" oninput="renderAttendanceList()"><button class="btn btn-sm" id="attSearchClear" onclick="clearAttendanceSearch()" style="display:none">✖️ ล้าง</button><span id="attSearchInfo"></span></div>
       <div class="tw"><table>
         <thead class="att-stat-head">
           <tr><th rowspan="2">รหัส</th><th rowspan="2">ชื่อ-สกุล</th><th rowspan="2">ขาดงาน<br><small>วัน</small></th><th colspan="2">มาสาย/กลับก่อน</th><th colspan="3">กิจ / กิจย่อย</th><th colspan="3">ป่วย (มี และ ไม่มี<br>ใบรับรองแพทย์)</th><th colspan="3">รวม ป่วย+กิจ</th><th rowspan="2">ใบรับรองแพทย์<br>สะสม<br><small>ว.ชม.น.</small></th><th rowspan="2">วันลารวม<br>(คิดคะแนน Z)</th><th rowspan="2"></th></tr>
@@ -4080,6 +4085,7 @@ document.querySelectorAll('.nav-item').forEach(n=>n.onclick=()=>{
   if(p==='audit' && typeof ms365SyncAuditLog==='function') ms365SyncAuditLog(true);
   if(p==='cyclesetup' && typeof renderCycleSetupTimeline==='function') renderCycleSetupTimeline();
   if((p==='import'||p==='myeval') && typeof renderAttPeriod==='function') renderAttPeriod();
+  if(p==='import' && typeof renderAttendanceList==='function') renderAttendanceList();
   if(p==='cycle' && typeof renderCyclesTable==='function'){ renderCyclesTable(); populateCycleStepsCycleSel(); renderCycleSteps(); }
   if(p==='cycle' && typeof syncGradeVisSettingUi==='function') syncGradeVisSettingUi();
   if(p==='myresult' && typeof renderMyResult==='function') renderMyResult();
@@ -17007,10 +17013,23 @@ async function deleteAttendanceRow(code){
   if(typeof appendAuditLog==='function') appendAuditLog('data','ลบข้อมูลเวลาทำงาน',code,remote?'ลบทั้งเว็บและ Excel':'ลบเฉพาะในเครื่อง');
   smlToast(remote?'ลบข้อมูลเรียบร้อย (เว็บ + Excel)':'ลบข้อมูลเรียบร้อย (เฉพาะในเครื่องนี้)','ok');
 }
+/* #325: ค้นหารายชื่อที่มีข้อมูลเวลา ด้วยรหัสพนักงาน (หรือชื่อ) — ตัวพิมพ์เล็ก/ใหญ่ไม่สำคัญ, ค้นแบบ "มีคำนี้อยู่ในรหัส/ชื่อ"
+   ชื่ออ่านจาก MASTER_USERS ตามรหัส (ไม่เชื่อชื่อที่เก็บในไฟล์, #1) แถวที่กำลังแก้ไขอยู่แสดงเสมอแม้ไม่ตรงคำค้น */
+function attendanceSearchMatch(code,q){
+  if(!q) return true;
+  const emp=MASTER_USERS.find(u=>u[0]===code);
+  const name=(emp?.[1] || ATTENDANCE[code]?.name || '');
+  return String(code).toLowerCase().includes(q) || String(name).toLowerCase().includes(q);
+}
+function clearAttendanceSearch(){ const s=document.getElementById('attSearch'); if(s){ s.value=''; } renderAttendanceList(); }
 function renderAttendanceList(){
   const el=document.getElementById('attRows'); if(!el) return;
-  const codes=Object.keys(ATTENDANCE);
-  const cnt=document.getElementById('attCount'); if(cnt) cnt.textContent=codes.length+' คน';
+  const allCodes=Object.keys(ATTENDANCE);
+  const q=String(document.getElementById('attSearch')?.value||'').trim().toLowerCase();
+  const codes=allCodes.filter(c=>c===editingAttendanceCode || attendanceSearchMatch(c,q));
+  const cnt=document.getElementById('attCount'); if(cnt) cnt.textContent = q ? (codes.length+'/'+allCodes.length+' คน') : (allCodes.length+' คน');
+  const clr=document.getElementById('attSearchClear'); if(clr) clr.style.display = q ? '' : 'none';
+  const inf=document.getElementById('attSearchInfo'); if(inf) inf.textContent = q ? ('พบ '+codes.length+' จาก '+allCodes.length+' คน') : '';
   el.innerHTML = codes.length ? codes.map(code=>{
     const a=ATTENDANCE[code];
     const emp=MASTER_USERS.find(u=>u[0]===code);
@@ -17041,7 +17060,7 @@ function renderAttendanceList(){
       <td>${escH(a.medCert||'')||'-'}</td>
       <td title="ป่วย+กิจที่นับคะแนน ${leaveCountedDays(a)} วัน (เศษ ≥ 4 ชม. = 0.5)">${zDays.toFixed(2)}</td>
       <td><button class="btn btn-sm" onclick="editAttendanceRow('${escJs(code)}')">✏️</button> <button class="btn btn-sm btn-dg" onclick="deleteAttendanceRow('${escJs(code)}')">🗑️</button></td></tr>`;
-  }).join('') : '<tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:16px">ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน</td></tr>';
+  }).join('') : ('<tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:16px">'+(allCodes.length ? 'ไม่พบรหัส/ชื่อที่ตรงกับ "'+escH(q)+'"' : 'ยังไม่มีข้อมูล — Import ไฟล์หรือกรอกด้วยตนเองด้านบน')+'</td></tr>');
   if(typeof renderAttendancePushStatus==='function') renderAttendancePushStatus();
 }
 
