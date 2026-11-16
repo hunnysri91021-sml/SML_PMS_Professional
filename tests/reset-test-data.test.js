@@ -33,7 +33,7 @@ const {open,ok,done,INJECT}=require('./helpers');
     out.csvCount=csvs.length; out.hdrApp=(hdrs.Appraisals||[]).slice(0,5).join('|')+'..'+(hdrs.Appraisals||[]).slice(-3).join('|'); out.hdrAtt=(hdrs.Attendance||[]).slice(0,4).join('|'); out.resetUpsert=upserts.some(u=>u.t==='FormWeights'&&u.key==='__reset__');
     out.drafts=getDrafts().length; out.att=Object.keys(ATTENDANCE).length; out.kpiActual=goalKpiData[0].actualVal;
     out.kpiPushed=upserts.some(u=>u.t==='KPI_Goals');
-    out.auditHasReset=JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]').some(e=>/ล้างข้อมูลทดสอบ/.test(e.action));
+    out.auditHasReset=JSON.parse(localStorage.getItem(AUDIT_LOG_KEY)||'[]').some(e=>/ล้างข้อมูล/.test(e.action));
     // เครื่องอื่น: เจอตราที่ใหม่กว่า → ล้าง; ตราเดิมซ้ำ → ไม่ล้างข้อมูลใหม่
     localStorage.setItem(RESET_APPLIED_KEY,'2000-01-01T00:00:00Z');
     __draft('E9','Submitted',70);

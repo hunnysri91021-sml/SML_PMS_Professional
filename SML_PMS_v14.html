@@ -3090,7 +3090,7 @@ img,svg,canvas{max-width:100%}
             <button class="btn btn-ok" style="width:100%;justify-content:center" onclick="ms365PushAppraisals()">📤 Push ผลประเมิน → Excel</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="Export ข้อมูลเก่าของ Audit Log เป็นไฟล์เก็บไว้ แล้วลบออกจาก SharePoint List — Admin/HR เท่านั้น" onclick="ms365ArchiveOldRows('AuditLog')">🗄️ เก็บถาวร Audit Log เก่า</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="Export ประวัติ Approvals ของรอบเก่าเป็นไฟล์เก็บไว้ แล้วลบออกจาก SharePoint List — Admin/HR เท่านั้น" onclick="ms365ArchiveOldRows('Approvals')">🗄️ เก็บถาวร Approvals เก่า</button>
-            <button class="btn" style="width:100%;justify-content:center;margin-top:6px;color:#b91c1c;border-color:#fca5a5" title="ล้างผลประเมิน/Approvals/Audit Log/ผลจริง KPI/ข้อมูลเวลา/IDP ทั้งเว็บและ Excel สำหรับช่วงทดสอบระบบ — Admin/HR เท่านั้น ต้องพิมพ์ยืนยัน" onclick="resetTestData()">🧹 ล้างข้อมูลทดสอบ (ทั้งเว็บและ Excel)</button>
+            <button class="btn" style="width:100%;justify-content:center;margin-top:6px;color:#b91c1c;border-color:#fca5a5" title="เลือกล้างผลประเมิน / สถิติเวลาทำงาน / Audit Log แยกกันได้ ทั้งเว็บและ Excel — Admin/HR เท่านั้น ต้องพิมพ์ยืนยัน" onclick="openResetDataModal()">🧹 ล้างข้อมูล (เลือกส่วนที่จะล้าง)</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ลบแถวซ้ำเก่า (รหัส+รอบ+ระดับเดียวกัน) เก็บแถวสถานะล่าสุด — Admin/HR เท่านั้น" onclick="ms365DedupeAppraisals()">🧹 ลบแถวซ้ำเก่าใน Appraisals</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Audit Log จาก Excel ไปเก็บเป็น SharePoint List (เร็วกว่า) — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateAuditLogToList()">🚚 ย้าย Audit Log ไป SharePoint List</button>
             <button class="btn" style="width:100%;justify-content:center;margin-top:6px" title="ย้ายประวัติ Approvals จาก Excel ไปเก็บเป็น SharePoint List — Admin/HR เท่านั้น ทำซ้ำได้ปลอดภัย" onclick="ms365MigrateTableToList('Approvals')">🚚 ย้าย Approvals ไป SharePoint List</button>
@@ -3893,6 +3893,19 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
     </table></div>
   </div>
   <div class="md-f"><button class="btn" onclick="closeM()">ปิด</button></div>
+</div></div>
+
+<div class="ov" id="mResetData"><div class="md" style="max-width:560px">
+  <div class="md-h"><h3>🧹 ล้างข้อมูล — เลือกส่วนที่จะล้าง</h3><button class="x" onclick="closeM()">×</button></div>
+  <div class="md-b">
+    <div class="al al-w"><span>⚠️</span><div>ลบแล้วกู้คืนไม่ได้ (ทั้งในเว็บและ Excel/SharePoint) — ระบบจะดาวน์โหลดไฟล์สำรอง CSV ก่อน แล้วให้พิมพ์ยืนยันอีกครั้ง</div></div>
+    <label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line,#e5e7eb);cursor:pointer"><input type="checkbox" id="rst_eval" checked style="margin-top:4px"><div><b>1. ผลการประเมิน</b><div style="font-size:12px;color:#64748b">ใบประเมินทุกสถานะ (Appraisals) · ประวัติอนุมัติ/ความเห็น/ลายเซ็น (Approvals) · ข้อโต้แย้ง · ผลจริง KPI รายบุคคล · IDP</div></div></label>
+    <label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line,#e5e7eb);cursor:pointer"><input type="checkbox" id="rst_att" checked style="margin-top:4px"><div><b>2. สถิติเวลาทำงาน</b><div style="font-size:12px;color:#64748b">ข้อมูลสาย/กลับก่อน/ลา/ขาด ของทุกคน (Attendance + AttendanceDetail) — เคลียร์เฉพาะช่องกรอก ไม่แตะคอลัมน์สูตร Excel</div></div></label>
+    <label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;cursor:pointer"><input type="checkbox" id="rst_audit" style="margin-top:4px"><div><b>3. Audit Log</b> <span style="font-size:12px;color:#64748b">(ไม่ติ๊กไว้ก่อน — แนะนำให้เก็บไว้เป็นหลักฐาน ยกเว้นล้างหลังช่วงทดสอบ)</span></div></label>
+    <div class="al al-i" style="margin-top:10px"><span>ℹ️</span><div><b>เริ่มรอบประเมินใหม่?</b> ผลประเมินแยกตามรหัสรอบอยู่แล้ว — เปลี่ยน "รหัสรอบ" ในหน้า ตั้งค่ารอบประเมิน ข้อมูลรอบเก่าจะไม่ปนกัน (ไม่จำเป็นต้องล้างผลประเมิน) · แต่สถิติเวลาไม่แยกตามรอบ จึงควรล้าง/นำเข้าใหม่ทับ</div></div>
+    <div style="font-size:12px;color:#64748b;margin-top:8px">ไม่แตะ: พนักงาน/PIN/ตั้งค่ารอบ/สัดส่วน/แบบฟอร์ม/รายการหลัก/นิยาม KPI</div>
+  </div>
+  <div class="md-f"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn" style="color:#b91c1c;border-color:#fca5a5" onclick="submitResetModal()">ดำเนินการต่อ →</button></div>
 </div></div>
 
 <div class="ov" id="mRule"><div class="md" style="max-width:520px">
@@ -9218,75 +9231,125 @@ const RESET_BACKUP_HEADERS = {
   IDP: ['EmpCode','Name','Dept','Grade','Plan','Due','Owner','Metric','Status'],
   Attendance: ['EmpID','ชื่อ-สกุล','รอบ (Period)','มาสาย','กลับก่อน','ลาป่วย','ลากิจ','ขาดงาน','วันลารวม (Auto)','Z Score (Auto)','หมายเหตุ']
 };
-function clearLocalTestData(){
-  const keys = [MS365_LOCAL_DRAFT_KEY, PUSHED_APPRAISALS_KEY, RESULT_NOTIFIED_KEY, DISPUTES_KEY, EVAL_LAST_ACTOR_KEY, EVAL_STAGE_SIGNERS_KEY,
+/* ส่วนที่เลือกล้างได้แยกกัน: eval = ผลการประเมิน (Appraisals/Approvals/IDP/ผลจริง KPI + ความเห็น/ลายเซ็น/ข้อโต้แย้งในเครื่อง),
+   att = สถิติเวลาทำงาน (Attendance/AttendanceDetail), audit = Audit Log */
+const RESET_SCOPES = ['eval','att','audit'];
+const RESET_SCOPE_LABEL = { eval:'ผลการประเมิน', att:'สถิติเวลาทำงาน', audit:'Audit Log' };
+const RESET_TABLE_SCOPE = { Appraisals:'eval', Approvals:'eval', IDP:'eval', AuditLog:'audit' };
+const RESET_APPLIED_PREFIX = 'smlPmsResetAppliedAt_';
+function normResetScopes(scopes){ const s = (Array.isArray(scopes)?scopes:RESET_SCOPES).filter(x=>RESET_SCOPES.includes(x)); return s.length?s:RESET_SCOPES.slice(); }
+function clearLocalTestData(scopes){
+  const sc = normResetScopes(scopes);
+  const keys = [];
+  if(sc.includes('eval')) keys.push(MS365_LOCAL_DRAFT_KEY, PUSHED_APPRAISALS_KEY, RESULT_NOTIFIED_KEY, DISPUTES_KEY, EVAL_LAST_ACTOR_KEY, EVAL_STAGE_SIGNERS_KEY,
     EVAL_NEEDS_RECONFIRM_KEY, EVAL_REJECT_INFO_KEY, EVAL_RECONFIRM_CLEARED_KEY, APPROVAL_SIGNATURE_KEY, EVAL_HR_NOTE_KEY, EVAL_COMMENTS_KEY,
-    ACK_CHANNEL_KEY, EVAL_HELD_KEY, AUDIT_LOG_KEY, IDP_LOCAL_KEY, ATTENDANCE_KEY];
+    ACK_CHANNEL_KEY, EVAL_HELD_KEY, IDP_LOCAL_KEY);
+  if(sc.includes('att')) keys.push(ATTENDANCE_KEY);
+  if(sc.includes('audit')) keys.push(AUDIT_LOG_KEY);
   keys.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
-  ATTENDANCE = {}; idpData = [];
-  goalKpiData.forEach(k=>{ if(k.scope==='person') k.actualVal=''; }); saveKpiData();
-  bellCurveResult = null;
+  if(sc.includes('att')) ATTENDANCE = {};
+  if(sc.includes('eval')){
+    idpData = [];
+    goalKpiData.forEach(k=>{ if(k.scope==='person') k.actualVal=''; }); saveKpiData();
+    bellCurveResult = null;
+  }
   ['renderWorkflowPages','renderCycleStats','renderNavBadges','renderAttendanceList','renderIdpRows','renderAuditLog'].forEach(fn=>{ try{ if(typeof window[fn]==='function') window[fn](); }catch(e){} });
-  try{ renderGoalKpi(goalKpiData); }catch(e){}
+  if(sc.includes('eval')){ try{ renderGoalKpi(goalKpiData); }catch(e){} }
 }
-async function resetTestData(){
+function openResetDataModal(){
   if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  openM('mResetData');
+}
+function submitResetModal(){
+  const scopes = RESET_SCOPES.filter(s=>{ const el=document.getElementById('rst_'+s); return el && el.checked; });
+  if(!scopes.length){ smlToast('เลือกอย่างน้อย 1 ส่วนที่จะล้าง','warn'); return; }
+  closeM();
+  resetTestData(scopes);
+}
+async function resetTestData(scopes){
+  if(!isAdminOrSysadmin()){ smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  const sc = normResetScopes(scopes);
+  const scLabel = sc.map(s=>RESET_SCOPE_LABEL[s]).join(' + ');
+  const tables = RESET_REMOTE_TABLES.filter(t=>sc.includes(RESET_TABLE_SCOPE[t]));
+  const doAtt = sc.includes('att'), doEval = sc.includes('eval');
   const cfg = loadMs365Config();
   const remote = isMs365Configured(cfg);
   if(remote && !isWorkerConfigured(cfg)){ smlToast('ต้องตั้งค่า Proxy (Worker) ก่อน จึงจะล้างข้อมูลใน Excel ได้','warn'); return; }
   try{
     const counts = {};
     if(remote){
-      for(const t of RESET_REMOTE_TABLES){ counts[t] = (await workerFetch(cfg,'/admin/clear-table',{method:'POST',body:JSON.stringify({table:t,dryRun:true})})).total; }
-      counts.Attendance = (await workerFetch(cfg,'/admin/clear-columns',{method:'POST',body:JSON.stringify({table:'Attendance',dryRun:true})})).rows;
+      for(const t of tables){ counts[t] = (await workerFetch(cfg,'/admin/clear-table',{method:'POST',body:JSON.stringify({table:t,dryRun:true})})).total; }
+      if(doAtt) counts.Attendance = (await workerFetch(cfg,'/admin/clear-columns',{method:'POST',body:JSON.stringify({table:'Attendance',dryRun:true})})).rows;
     }
-    const localDrafts = getDrafts().length;
-    const summary = (remote ? RESET_REMOTE_TABLES.map(t=>'• '+t+': '+counts[t]+' แถว').join('\n')+'\n• Attendance: เคลียร์ช่องกรอก '+counts.Attendance+' แถว (ไม่แตะสูตร)\n' : '')
-      + '• ในเครื่องนี้: ใบประเมิน '+localDrafts+' ใบ + ความเห็น/ลายเซ็น/ข้อโต้แย้ง/Audit Log/IDP/ข้อมูลเวลา + ผลจริง KPI รายบุคคล';
-    if(!confirm('⚠️ ล้างข้อมูลทดสอบ — ลบแล้วกู้คืนไม่ได้\n\n'+summary+'\n\nไม่แตะ: พนักงาน/PIN/ตั้งค่ารอบ/สัดส่วน/แบบฟอร์ม/รายการหลัก/นิยาม KPI\n\nระบบจะดาวน์โหลดไฟล์สำรอง CSV ก่อน แล้วถามยืนยันอีกครั้ง ดำเนินการต่อ?')) return;
+    const localLines = [];
+    if(doEval) localLines.push('ใบประเมิน '+getDrafts().length+' ใบ + ความเห็น/ลายเซ็น/ข้อโต้แย้ง/IDP + ผลจริง KPI รายบุคคล');
+    if(doAtt) localLines.push('ข้อมูลเวลาทำงาน '+Object.keys(ATTENDANCE).length+' คน');
+    if(sc.includes('audit')) localLines.push('Audit Log');
+    const summary = (remote ? tables.map(t=>'• '+t+': '+counts[t]+' แถว').join('\n')+(tables.length?'\n':'')+(doAtt?'• Attendance: เคลียร์ช่องกรอก '+counts.Attendance+' แถว (ไม่แตะสูตร)\n':'') : '')
+      + '• ในเครื่องนี้: '+localLines.join(' · ');
+    if(!confirm('⚠️ ล้างข้อมูล: '+scLabel+' — ลบแล้วกู้คืนไม่ได้\n\n'+summary+'\n\nไม่แตะ: พนักงาน/PIN/ตั้งค่ารอบ/สัดส่วน/แบบฟอร์ม/รายการหลัก/นิยาม KPI'+(doEval?'':'/ผลการประเมิน')+(doAtt?'':'/สถิติเวลา')+'\n\nระบบจะดาวน์โหลดไฟล์สำรอง CSV ก่อน แล้วถามยืนยันอีกครั้ง ดำเนินการต่อ?')) return;
     const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-    downloadCsv('สำรอง_ใบประเมินในเครื่อง_'+ts+'.csv', APPRAISAL_BACKUP_HEADERS, getDrafts());
+    if(doEval) downloadCsv('สำรอง_ใบประเมินในเครื่อง_'+ts+'.csv', APPRAISAL_BACKUP_HEADERS, getDrafts());
     if(remote){
-      for(const t of RESET_REMOTE_TABLES.concat(['Attendance'])){
+      for(const t of tables.concat(doAtt?['Attendance']:[])){
         const rows = await graphListTableRows(t);
         const hd = RESET_BACKUP_HEADERS[t] || [];
         if(rows.length) downloadCsv('สำรอง_'+t+'_'+ts+'.csv', rows[0].map((_,i)=>hd[i]||('คอลัมน์'+(i+1))), rows);
       }
     }
-    const typed = prompt('ได้ดาวน์โหลดไฟล์สำรองแล้ว (ตรวจว่าเก็บไว้ครบ)\n\nพิมพ์คำว่า  ล้างข้อมูล  เพื่อยืนยันลบจริง:');
+    const typed = prompt('ได้ดาวน์โหลดไฟล์สำรองแล้ว (ตรวจว่าเก็บไว้ครบ)\n\nจะล้าง: '+scLabel+'\nพิมพ์คำว่า  ล้างข้อมูล  เพื่อยืนยันลบจริง:');
     if(String(typed||'').trim()!=='ล้างข้อมูล'){ smlToast('ยกเลิก — ไม่มีข้อมูลถูกลบ (ไฟล์สำรองยังอยู่)','info'); return; }
     if(remote){
-      for(const t of RESET_REMOTE_TABLES){
+      for(const t of tables){
         let guard=0, r;
         do{ r = await workerFetch(cfg,'/admin/clear-table',{method:'POST',body:JSON.stringify({table:t})}); guard++; smlToast('กำลังล้าง '+t+' (เหลือ '+r.remaining+')...','info'); }while(r.remaining>0 && r.deleted>0 && guard<200);
         if(r.remaining>0) throw new Error('ล้าง '+t+' ไม่หมด (เหลือ '+r.remaining+')');
       }
-      await workerFetch(cfg,'/admin/clear-columns',{method:'POST',body:JSON.stringify({table:'Attendance'})});
-      try{ let g=0,rr; do{ rr = await workerFetch(cfg,'/admin/clear-table',{method:'POST',body:JSON.stringify({table:'AttendanceDetail'})}); g++; }while(rr.remaining>0 && rr.deleted>0 && g<50); }catch(e){ /* ไม่มีตาราง AttendanceDetail — ข้าม */ }
-      const kpis = goalKpiData.filter(k=>k.scope==='person' && k.actualVal!=='' && k.actualVal!=null);
-      for(const k of kpis){ k.actualVal=''; const rr = await pushKpiToExcel(k); if(!rr.ok) throw new Error('ล้างผลจริง KPI '+k.id+' ไม่สำเร็จ: '+rr.error); }
+      if(doAtt){
+        await workerFetch(cfg,'/admin/clear-columns',{method:'POST',body:JSON.stringify({table:'Attendance'})});
+        try{ let g=0,rr; do{ rr = await workerFetch(cfg,'/admin/clear-table',{method:'POST',body:JSON.stringify({table:'AttendanceDetail'})}); g++; }while(rr.remaining>0 && rr.deleted>0 && g<50); }catch(e){ /* ไม่มีตาราง AttendanceDetail — ข้าม */ }
+      }
+      if(doEval){
+        const kpis = goalKpiData.filter(k=>k.scope==='person' && k.actualVal!=='' && k.actualVal!=null);
+        for(const k of kpis){ k.actualVal=''; const rr = await pushKpiToExcel(k); if(!rr.ok) throw new Error('ล้างผลจริง KPI '+k.id+' ไม่สำเร็จ: '+rr.error); }
+      }
+      /* ตราเวลาแยกต่อส่วน (__reset__eval/__reset__att/__reset__audit) ให้เครื่องอื่นล้างเฉพาะส่วนนั้น; ล้างครบทุกส่วนเขียนตาเดิม __reset__ ด้วย (เครื่องที่ยังเป็นเวอร์ชันเก่า) */
       const at = new Date().toISOString();
-      await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__reset__',['__reset__',JSON.stringify({at,by:currentActorLabel()}),at]);
-      localStorage.setItem(RESET_APPLIED_KEY, at);
+      const payload = JSON.stringify({at,by:currentActorLabel()});
+      for(const s of sc){ await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__reset__'+s,['__reset__'+s,payload,at]); try{ localStorage.setItem(RESET_APPLIED_PREFIX+s, at); }catch(e){} }
+      if(sc.length===RESET_SCOPES.length) await graphUpsertTableRow(FORM_WEIGHTS_TABLE,0,'__reset__',['__reset__',payload,at]);
+      if(doEval) localStorage.setItem(RESET_APPLIED_KEY, at);
     }
-    clearLocalTestData();
-    appendSyncLog('ล้างข้อมูลทดสอบสำเร็จ', true);
-    appendAuditLog('ms365','ล้างข้อมูลทดสอบ','ผลประเมิน/Approvals/AuditLog/KPI actual/Attendance/IDP', remote?'ล้างทั้งเว็บและ Excel':'ล้างเฉพาะในเครื่อง');
-    smlToast('ล้างข้อมูลทดสอบเสร็จแล้ว','ok');
+    clearLocalTestData(sc);
+    appendSyncLog('ล้างข้อมูลสำเร็จ: '+scLabel, true);
+    appendAuditLog('ms365','ล้างข้อมูล: '+scLabel, sc.map(s=>({eval:'ผลประเมิน/Approvals/KPI actual/IDP',att:'Attendance',audit:'AuditLog'}[s])).join(' · '), remote?'ล้างทั้งเว็บและ Excel':'ล้างเฉพาะในเครื่อง');
+    smlToast('ล้างข้อมูลเสร็จแล้ว: '+scLabel,'ok');
   }catch(e){
     const msg = e?.message||String(e);
-    appendSyncLog('ล้างข้อมูลทดสอบไม่สำเร็จ: '+msg, false);
+    appendSyncLog('ล้างข้อมูลไม่สำเร็จ: '+msg, false);
     smlToast('ล้างไม่สำเร็จ: '+msg+(/not found|404/i.test(msg)?' (ต้อง redeploy Worker ตัวล่าสุดก่อน)':'')+' — ข้อมูลในเครื่องยังไม่ถูกล้าง (ใน Excel อาจถูกล้างบางส่วนแล้ว กดล้างซ้ำได้)','err');
   }
 }
-/* เครื่องอื่นเจอตรา __reset__ ที่ใหม่กว่าที่เคยทำ → ล้างข้อมูลทดสอบในเครื่องตัวเอง (กันดัน draft เก่ากลับขึ้น Excel) */
+/* เครื่องอื่นเจอตราที่ใหม่กว่าที่เคยทำ → ล้างข้อมูลในเครื่องตัวเองเฉพาะส่วนนั้น (กันดันข้อมูลเก่ากลับขึ้น Excel)
+   __reset__ (ตาเดิม) = ล้างครบทุกส่วน; __reset__eval/att/audit = ล้างเฉพาะส่วน */
 function applyResetEpochRows(rows){
   rows.forEach(r=>{
-    if(String(r[0]??'').trim()!=='__reset__') return;
+    const rk = String(r[0]??'').trim();
+    if(!rk.startsWith('__reset__')) return;
+    const part = rk.slice(9);
+    if(part && !RESET_SCOPES.includes(part)) return;
     try{
       const remote = JSON.parse(r[1]); const at = remote && remote.at;
-      const applied = localStorage.getItem(RESET_APPLIED_KEY)||'';
-      if(at && at>applied){ localStorage.setItem(RESET_APPLIED_KEY, at); clearLocalTestData(); appendSyncLog('Admin ล้างข้อมูลทดสอบ ('+at+') — ล้างข้อมูลในเครื่องนี้ตาม', true); }
+      if(!at) return;
+      const scopes = part ? [part] : RESET_SCOPES;
+      const appliedKey = part ? RESET_APPLIED_PREFIX+part : RESET_APPLIED_KEY;
+      const applied = localStorage.getItem(appliedKey)||'';
+      if(at>applied){
+        localStorage.setItem(appliedKey, at);
+        if(scopes.includes('eval')){ const cur=localStorage.getItem(RESET_APPLIED_KEY)||''; if(at>cur) localStorage.setItem(RESET_APPLIED_KEY, at); }
+        clearLocalTestData(scopes);
+        appendSyncLog('Admin ล้างข้อมูล ('+scopes.map(s=>RESET_SCOPE_LABEL[s]).join(' + ')+' · '+at+') — ล้างข้อมูลในเครื่องนี้ตาม', true);
+      }
     }catch(e){}
   });
 }
