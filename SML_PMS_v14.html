@@ -1751,6 +1751,20 @@ img,svg,canvas{max-width:100%}
 .att-stat-head tr:first-child th:nth-child(6){background:#dbeafe}
 .att-stat-head tr:first-child th:nth-child(7){background:#fbcfe8}
 #attRows td:nth-child(n+4){text-align:center}
+/* #324 ฟอร์มกรอกวันลารายบุคคล: จัดกลุ่ม ขาด / สาย / กิจ / ป่วย เรียง วัน → ชม. → นาที */
+.att-mn-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.att-mn-box{border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;padding:12px 14px}
+.att-mn-box.att-mn-wide{grid-column:1/-1}
+.att-mn-h{font-weight:800;font-size:13.5px;color:#1e293b;margin-bottom:9px}
+.att-mn-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.att-mn-row.att-mn-row1{grid-template-columns:minmax(0,220px)}
+.att-mn-row>div{display:flex;flex-direction:column;gap:4px}
+.att-mn-row input{width:100%;box-sizing:border-box;height:42px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-size:16px;font-weight:700;text-align:center}
+.att-mn-row input[type=text]{text-align:left;font-weight:600}
+.att-mn-row input:focus{outline:2px solid #6366f1;outline-offset:1px;border-color:#6366f1}
+.att-mn-row span{font-size:11.5px;font-weight:700;color:#64748b;text-align:center}
+.att-mn-note{font-size:12px;color:#64748b;margin:-2px 0 10px}
+@media (max-width:700px){.att-mn-grid{grid-template-columns:minmax(0,1fr)}.att-mn-row.att-mn-row1{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -2666,19 +2680,45 @@ img,svg,canvas{max-width:100%}
         <div class="al al-i" id="mn_empInfo" style="display:none;margin-bottom:12px">
           <span>👤</span><div id="mn_empInfoText"></div>
         </div>
-        <div class="fr" style="flex-wrap:wrap">
-          <div class="fg" style="max-width:110px"><label>ขาดงาน (วัน)</label><input type="number" id="mn_absent" min="0" value="0"></div>
-          <div class="fg" style="max-width:110px"><label>มาสาย (ครั้ง)</label><input type="number" id="mn_late" min="0" value="0"></div>
-          <div class="fg" style="max-width:110px"><label>กลับก่อน (ครั้ง)</label><input type="number" id="mn_early" min="0" value="0"></div>
-          <div class="fg" style="max-width:130px"><label>สาย/กลับก่อน (นาที)</label><input type="number" id="mn_lateMin" min="0" value="0"></div>
-          <div class="fg" style="max-width:90px"><label>กิจ (วัน)</label><input type="number" id="mn_personal" min="0" step="0.5" value="0"></div>
-          <div class="fg" style="max-width:80px"><label>กิจ (ชม.)</label><input type="number" id="mn_personalHr" min="0" value="0"></div>
-          <div class="fg" style="max-width:80px"><label>กิจ (นาที)</label><input type="number" id="mn_personalMin" min="0" value="0"></div>
-          <div class="fg" style="max-width:90px"><label>ป่วย (วัน)</label><input type="number" id="mn_sick" min="0" step="0.5" value="0"></div>
-          <div class="fg" style="max-width:80px"><label>ป่วย (ชม.)</label><input type="number" id="mn_sickHr" min="0" value="0"></div>
-          <div class="fg" style="max-width:80px"><label>ป่วย (นาที)</label><input type="number" id="mn_sickMin" min="0" value="0"></div>
-          <div class="fg"><label>ใบรับรองแพทย์สะสม</label><input type="text" id="mn_medcert" placeholder="เช่น 10.5.0"></div>
+        <div class="att-mn-grid">
+          <div class="att-mn-box">
+            <div class="att-mn-h">🚫 ขาดงาน</div>
+            <div class="att-mn-row att-mn-row1">
+              <div><input type="number" id="mn_absent" min="0" value="0"><span>วัน</span></div>
+            </div>
+          </div>
+          <div class="att-mn-box">
+            <div class="att-mn-h">⏰ มาสาย / กลับก่อน</div>
+            <div class="att-mn-row">
+              <div><input type="number" id="mn_late" min="0" value="0"><span>สาย (ครั้ง)</span></div>
+              <div><input type="number" id="mn_early" min="0" value="0"><span>กลับก่อน (ครั้ง)</span></div>
+              <div><input type="number" id="mn_lateMin" min="0" value="0"><span>รวม (นาที)</span></div>
+            </div>
+          </div>
+          <div class="att-mn-box">
+            <div class="att-mn-h">📝 ลากิจ</div>
+            <div class="att-mn-row">
+              <div><input type="number" id="mn_personal" min="0" step="0.5" value="0"><span>วัน</span></div>
+              <div><input type="number" id="mn_personalHr" min="0" value="0"><span>ชม.</span></div>
+              <div><input type="number" id="mn_personalMin" min="0" value="0"><span>นาที</span></div>
+            </div>
+          </div>
+          <div class="att-mn-box">
+            <div class="att-mn-h">🤒 ลาป่วย</div>
+            <div class="att-mn-row">
+              <div><input type="number" id="mn_sick" min="0" step="0.5" value="0"><span>วัน</span></div>
+              <div><input type="number" id="mn_sickHr" min="0" value="0"><span>ชม.</span></div>
+              <div><input type="number" id="mn_sickMin" min="0" value="0"><span>นาที</span></div>
+            </div>
+          </div>
+          <div class="att-mn-box att-mn-wide">
+            <div class="att-mn-h">🏥 ใบรับรองแพทย์สะสม</div>
+            <div class="att-mn-row att-mn-row1">
+              <div><input type="text" id="mn_medcert" placeholder="เช่น 10.5.0"><span>วัน.ชม.นาที</span></div>
+            </div>
+          </div>
         </div>
+        <div class="att-mn-note">1 วัน = 8 ชม. · เศษรวมป่วย+กิจ ไม่ถึง 4 ชม. ไม่นับ, 4 ชม.ขึ้นไป นับ 0.5 วัน</div>
         <div class="template-actions">
           <button class="btn btn-p" id="mn_saveBtn" onclick="saveManualAttendance()">💾 บันทึกข้อมูลวันลา</button>
         </div>
