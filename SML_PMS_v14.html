@@ -3740,9 +3740,11 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
           <div class="mini-list">
             <div class="mini-row"><span>รอบ</span><b id="csCycleName2">—</b></div>
             <div class="mini-row"><span>ผู้เข้ารอบ</span><b id="csTotalCount2">0 คน</b></div>
-            <div class="mini-row"><span>ผู้ประเมิน L1</span><b id="csL1Count">0 คน</b></div>
-            <div class="mini-row"><span>ผู้ยืนยัน L2</span><b id="csL2Count">0 คน</b></div>
-            <div class="mini-row"><span>ผู้อนุมัติ</span><b>AGM / MD</b></div>
+            <div class="mini-row"><span>L1 หัวหน้าหน่วย</span><b id="csL1Count">0 คน</b></div>
+            <div class="mini-row"><span>L2 หัวหน้าแผนก</span><b id="csL2Count">0 คน</b></div>
+            <div class="mini-row"><span>L3 ผู้ตรวจ MGR</span><b id="csL3Count">0 คน</b></div>
+            <div class="mini-row"><span>L4 ผู้อนุมัติ GM</span><b id="csL4Count">0 คน</b></div>
+            <div class="mini-row"><span>อนุมัติขั้นสุดท้าย (MD/AMD)</span><b id="csFinalCount">0 คน</b></div>
           </div>
         </div>
       </div>
@@ -13803,12 +13805,17 @@ function renderCycleStats(){
 
   set('orgTotalCount', MASTER_USERS.length);
 
-  const l1Count = participants.filter(u=>u[2]==='l1').length;
-  const l2Count = participants.filter(u=>u[2]==='l2').length;
+  /* สรุปการตั้งค่า: นับ "ผู้ประเมินตัวจริงที่ถูกระบุในสาย" (ชื่อไม่ซ้ำ) ของผู้เข้ารอบ ไม่ใช่นับจาก role
+     L1=u[9] L2=u[10] L3=u[19] L4=u[11] (ตรงป้ายใน Add/Edit Employee, #222/#272) */
+  const distinctNames = idx => new Set(participants.map(u=>String(u[idx]||'').trim()).filter(n=>n && n!=='—')).size;
+  const finalCount = MASTER_USERS.filter(u=>u[12]==='active' && u[2]==='exec').length;
   set('csTotalCount', total+' คน');
   set('csTotalCount2', total+' คน');
-  set('csL1Count', l1Count+' คน');
-  set('csL2Count', l2Count+' คน');
+  set('csL1Count', distinctNames(9)+' คน');
+  set('csL2Count', distinctNames(10)+' คน');
+  set('csL3Count', distinctNames(19)+' คน');
+  set('csL4Count', distinctNames(11)+' คน');
+  set('csFinalCount', finalCount+' คน');
   set('csProgressPct', pct+'%');
   set('mSaveCycleCount', total+' คน');
 
