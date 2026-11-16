@@ -9037,6 +9037,8 @@ touches employee/attendance/evaluation data.
 
 333. **พนักงานส่งแบบประเมินตนเองแล้ว ผู้ประเมินไม่ได้รับ LINE/อีเมล.** `saveEvaluationToMs365('Submitted')` แจ้งเฉพาะ Admin ทางอีเมล (#40) ไม่เคยเรียก `notifyNextEvaluators` (#242 ทำเฉพาะขั้นสอบทาน/ส่งจากหน้าต่างสอบทาน). ตอนนี้เรียกหลัง skipEmptyReviewStages แล้วต่อผลใน toast (`nextNotifyToast`). ผู้ประเมินต้องมี LINE User ID (ลงทะเบียนผ่านบอท) และ Worker ตั้งค่าแล้ว ไม่งั้น toast บอกเหตุผลจริง. ทดสอบ: `tests/self-submit-notify.test.js`.
 
+334. **พนักงานส่งแบบประเมินตนเองต้องผ่านหัวหน้าหน่วย (L1) ก่อนหัวหน้าแผนก (L2).** เพิ่มสถานะ `SelfSubmitted` (พนักงานส่งแล้ว รอ L1 สอบทาน) ระหว่าง Draft กับ Submitted — **ไม่ใส่ใน `EVAL_STATUS_ORDER`** แต่ให้ `evalStatusRank()` คืน 0.5 (ทั้งเว็บและ Worker ต้องตรงกัน) เพราะโค้ดหลายจุดเทียบเลขอันดับ (rank>=2/3/4) การแทรกในอาร์เรย์จะเลื่อนเลขทั้งหมด. `Submitted` ยังหมายถึง "รอบแรกเสร็จ รอ L2" เหมือนเดิม. `saveEvaluationToMs365('Submitted')` ตั้ง `SelfSubmitted` เมื่อพนักงานมีหัวหน้าหน่วย (`resolveUnitHeadFor`, role unit ในช่อง u[9]) ไม่มี = Submitted ตรงไป L2; ถ้า L1 ประเมินแทน (`submitReviewerForm` Draft→Submitted) ข้าม SelfSubmitted ไป L2 ตามเดิม. หน้า "2. ประเมินทีมงาน": แถว SelfSubmitted ของหัวหน้าหน่วยตัวเองเป็นปุ่ม "ประเมิน" (`canActOnSelfSubmitted`: L1 ของคนนั้นหรือ Admin เท่านั้น), `submitReviewerForm` STEP SelfSubmitted→Submitted, ตีกลับ SelfSubmitted→Draft (`RejectedSelfSubmitted`). แจ้งเตือน: `nextEvaluatorFor` SelfSubmitted→L1 (LINE/อีเมล) แล้ว L1 ส่งต่อ → แจ้ง L2. `skipEmptyReviewStages` ข้าม L1 อัตโนมัติถ้าไม่มี. ข้อจำกัด: "บันทึกไว้ก่อน" (hold) ยังไม่รองรับกับ SelfSubmitted. ทดสอบ: `tests/unit-head-first.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

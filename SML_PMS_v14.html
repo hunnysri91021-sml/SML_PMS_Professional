@@ -6457,7 +6457,7 @@ function renderTeamFromMaster() {
   const withStatus = allDirectReports.map(u => {
     const d = findCurrentCycleDraft(drafts, u[0], cycleNow);
     const status = d ? d[d.length-1] : 'Draft';
-    const wf = status==='Draft' ? 'pending' : 'done';
+    const wf = (status==='Draft' || (status==='SelfSubmitted' && canActOnSelfSubmitted(u))) ? 'pending' : 'done';
     const X = d ? Number(d[d.length-3]) : null;
     /* คอลัมน์ "วินัย" เดิมเป็น "—" ตายตัวเสมอ ไม่เคยดึงคะแนนจริง — ปัจจัยที่ 7 "ด้านความมีวินัย
        (Discipline)" อยู่ตำแหน่งเดียวกัน (index 6 ใน m[]) ในทั้ง 4 แบบฟอร์ม (op/of/ldr/mgr, ดูรายการ
@@ -6480,7 +6480,7 @@ function renderTeamFromMaster() {
 
   const _teamChecked = new Set(getCheckedKeys('team-chk'));
   el.innerHTML = filtered.length ? deptGroupMap(filtered.map(r=>({...r,emp:r.u})),10,({u,wf,X,discipline,d}) => {
-    const st = stMap[wf];
+    const st = (d && d[d.length-1]==='SelfSubmitted') ? (wf==='pending' ? ['b-y','⏳ รอ L1 สอบทาน'] : ['b-y','⏳ รอหัวหน้าหน่วย (L1)']) : stMap[wf];
     /* เดิมใช้ inferLevelFromPosition(u[7]) เดา "ระดับฟอร์ม" จากคำในตำแหน่งงานเสมอ — ถ้าคนนี้เคยมีร่าง/
        ส่งแบบประเมินไว้จริงแล้วภายใต้ระดับจริงที่ Admin กำหนด (emp[18], ดู CLAUDE.md #23) ซึ่งอาจไม่ตรง
        กับที่เดาจากตำแหน่ง เปิดฟอร์มมาก็จะหาแบบร่างไม่เจอ (เทียบ lv ผิด) ทำให้ restoreReviewerFormFromDraft()
@@ -10163,7 +10163,7 @@ async function notifyPrevTierOnAdvance(empCode, cycle, prevActorSnapshot){
 function nextEvaluatorFor(empCode, status){
   const emp = MASTER_USERS.find(u=>u[0]===empCode);
   if(!emp) return null;
-  const map = { Submitted:[resolveL1Reviewer,'สอบทานหัวหน้าแผนก (L2)'], L1Reviewed:[resolveL2Reviewer,'สอบทานผู้จัดการส่วน (L3)'], L2Reviewed:[resolveGmReviewer,'อนุมัติ GM (L4)'] };
+  const map = { SelfSubmitted:[resolveUnitHeadFor,'สอบทาน/ประเมินรอบแรก (L1 หัวหน้าหน่วย)'], Submitted:[resolveL1Reviewer,'สอบทานหัวหน้าแผนก (L2)'], L1Reviewed:[resolveL2Reviewer,'สอบทานผู้จัดการส่วน (L3)'], L2Reviewed:[resolveGmReviewer,'อนุมัติ GM (L4)'] };
   const m = map[status]; if(!m) return null;
   const who = m[0](emp);
   return who ? { who, stageLabel:m[1], emp } : null;
@@ -10713,6 +10713,12 @@ async function saveEvaluationToMs365(status='Draft'){
   const existingBefore = getDrafts().find(d => draftKey(d) === draftKey(payload));
   const prevActor = getEvalLastActor(payload[0], payload[2]);
   const isEditAfterAction = !!existingBefore && !!prevActor;
+  /* #334: พนักงานส่งแบบประเมินตนเอง → ไปหัวหน้าหน่วย (L1) ก่อน (SelfSubmitted) แล้วจึงถึงหัวหน้าแผนก (L2)
+     ถ้าไม่มีหัวหน้าหน่วยจริงในสาย ใช้ Submitted ตรงไปหัวหน้าแผนกเหมือนเดิม */
+  if(status==='Submitted'){
+    const _emp = MASTER_USERS.find(u=>u[0]===payload[0]);
+    if(_emp && _emp[2]!=='unit' && typeof resolveUnitHeadFor==='function' && resolveUnitHeadFor(_emp)) payload[payload.length-1] = 'SelfSubmitted';
+  }
   saveEvaluationLocal(payload);
   if(typeof appendAuditLog==='function') appendAuditLog('evaluation', status==='Submitted'?'ส่งแบบประเมิน':'บันทึกร่างแบบประเมิน', payload[0], payload[1]+' — ระดับ '+payload[3]);
   // ข้ามระดับสอบทานที่ไม่มีผู้สอบทานจริงทันทีที่ส่งจริง — ไม่ต้องรอ MS365 ตั้งค่า เพราะทำงานกับข้อมูล local
@@ -11402,7 +11408,17 @@ async function deleteDraftByKey(key){
 /* #238: เพิ่ม 'ResultSent' (ส่งผลให้พนักงานแล้ว) คั่นระหว่าง GMApproved/Acknowledged — GM อนุมัติแล้วยังไม่ถึงพนักงาน
    จนกว่า GM กด "ยืนยันส่งผลให้พนักงาน" (ต้องตรงกับ EVAL_STATUS_ORDER ใน tools/sml-pms-proxy-worker.js ทุกตัวอักษร) */
 const EVAL_STATUS_ORDER = ['Draft','Submitted','L1Reviewed','L2Reviewed','GMApproved','ResultSent','Acknowledged','Calibrated','CalibChecked','Approved'];
-function evalStatusRank(status){ const i = EVAL_STATUS_ORDER.indexOf(status); return i<0 ? 0 : i; }
+/* #334: 'SelfSubmitted' = พนักงานส่งแบบประเมินตนเองแล้ว รอหัวหน้าหน่วย (L1) สอบทาน — อยู่ระหว่าง Draft กับ Submitted
+   ให้ rank 0.5 (ไม่ใส่ในอาร์เรย์) เพื่อไม่เลื่อนเลขอันดับของสถานะอื่นที่โค้ดหลายจุดเทียบด้วยตัวเลข (rank>=2/3/4) —
+   Submitted ยังหมายถึง "รอบแรกเสร็จ รอหัวหน้าแผนก (L2)" เหมือนเดิม (ต้องตรงกับ tools/sml-pms-proxy-worker.js) */
+function evalStatusRank(status){ if(status==='SelfSubmitted') return 0.5; const i = EVAL_STATUS_ORDER.indexOf(status); return i<0 ? 0 : i; }
+/* #334: ใครกดสอบทานขั้น SelfSubmitted ได้ — หัวหน้าหน่วย (L1) ของพนักงานคนนั้น หรือ Admin เท่านั้น */
+function canActOnSelfSubmitted(emp){
+  const me = CURRENT_SESSION_USER; if(!me||!emp) return false;
+  if(['admin','sysadmin'].includes(me[2])) return true;
+  const uh = (typeof resolveUnitHeadFor==='function') ? resolveUnitHeadFor(emp) : null;
+  return !!(uh && uh[0]===me[0]);
+}
 /* "จบกระบวนการทั้งหมดแล้ว จริงๆ" (พร้อมพิมพ์ทางการ/นับเป็นค้าง Push เข้า Excel/พร้อม Export
    Payroll) = อนุมัติขั้นสุดท้ายโดย AMD/MD เท่านั้น — คืนความหมายเดิมของคำว่า "Approved" ให้ตรงกับ
    ตำแหน่งจริงในกระบวนการ (ปลายสุดของ EVAL_STATUS_ORDER อีกครั้ง หลังจากที่ #58 เคยยัด Acknowledged
@@ -11510,13 +11526,14 @@ function skipEmptyReviewStages(empCode, cycle, level){
   const drafts = getDrafts();
   const d = drafts.find(x=>x[0]===empCode && x[2]===cycle && x[3]===level);
   if(!d) return;
-  const order = ['Submitted','L1Reviewed','L2Reviewed','GMApproved'];
+  const order = ['SelfSubmitted','Submitted','L1Reviewed','L2Reviewed','GMApproved'];
   let idx = order.indexOf(d[d.length-1]);
   if(idx < 0) return; // สถานะนอกช่วงที่ skip-logic นี้ดูแล (Draft, Acknowledged ขึ้นไป ฯลฯ)
   let status = d[d.length-1], changed = false;
   while(idx < order.length-1){
     const nextStage = order[idx+1];
-    const reviewer = nextStage==='L1Reviewed' ? resolveL1Reviewer(emp)
+    const reviewer = nextStage==='Submitted' ? resolveUnitHeadFor(emp)
+                    : nextStage==='L1Reviewed' ? resolveL1Reviewer(emp)
                     : nextStage==='L2Reviewed' ? resolveL2Reviewer(emp)
                     : resolveGmReviewer(emp);
     if(reviewer) break; // มีผู้สอบทานจริงรอที่ระดับนี้ — หยุดข้าม
@@ -11748,7 +11765,7 @@ function rejectInfoHtml(key){
   if(!i||!i.reason) return '';
   return '<br><b>เหตุผลที่ตีกลับ'+(i.by?' (โดย '+escH(i.by)+')':'')+':</b> '+escH(i.reason);
 }
-const REJECT_STEP_TARGET = { RejectedL1Review:'Draft', RejectedSubmitted:'Draft', RejectedL2Review:'Submitted', RejectedL1Reviewed:'Submitted', RejectedGmApproval:'L1Reviewed', RejectedL2Reviewed:'L1Reviewed', RejectedGmSole:'Draft' };
+const REJECT_STEP_TARGET = { RejectedSelfSubmitted:'Draft', RejectedL1Review:'Draft', RejectedSubmitted:'Draft', RejectedL2Review:'Submitted', RejectedL1Reviewed:'Submitted', RejectedGmApproval:'L1Reviewed', RejectedL2Reviewed:'L1Reviewed', RejectedGmSole:'Draft' };
 /* ธง "ถูกตีกลับ" เดิมอยู่ในเครื่องที่กดตีกลับเท่านั้น → ผู้ประเมินที่เปิดจากเครื่องอื่นไม่ถูกบังคับ.
    อ่านจาก Approvals: แถวล่าสุดของ empCode|cycle เป็น Rejected* และใบยังอยู่สถานะปลายทางของการตีกลับนั้น
    (ยังไม่มีใครส่งต่อ) และยังไม่เคยปลดธงหลังเวลาตีกลับ → ตั้งธง + เหตุผลในเครื่องนี้ */
@@ -15659,10 +15676,12 @@ async function submitReviewerForm(){
   const existing = getDrafts().find(d => d[0]===code && d[2]===cycle && d[3]===lv);
   const curStatus = existing ? existing[existing.length-1] : 'Draft';
   const STEP = { Draft:{next:'Submitted', label:'บันทึกคะแนนรอบแรกโดยหัวหน้า'},
+                 SelfSubmitted:{next:'Submitted', label:'หัวหน้าหน่วย (L1) สอบทาน/ประเมินแล้ว'},
                  Submitted:{next:'L1Reviewed', label:'ผ่านสอบทานหัวหน้าแผนก'},
                  L1Reviewed:{next:'L2Reviewed', label:'ผ่านสอบทานผู้จัดการส่วน'} };
   /* #268: GM ที่เป็นผู้ประเมินคนเดียวของพนักงาน (ไม่มีผู้สอบทาน L1/L2 ตัวจริงคั่น เช่น MGR) ต้องแก้/ให้คะแนนในฟอร์มแล้วอนุมัติเองได้ — เดิมฟอร์มฝั่ง GM เป็นอ่านอย่างเดียว */
   if(curStatus==='L2Reviewed' && emp && isSoleGmReviewer(emp, CURRENT_SESSION_USER)) STEP.L2Reviewed = {next:'GMApproved', label:'GM ประเมินและอนุมัติแล้ว'};
+  if(curStatus==='SelfSubmitted' && !canActOnSelfSubmitted(emp)){ smlToast('ขั้นนี้เป็นของหัวหน้าหน่วย (L1) ของพนักงานคนนี้เท่านั้น','warn'); return; }
   const step = STEP[curStatus];
   if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการบันทึกจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
   /* ผู้ใช้ขอ "ต้องมีคนประเมินอย่างน้อย 1 คน" — บล็อกเฉพาะการส่งครั้งแรกจริง (Draft→Submitted) เหมือน
@@ -15730,12 +15749,14 @@ async function rejectReviewerForm(){
   const existing = getDrafts().find(d => d[0]===code && d[2]===cycle && d[3]===lv);
   if(!existing){ smlToast('ยังไม่มีใบประเมินที่จะตีกลับสำหรับคนนี้','warn'); return; }
   const curStatus = existing[existing.length-1];
-  const STEP = { Submitted:{prev:'Draft', label:'ตีกลับให้แก้ไข'},
+  const STEP = { SelfSubmitted:{prev:'Draft', label:'หัวหน้าหน่วย (L1) ตีกลับให้แก้ไข'},
+                 Submitted:{prev:'Draft', label:'ตีกลับให้แก้ไข'},
                  L1Reviewed:{prev:'Submitted', label:'ตีกลับจากสอบทานหัวหน้าแผนก'},
                  L2Reviewed:{prev:'L1Reviewed', label:'ตีกลับจากสอบทานผู้จัดการส่วน'} };
   /* #269: GM ที่เป็นผู้ประเมินคนเดียว ตีกลับไป L1Reviewed ไม่ได้ (ระบบข้ามขั้นกลับมารอ GM) → ตีกลับไป Draft เหมือน rejectGmSelected */
   const _soleRej = curStatus==='L2Reviewed' && isSoleGmReviewer(MASTER_USERS.find(u=>u[0]===code), CURRENT_SESSION_USER);
   if(_soleRej) STEP.L2Reviewed = {prev:'Draft', label:'GM ตีกลับให้ประเมินใหม่', sole:true};
+  if(curStatus==='SelfSubmitted' && !canActOnSelfSubmitted(MASTER_USERS.find(u=>u[0]===code))){ smlToast('ขั้นนี้เป็นของหัวหน้าหน่วย (L1) ของพนักงานคนนี้เท่านั้น','warn'); return; }
   const step = STEP[curStatus];
   if(!step){ smlToast('ขั้นตอนนี้ไม่รองรับการตีกลับจากหน้าต่างนี้ — ใช้ปุ่มที่หน้ารายการแทน','warn'); return; }
   const _why = askRejectReason(1); if(!_why) return;
@@ -15920,7 +15941,8 @@ function renderCyclesTable(){
 const CYCLE_PARTICIPANT_ROLE_RANK = {emp:0, unit:1, l1:2, l2:3, gm:4, exec:5, admin:6, sysadmin:6};
 const CYCLE_PARTICIPANT_STATUS_TH = {
   Draft:'<span style="color:#94a3b8">ยังไม่ส่งแบบประเมิน</span>',
-  Submitted:'ส่งแบบประเมินแล้ว — รอหัวหน้าหน่วย/แผนกสอบทาน',
+  SelfSubmitted:'พนักงานส่งแล้ว — รอหัวหน้าหน่วย (L1) สอบทาน',
+  Submitted:'รอบแรกเสร็จ — รอหัวหน้าแผนก (L2) สอบทาน',
   L1Reviewed:'ผ่านสอบทานหัวหน้าแผนก (L2) แล้ว',
   L2Reviewed:'ผ่านสอบทานผู้จัดการส่วน (L3) แล้ว',
   GMApproved:'ผ่านอนุมัติ GM (L4) แล้ว — รอ GM ยืนยันส่งผลให้พนักงาน',

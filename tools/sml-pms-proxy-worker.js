@@ -667,7 +667,9 @@ async function verifyLineSignature(channelSecret, rawBody, signatureHeader) {
    แก้คู่กันเสมอถ้าฝั่งใดฝั่งหนึ่งเปลี่ยน) ใช้แค่เพื่อแยก "สถานะยังไม่ถึง GMApproved" (จริงๆ ไม่ควรเกิด
    เพราะปุ่มนี้ส่งหลัง GM อนุมัติเท่านั้น) ออกจาก "ผ่าน GMApproved ไปแล้ว" (รับทราบไปแล้วก่อนหน้านี้) */
 const EVAL_STATUS_ORDER = ['Draft', 'Submitted', 'L1Reviewed', 'L2Reviewed', 'GMApproved', 'ResultSent', 'Acknowledged', 'Calibrated', 'CalibChecked', 'Approved'];
+/* #334: SelfSubmitted = พนักงานส่งแล้ว รอหัวหน้าหน่วย (L1) — rank 0.5 ต้องตรงกับเว็บ */
 function evalStatusRank(status) {
+  if (status === 'SelfSubmitted') return 0.5;
   const i = EVAL_STATUS_ORDER.indexOf(status);
   return i < 0 ? -1 : i;
 }
