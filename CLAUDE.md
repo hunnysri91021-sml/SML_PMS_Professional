@@ -9031,6 +9031,8 @@ touches employee/attendance/evaluation data.
 
 330. **หน้าต่าง "ส่งการแจ้งเตือน" (Reminder) เลือกส่งเป็นฝ่ายหรือรายคนได้.** เพิ่มตัวกรอง "เลือกเฉพาะฝ่าย" (`rm_dept`, ดึงจากค่าฝ่าย u[6] จริงของพนักงาน active — #3) ทับกลุ่มเป้าหมายเดิม, ตัวเลือกกลุ่มใหม่ "เลือกรายคน" (เริ่มไม่ติ๊กใคร) และช่องติ๊กรายชื่อพร้อม "เลือกทั้งหมด"/นับ "เลือกแล้ว x/y". `sendReminder()` ส่งเฉพาะคนที่ติ๊ก (`getReminderSelected()` อ่านจาก `_rmChecked`); เปลี่ยนกลุ่ม/ฝ่ายแล้วรีเซ็ตการติ๊ก; Audit Log ระบุฝ่ายและจำนวนคน. `getReminderTargets(key)` เดิมไม่เปลี่ยน. ทดสอบ: `tests/reminder-scope.test.js`.
 
+331. **ช่วงวันที่ข้อมูลเวลาทำงาน (#311) มีตัวเลือก "ข้อมูลช่วงวันลายังไม่ครบ" + ข้อความเตือนต่อท้าย.** เก็บ `incomplete`/`note` ใน `smlPmsAttPeriod` และ JSON แถว `__attperiod__` เดิม (sync ข้ามเครื่องไปด้วย ไม่ต้อง redeploy Worker). `attPeriodLabel()` ต่อท้าย "· ⚠️ ข้อความ" (escape ด้วย `escH`; เว้นว่าง = ข้อความมาตรฐาน `ATT_INCOMPLETE_DEFAULT`) จึงขึ้นในแบบประเมิน/ฟอร์มสอบทาน/ใบพิมพ์ทุกใบโดยอัตโนมัติ และหน้า "8. ผลประเมิน" มีแถบเตือนสีเหลือง `#myResultAttNote` (คะแนนอาจเปลี่ยนเมื่อข้อมูลครบ). ติ๊กออกเมื่อข้อมูลครบ. ทดสอบ: `tests/att-period-incomplete.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:

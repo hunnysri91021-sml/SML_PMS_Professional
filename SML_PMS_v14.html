@@ -2249,6 +2249,7 @@ img,svg,canvas{max-width:100%}
     <div class="ph"><div><h2>ผลประเมินของฉัน</h2><p>ประวัติผลการประเมินจริงของฉันเท่าที่มีบันทึกในระบบ</p></div></div>
 
     <div class="al al-s" id="myResultBanner" style="display:none"><span>🎉</span><div id="myResultBannerText"></div></div>
+    <div class="al al-w" id="myResultAttNote" style="display:none"><span>⚠️</span><div id="myResultAttNoteText"></div></div>
     <div class="al al-i" id="myResultEmptyNotice" style="display:none"><span>ℹ️</span><div>ยังไม่มีผลการประเมินที่อนุมัติเสร็จสิ้นของคุณในระบบ — ตัวเลขด้านล่างจะแสดงทันทีที่มีผลประเมินสถานะ "Approved" บันทึกไว้</div></div>
 
     <div class="grid g3" style="margin-bottom:18px">
@@ -2617,6 +2618,11 @@ img,svg,canvas{max-width:100%}
           <div class="fg" style="margin:0"><label>ตั้งแต่วันที่</label><input type="date" id="attPeriodFrom"></div>
           <div class="fg" style="margin:0"><label>ถึงวันที่</label><input type="date" id="attPeriodTo"></div>
           <button class="btn btn-p" id="attPeriodSaveBtn" onclick="saveAttPeriod()">💾 บันทึกช่วงข้อมูล</button>
+        </div>
+        <div style="margin-top:12px;padding:10px 12px;border:1px solid #fde68a;background:#fffbeb;border-radius:10px">
+          <label style="display:flex;gap:8px;align-items:center;font-weight:600;color:#92400e;cursor:pointer"><input type="checkbox" id="attPeriodIncomplete" style="width:auto" onchange="document.getElementById('attPeriodNote').disabled=!this.checked||!isAdminOrSysadmin()">⚠️ ข้อมูลช่วงวันลายังไม่ครบ — แสดงข้อความเตือนว่าคะแนนเวลาทำงาน (Z) เป็นฉบับร่าง</label>
+          <input type="text" id="attPeriodNote" maxlength="160" style="margin-top:8px;width:100%" placeholder="ข้อความที่จะแสดงต่อท้าย (เว้นว่าง = ใช้ข้อความมาตรฐาน)">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">ข้อความนี้จะแสดงต่อท้ายช่วงวันที่ในแบบประเมิน ใบพิมพ์ ฟอร์มสอบทาน และหน้า "ผลประเมิน" ของพนักงาน — ปิดติ๊กเมื่อข้อมูลครบแล้ว</div>
         </div>
         <div id="attPeriodMeta" style="font-size:11px;color:var(--text3);margin-top:8px"></div>
       </div>
@@ -6774,6 +6780,7 @@ function myResultStatusLabel(st){
   return 'อยู่ระหว่างพิจารณา';
 }
 function renderMyResult(){
+  try{ renderAttPeriod(); }catch(e){}
   const box = document.getElementById('pg-myresult');
   if(!box) return;
   const me = CURRENT_SESSION_USER;
@@ -10498,11 +10505,21 @@ async function ms365SyncDisputes(silent=true){
 const ATT_PERIOD_KEY='smlPmsAttPeriod';
 function getAttPeriod(){ try{ const o=JSON.parse(localStorage.getItem(ATT_PERIOD_KEY)||'null'); if(o&&(o.from||o.to)) return o; }catch(e){} return {from:'',to:'',at:'',by:''}; }
 function attFmtIso(iso){ if(!iso) return ''; const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return ''; const mo=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return (+m[3])+' '+mo[+m[2]-1]+' '+(+m[1]+543); }
-function attPeriodLabel(){ const p=getAttPeriod(); if(!p.from||!p.to) return 'ยังไม่ระบุช่วงข้อมูล'; return 'ข้อมูลระหว่างวันที่ '+attFmtIso(p.from)+' – '+attFmtIso(p.to); }
+const ATT_INCOMPLETE_DEFAULT='ข้อมูลช่วงวันลายังไม่ครบ — คะแนนเวลาทำงานเป็นฉบับร่าง ยังไม่สมบูรณ์';
+function attIncompleteText(){ const p=getAttPeriod(); return p.incomplete ? (String(p.note||'').trim()||ATT_INCOMPLETE_DEFAULT) : ''; }
+function attPeriodLabel(){ const p=getAttPeriod(); let t=(!p.from||!p.to)?'ยังไม่ระบุช่วงข้อมูล':('ข้อมูลระหว่างวันที่ '+attFmtIso(p.from)+' – '+attFmtIso(p.to)); const w=attIncompleteText(); return w? t+' · ⚠️ '+escH(w) : t; }
 function renderAttPeriod(){
   const p=getAttPeriod(); const t=attPeriodLabel();
-  const h=document.getElementById('attPeriodHead'); if(h) h.textContent=(p.from&&p.to)?t:'ช่วงข้อมูล: ยังไม่ระบุ';
-  document.querySelectorAll('.attPeriodTxt').forEach(e=>{ e.textContent=(p.from&&p.to)?t:'ช่วงข้อมูล: ยังไม่ระบุ'; });
+  const adm0=(typeof isAdminOrSysadmin==='function')&&isAdminOrSysadmin();
+  const wTxt=attIncompleteText();
+  const plain=(p.from&&p.to)?('ข้อมูลระหว่างวันที่ '+attFmtIso(p.from)+' – '+attFmtIso(p.to)):'ช่วงข้อมูล: ยังไม่ระบุ';
+  const h=document.getElementById('attPeriodHead'); if(h) h.textContent=plain+(wTxt?' · ⚠️ '+wTxt:'');
+  document.querySelectorAll('.attPeriodTxt').forEach(e=>{ e.textContent=plain+(wTxt?' · ⚠️ '+wTxt:''); });
+  const mn=document.getElementById('myResultAttNote'), mt=document.getElementById('myResultAttNoteText');
+  if(mn&&mt){ mt.textContent=wTxt?('หมายเหตุ: '+wTxt+' — คะแนนที่เห็นอาจเปลี่ยนแปลงเมื่อข้อมูลครบ'):''; mn.style.display=wTxt?'':'none'; }
+  const ci=document.getElementById('attPeriodIncomplete'), cn=document.getElementById('attPeriodNote');
+  if(ci&&document.activeElement!==ci){ ci.checked=!!p.incomplete; ci.disabled=!adm0; }
+  if(cn&&document.activeElement!==cn){ cn.value=p.note||''; cn.disabled=!adm0||!p.incomplete; }
   const f=document.getElementById('attPeriodFrom'), to=document.getElementById('attPeriodTo');
   const adm=(typeof isAdminOrSysadmin==='function')&&isAdminOrSysadmin();
   if(f&&document.activeElement!==f) f.value=p.from||''; if(to&&document.activeElement!==to) to.value=p.to||'';
@@ -10514,9 +10531,11 @@ async function saveAttPeriod(){
   const from=document.getElementById('attPeriodFrom')?.value||'', to=document.getElementById('attPeriodTo')?.value||'';
   if(!from||!to){ smlToast('กรุณาระบุทั้งวันเริ่มต้นและวันสิ้นสุด','warn'); return; }
   if(to<from){ smlToast('วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น','warn'); return; }
-  const me=CURRENT_SESSION_USER; const st={from,to,at:new Date().toISOString(),by:(me&&me[1])||''};
+  const me=CURRENT_SESSION_USER; const incomplete=!!document.getElementById('attPeriodIncomplete')?.checked;
+  const note=(document.getElementById('attPeriodNote')?.value||'').trim().slice(0,160);
+  const st={from,to,incomplete,note,at:new Date().toISOString(),by:(me&&me[1])||''};
   localStorage.setItem(ATT_PERIOD_KEY,JSON.stringify(st));
-  appendAuditLog('setting','ตั้งช่วงข้อมูลเวลาทำงาน','HRGO',attFmtIso(from)+' – '+attFmtIso(to));
+  appendAuditLog('setting','ตั้งช่วงข้อมูลเวลาทำงาน','HRGO',attFmtIso(from)+' – '+attFmtIso(to)+(incomplete?' | ข้อมูลไม่ครบ: '+(note||ATT_INCOMPLETE_DEFAULT):''));
   renderAttPeriod();
   const cfg=loadMs365Config(); let pushed=false;
   if(isMs365Configured(cfg)){
