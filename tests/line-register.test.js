@@ -29,6 +29,12 @@ function mock(){ global.fetch=async(url,opt={})=>{ const u=String(url),m=opt.met
   writes.length=0; await hook('Uold','E2');
   ok(writes.length===1,'เจ้าของ LINE เดิมส่งซ้ำ → อัปเดตได้');
 
+  replies.length=0; writes.length=0;
+  { const body=JSON.stringify({events:[{type:'follow',replyToken:'r',source:{userId:'Ufollow'}}]});
+    const sig=crypto.createHmac('sha256','sec').update(body).digest('base64');
+    await w.fetch(new Request('https://w/webhook/line',{method:'POST',headers:{'x-line-signature':sig},body}),ENV); }
+  ok(writes.length===0&&/รหัสพนักงาน/.test(replies[0]||''),'เพิ่มเพื่อนเฉยๆ → ไม่เขียน Excel แต่ตอบวิธีลงทะเบียน (พิมพ์รหัส)');
+
   const {b,p,errs}=await open();
   await p.evaluate(()=>{ localStorage.setItem('smlPmsMs365GraphConfig',JSON.stringify({lineAddUrl:'x'})); });
   const d0=await p.evaluate(()=>{ localStorage.removeItem('smlPmsMs365GraphConfig'); openLineReg(); const a=document.getElementById('lineRegBtn'); const r={d:getComputedStyle(a).display,h:a.href}; closeLineReg(); return r; });

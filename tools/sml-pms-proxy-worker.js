@@ -788,6 +788,14 @@ async function handleLineEvent(ev, env, token, driveId, itemId) {
      ฟังก์ชันหนึ่งโดยเฉพาะ — ไม่ใช่ "ข้อความตัวอักษร" แบบ flow เดิมด้านล่าง (ซึ่งยังคงทำงานเหมือนเดิม
      ทุกประการสำหรับการลงทะเบียน LINE User ID) */
   if (ev && ev.type === 'postback') { await handleLineAckPostback(ev, env, token, driveId, itemId); return; }
+  /* #328: พนักงานแค่ "เพิ่มเพื่อน" (follow event) ยังไม่ได้ผูกอะไร — เดิมเงียบ ทำให้เข้าใจว่าเพิ่มเพื่อนแล้วลงทะเบียนเสร็จ
+     ทั้งที่ต้องพิมพ์รหัสพนักงานส่งมาด้วย → ตอบวิธีทำทันที (ไม่ต้องแตะ Excel) */
+  if (ev && ev.type === 'follow' && ev.replyToken) {
+    await replyLine(env.LINE_CHANNEL_ACCESS_TOKEN, ev.replyToken,
+      'ขอบคุณที่เพิ่มเพื่อน SML PMS 🙏\nเพื่อลงทะเบียนรับการแจ้งเตือน กรุณาพิมพ์ "รหัสพนักงาน" ของคุณส่งมาในแชทนี้ (เช่น 90526) แล้วรอข้อความยืนยัน\n(แค่เพิ่มเพื่อนยังไม่ถือว่าลงทะเบียน)'
+    ).catch((e) => console.error('follow reply failed:', (e && e.message) || e));
+    return;
+  }
   if (!ev || ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;
   const userId = ev.source && ev.source.userId;
   const replyToken = ev.replyToken;
