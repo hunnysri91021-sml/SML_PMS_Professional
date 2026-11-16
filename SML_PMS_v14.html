@@ -3999,7 +3999,8 @@ const GRAPH_SCOPES  = ["Files.ReadWrite", "Sites.ReadWrite.All", "User.Read"];
 <div class="ov" id="mReminder"><div class="md" style="max-width:470px">
   <div class="md-h"><h3>📢 ส่งการแจ้งเตือน</h3><button class="x" onclick="closeM()">×</button></div>
   <div class="md-b">
-    <div class="fg"><label>กลุ่มเป้าหมาย</label><select id="rm_target" onchange="renderReminderPreview()"></select></div>
+    <div class="fg"><label>กลุ่มเป้าหมาย</label><select id="rm_target" onchange="onReminderScopeChange()"></select></div>
+    <div class="fg"><label>เลือกเฉพาะฝ่าย</label><select id="rm_dept" onchange="onReminderScopeChange()"></select></div>
     <div class="fg"><label>ช่องทาง</label>
       <label style="font-weight:400"><input type="checkbox" id="rm_ch_email" checked style="width:auto;margin-right:5px">อีเมล</label>
       <label style="font-weight:400;margin-left:14px"><input type="checkbox" id="rm_ch_line" checked style="width:auto;margin-right:5px">LINE <small style="color:#64748b">(เฉพาะคนที่มี LINE User ID บันทึกไว้แล้ว)</small></label>
@@ -7853,11 +7854,42 @@ function getReminderTargets(key){
   return active; // 'all'
 }
 
-function renderReminderPreview(){
+/* ผู้ใช้ขอให้เลือกส่งเป็น "ฝ่าย" หรือ "รายคน" ได้ — เพิ่มตัวกรองฝ่าย (u[6]) ทับกลุ่มเดิม และติ๊กเลือก/ไม่เลือกรายคนในรายชื่อ
+   (_rmChecked = รหัสที่ติ๊กอยู่; เปลี่ยนกลุ่ม/ฝ่ายแล้วรีเซ็ต: กลุ่มปกติติ๊กทั้งหมด, "เลือกรายคน" เริ่มต้นไม่ติ๊กเลย) */
+let _rmChecked = new Set();
+function getReminderScoped(key, dept){
+  let t = key==='person' ? MASTER_USERS.filter(u=>u[12]==='active') : getReminderTargets(key);
+  if(dept) t = t.filter(u => String(u[6]||'').trim()===dept);
+  return t;
+}
+function getReminderSelected(){
+  const key = document.getElementById('rm_target')?.value || 'pending';
+  const dept = document.getElementById('rm_dept')?.value || '';
+  return getReminderScoped(key, dept).filter(u=>_rmChecked.has(u[0]));
+}
+function onReminderScopeChange(){
+  const key = document.getElementById('rm_target')?.value || 'pending';
+  const dept = document.getElementById('rm_dept')?.value || '';
+  _rmChecked = key==='person' ? new Set() : new Set(getReminderScoped(key, dept).map(u=>u[0]));
+  renderReminderPreview(true);
+}
+function toggleReminderPerson(code, on){
+  if(on) _rmChecked.add(code); else _rmChecked.delete(code);
+  renderReminderPreview(true);
+}
+function toggleReminderAll(on){
+  const key = document.getElementById('rm_target')?.value || 'pending';
+  const dept = document.getElementById('rm_dept')?.value || '';
+  _rmChecked = on ? new Set(getReminderScoped(key, dept).map(u=>u[0])) : new Set();
+  renderReminderPreview(true);
+}
+function renderReminderPreview(keepSel){
   const sel = document.getElementById('rm_target');
+  const dsel = document.getElementById('rm_dept');
   const box = document.getElementById('rm_preview');
   if(!sel || !box) return;
   const curKey = sel.value || 'pending';
+  const curDept = dsel ? dsel.value : '';
   const counts = {
     pending: getReminderTargets('pending').length,
     l1: getReminderTargets('l1').length,
@@ -7866,19 +7898,32 @@ function renderReminderPreview(){
   sel.innerHTML = `
     <option value="pending">ผู้ที่ยังไม่ส่งแบบประเมิน (${counts.pending} คน)</option>
     <option value="l1">หัวหน้าระดับ 1 ทั้งหมด (${counts.l1} คน)</option>
-    <option value="all">ทุกคนที่ Active ในระบบ (${counts.all} คน)</option>`;
+    <option value="all">ทุกคนที่ Active ในระบบ (${counts.all} คน)</option>
+    <option value="person">เลือกรายคน (ติ๊กชื่อเอง)</option>`;
   sel.value = curKey;
-  const targets = getReminderTargets(sel.value);
+  if(dsel){
+    const depts = [...new Set(MASTER_USERS.filter(u=>u[12]==='active').map(u=>String(u[6]||'').trim()).filter(Boolean))].sort((x,y)=>x.localeCompare(y,'th'));
+    dsel.innerHTML = '<option value="">— ทุกฝ่าย —</option>' + depts.map(d=>`<option value="${escH(d)}">${escH(d)}</option>`).join('');
+    dsel.value = depts.includes(curDept) ? curDept : '';
+  }
+  const dept = dsel ? dsel.value : '';
+  const targets = getReminderScoped(sel.value, dept);
+  if(!keepSel){ _rmChecked = sel.value==='person' ? new Set() : new Set(targets.map(u=>u[0])); }
+  else { const valid=new Set(targets.map(u=>u[0])); _rmChecked = new Set([..._rmChecked].filter(c=>valid.has(c))); }
   if(!targets.length){
-    box.innerHTML = '<div style="color:#94a3b8">ไม่มีรายชื่อตรงกลุ่มเป้าหมายนี้</div>';
+    box.innerHTML = '<div style="color:#94a3b8">ไม่มีรายชื่อตรงกลุ่มเป้าหมาย/ฝ่ายนี้</div>';
     return;
   }
-  box.innerHTML = targets.map(u => {
+  const allOn = targets.every(u=>_rmChecked.has(u[0]));
+  box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0 6px;border-bottom:2px solid #e2e8f0;font-weight:600">
+      <label style="font-weight:600"><input type="checkbox" ${allOn?'checked':''} onchange="toggleReminderAll(this.checked)" style="width:auto;margin-right:6px">เลือกทั้งหมด</label>
+      <span style="color:#1d4ed8">เลือกแล้ว ${_rmChecked.size}/${targets.length} คน</span></div>` +
+  targets.map(u => {
     const hasEmail = !!u[15];
     const hasLine = !!u[21];
     return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f1f5f9">
-      <span>${escH(u[1])} <span style="color:#94a3b8">(${escH(u[0])})</span></span>
-      <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? u[15] : 'ไม่มีอีเมล'}${hasLine ? ' · 💬 LINE' : ''}</span>
+      <label style="font-weight:400"><input type="checkbox" ${_rmChecked.has(u[0])?'checked':''} onchange="toggleReminderPerson('${escJs(u[0])}',this.checked)" style="width:auto;margin-right:6px">${escH(u[1])} <span style="color:#94a3b8">(${escH(u[0])})</span></label>
+      <span style="${hasEmail?'':'color:#dc2626'}">${hasEmail ? escH(u[15]) : 'ไม่มีอีเมล'}${hasLine ? ' · 💬 LINE' : ''}</span>
     </div>`;
   }).join('');
 }
@@ -7927,7 +7972,7 @@ async function sendEmailToList(recipients, subject, body){
 }
 
 async function sendReminder(){
-  const targets = getReminderTargets(document.getElementById('rm_target')?.value || 'pending');
+  const targets = getReminderSelected();
   /* ต่อลิงก์เข้าระบบท้ายข้อความ (ทั้งอีเมลและ LINE) — ลิงก์หน้าแรกเดียวกัน ทุกคนล็อกอินด้วยรหัส/PIN ตัวเอง;
      ไม่มี appUrl ตั้งไว้ = ไม่ใส่ (ไม่เดา URL, #14); ไม่ใส่ซ้ำถ้าผู้ใช้พิมพ์ลิงก์ไว้ในข้อความเองแล้ว */
   const _rmCfg = loadMs365Config();
@@ -7936,7 +7981,7 @@ async function sendReminder(){
     ? _rmRaw + `\n\nเข้าระบบ: ${_rmCfg.appUrl}` : _rmRaw;
   const wantEmail = document.getElementById('rm_ch_email')?.checked;
   const wantLine = document.getElementById('rm_ch_line')?.checked;
-  if(!targets.length){ smlToast('ไม่มีผู้รับในกลุ่มเป้าหมายนี้','warn'); return; }
+  if(!targets.length){ smlToast('ยังไม่ได้เลือกผู้รับ — ติ๊กชื่อในรายการก่อน','warn'); return; }
   if(!wantEmail && !wantLine){ smlToast('กรุณาเลือกช่องทางที่จะส่งอย่างน้อย 1 ช่องทาง','warn'); return; }
 
   const withEmail = targets.filter(u=>u[15]);
@@ -7980,7 +8025,7 @@ async function sendReminder(){
   if(!parts.length) parts.push('ยังไม่ได้เลือกช่องทางที่พร้อมใช้งาน');
   const okOverall = (emailSendResult && emailSendResult.configured && emailSendResult.sentCount) || (wantEmail && withEmail.length && (!emailSendResult || !emailSendResult.configured)) || (lineResult&&lineResult.sent);
   smlToast(parts.join(' · '), okOverall ? 'ok' : 'warn');
-  if(typeof appendAuditLog==='function') appendAuditLog('reminder','ส่ง Reminder', document.getElementById('rm_target')?.value||'pending', parts.join(' · '));
+  if(typeof appendAuditLog==='function') appendAuditLog('reminder','ส่ง Reminder', (document.getElementById('rm_target')?.value||'pending')+(document.getElementById('rm_dept')?.value?' / ฝ่าย '+document.getElementById('rm_dept').value:'')+' ('+targets.length+' คน)', parts.join(' · '));
 }
 
 /* #156/#181: แจ้งผลประเมิน — ผู้ใช้ขอให้แจ้งทันทีที่ GM (หรือคนที่ได้รับมอบหมายแทน GM — resolveGmReviewer()

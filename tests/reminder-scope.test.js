@@ -1,0 +1,31 @@
+const { chromium } = require('playwright');
+const path = require('path');
+(async()=>{
+  const b = await chromium.launch(); const p = await b.newPage();
+  await p.goto('file://'+path.resolve(__dirname,'../SML_PMS_v14.html'));
+  await p.waitForTimeout(500);
+  const r = await p.evaluate(async()=>{
+    const mk=(c,n,dept)=>{const u=new Array(22).fill('');u[0]=c;u[1]=n;u[2]='emp';u[6]=dept;u[12]='active';u[15]=c+'@x.co';return u;};
+    MASTER_USERS.splice(0,MASTER_USERS.length,mk('A1','ก','ฝ่ายขาย'),mk('A2','ข','ฝ่ายขาย'),mk('B1','ค','ฝ่ายบัญชี'));
+    localStorage.setItem(MS365_LOCAL_DRAFT_KEY,'[]');
+    const sent=[]; window.sendEmailToList=async(l)=>{sent.push(l.map(u=>u[0]));return {configured:true,sentCount:l.length,failedCount:0,perEmp:new Map()}};
+    window.sendLineReminder=async()=>({sent:0,reason:'x'});
+    document.getElementById('rm_ch_line').checked=false;
+    renderReminderPreview();
+    const out={};
+    out.deptOpts=[...document.getElementById('rm_dept').options].map(o=>o.value);
+    out.all=getReminderSelected().length;
+    document.getElementById('rm_dept').value='ฝ่ายขาย'; onReminderScopeChange();
+    out.dept=getReminderSelected().map(u=>u[0]);
+    toggleReminderPerson('A2',false);
+    out.untick=getReminderSelected().map(u=>u[0]);
+    document.getElementById('rm_dept').value=''; document.getElementById('rm_target').value='person'; onReminderScopeChange();
+    out.personStart=getReminderSelected().length;
+    toggleReminderPerson('B1',true);
+    await sendReminder(); out.sent=sent;
+    return out;
+  });
+  const ok = r.deptOpts.length===3 && r.all===3 && r.dept.join()==='A1,A2' && r.untick.join()==='A1' && r.personStart===0 && JSON.stringify(r.sent)==='[["B1"]]';
+  console.log(ok?'PASS reminder-scope':'FAIL reminder-scope', JSON.stringify(r));
+  await b.close(); process.exit(ok?0:1);
+})();

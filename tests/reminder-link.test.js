@@ -8,7 +8,7 @@ const path = require('path');
     const sent=[]; window.sendLineReminder=async(t,m)=>{sent.push(m);return {sent:1}};
     window.getReminderTargets=()=>[['X','n','emp','','','','','','','','','','','','','a@b.c']];
     window.sendEmailToList=async(l,s,m)=>{sent.push(m);return {configured:true,sentCount:1,failedCount:0}};
-    document.getElementById('rm_ch_line').checked=true; document.getElementById('rm_ch_email').checked=true;
+    renderReminderPreview(); document.getElementById('rm_ch_line').checked=true; document.getElementById('rm_ch_email').checked=true;
     await sendReminder(); return {sent, url:loadMs365Config().appUrl};
   });
   const ok = r.url && r.sent.length===2 && r.sent.every(m=>m.includes(r.url));

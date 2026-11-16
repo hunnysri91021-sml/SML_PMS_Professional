@@ -9029,6 +9029,8 @@ touches employee/attendance/evaluation data.
 
 319. **Log ขึ้น "ขึ้น Excel" แต่ Excel ไม่เปลี่ยน และดึงกลับได้ค่าเก่า = upsert หาแถวเดิมไม่เจอ แล้ว "เพิ่มแถวใหม่" ต่อท้ายตาราง (ไม่ใช่ error).** `graphUpsertTableRow` คืน `'updated'`/`'added'` แต่ผู้เรียกไม่เคยแยก จึง log สำเร็จเหมือนกัน; แถวเดิมของรหัสนั้นไม่ถูกแตะ และตอนดึงกลับ `MASTER_USERS.find` หยิบแถวแรก (ค่าเก่า). ตอนนี้ Worker `/rows/upsert` ส่ง `scanned` (จำนวนแถวที่ค้นหา) + `sampleKeys` (ตัวอย่างค่าในคอลัมน์คีย์) + `matched` กลับมา, เว็บเก็บใน `window._lastUpsertInfo`; `pushSingleEmployeeToExcel` คืน false + toast/Sync Log "เพิ่มแถวใหม่ ไม่ได้แก้แถวเดิม — ค้นหา N แถว ไม่พบรหัส … (ตัวอย่างค่าในคอลัมน์ EmpID: …)" (ใช้ดูว่าคอลัมน์คีย์ไม่ตรง/ชนิดข้อมูลต่าง/ตาราง–ไฟล์ผิด); `loadEmployeesFromMs365` log เตือนเมื่อมีรหัสซ้ำในตาราง. ถ้าเห็นข้อความนี้ให้ตรวจ: ตาราง Employees มี EmpID เป็นคอลัมน์แรกจริงไหม, FILE_PATH ของ Worker ชี้ไฟล์เดียวกับที่ HR เปิดดูไหม, แล้วลบแถวซ้ำที่ถูกเพิ่มต่อท้าย. **Worker เปลี่ยน → ต้อง redeploy** (ถ้ายังไม่ redeploy เว็บยังแยก added/updated ไม่ได้เมื่อผ่าน Worker แต่ไม่พัง). ทดสอบ: `tests/upsert-added-warning.test.js`.
 
+330. **หน้าต่าง "ส่งการแจ้งเตือน" (Reminder) เลือกส่งเป็นฝ่ายหรือรายคนได้.** เพิ่มตัวกรอง "เลือกเฉพาะฝ่าย" (`rm_dept`, ดึงจากค่าฝ่าย u[6] จริงของพนักงาน active — #3) ทับกลุ่มเป้าหมายเดิม, ตัวเลือกกลุ่มใหม่ "เลือกรายคน" (เริ่มไม่ติ๊กใคร) และช่องติ๊กรายชื่อพร้อม "เลือกทั้งหมด"/นับ "เลือกแล้ว x/y". `sendReminder()` ส่งเฉพาะคนที่ติ๊ก (`getReminderSelected()` อ่านจาก `_rmChecked`); เปลี่ยนกลุ่ม/ฝ่ายแล้วรีเซ็ตการติ๊ก; Audit Log ระบุฝ่ายและจำนวนคน. `getReminderTargets(key)` เดิมไม่เปลี่ยน. ทดสอบ: `tests/reminder-scope.test.js`.
+
 ## Verification checklist for any change to this file
 
 Before considering a change to `SML_PMS_v14.html` done:
