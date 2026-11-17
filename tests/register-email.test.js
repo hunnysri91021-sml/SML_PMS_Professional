@@ -78,12 +78,14 @@ function mockFetch(){
     CURRENT_SESSION_USER=MASTER_USERS.find(u=>u[2]==='admin')||MASTER_USERS[0];
     window.isAdminOrSysadmin=()=>true;
     await sendPinToRegistered();
+    const rows=[...document.querySelectorAll('#regPinRows tr')].map(tr=>tr.textContent).join(' ');
+    await sendPinToRegistered(regPinChecked()); conf=rows;
     const get=id=>MASTER_USERS.find(u=>u[0]===id);
     return {sent:sent.map(s=>s[0]),conf,t1:!!get('T1')[17],bad:!!get('BAD')[17],t2:get('T2')[17]};
   });
   ok(res.sent.includes('T1')&&!res.sent.includes('T2')&&!res.sent.includes('T3')&&!res.sent.includes('T4'),'ส่ง PIN เฉพาะคนมีอีเมล+ไม่มี PIN+active');
   ok(res.t1&&!res.bad&&res.t2==='hash','ส่งสำเร็จ = ตั้ง PIN, ส่งไม่ได้ = ไม่ตั้ง PIN, คนมี PIN เดิมไม่ถูกแตะ');
-  ok(/t1@x\.com/.test(res.conf),'confirm แสดงอีเมลให้ HR ตรวจก่อน');
+  ok(/t1@x\.com/.test(res.conf),'หน้าตรวจรายชื่อแสดงอีเมลให้ HR ตรวจก่อน');
   ok(errors.length===0,'ไม่มี JS error: '+errors.join('|'));
   await browser.close(); done();
 })();

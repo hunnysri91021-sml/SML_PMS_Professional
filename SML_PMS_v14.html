@@ -5699,16 +5699,52 @@ async function registerEmailSubmit(){
 }
 /* HR: ส่ง PIN ให้ทุกคนที่มีอีเมลในระบบแต่ยังไม่มี PIN — ดึงข้อมูลล่าสุดจาก Excel, ให้ดูรายชื่อก่อนยืนยัน,
    ส่งอีเมลสำเร็จเท่านั้นจึงตั้ง PIN (ส่งไม่ได้ = ไม่ตั้ง ไม่ทำให้พนักงานมี PIN ที่ไม่มีใครรู้) */
-async function sendPinToRegistered(){
+/* #335: HR ตรวจรายชื่อผู้ลงทะเบียนอีเมลทีละคน (ติ๊กเลือก + เครื่องหมายเตือน) ก่อนส่ง PIN — เดิม confirm() ก้อนเดียวแสดง 30 คนแรก */
+function regPinCandidates(){
+  const mailOk=e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e||'').trim());
+  const all=MASTER_USERS.filter(u=>u[12]==='active');
+  const dom=e=>String(e||'').trim().toLowerCase().split('@')[1]||'';
+  const cnt={}; all.filter(u=>u[17]&&mailOk(u[15])).forEach(u=>{const d=dom(u[15]);cnt[d]=(cnt[d]||0)+1;});
+  const top=Object.keys(cnt).sort((x,y)=>cnt[y]-cnt[x])[0]||'';
+  const emailCount={}; all.forEach(u=>{const e=String(u[15]||'').trim().toLowerCase(); if(e) emailCount[e]=(emailCount[e]||0)+1;});
+  return MASTER_USERS.filter(u=>u[12]==='active'&&!u[17]&&mailOk(u[15])).map(u=>{
+    const e=String(u[15]).trim().toLowerCase(); const flags=[];
+    if(emailCount[e]>1) flags.push('อีเมลนี้ซ้ำกับพนักงานอีกคน');
+    if(top && dom(e)!==top) flags.push('โดเมนต่างจากอีเมลบริษัท (@'+top+')');
+    return {u,flags};
+  });
+}
+function sendPinToRegistered(selected){
   if(!isAdminOrSysadmin()){ if(typeof smlToast==='function') smlToast('เฉพาะ Admin/HR เท่านั้น','warn'); return; }
+  if(Array.isArray(selected)) return doSendRegPins(selected);
   const cfg=loadMs365Config();
   if(!isWorkerConfigured(cfg)){ if(typeof smlToast==='function') smlToast('ต้องตั้งค่า Proxy (MS365) ก่อนจึงส่ง PIN ทางอีเมลได้','warn'); return; }
-  try{ await ms365SyncEmployees(true); await ms365SyncEmployeeSettingsSilent(); }catch(e){}
-  const mailOk=e=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e||'').trim());
-  const targets=MASTER_USERS.filter(u=>u[12]==='active'&&!u[17]&&mailOk(u[15]));
-  if(!targets.length){ if(typeof smlToast==='function') smlToast('ไม่มีพนักงานที่มีอีเมลแต่ยังไม่มี PIN','ok'); return; }
-  const lines=targets.slice(0,30).map(u=>'• '+u[0]+' '+u[1]+' → '+u[15]).join('\n')+(targets.length>30?'\n… และอีก '+(targets.length-30)+' คน':'');
-  if(!confirm('ส่ง PIN (สุ่ม 4 หลัก) ทางอีเมลให้ '+targets.length+' คน?\n\nตรวจสอบอีเมลให้ถูกต้องก่อน (ใครก็ลงทะเบียนอีเมลได้ — ผิดคนจะได้ PIN ของบัญชีนั้น):\n'+lines)) return;
+  return (async()=>{
+    try{ await ms365SyncEmployees(true); await ms365SyncEmployeeSettingsSilent(); }catch(e){}
+    const list=regPinCandidates();
+    if(!list.length){ if(typeof smlToast==='function') smlToast('ไม่มีพนักงานที่มีอีเมลแต่ยังไม่มี PIN','ok'); return; }
+    let m=document.getElementById('mRegPin');
+    if(!m){ m=document.createElement('div'); m.className='ov'; m.id='mRegPin'; document.body.appendChild(m); }
+    m.innerHTML='<div class="md" style="max-width:760px"><div class="md-h"><h3>📧 ตรวจรายชื่อผู้ลงทะเบียนอีเมล ก่อนส่ง PIN</h3><button class="x" onclick="closeM()">×</button></div><div class="md-b">'
+      +'<div class="al al-w" style="margin-bottom:8px">ใครรู้รหัสพนักงานก็ลงทะเบียนอีเมลได้ — ผู้รับอีเมลจะได้ PIN ของบัญชีนั้น จึงตรวจให้ชัวร์ว่าอีเมลเป็นของเจ้าของรหัสจริง (⚠️ = ควรตรวจเป็นพิเศษ ไม่ติ๊กให้โดยอัตโนมัติ)</div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><input id="regPinSearch" placeholder="🔍 ค้นหารหัส/ชื่อ/อีเมล" oninput="regPinFilter()" style="flex:1;min-width:180px">'
+      +'<button class="btn btn-s" onclick="regPinTick(true)">ติ๊กทั้งหมดที่แสดง</button><button class="btn btn-s" onclick="regPinTick(false)">ยกเลิกทั้งหมด</button></div>'
+      +'<div style="max-height:46vh;overflow:auto;border:1px solid #e2e8f0;border-radius:8px"><table style="width:100%;font-size:13px"><thead><tr><th></th><th>รหัส</th><th>ชื่อ-สกุล / ฝ่าย</th><th>อีเมลที่ลงทะเบียน</th><th>ข้อสังเกต</th></tr></thead><tbody id="regPinRows">'
+      +list.map(x=>{const u=x.u;return '<tr data-s="'+escH((u[0]+' '+u[1]+' '+u[15]).toLowerCase())+'"><td><input type="checkbox" class="regpin-chk" value="'+escH(u[0])+'" '+(x.flags.length?'':'checked')+' onchange="regPinCount()"></td><td>'+escH(u[0])+'</td><td>'+escH(u[1])+'<br><small style="color:#64748b">'+escH(u[6]||'')+'</small></td><td>'+escH(u[15])+'</td><td style="color:#b45309">'+(x.flags.length?'⚠️ '+x.flags.map(escH).join('<br>⚠️ '):'<span style="color:#15803d">—</span>')+'</td></tr>';}).join('')
+      +'</tbody></table></div><div id="regPinCount" style="margin:8px 0;font-weight:600"></div>'
+      +'<div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" onclick="closeM()">ยกเลิก</button><button class="btn btn-p" onclick="sendPinToRegistered(regPinChecked())">📧 ส่ง PIN ให้ที่ติ๊กไว้</button></div></div></div>';
+    openM('mRegPin'); regPinCount();
+  })();
+}
+function regPinChecked(){ return [...document.querySelectorAll('#regPinRows .regpin-chk:checked')].map(c=>c.value); }
+function regPinCount(){ const n=regPinChecked().length, t=document.querySelectorAll('#regPinRows .regpin-chk').length; const e=document.getElementById('regPinCount'); if(e) e.textContent='เลือกแล้ว '+n+' / '+t+' คน'; }
+function regPinFilter(){ const q=(document.getElementById('regPinSearch').value||'').trim().toLowerCase(); document.querySelectorAll('#regPinRows tr').forEach(tr=>{ tr.style.display=(!q||tr.dataset.s.includes(q))?'':'none'; }); }
+function regPinTick(on){ document.querySelectorAll('#regPinRows tr').forEach(tr=>{ if(tr.style.display!=='none'){ const c=tr.querySelector('.regpin-chk'); if(c) c.checked=on; } }); regPinCount(); }
+async function doSendRegPins(codes){
+  const set=new Set(codes);
+  const targets=regPinCandidates().map(x=>x.u).filter(u=>set.has(u[0]));
+  if(!targets.length){ if(typeof smlToast==='function') smlToast('ยังไม่ได้เลือกใครเลย','warn'); return; }
+  if(!confirm('ส่ง PIN (สุ่ม 4 หลัก) ทางอีเมลให้ '+targets.length+' คนที่เลือก?')) return;
   let okN=0; const fails=[];
   for(const emp of targets){
     const pin=String(Math.floor(1000+Math.random()*9000));
@@ -5719,8 +5755,9 @@ async function sendPinToRegistered(){
     await pushSingleEmployeeSettings(emp[0]);
     okN++;
   }
+  if(typeof closeM==='function') closeM();
   if(typeof smlToast==='function') smlToast('ส่ง PIN สำเร็จ '+okN+' คน'+(fails.length?' · ไม่สำเร็จ '+fails.length+' คน':''),fails.length?'warn':'ok');
-  if(fails.length) alert('ส่ง PIN ไม่สำเร็จ '+fails.length+' คน (ยังไม่ได้ตั้ง PIN ให้ — ลองใหม่หรือใช้ปุ่ม 🔑 ตั้ง/รีเซ็ต PIN รายคน):\n\n'+fails.join('\n'));
+  if(fails.length) alert('ส่ง PIN ไม่สำเร็จ '+fails.length+' คน (ยังไม่ได้ตั้ง PIN ให้ — ลองใหม่หรือใช้ปุ่ม 🔑 รายคน):\n'+fails.slice(0,20).join('\n'));
   if(typeof filterUsers==='function') filterUsers();
 }
 /* #305: ลงทะเบียน LINE จากหน้าล็อกอิน — ลิงก์เพิ่มเพื่อนตั้งโดย Admin; การผูก LINE User ID ทำที่ Worker เมื่อพนักงานพิมพ์รหัส (#148) */
