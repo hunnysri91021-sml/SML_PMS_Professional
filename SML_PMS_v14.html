@@ -6517,7 +6517,10 @@ function renderTeamFromMaster() {
 
   const _teamChecked = new Set(getCheckedKeys('team-chk'));
   el.innerHTML = filtered.length ? deptGroupMap(filtered.map(r=>({...r,emp:r.u})),10,({u,wf,X,discipline,d}) => {
-    const st = (d && d[d.length-1]==='SelfSubmitted') ? (wf==='pending' ? ['b-y','⏳ รอ L1 สอบทาน'] : ['b-y','⏳ รอหัวหน้าหน่วย (L1)']) : stMap[wf];
+    /* #337: "ส่งแล้ว" เฉยๆ ทำให้เข้าใจว่าหัวหน้าอยู่ขั้นไหน — แสดงขั้นจริงของใบ (ส่งต่อไปถึงใครแล้ว/รอใคร) */
+    const _stT={Submitted:'รอ L2 สอบทาน',L1Reviewed:'รอ L3 สอบทาน',L2Reviewed:'รอ GM อนุมัติ',GMApproved:'GM อนุมัติแล้ว รอส่งผล',ResultSent:'ส่งผลให้พนักงานแล้ว',Acknowledged:'พนักงานรับทราบ รอ Calibration',Calibrated:'Calibration แล้ว รอตรวจ',CalibChecked:'รอ MD อนุมัติ',Approved:'อนุมัติเสร็จสิ้น'};
+    const _ds = d ? d[d.length-1] : '';
+    const st = (_ds==='SelfSubmitted') ? (wf==='pending' ? ['b-y','⏳ รอ L1 สอบทาน'] : ['b-y','⏳ รอหัวหน้าหน่วย (L1)']) : (wf==='done' && _stT[_ds]) ? ['b-g','✓ ส่งแล้ว · '+_stT[_ds]] : stMap[wf];
     /* เดิมใช้ inferLevelFromPosition(u[7]) เดา "ระดับฟอร์ม" จากคำในตำแหน่งงานเสมอ — ถ้าคนนี้เคยมีร่าง/
        ส่งแบบประเมินไว้จริงแล้วภายใต้ระดับจริงที่ Admin กำหนด (emp[18], ดู CLAUDE.md #23) ซึ่งอาจไม่ตรง
        กับที่เดาจากตำแหน่ง เปิดฟอร์มมาก็จะหาแบบร่างไม่เจอ (เทียบ lv ผิด) ทำให้ restoreReviewerFormFromDraft()
