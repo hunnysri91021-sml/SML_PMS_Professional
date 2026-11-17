@@ -6520,7 +6520,10 @@ function renderTeamFromMaster() {
     /* #337: "ส่งแล้ว" เฉยๆ ทำให้เข้าใจว่าหัวหน้าอยู่ขั้นไหน — แสดงขั้นจริงของใบ (ส่งต่อไปถึงใครแล้ว/รอใคร) */
     const _stT={Submitted:'รอ L2 สอบทาน',L1Reviewed:'รอ L3 สอบทาน',L2Reviewed:'รอ GM อนุมัติ',GMApproved:'GM อนุมัติแล้ว รอส่งผล',ResultSent:'ส่งผลให้พนักงานแล้ว',Acknowledged:'พนักงานรับทราบ รอ Calibration',Calibrated:'Calibration แล้ว รอตรวจ',CalibChecked:'รอ MD อนุมัติ',Approved:'อนุมัติเสร็จสิ้น'};
     const _ds = d ? d[d.length-1] : '';
-    const st = (_ds==='SelfSubmitted') ? (wf==='pending' ? ['b-y','⏳ รอ L1 สอบทาน'] : ['b-y','⏳ รอหัวหน้าหน่วย (L1)']) : (wf==='done' && _stT[_ds]) ? ['b-g','✓ ส่งแล้ว · '+_stT[_ds]] : stMap[wf];
+    /* #338: ป้ายบอก "รอ L2/L3" แต่ถ้าหาผู้สอบทานขั้นนั้นตามสายบังคับบัญชาไม่เจอ ใบจะไม่ขึ้นคิวใครเลย — เตือนให้ตรงความจริง */
+    const _orphan = (_ds==='Submitted' && !resolveL1Reviewer(u)) ? 'ไม่พบผู้สอบทาน L2 ตามสายบังคับบัญชา — ตรวจช่อง "หัวหน้าแผนก (L2)" ของพนักงานคนนี้'
+      : (_ds==='L1Reviewed' && !resolveL2Reviewer(u)) ? 'ไม่พบผู้สอบทาน L3 ตามสายบังคับบัญชา — ตรวจช่อง "ผู้ตรวจ MGR (L3)" ของพนักงานคนนี้' : '';
+    const st = _orphan ? ['b-r','⚠️ ส่งแล้ว แต่'+_orphan.split(' — ')[0],_orphan] : (_ds==='SelfSubmitted') ? (wf==='pending' ? ['b-y','⏳ รอ L1 สอบทาน'] : ['b-y','⏳ รอหัวหน้าหน่วย (L1)']) : (wf==='done' && _stT[_ds]) ? ['b-g','✓ ส่งแล้ว · '+_stT[_ds]] : stMap[wf];
     /* เดิมใช้ inferLevelFromPosition(u[7]) เดา "ระดับฟอร์ม" จากคำในตำแหน่งงานเสมอ — ถ้าคนนี้เคยมีร่าง/
        ส่งแบบประเมินไว้จริงแล้วภายใต้ระดับจริงที่ Admin กำหนด (emp[18], ดู CLAUDE.md #23) ซึ่งอาจไม่ตรง
        กับที่เดาจากตำแหน่ง เปิดฟอร์มมาก็จะหาแบบร่างไม่เจอ (เทียบ lv ผิด) ทำให้ restoreReviewerFormFromDraft()
@@ -6549,7 +6552,7 @@ function renderTeamFromMaster() {
       <td>${d?Number(d[d.length-5]).toFixed(2):'<span style="color:#cbd5e1">—</span>'}</td>
       <td>${d?Number(d[d.length-4]).toFixed(2):'<span style="color:#cbd5e1">—</span>'}</td>
       <td>${X==null?'<span style="color:#cbd5e1">—</span>':'<b>'+X+'</b>'}</td>
-      <td><span class="bd ${escH(st[0])}">${escH(st[1])}</span></td>
+      <td><span class="bd ${escH(st[0])}" title="${escH(st[2]||'')}">${escH(st[1])}</span></td>
       <td><button class="btn btn-sm ${wf==='pending'?'btn-p':''}"
         onclick="openReviewerForm('${escJs(openLevel)}','${escJs(u[1])}','${escJs(u[0])}','${escJs(u[7])}',(typeof getCurrentEvalCycleYear==='function'?getCurrentEvalCycleYear():'2569'),${wf==='done'})">
         ${wf==='done'?'ดูแบบฟอร์ม':'ประเมิน'}
