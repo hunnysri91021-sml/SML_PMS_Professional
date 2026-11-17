@@ -15632,7 +15632,8 @@ async function saveReviewerHold(){
   if(scores.some(x=>!x)){ smlToast('กรุณาให้คะแนนครบทุกข้อก่อนบันทึก','warn'); return; }
   const existing=getDrafts().find(d=>d[0]===code&&d[2]===cycle&&d[3]===lv);
   const curStatus=existing?existing[existing.length-1]:'Draft';
-  const STEPNEXT={Draft:'Submitted',Submitted:'L1Reviewed',L1Reviewed:'L2Reviewed'};
+  const STEPNEXT={Draft:'Submitted',SelfSubmitted:'Submitted',Submitted:'L1Reviewed',L1Reviewed:'L2Reviewed'};
+  if(curStatus==='SelfSubmitted' && !canActOnSelfSubmitted(MASTER_USERS.find(u=>u[0]===code))){ smlToast('ขั้นนี้เป็นของหัวหน้าหน่วย (L1) ของพนักงานคนนี้เท่านั้น','warn'); return; }
   if(!STEPNEXT[curStatus]){ smlToast('ขั้นตอนนี้ไม่รองรับการบันทึกไว้ก่อนจากหน้าต่างนี้','warn'); return; }
   const emp=MASTER_USERS.find(u=>u[0]===code);
   const empName=emp?emp[1]:code;
@@ -15656,7 +15657,12 @@ async function saveReviewerHold(){
 async function sendHeldTeamSelected(){
   let keys=getCheckedKeys('team-chk');
   if(!keys.length){ smlToast('กรุณาเลือกอย่างน้อย 1 คนที่บันทึกไว้แล้ว','warn'); return; }
-  keys=await guardFreshStatus(keys,'Draft');
+  { /* #336: ใบที่ L1 พักไว้อาจเป็น SelfSubmitted (พนักงานส่งเอง L1 แก้แล้วยังไม่ส่งต่อ) หรือ Draft (L1 ประเมินแทน) — ตรวจสถานะล่าสุดแยกกลุ่ม */
+    const stOf=k=>{const d=getDrafts().find(x=>draftKey(x)===k); return d?d[d.length-1]:'';};
+    const gS=keys.filter(k=>stOf(k)==='SelfSubmitted'), gD=keys.filter(k=>stOf(k)!=='SelfSubmitted');
+    const a=gS.length?await guardFreshStatus(gS,'SelfSubmitted'):[], c=gD.length?await guardFreshStatus(gD,'Draft'):[];
+    keys=[...a,...c];
+  }
   if(!keys.length) return;
   const bad=keys.filter(k=>{const emp=MASTER_USERS.find(u=>u[0]===k.split('|')[0]); return typeof hasAnyRealReviewer==='function'&&!hasAnyRealReviewer(emp);});
   if(bad.length){ smlToast('มี '+bad.length+' คนที่ไม่มีผู้ประเมินคนถัดไปในสายบังคับบัญชา — ติดต่อ Admin ก่อนส่ง','warn'); keys=keys.filter(k=>!bad.includes(k)); if(!keys.length) return; }
