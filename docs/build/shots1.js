@@ -12,7 +12,9 @@ const sh=async(p,n,o)=>{o=o||{}; if(o.scroll) await p.evaluate(([s,off])=>{const
    await p.evaluate(g=>{document.querySelector(g).style.display='none';document.getElementById('loginGate').style.display='flex';},gate);
  }
  /* เข้าสู่ระบบจริงด้วยรหัส SML-009 */
- await p.fill('#loginCode','SML-009'); await p.click('#loginBtn'); await p.waitForTimeout(2200);
+ await p.fill('#loginCode','SML-009'); await p.click('#loginBtn'); await p.waitForTimeout(1500);
+ await sh(p,'a6-pdpa',{marks:[{sel:'#pdpaChk'},{sel:'#pdpaOkBtn'}]});
+ await p.check('#pdpaChk'); await p.click('#pdpaOkBtn'); await p.waitForTimeout(2200);
  await sh(p,'b0-home',{marks:[{sel:'.nav-item[data-pg="myeval"]'},{sel:'.nav-item[data-pg="myresult"]'},{sel:'#notifBell'},{sel:'text=ออกจากระบบ',tag:'button'}]});
  /* B1 เปิดหน้าประเมินตนเอง */
  await p.click('.nav-item[data-pg="myeval"]'); await p.waitForTimeout(500);
