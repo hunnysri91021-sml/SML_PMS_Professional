@@ -4,7 +4,8 @@ const {open,ok,done,INJECT}=require('./helpers');
  const r=await p.evaluate(()=>{
   __mockGraph();
   __emp('M1',{name:'หน.หน่วย',role:'unit',email:'m@x.com'});
-  __emp('S1',{name:'พนง.หนึ่ง',role:'emp',level:'of',l1:'หน.หน่วย'});
+  __emp('L3X',{name:'ผู้ตรวจ L3',role:'l2'});
+  __emp('S1',{name:'พนง.หนึ่ง',role:'emp',level:'of',l1:'หน.หน่วย',l3:'ผู้ตรวจ L3'});
   __emp('S2',{name:'พนง.สอง',role:'emp',level:'of',l1:'หน.หน่วย'});
   const cy=getCurrentEvalCycleYear(); const a=getDrafts();
   a.push(['S1','n',cy,'of',15,15,15,10,10,10,10,5,5,5,null,null,null,null,50,30,80,'B','L1Reviewed']);
