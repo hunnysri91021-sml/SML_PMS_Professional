@@ -17817,5 +17817,37 @@ async function confirmImportEmployees(){
   if(document.readyState!=='loading') init();
 })();
 </script>
+<script id="sml-click-guard">
+/* #339: กันกดซ้ำ/กดย้ำ — ปุ่มส่ง/อนุมัติ/ตีกลับ/ยืนยัน: (1) กำลังทำงานค้างอยู่ (await Excel) กดซ้ำ = ไม่ทำซ้ำ + แจ้งเตือน
+   (2) เพิ่งทำเสร็จภายใน CLICK_GUARD_MS กดซ้ำอีก = แจ้งเตือนให้รอ. ครอบฟังก์ชันระดับ window เดิมโดยไม่แก้ตัวฟังก์ชัน (onclick และการเรียกภายในใช้ binding เดียวกัน) */
+(function(){
+  const CLICK_GUARD_MS=2500;
+  const NAMES=['saveEvaluationToMs365','submitEvalOnline','acknowledgeMyResult','submitReviewerForm','rejectReviewerForm','saveReviewerHold','sendHeldTeamSelected',
+    'approveReviewL1Selected','rejectReviewL1Selected','approveReviewSelected','rejectReviewSelected','approveGmSelected','rejectGmSelected','sendResultToEmployeesSelected',
+    'confirmCalibration','approveCalibCheckSelected','rejectCalibCheckSelected','approveAllFinal','rejectApproveAll'];
+  const busy={}, lastDone={};
+  /* โหมดทดสอบอัตโนมัติ (Playwright) เรียกฟังก์ชันซ้ำเร็วๆ ได้ — ตัด cooldown ออก เว้นแต่ตั้ง __forceClickGuard */
+  const cooldownOn=()=> !navigator.webdriver || window.__forceClickGuard===true;
+  window.clickGuardKey=function(name,args){ let k=name; try{ k+='|'+Array.prototype.map.call(args,a=>(a===null||typeof a!=='object')?String(a):'').join('|'); }catch(e){} return k; };
+  NAMES.forEach(name=>{
+    const orig=window[name]; if(typeof orig!=='function') return;
+    window[name]=function(){
+      const key=window.clickGuardKey(name,arguments);
+      if(busy[key]){ smlToast('⏳ ระบบกำลังดำเนินการรายการนี้อยู่ — กรุณารอสักครู่ อย่ากดซ้ำ','warn'); return Promise.resolve(); }
+      const since=Date.now()-(lastDone[key]||0);
+      if(cooldownOn() && lastDone[key] && since<CLICK_GUARD_MS){
+        smlToast('⏳ คุณเพิ่งกดปุ่มนี้ไป — กรุณารอ '+Math.ceil((CLICK_GUARD_MS-since)/1000)+' วินาทีก่อนกดอีกครั้ง','warn'); return Promise.resolve();
+      }
+      busy[key]=true;
+      const fin=()=>{ busy[key]=false; lastDone[key]=Date.now(); };
+      let r;
+      try{ r=orig.apply(this,arguments); }catch(e){ fin(); throw e; }
+      if(r && typeof r.then==='function') return r.then(v=>{fin();return v;},e=>{fin();throw e;});
+      fin(); return r;
+    };
+    window[name].__orig=orig;
+  });
+})();
+</script>
 </body>
 </html>
